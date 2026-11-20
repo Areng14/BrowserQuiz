@@ -8,7 +8,7 @@ const H = require('./harness');
 const { runSamples } = require('./coderun');
 const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } = require('./grade');
 const { fillTemplate } = require('./quizfile');
-const { HttpError, clientIp, sameNetwork, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
+const { HttpError, clientIp, sameNetwork, isHttps, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
 
 const PEPPER = process.env.ID_PEPPER || '';
 const joinFails = limiter(20, 60000);
@@ -19,11 +19,23 @@ const ATT = 'att';
 const hashSid = (sid) => crypto.createHmac('sha256', PEPPER).update(String(sid).trim()).digest('hex');
 const safeEqual = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
+// Safe Exam Browser: a run with a Config Key only answers SEB running that exam's settings. SEB sends
+// X-SafeExamBrowser-ConfigKeyHash on every request: SHA-256 of the request's full URL followed by the
+// Config Key. A normal browser doesn't have it, and can't make it without the key.
+function requireSeb(req, run) {
+  if (!run.seb_key) return;
+  const url = `${isHttps(req) ? 'https' : 'http'}://${req.headers.host}${req.url}`;
+  const want = crypto.createHash('sha256').update(url + run.seb_key).digest('hex');
+  const got = String(req.headers['x-safeexambrowser-configkeyhash'] || '').toLowerCase();
+  if (got.length !== want.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want))) throw new HttpError(403, 'seb_required');
+}
+
 function openRun(runId, req) {
   const run = q('SELECT * FROM runs WHERE id = ?').get(String(runId || ''));
   if (!run) throw new HttpError(404, 'bad_code');
   if (run.status !== 'open') throw new HttpError(403, 'run_closed');
   if (run.ip_lock && !sameNetwork(clientIp(req), run.ip_lock)) throw new HttpError(403, 'wrong_network');
+  requireSeb(req, run);
   return run;
 }
 
@@ -34,6 +46,7 @@ function current(req, { mustBeOpen = true } = {}) {
   const run = q('SELECT * FROM runs WHERE id = ?').get(a.runId);
   if (!run) throw new HttpError(401, 'no_attempt');
   a.practice = run.mode === 'practice';
+  requireSeb(req, run);
   if (mustBeOpen && run.status !== 'open' && a.status !== 'active') throw new HttpError(403, 'run_closed');
   const ip = clientIp(req);
   if (run.ip_lock && !sameNetwork(ip, run.ip_lock)) {
@@ -97,6 +110,7 @@ function runInfo(run, quiz) {
     runId: run.id, title: quiz.title, timeLimitMin: quiz.timeLimitMin,
     questionCount: quiz.questions.length, hasCode: quiz.questions.some((qq) => qq.type !== 'single' && qq.type !== 'multi' && qq.type !== 'text'),
     practice: run.mode === 'practice',
+    seb: !!run.seb_key, // SEB keeps the window locked full screen itself
   };
 }
 
@@ -128,6 +142,7 @@ module.exports = function studentRoutes(r) {
       throw new HttpError(404, 'bad_code');
     }
     if (run.ip_lock && !sameNetwork(ip, run.ip_lock)) throw new HttpError(403, 'wrong_network');
+    requireSeb(req, run);
     json(res, 200, runInfo(run, store.getQuiz(run.quiz_id)));
   });
 

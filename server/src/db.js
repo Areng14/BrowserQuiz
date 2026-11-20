@@ -89,6 +89,7 @@ addColumn('teachers', 'key_wrap', 'TEXT');
 addColumn('teachers', 'rec_wrap', 'TEXT');
 addColumn('quizzes', 'enc', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('assets', 'enc', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('runs', 'seb_key', 'TEXT'); // Safe Exam Browser Config Key: only SEB with that config can take the quiz
 db.exec(`CREATE INDEX IF NOT EXISTS quizzes_owner ON quizzes(owner_id);
 CREATE INDEX IF NOT EXISTS rosters_owner ON rosters(owner_id);
 CREATE INDEX IF NOT EXISTS runs_owner ON runs(owner_id);`);

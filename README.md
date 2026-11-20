@@ -88,6 +88,22 @@ reference solutions, before uploading:
 node scripts/check-quiz.mjs examples/ap-csa-unit4 --run
 ```
 
+## Safe Exam Browser (optional)
+
+For graded exams, a quiz can require [Safe Exam Browser](https://safeexambrowser.org) (SEB), a
+free lockdown browser that keeps students out of other apps. BrowserQuiz only lets in SEB running
+your exam's settings: any other browser gets "Open this quiz in Safe Exam Browser". (Respondus
+LockDown Browser only works inside an LMS like Canvas, so BrowserQuiz can't require it.)
+
+1. Have SEB installed on the student computers. Installing it needs an administrator, so ask IT.
+2. In SEB Config Tool, set the **Start URL** to your BrowserQuiz address (the "Join at" link).
+   On the **Exam** tab, turn on sending the Browser Exam Key and Config Key, and copy the
+   **Config Key**. Save the settings as a `.seb` file.
+3. Start the quiz with **Require Safe Exam Browser** ticked and paste the Config Key.
+4. Students open the `.seb` file, which starts SEB on the quiz.
+
+If you change the SEB settings, the Config Key changes too: start the quiz with the new one.
+
 ## Do I just need the IP?
 
 To try it, yes: anyone who can reach `<ip>:8080` can use it. For a real class, use a

@@ -36,6 +36,7 @@
     not_admitted: 'Your teacher has to let you in first.',
     teacher_login: 'Sign in on the teacher page first.',
     locked: 'Your teacher needs to sign in to BrowserQuiz first. Try again in a minute.',
+    seb_required: 'Open this quiz in Safe Exam Browser. Your teacher has the file that starts it.',
   };
 
   let api;
@@ -417,7 +418,7 @@
     // Re-check when the window changes size or a display is plugged in or out.
     function renderChecks() {
       const checks = prechecks();
-      blocked = !cfg.demo && checks.some((c) => !c.ok);
+      blocked = !cfg.demo && !S.run.seb && checks.some((c) => !c.ok); // SEB locks the screen itself
       checkList.hidden = !checks.some((c) => !c.ok);
       checkList.replaceChildren(...checks.filter((c) => !c.ok).map((c) => h('li', {},
         h('span', { class: 'check-mark ' + (c.ok ? 'ok' : 'bad'), text: c.ok ? 'OK' : 'Fix' }),
@@ -458,8 +459,10 @@
   async function beginQuiz(btn, msg, label) {
     btn.disabled = true; btn.textContent = 'Starting…'; msg.textContent = '';
     const practice = !!S.run.practice;
-    const fsOk = practice ? false : await enterFullscreen();
-    if (!fsOk && !cfg.demo && !practice) {
+    // Safe Exam Browser already runs locked full screen, and may not offer the browser's fullscreen.
+    const seb = !!S.run.seb;
+    const fsOk = practice || seb ? false : await enterFullscreen();
+    if (!fsOk && !cfg.demo && !practice && !seb) {
       msg.textContent = 'Fullscreen was blocked. Click again.';
       btn.disabled = false; btn.textContent = label;
       return;

@@ -436,7 +436,7 @@ module.exports = function teacherRoutes(r) {
     const runs = q(`SELECT runs.*, quizzes.title AS quiz_title, rosters.name AS roster_name,
         (SELECT COUNT(*) FROM attempts WHERE attempts.run_id = runs.id AND archived = 0) AS joined
       FROM runs JOIN quizzes ON quizzes.id = runs.quiz_id JOIN rosters ON rosters.id = runs.roster_id WHERE runs.owner_id = ? ORDER BY runs.created_at DESC LIMIT 50`).all(me.id)
-      .map((x) => ({ id: x.id, code: x.code, status: x.status, quiz: x.quiz_title, roster: x.roster_name, joined: x.joined, ipLock: !!x.ip_lock, practice: x.mode === 'practice', createdAt: x.created_at }));
+      .map((x) => ({ id: x.id, code: x.code, status: x.status, quiz: x.quiz_title, roster: x.roster_name, joined: x.joined, ipLock: !!x.ip_lock, practice: x.mode === 'practice', seb: !!x.seb_key, createdAt: x.created_at }));
     json(res, 200, { quizzes, rosters, runs });
   });
 
@@ -657,10 +657,13 @@ module.exports = function teacherRoutes(r) {
     const body = await readJson(req, 4096);
     if (!q('SELECT 1 FROM quizzes WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.quizId || ''), me.id)) throw new HttpError(400, 'bad_quiz');
     if (!q('SELECT 1 FROM rosters WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.rosterId || ''), me.id)) throw new HttpError(400, 'bad_roster');
+    // Safe Exam Browser: the Config Key from SEB Config Tool for this exam's settings (64 hex digits).
+    const sebKey = body.sebKey ? String(body.sebKey).trim().toLowerCase() : null;
+    if (sebKey && !/^[0-9a-f]{64}$/.test(sebKey)) throw new HttpError(400, 'bad_seb_key', "The Config Key is 64 letters and digits. Copy it from SEB Config Tool's Exam tab.");
     const id = crypto.randomUUID();
     const code = newJoinCode();
-    q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at, owner_id) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?)")
-      .run(id, body.quizId, body.rosterId, code, body.ipLock ? clientIp(req) : null, body.practice ? 'practice' : 'exam', Date.now(), me.id);
+    q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at, owner_id, seb_key) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)")
+      .run(id, body.quizId, body.rosterId, code, body.ipLock ? clientIp(req) : null, body.practice ? 'practice' : 'exam', Date.now(), me.id, sebKey);
     audit(me, 'open-run', null, code);
     json(res, 200, { id, code });
   });
@@ -723,7 +726,7 @@ module.exports = function teacherRoutes(r) {
     const roster = rosterStudentsForRun(run);
     const byStudent = new Map(q('SELECT id, student_id FROM attempts WHERE run_id = ? AND archived = 0').all(run.id).map((x) => [x.student_id, store.getAttempt(x.id)]));
     json(res, 200, {
-      run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin },
+      run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin },
       students: roster.map((s) => liveRow(s, byStudent.get(s.id), quiz)),
     });
   });

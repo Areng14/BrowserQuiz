@@ -208,11 +208,17 @@
     const rosterSel = picker('run-roster', 'Class', data.rosters.map((x) => ({ value: x.id, label: x.name, meta: [plural(x.students, 'student')] })));
     const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', checked: true });
     const practice = h('input', { type: 'checkbox', id: 'practice' });
+    // Safe Exam Browser: only SEB running the exam's settings can open the quiz.
+    const seb = h('input', { type: 'checkbox', id: 'seb' });
+    const sebKey = h('input', { class: 'input t-mono', id: 'seb-key', autocomplete: 'off', spellcheck: 'false', maxlength: '64', placeholder: '64 letters and digits' });
+    const sebField = h('label', { class: 'field t-seb', for: 'seb-key' }, h('span', { class: 'field-label', text: "Config Key (SEB Config Tool, Exam tab)" }), sebKey);
+    sebField.hidden = true;
+    seb.addEventListener('change', () => { sebField.hidden = !seb.checked; if (seb.checked) sebKey.focus(); });
     const startMsg = h('p', { class: 't-error', role: 'alert' });
     const startBtn = h('button', { class: 'btn primary', type: 'button', text: 'Start quiz', disabled: !data.quizzes.length || !data.rosters.length });
     startBtn.addEventListener('click', async () => {
       startBtn.disabled = true;
-      try { const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked, practice: practice.checked }); showRun(r.id); } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
+      try { const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked, practice: practice.checked, sebKey: seb.checked ? sebKey.value.trim() : null }); showRun(r.id); } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
     });
 
     const quizFile = h('input', { class: 'input', type: 'file', id: 'quiz-file', accept: '.quiz,.zip,.json' });
@@ -252,6 +258,8 @@
           quizSel.el, rosterSel.el),
         h('label', { class: 't-check', for: 'ip-lock' }, ipLock, h('span', { text: 'Only allow students on my current network' })),
         h('label', { class: 't-check', for: 'practice' }, practice, h('span', { text: 'Practice: no lockdown or monitoring, and students see the answers at the end' })),
+        h('label', { class: 't-check', for: 'seb' }, seb, h('span', { text: 'Require Safe Exam Browser' })),
+        sebField,
         h('div', {}, startBtn), startMsg, runner),
       h('section', { class: 't-section' },
         h('h2', { text: 'Recent quizzes' }),
@@ -260,7 +268,7 @@
           h('tbody', {}, data.runs.map((r) => h('tr', {},
             h('td', {}, h('button', { class: 't-link', type: 'button', text: r.code, onclick: () => showRun(r.id) })),
             h('td', { text: r.quiz }), h('td', { text: r.roster }),
-            h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.practice ? ' (practice)' : ''}` }),
+            h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.practice ? ' (practice)' : r.seb ? ' (SEB)' : ''}` }),
             h('td', { class: 'num', text: String(r.joined) }), h('td', { text: date(r.createdAt) }),
             h('td', { class: 't-actions' }, h('button', { class: 'btn small', type: 'button', text: 'Delete',
               onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?${r.status === 'open' ? " It's still open: anyone taking it gets signed out." : ''}`) }))))))) : h('p', { class: 't-muted', text: 'None yet.' })),
@@ -512,7 +520,7 @@
       const run = data.run;
       code.textContent = run.code;
       title.textContent = run.title;
-      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}.`;
+      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
       howTo.textContent = `Join at ${location.origin}`;
       toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
       toggle.onclick = () => {

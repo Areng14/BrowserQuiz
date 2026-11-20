@@ -47,6 +47,7 @@ input[type="file"].input { padding: 6px 10px; }
 .t-recovery p { margin: 0; }
 .t-code-big { padding: 8px 12px; font: 700 18px var(--mono); letter-spacing: 0.04em; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; user-select: all; }
 .t-mono { font-family: var(--mono); }
+.t-seb { max-width: 560px; }
 .t-temp { padding: 1px 6px; font: 600 15px var(--mono); background: var(--soft); border: 1px solid var(--line); border-radius: 4px; user-select: all; }
 
 .t-table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
