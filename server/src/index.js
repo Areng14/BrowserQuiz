@@ -12,15 +12,20 @@ const teacherRoutes = require('./teacher');
 const PORT = Number(process.env.PORT) || 8080;
 const PUBLIC = path.join(__dirname, '..', '..', 'public');
 
+// Config problems: say so once. In a container (node is PID 1) stay parked instead of exiting, or Docker
+// restarts the app forever and repeats the same error. The health check reports it as unhealthy.
+const problems = [];
 for (const k of ['ADMIN_PASSWORD', 'ID_PEPPER']) {
-  if (!process.env[k] || process.env[k].length < 12) {
-    console.error(`Set ${k} to a long random value (12+ characters). See .env.example.`);
-    process.exit(1);
-  }
+  if (!process.env[k] || process.env[k].length < 12) problems.push(`${k} must be 12+ characters`);
 }
-if (process.env.RUNNER_URL && (process.env.RUNNER_TOKEN || '').length < 16) {
-  console.error('Set RUNNER_TOKEN to a long random value (16+ characters, the runner refuses shorter ones). See .env.example.');
-  process.exit(1);
+if (process.env.RUNNER_URL && (process.env.RUNNER_TOKEN || '').length < 16) problems.push('RUNNER_TOKEN must be 16+ characters');
+if (problems.length) {
+  console.error(['BrowserQuiz did not start. Fix .env, then run: docker compose up -d', ...problems.map((x) => '  - ' + x)].join('\n'));
+  if (process.pid !== 1) process.exit(1);
+  process.on('SIGTERM', () => process.exit(1));
+  process.on('SIGINT', () => process.exit(1));
+  setInterval(() => {}, 1 << 30);
+  return; // eslint-disable-line no-unreachable -- CommonJS: stop here
 }
 
 const api = router();

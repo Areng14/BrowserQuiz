@@ -374,8 +374,10 @@ def self_test():
     problems = []
     if os.getuid() != 0:
         problems.append("must run as root inside its container (it drops to a per-slot uid for every job)")
-    if ABI < 4:
-        problems.append(f"Landlock ABI {ABI} is too old or missing (need 4+ to block network)")
+    # Landlock does the filesystem jail (any ABI). Network is blocked by seccomp (socket and io_uring
+    # denied), which the probe below proves; Landlock ABI 4+ (kernel 6.7+) adds a second network block.
+    if ABI < 1:
+        problems.append("Landlock is missing: the host kernel needs Landlock enabled (Linux 5.13+)")
     if len(TOKEN) < 16:
         problems.append("RUNNER_TOKEN must be set to 16+ random characters")
     if not os.path.isdir(JOBS):
@@ -402,14 +404,23 @@ def self_test():
 if __name__ == "__main__":
     os.makedirs(JOBS, exist_ok=True)
     os.chmod(JOBS, 0o711)
-    problems = self_test()
-    if problems:
-        for p in problems:
-            print("runner: refusing to start:", p, flush=True)
-        sys.exit(1)
-    print(f"runner: sandbox ok (landlock ABI {ABI}{', signal scoping on' if ABI >= 6 else ''}), {SLOTS} slots, listening on :{PORT}", flush=True)
     # PID 1 ignores SIGTERM unless it asks for it, so docker stop would wait 10s and SIGKILL.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    problems = self_test()
+    if problems:
+        print("runner: not starting, so code questions can't run:", flush=True)
+        for p in problems:
+            print("  -", p, flush=True)
+        if os.getpid() == 1:
+            # In a container: stay parked instead of exiting, or Docker restarts it forever and
+            # repeats this message. The health check reports it as unhealthy.
+            while True:
+                signal.pause()
+        sys.exit(1)
+    extras = [f"landlock ABI {ABI}", "network blocked by seccomp" + (" and landlock" if ABI >= 4 else "")]
+    if ABI >= 6:
+        extras.append("signal scoping on")
+    print(f"runner: sandbox ok ({', '.join(extras)}), {SLOTS} slots, listening on :{PORT}", flush=True)
     # Listen on IPv6 and IPv4 both: Railway's private network can be IPv6-only.
     class DualStackServer(ThreadingHTTPServer):
         address_family = socket.AF_INET6

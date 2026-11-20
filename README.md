@@ -12,22 +12,28 @@ leaves the window gets quietly invalidated (the teacher can restore them).
 
 ## Run it
 
-You need a machine with Docker. A small Linux VPS (2 GB RAM) handles a class.
+You need a machine with Docker. That can be your own computer with Docker Desktop, or a small Linux VPS (2 GB RAM handles a class).
 
 ```bash
 git clone https://github.com/Areng14/BrowserQuiz.git && cd BrowserQuiz
-cp .env.example .env
 ```
 
-Fill in the three secrets in `.env` (`openssl rand -base64 24` makes a good one), then:
+Then run the setup script. On Windows, double-click `setup.cmd`. On Mac or Linux:
 
 ```bash
-docker compose up -d --build
+./setup.sh
 ```
 
-Open `http://<server-ip>:8080/teacher`, sign in with `ADMIN_PASSWORD`, upload a quiz
-and a roster, and press Start. Students go to `http://<server-ip>:8080` and type the
-join code.
+The script:
+- asks for a teacher password, or makes one up if you press Enter
+- generates the other secrets into `.env`
+- picks a free port
+- builds and starts everything
+- prints where to go
+
+Run it again any time: it keeps what's already set.
+
+Doing it by hand instead: copy `.env.example` to `.env`, fill in the three secrets, then run `docker compose up -d --build`.
 
 If students can't reach it, open port 8080 in the server's firewall.
 
@@ -67,11 +73,9 @@ Where to host:
 
 ## Requirements
 
-- **Linux kernel with Landlock** (5.13+, 6.7+ for the network block). Any current
-  distro works. The runner checks its sandbox when it starts and refuses to run code
-  if anything is missing, so you'll know right away (`docker compose logs runner`
-  should say `sandbox ok`). Docker Desktop on Windows or macOS may or may not pass
-  this check, depending on its VM kernel.
+- **A kernel with Landlock** (Linux 5.13+). Any current distro works, and so does Docker Desktop on Windows.
+  The runner checks its sandbox when it starts. If anything is missing it won't run code, and
+  `docker compose logs runner` says why. Everything else still works.
 - Docker Compose v2 (`docker compose`, not `docker-compose`).
 
 ## Day to day
