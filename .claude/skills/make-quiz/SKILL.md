@@ -19,6 +19,12 @@ Fill gaps with these defaults and say which ones you used. Don't stop to ask.
   3–4 for a trace table, 2–4 for fill in the blanks, 5–10 for code, 5 for a written answer
 - Points per question: 1 for multiple choice, 2 for select-all, 1 for short answer, 6–9 for code
 - "A few" questions means 3–5
+- Medium difficulty. Easy: one idea per question, short code (about 5 lines), direct tracing
+  or recall. Medium: AP exam level, two ideas per question, traps real students fall into,
+  code questions the size of one free-response part. Hard: multi-step reasoning, nested loops
+  and 2D arrays, tricky edge cases. Mixed: start easy, end hard.
+- Rubric items on code questions grade themselves (`require`/`forbid`) unless the user wants
+  to grade them by hand or wants no rubric
 
 ## 2. Write it
 
