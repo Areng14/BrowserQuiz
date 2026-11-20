@@ -212,7 +212,10 @@ function studentReport(quiz, a, name) {
     questions: quiz.questions.map((qq) => {
       const ans = a.answers ? a.answers[qq.id] : undefined;
       const sc = a.result ? questionScore(qq, res, a.answers) : null;
-      const row = { id: qq.id, type: qq.type, mode: qq.mode || null, prompt: qq.prompt, image: qq.image || null, imageAlt: qq.imageAlt || '', points: sc && sc.state === 'done' ? sc.points : null, max: qq.points };
+      const row = {
+        id: qq.id, type: qq.type, mode: qq.mode || null, prompt: qq.prompt, image: qq.image || null, imageAlt: qq.imageAlt || '',
+        points: sc && sc.state === 'done' ? sc.points : null, max: qq.points, review: !!(sc && sc.review),
+      };
       if (qq.type === 'single' || qq.type === 'multi') {
         const perm = a.layout && a.layout.perms ? a.layout.perms[qq.id] : null;
         row.choices = qq.choices;

@@ -388,6 +388,7 @@
             d.userAgent ? h('p', { class: 't-muted t-small', text: d.userAgent }) : null)),
         h('div', { class: 't-section' }, h('h3', { text: d.totals ? `Answers (${d.totals.score} / ${d.totals.max}${d.totals.pending ? ', code still grading' : d.totals.failed ? ', grading failed' : d.totals.review ? ', needs review' : ''})` : 'Answers so far' }), answers)));
       drawTrail(canvas, d.mouse);
+      window.BQReport.highlight(answers);
       if (!quiet) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
