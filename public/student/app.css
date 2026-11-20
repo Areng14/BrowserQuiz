@@ -145,13 +145,15 @@
 .choice:has(input:checked) { border-color: var(--accent); }
 .choice-text { min-width: 0; overflow-wrap: anywhere; }
 /* cross out: a button beside each choice; a crossed-out choice is dimmed and struck through */
-.choice-row { display: flex; align-items: center; gap: 6px; }
+.choice-row { display: flex; align-items: stretch; gap: 6px; }
 .choice-row > .choice { flex: 1; min-width: 0; }
+/* same height, border and corners as the choice beside it */
 .choice-x {
-  flex: none; min-width: 48px; height: 30px; padding: 0 8px; font: 600 12px var(--font); color: var(--ink-2);
+  flex: none; width: 56px; padding: 0; font: 600 12px var(--font); color: var(--ink-2);
   background: none; border: 1px solid transparent; border-radius: 6px; cursor: pointer;
 }
 .choice-x:hover { color: var(--ink); background: var(--soft); border-color: var(--line); }
+.bq-app .choice-x:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 .x-icon { font-size: 13px; text-decoration: line-through; text-decoration-thickness: 2px; }
 .choice-row.crossed .choice { position: relative; }
 .choice-row.crossed .choice::after { content: ''; position: absolute; left: 8px; right: 8px; top: 50%; border-top: 2px solid var(--ink-2); pointer-events: none; }

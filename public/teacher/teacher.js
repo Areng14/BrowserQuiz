@@ -95,8 +95,8 @@
     try { [data, me] = await Promise.all([api('/api/t/overview'), api('/api/t/me').catch(() => null)]); } catch (e) { if (e.message !== 'login') mount(h('p', { class: 't-error', text: e.message })); return; }
     const runner = !me || !me.runner || me.runnerOk ? null
       : h('p', { class: 't-error t-small' }, h('span', { class: 'dot bad' }), 'Code runner offline. Code questions get graded once it is back.');
-    const quizSel = h('select', { class: 'input', id: 'run-quiz' }, data.quizzes.map((x) => h('option', { value: x.id, text: `${x.title} (${plural(x.questions, 'question')}, added ${date(x.createdAt)})` })));
-    const rosterSel = h('select', { class: 'input', id: 'run-roster' }, data.rosters.map((x) => h('option', { value: x.id, text: `${x.name} (${x.students})` })));
+    const quizSel = picker('run-quiz', 'Quiz', data.quizzes.map((x) => ({ value: x.id, label: x.title, meta: [plural(x.questions, 'question'), date(x.createdAt)] })));
+    const rosterSel = picker('run-roster', 'Class', data.rosters.map((x) => ({ value: x.id, label: x.name, meta: [plural(x.students, 'student')] })));
     const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', checked: true });
     const practice = h('input', { type: 'checkbox', id: 'practice' });
     const startMsg = h('p', { class: 't-error', role: 'alert' });
@@ -140,8 +140,7 @@
         h('h1', { text: 'Start a quiz' }),
         !data.quizzes.length || !data.rosters.length ? h('p', { class: 't-muted', text: 'Upload a quiz and a roster below first.' }) : null,
         h('div', { class: 't-row' },
-          h('label', { class: 'field', for: 'run-quiz' }, h('span', { class: 'field-label', text: 'Quiz' }), quizSel),
-          h('label', { class: 'field', for: 'run-roster' }, h('span', { class: 'field-label', text: 'Class' }), rosterSel)),
+          quizSel.el, rosterSel.el),
         h('label', { class: 't-check', for: 'ip-lock' }, ipLock, h('span', { text: 'Only allow students on my current network' })),
         h('label', { class: 't-check', for: 'practice' }, practice, h('span', { text: 'Practice: no lockdown or monitoring, and students see the answers at the end' })),
         h('div', {}, startBtn), startMsg, runner),
@@ -158,7 +157,7 @@
               onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?${r.status === 'open' ? " It's still open: anyone taking it gets signed out." : ''}`) }))))))) : h('p', { class: 't-muted', text: 'None yet.' })),
       h('section', { class: 't-section' },
         h('div', { class: 't-head' }, h('h2', { text: 'Quizzes' }),
-          linkBtn('AI prompt', '/api/t/quiz-prompt'),
+          copyPromptBtn(),
           h('button', { class: 'btn small primary', type: 'button', text: 'New quiz', onclick: () => window.BQT.showQuizEditor(null) })),
         data.quizzes.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
           h('tbody', {}, data.quizzes.map((x) => h('tr', {},
@@ -196,6 +195,108 @@
     const a = h('a', { class: 'btn small', href, text, target: newTab ? '_blank' : null, rel: newTab ? 'noopener' : null });
     a.style.cssText = 'display:inline-flex;align-items:center;text-decoration:none';
     return a;
+  }
+
+  // A dropdown whose rows have a name on the left and details lined up on the right, which a native
+  // select can't do. items: [{ value, label, meta: [column, ...] }]. Keyboard: arrows, Home/End,
+  // Enter or Space to pick, Escape to close.
+  function picker(id, labelText, items) {
+    let value = items.length ? items[0].value : '';
+    let active = 0;
+    const row = (it) => [h('span', { class: 'pick-label', text: it.label }), h('span', { class: 'pick-meta' }, it.meta.map((m) => h('span', { text: m })))];
+    const face = h('span', { class: 'pick-face', id: id + '-value' });
+    const btn = h('button', {
+      class: 'input pick', type: 'button', id, disabled: !items.length,
+      'aria-haspopup': 'listbox', 'aria-expanded': 'false', 'aria-labelledby': `${id}-label ${id}-value`,
+    }, face, h('span', { class: 'pick-caret', 'aria-hidden': 'true' }));
+    const list = h('ul', { class: 'pick-list', role: 'listbox', id: id + '-list', tabindex: '-1', 'aria-labelledby': id + '-label' });
+    list.hidden = true;
+    const opts = items.map((it, i) => {
+      const li = h('li', { class: 'pick-opt', role: 'option', id: `${id}-o${i}`, 'data-value': it.value }, row(it));
+      li.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus in the list until the click
+      li.addEventListener('click', () => { choose(i); close(); });
+      li.addEventListener('mousemove', () => setActive(i, true));
+      list.append(li);
+      return li;
+    });
+    const el = h('div', { class: 'field pick-wrap' }, h('span', { class: 'field-label', id: id + '-label', text: labelText }), btn, list);
+    function paint() {
+      const it = items.find((x) => x.value === value);
+      face.replaceChildren(...(it ? row(it) : []));
+      opts.forEach((li, i) => li.setAttribute('aria-selected', String(items[i].value === value)));
+    }
+    function setActive(i, fromMouse) {
+      active = Math.max(0, Math.min(items.length - 1, i));
+      opts.forEach((li, k) => li.classList.toggle('active', k === active));
+      list.setAttribute('aria-activedescendant', opts[active].id);
+      if (!fromMouse) opts[active].scrollIntoView({ block: 'nearest' });
+    }
+    function choose(i) { value = items[i].value; paint(); }
+    function open() {
+      list.hidden = false;
+      btn.setAttribute('aria-expanded', 'true');
+      setActive(Math.max(0, items.findIndex((x) => x.value === value)));
+      list.focus();
+    }
+    function close(stay) {
+      list.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      if (!stay) btn.focus();
+    }
+    btn.addEventListener('click', () => (list.hidden ? open() : close()));
+    btn.addEventListener('keydown', (e) => {
+      if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); open(); }
+    });
+    list.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowDown') setActive(active + 1);
+      else if (e.key === 'ArrowUp') setActive(active - 1);
+      else if (e.key === 'Home') setActive(0);
+      else if (e.key === 'End') setActive(items.length - 1);
+      else if (e.key === 'Enter' || e.key === ' ') { choose(active); close(); }
+      else if (e.key === 'Escape') close();
+      else if (e.key === 'Tab') { close(true); return; }
+      else return;
+      e.preventDefault();
+    });
+    list.addEventListener('focusout', (e) => { if (!el.contains(e.relatedTarget)) close(true); });
+    paint();
+    return { el, get value() { return value; } };
+  }
+
+  // The AI prompt goes on the clipboard, ready to paste into a chatbot. It's fetched ahead of time so
+  // the copy happens right in the click. If copying is blocked, it downloads instead.
+  function copyPromptBtn() {
+    const url = `/api/t/quiz-prompt`;
+    const btn = h('button', { class: 'btn small', type: 'button', text: 'Copy AI prompt' });
+    let text = null;
+    const ready = fetch(url, { credentials: 'same-origin' }).then((r) => (r.ok ? r.text() : null)).then((t) => { text = t; }).catch(() => {});
+    let reset = 0;
+    btn.addEventListener('click', async () => {
+      if (text == null) await ready;
+      if (text != null && await copyText(text)) {
+        btn.textContent = 'Copied';
+        clearTimeout(reset);
+        reset = setTimeout(() => { btn.textContent = 'Copy AI prompt'; }, 2000);
+      } else {
+        location.href = url;
+      }
+    });
+    return btn;
+  }
+  async function copyText(text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      try { await navigator.clipboard.writeText(text); return true; } catch (e) { /* try the old way */ }
+    }
+    // Plain http on a school network has no clipboard API; a selected textarea still copies.
+    const ta = h('textarea', { readonly: '', 'aria-hidden': 'true' });
+    ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+    ta.value = text;
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    ta.remove();
+    return ok;
   }
   async function remove(path, question) {
     if (!confirm(question)) return;

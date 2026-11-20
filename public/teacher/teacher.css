@@ -14,6 +14,25 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-section { display: grid; gap: 12px; align-content: start; }
 .t-row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .t-row .field { min-width: 200px; flex: 1 1 200px; }
+/* picker: a dropdown with the name on the left and details lined up on the right */
+.pick-wrap { position: relative; }
+.pick { display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer; }
+.pick:disabled { cursor: default; color: var(--ink-2); }
+.pick-face { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 16px; }
+.pick-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-meta { flex: none; display: flex; gap: 16px; font-size: 14px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pick-meta > span { min-width: 92px; text-align: right; }
+.pick-meta > span + span { min-width: 128px; }
+.pick-caret { flex: none; width: 7px; height: 7px; margin: 0 2px 3px; border: solid var(--ink-2); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.pick-list {
+  position: absolute; z-index: 30; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none;
+  max-height: 320px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+}
+.pick-list:focus { outline: none; }
+.pick-opt { display: flex; align-items: baseline; gap: 16px; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+.pick-opt.active { background: var(--soft); }
+.pick-opt[aria-selected="true"] .pick-label { font-weight: 600; }
 .t-muted { color: var(--ink-2); }
 .t-small { font-size: 13px; }
 .t-error { color: var(--bad); white-space: pre-wrap; font-size: 14px; }
