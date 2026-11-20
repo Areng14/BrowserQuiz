@@ -129,7 +129,7 @@
 
 .qmain { overflow: auto; padding: 32px var(--gut-r) 48px var(--gut-l); outline: none; }
 .qview { max-width: 720px; margin: 0 auto; display: grid; gap: 18px; }
-.qview.wide { max-width: 1240px; }
+.qview.wide { max-width: 2400px; }
 .meta-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; color: var(--ink-2); }
 .prompt { display: grid; gap: 10px; font-size: 17px; }
 .directions { font-size: 17px; max-width: 640px; }
@@ -148,8 +148,8 @@
 
 /* code questions: prompt | editor */
 .code-q { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
-.code-left { flex: 1 1 320px; min-width: 0; display: grid; gap: 14px; }
-.code-right { flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.code-left { flex: 0 1 clamp(320px, 30%, 600px); min-width: 0; display: grid; gap: 14px; }
+.code-right { flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .bq-app .sub { font-size: 15px; font-weight: 600; margin: 0; }
 .samples { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 14px; }
 .sample-call { margin: 0; padding: 8px 10px; font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); border-radius: 6px 6px 0 0; }
@@ -163,7 +163,7 @@
 .conn-banner { padding: 8px var(--gut-r) 8px var(--gut-l); font-size: 14px; color: var(--ink); background: var(--soft); border-bottom: 1px solid var(--line); border-left: 3px solid var(--warn); }
 [hidden] { display: none !important; }
 .lang-label { font-size: 14px; font-weight: 600; padding-left: 4px; }
-.editor-host { height: clamp(300px, 50vh, 560px); background: var(--editor); }
+.editor-host { height: max(320px, calc(100vh - 300px)); background: var(--editor); }
 .editor-loading { padding: 16px; color: var(--ink-2); font-size: 14px; }
 .code-fallback { width: 100%; height: 100%; resize: none; border: 0; padding: 12px; font: 14px/22px var(--mono); color: var(--ink); background: var(--editor); tab-size: 4; }
 .code-fallback:focus { outline: none; }
@@ -199,10 +199,16 @@
 }
 
 /* submitted */
-.confetti-layer { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.confetti { position: absolute; width: 8px; height: 14px; animation: bq-fall 1.6s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
-.confetti > span { display: block; width: 100%; height: 100%; border-radius: 2px; }
-@keyframes bq-fall { from { transform: translateY(-70vh); opacity: 0; } 25% { opacity: 1; } to { transform: translateY(0); opacity: 1; } }
+.confetti-layer { position: fixed; inset: 0; z-index: 40; overflow: hidden; pointer-events: none; }
+.confetti { position: absolute; bottom: -16px; border-radius: 2px; opacity: 0; animation-name: bq-shot; animation-fill-mode: forwards; }
+.confetti.l { left: -10px; }
+.confetti.r { right: -10px; }
+@keyframes bq-shot {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0deg); animation-timing-function: cubic-bezier(0.15, 0.7, 0.35, 1); }
+  42% { opacity: 1; transform: translate(var(--x1), var(--y1)) rotate(var(--r1)); animation-timing-function: cubic-bezier(0.45, 0, 0.8, 0.6); }
+  85% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--x2), var(--y2)) rotate(var(--r2)); }
+}
 .done-panel { position: relative; }
 
 @media (max-width: 600px) {
@@ -211,10 +217,23 @@
   .qnav .btn { padding: 0 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .confetti { animation: none; }
+  .confetti-layer { display: none; }
 }
 
 /* Teacher preview */
 .pv-score { display: grid; gap: 8px; }
 .pv-score p { margin: 0; }
 .pv-score ul { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 14px; }
+
+/* Practice */
+.row-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.row-actions a.btn { display: inline-flex; align-items: center; text-decoration: none; }
+
+/* Big screens: scale the text up. Not the code editor itself: CSS zoom throws off where its cursor lands,
+   so its font size grows through its own setting instead (see editorFontSize in app.js). */
+@media (min-width: 1700px) {
+  .qbar, .qnav, .qview:not(.wide), .code-left, .results, .screen > .panel { zoom: 1.15; }
+}
+@media (min-width: 2300px) {
+  .qbar, .qnav, .qview:not(.wide), .code-left, .results, .screen > .panel { zoom: 1.3; }
+}

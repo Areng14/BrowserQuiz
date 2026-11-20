@@ -12,7 +12,7 @@
     resize: 'Window resized', 'unfocused-beat': 'Heartbeat: not focused', 'heartbeat-lost': 'Connection lost', reconnect: 'Reconnected',
     resume: 'Continued on a new computer', 'let-in': 'Let back in by teacher', extend: 'Extra time', grade: 'Graded by teacher',
     'extended-display': 'Second display', 'bulk-insert': 'Large insert in editor', 'inhuman-typing': 'Typing faster than a person',
-    'late-submit': 'Submitted late', 'other-network': 'Request from another network', 'other-device': 'Request from another browser',
+    'late-submit': 'Submitted late', exit: 'Exited the quiz', 'other-network': 'Request from another network', 'other-device': 'Request from another browser',
   };
   let pollTimer = 0;
   let selected = null;
@@ -98,15 +98,24 @@
     const quizSel = h('select', { class: 'input', id: 'run-quiz' }, data.quizzes.map((x) => h('option', { value: x.id, text: `${x.title} (${plural(x.questions, 'question')}, added ${date(x.createdAt)})` })));
     const rosterSel = h('select', { class: 'input', id: 'run-roster' }, data.rosters.map((x) => h('option', { value: x.id, text: `${x.name} (${x.students})` })));
     const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', checked: true });
+    const practice = h('input', { type: 'checkbox', id: 'practice' });
     const startMsg = h('p', { class: 't-error', role: 'alert' });
     const startBtn = h('button', { class: 'btn primary', type: 'button', text: 'Start quiz', disabled: !data.quizzes.length || !data.rosters.length });
     startBtn.addEventListener('click', async () => {
       startBtn.disabled = true;
-      try { const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked }); showRun(r.id); } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
+      try { const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked, practice: practice.checked }); showRun(r.id); } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
     });
 
     const quizFile = h('input', { class: 'input', type: 'file', id: 'quiz-file', accept: '.quiz,.zip,.json' });
     const quizMsg = h('p', { class: 't-error', role: 'alert' });
+    // Paste quiz.json (from an AI chat, say) and upload it straight away.
+    const pasteJson = h('textarea', { class: 'input t-textarea', id: 'paste-quiz', rows: 8, spellcheck: 'false', placeholder: '{ "title": "...", "questions": [ ... ] }' });
+    const pasteBtn = h('button', { class: 'btn', type: 'button', text: 'Upload pasted quiz' });
+    pasteBtn.addEventListener('click', async () => {
+      if (!pasteJson.value.trim()) { quizMsg.textContent = 'Paste a quiz.json first.'; return; }
+      pasteBtn.disabled = true; pasteBtn.textContent = 'Checking…'; quizMsg.textContent = '';
+      try { await api('/api/t/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: pasteJson.value }); showHome(); } catch (e) { quizMsg.textContent = e.message; pasteBtn.disabled = false; pasteBtn.textContent = 'Upload pasted quiz'; }
+    });
     const quizBtn = h('button', { class: 'btn', type: 'button', text: 'Upload .quiz' });
     quizBtn.addEventListener('click', async () => {
       const f = quizFile.files[0];
@@ -134,6 +143,7 @@
           h('label', { class: 'field', for: 'run-quiz' }, h('span', { class: 'field-label', text: 'Quiz' }), quizSel),
           h('label', { class: 'field', for: 'run-roster' }, h('span', { class: 'field-label', text: 'Class' }), rosterSel)),
         h('label', { class: 't-check', for: 'ip-lock' }, ipLock, h('span', { text: 'Only allow students on my current network' })),
+        h('label', { class: 't-check', for: 'practice' }, practice, h('span', { text: 'Practice: no lockdown or monitoring, and students see the answers at the end' })),
         h('div', {}, startBtn), startMsg, runner),
       h('section', { class: 't-section' },
         h('h2', { text: 'Recent quizzes' }),
@@ -142,7 +152,7 @@
           h('tbody', {}, data.runs.map((r) => h('tr', {},
             h('td', {}, h('button', { class: 't-link', type: 'button', text: r.code, onclick: () => showRun(r.id) })),
             h('td', { text: r.quiz }), h('td', { text: r.roster }),
-            h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: r.status === 'open' ? 'Open' : 'Closed' }),
+            h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.practice ? ' (practice)' : ''}` }),
             h('td', { class: 'num', text: String(r.joined) }), h('td', { text: date(r.createdAt) })))))) : h('p', { class: 't-muted', text: 'None yet.' })),
       h('section', { class: 't-section' },
         h('div', { class: 't-head' }, h('h2', { text: 'Quizzes' }),
@@ -160,6 +170,8 @@
               linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
               h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}? Past results stay.`) }))))))) : null,
         h('div', { class: 't-row' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizBtn),
+        h('details', { class: 't-paste' }, h('summary', { text: 'Paste a quiz.json' }),
+          h('label', { class: 'field', for: 'paste-quiz' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteJson), h('div', {}, pasteBtn)),
         quizMsg),
       h('section', { class: 't-section' },
         h('div', { class: 't-head' }, h('h2', { text: 'Classes' }),
@@ -281,7 +293,7 @@
       const run = data.run;
       code.textContent = run.code;
       title.textContent = run.title;
-      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.ipLock ? ', only your network' : ''}.`;
+      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}.`;
       howTo.textContent = `Join at ${location.origin}`;
       toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
       toggle.onclick = () => {
@@ -341,21 +353,22 @@
       if (quiet && (snapshot === lastDetail || typing || String(window.getSelection() || '') !== '')) return;
       lastDetail = snapshot;
       const canvas = h('canvas', { class: 't-trail', width: 640, height: 360, 'aria-label': 'Mouse trail' });
-      const answers = h('div', { class: 't-answers' }, d.answers.map((x, i) => {
-        const parts = [h('p', {}, h('b', { text: `${i + 1}. ` }), x.prompt.replace(/```\w*/g, ' ').replace(/`/g, '').replace(/\s+/g, ' ').trim().slice(0, 140))];
-        const pts = x.points != null ? `${x.points} / ${x.max}${x.override ? ' (set by you)' : ''}`
-          : x.state === 'pending' ? 'grading…' : x.state === 'failed' ? `grading failed (${(x.code && x.code.message) || 'runner offline'})` : `– / ${x.max}`;
-        parts.push(h('p', { class: 't-muted t-small', text: `Points: ${pts}${x.review ? ' (needs review)' : ''}` }));
-        if (x.type === 'code') {
-          parts.push(h('pre', { text: x.answer || '(no answer)' }));
-          if (x.code && x.code.compileError) parts.push(h('pre', { class: 't-error', text: x.code.compileError }));
-          if (x.code && x.code.tests) parts.push(h('p', { class: 't-small', text: `Hidden tests passed: ${x.code.tests.filter((t) => t.pass).length} of ${x.code.tests.length}${x.language ? ` (${x.language === 'python' ? 'Python' : 'Java'})` : ''}` }));
-        } else {
-          parts.push(h('p', { class: 't-small' }, 'Answer: ', h('b', { text: x.answer == null ? '(blank)' : String(x.answer) })));
-          parts.push(h('p', { class: 't-small t-muted', text: `Correct: ${x.correctAnswer}` }));
+      // Each question as it looked in the quiz, with this student's answer and the correct one,
+      // plus what only the teacher sees: grading state, hidden test results, and the grading controls.
+      const answers = h('div', { class: 't-answers r-view' }, d.report.questions.map((rq, i) => {
+        const x = d.answers[i];
+        const sec = window.BQReport.question(d.quiz, rq, i, { teacher: true });
+        const notes = [];
+        if (x.state === 'pending') notes.push('Grading…');
+        if (x.state === 'failed') notes.push(`Grading failed (${(x.code && x.code.message) || 'runner offline'})`);
+        if (x.override) notes.push('Points set by you');
+        if (x.review) notes.push('Needs review');
+        if (x.type === 'code' && x.code && x.code.tests && x.code.tests.length) {
+          notes.push(`Hidden tests passed: ${x.code.tests.filter((t) => t.pass).length} of ${x.code.tests.length}`);
         }
-        if (d.status === 'submitted') parts.push(gradeControls(id, x));
-        return h('div', { class: 't-answer' }, parts);
+        if (notes.length) sec.append(h('p', { class: 't-small t-muted', text: notes.join('. ') + '.' }));
+        if (d.status === 'submitted') sec.append(gradeControls(id, x));
+        return sec;
       }));
       detail.replaceChildren(h('section', { class: 't-detail' },
         h('div', { class: 't-row' },
@@ -373,7 +386,7 @@
           h('div', { class: 't-section' }, h('h3', { text: 'Mouse trail' }), canvas,
             h('p', { class: 't-muted t-small', text: `${d.mouse.length} mouse samples` }),
             d.userAgent ? h('p', { class: 't-muted t-small', text: d.userAgent }) : null)),
-        h('div', { class: 't-section' }, h('h3', { text: d.totals ? `Answers (${d.totals.score} / ${d.totals.max}${d.totals.pending ? ', code still grading' : d.totals.failed ? ', grading failed' : d.totals.review ? ', needs review' : ''})` : 'Answers' }), answers)));
+        h('div', { class: 't-section' }, h('h3', { text: d.totals ? `Answers (${d.totals.score} / ${d.totals.max}${d.totals.pending ? ', code still grading' : d.totals.failed ? ', grading failed' : d.totals.review ? ', needs review' : ''})` : 'Answers so far' }), answers)));
       drawTrail(canvas, d.mouse);
       if (!quiet) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }

@@ -69,6 +69,7 @@ function addColumn(table, col, def) {
 addColumn('quizzes', 'archived', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('rosters', 'archived', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('roster_students', 'removed', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('runs', 'mode', "TEXT NOT NULL DEFAULT 'exam'"); // exam | practice
 
 const cache = new Map();
 function q(sql) {

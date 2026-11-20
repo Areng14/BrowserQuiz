@@ -66,6 +66,11 @@
       if (this.armed) return;
       this.armed = true;
       const o = this.opts;
+      if (o.integrity === false) { // practice: heartbeats only, to autosave answers
+        this.beatTimer = setInterval(() => this.beat(), BEAT_MS);
+        this.beat();
+        return;
+      }
 
       this.on(window, 'blur', () => {
         if (!this.awaySince) this.awaySince = Date.now();

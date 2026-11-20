@@ -6,8 +6,8 @@ const { q } = require('./db');
 const store = require('./store');
 const H = require('./harness');
 const { runSamples } = require('./coderun');
-const { cleanAnswers, gradeAttempt } = require('./grade');
-const { HttpError, clientIp, sameNetwork, cookies, setCookie, json, readJson, limiter, send, sha256, newToken } = require('./http');
+const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz } = require('./grade');
+const { HttpError, clientIp, sameNetwork, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
 
 const PEPPER = process.env.ID_PEPPER || '';
 const joinFails = limiter(20, 60000);
@@ -32,6 +32,7 @@ function current(req, { mustBeOpen = true } = {}) {
   if (!a || a.archived) throw new HttpError(401, 'no_attempt');
   const run = q('SELECT * FROM runs WHERE id = ?').get(a.runId);
   if (!run) throw new HttpError(401, 'no_attempt');
+  a.practice = run.mode === 'practice';
   if (mustBeOpen && run.status !== 'open' && a.status !== 'active') throw new HttpError(403, 'run_closed');
   const ip = clientIp(req);
   if (run.ip_lock && !sameNetwork(ip, run.ip_lock)) {
@@ -76,6 +77,7 @@ function runInfo(run, quiz) {
   return {
     runId: run.id, title: quiz.title, timeLimitMin: quiz.timeLimitMin,
     questionCount: quiz.questions.length, hasCode: quiz.questions.some((qq) => qq.type === 'code'),
+    practice: run.mode === 'practice',
   };
 }
 
@@ -151,17 +153,21 @@ module.exports = function studentRoutes(r) {
       if (mine && mine.id === existing.id) return json(res, 200, { ok: true });
       // A student who lost their cookie before starting can sign in again. After that, only if the teacher
       // pressed "Let back in" (crashed PC, new seat): they pick up the same attempt, answers and clock.
-      const letIn = existing.letIn && now - existing.letIn < 10 * 60000;
+      // Practice runs aren't monitored, so signing in again anywhere is fine.
+      const letIn = run.mode === 'practice' || (existing.letIn && now - existing.letIn < 10 * 60000);
       if (existing.status !== 'waiting' && existing.status !== 'admitted' && !letIn) throw new HttpError(409, 'already_started');
       if (letIn) { existing.letIn = 0; existing.resumeOk = true; }
+      if (run.mode === 'practice' && existing.status === 'waiting') { existing.status = 'admitted'; store.save(existing); }
       existing.tokenHash = sha256(token);
       q('UPDATE attempts SET token_hash = ?, ip = ?, user_agent = ? WHERE id = ?').run(existing.tokenHash, clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), existing.id);
       existing.userAgent = String(req.headers['user-agent'] || '').slice(0, 300);
       store.logEvent(existing, 'join', 'info', 'signed in again');
     } else {
       const id = crypto.randomUUID();
+      // Practice runs skip the waiting room.
       q(`INSERT INTO attempts (id, run_id, student_id, token_hash, status, ip, user_agent, created_at)
-         VALUES (?, ?, ?, ?, 'waiting', ?, ?, ?)`).run(id, run.id, student.id, sha256(token), clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), now);
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, run.id, student.id, sha256(token), run.mode === 'practice' ? 'admitted' : 'waiting',
+        clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), now);
       store.logEvent(store.getAttempt(id), 'join', 'info', student.name);
     }
     setCookie(req, res, ATT, token, 12 * 3600);
@@ -260,6 +266,33 @@ module.exports = function studentRoutes(r) {
     } catch (e) {
       json(res, 200, { status: 'error', message: 'Code runner offline. Tell your teacher.' });
     }
+  });
+
+  // Practice only: the student's own answers next to the correct ones, once grading is done.
+  r.get('/api/practice-review', async (req, res) => {
+    const { a, run, quiz } = current(req, { mustBeOpen: false });
+    if (!a.practice) throw new HttpError(404, 'not_found');
+    if (a.status !== 'submitted') throw new HttpError(409, 'not_submitted');
+    const until = Date.now() + 30000;
+    while (Date.now() < until && (!a.result || totals(a.result, quiz, a.answers).pending)) await sleep(500);
+    const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
+    json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: [studentReport(quiz, a, student ? student.name : '')] });
+  });
+
+  // Practice only: start over with a fresh attempt.
+  r.post('/api/practice-retry', async (req, res) => {
+    const { a, run } = current(req);
+    if (!a.practice) throw new HttpError(404, 'not_found');
+    a.archived = true;
+    store.save(a);
+    store.forget(a.id);
+    const id = crypto.randomUUID();
+    const token = newToken();
+    q(`INSERT INTO attempts (id, run_id, student_id, token_hash, status, ip, user_agent, created_at)
+       VALUES (?, ?, ?, ?, 'admitted', ?, ?, ?)`).run(id, run.id, a.studentId, sha256(token), clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), Date.now());
+    store.logEvent(store.getAttempt(id), 'join', 'info', 'practice again');
+    setCookie(req, res, ATT, token, 12 * 3600);
+    json(res, 200, { ok: true });
   });
 
   r.post('/api/submit', async (req, res) => {

@@ -21,7 +21,7 @@ const CLIENT_EVENTS = {
   'blur': 'violation', 'hidden': 'violation', 'fullscreen-exit': 'violation', 'extended-display': 'violation',
   'mouse-left': 'warning', 'copy': 'warning', 'paste': 'warning', 'contextmenu': 'warning', 'blocked-key': 'warning',
   'print-screen': 'warning', 'resize': 'warning', 'bulk-insert': 'warning', 'inhuman-typing': 'warning',
-  'return': 'info',
+  'return': 'info', 'exit': 'violation',
 };
 // Events only the server records.
 // A lost heartbeat is only a warning: school wifi drops, and actually leaving the window is caught by
@@ -92,6 +92,7 @@ function logEvent(a, type, severity, detail) {
 function record(a, type, detail, quiz) {
   const severity = CLIENT_EVENTS[type] || SERVER_EVENTS[type];
   if (!severity) return;
+  if (a.practice && severity !== 'info') return; // practice runs aren't monitored
   const now = Date.now();
   if (severity === 'warning') {
     const n = (a.warnWindow.get(type) || []).filter((t) => now - t < 60000);

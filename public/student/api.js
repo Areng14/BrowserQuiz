@@ -42,6 +42,7 @@
     // keepalive lets a submit survive the page closing, but browsers cap keepalive bodies at 64 KB.
     submit: (answers) => post('/api/submit', { answers }, JSON.stringify(answers || {}).length < 60000),
     resume: () => post('/api/resume'),
+    practiceRetry: () => post('/api/practice-retry'),
     assetUrl: (p) => '/asset/' + String(p).split('/').map(encodeURIComponent).join('/'),
   };
 })();

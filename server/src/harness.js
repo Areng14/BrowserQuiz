@@ -229,7 +229,30 @@ function same(type, exp, got, unordered) {
   return a.every((x, i) => same(e, x, b[i], false));
 }
 
-const cleanJava = (s) => String(s || '').replace(/\/jobs\/[^/\s]+\//g, '').replace(/\r/g, '').trim().slice(0, 4000);
+// Errors inside the generated test file (BQMain.java) mean the student's code doesn't have what the question
+// asks for. Say that in plain words instead of showing our harness code; errors in their own file stay as-is.
+function explainHarnessErrors(text) {
+  const blocks = text.split(/(?=^BQMain\.java:\d+: error: )/m).filter((b) => b.startsWith('BQMain.java'));
+  const notes = blocks.map((b) => {
+    const msg = (b.match(/error: (.*)/) || [])[1] || '';
+    const sym = (b.match(/symbol:\s+(method|class|variable)\s+(.*)/) || []);
+    if (/cannot find symbol/.test(msg) && sym[1] === 'method') return `Missing method ${sym[2].trim()}`;
+    if (/cannot find symbol/.test(msg) && sym[1] === 'class') return `Missing class ${sym[2].trim()}`;
+    const ctor = msg.match(/constructor (\w+) in class \w+ cannot be applied/);
+    if (ctor) return `${ctor[1]} needs a constructor that takes (${((b.match(/found:\s+(.*)/) || [])[1] || '').trim()})`;
+    const conv = msg.match(/incompatible types: (.*) cannot be converted to (.*)/);
+    if (conv) return `A method returns ${conv[1]} but should return ${conv[2]}`;
+    if (/is not public in/.test(msg)) return msg.replace(/ in .*/, '') + ' (make it public)';
+    return msg;
+  });
+  return [...new Set(notes.filter(Boolean))].join('\n');
+}
+function cleanJava(s) {
+  const text = String(s || '').replace(/\/jobs\/[^/\s]+\//g, '').replace(/\r/g, '').trim();
+  if (!/^BQMain\.java:/m.test(text)) return text.slice(0, 4000);
+  const own = text.split(/(?=^\w+\.java:\d+: error: )/m).filter((b) => /^\w+\.java/.test(b) && !b.startsWith('BQMain.java')).join('').trim();
+  return [own, explainHarnessErrors(text)].filter(Boolean).join('\n').slice(0, 4000);
+}
 const cleanPy = (s) => String(s || '').replace(/File "\/jobs\/[^"]+\/(\w+\.py)"/g, 'File "$1"').trim().slice(0, 4000);
 
 // res = runner response. Returns { status, message?, tests: [{ pass, got?, gotSteps?, error? }], printed }

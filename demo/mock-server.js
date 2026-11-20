@@ -81,7 +81,7 @@
     'reload': 'violation', 'unfocused-beat': 'violation', 'heartbeat-lost': 'warning',
     'mouse-left': 'warning', 'copy': 'warning', 'paste': 'warning', 'contextmenu': 'warning', 'blocked-key': 'warning',
     'print-screen': 'warning', 'resize': 'warning', 'bulk-insert': 'warning', 'inhuman-typing': 'warning',
-    'return': 'info',
+    'return': 'info', 'exit': 'violation',
   };
   const SERVER_ONLY = new Set(['start', 'submit', 'admit', 'run', 'restore', 'join', 'reload']);
   const VIOLATION_MERGE_MS = 2000;

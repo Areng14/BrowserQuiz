@@ -33,6 +33,7 @@
   let api;
   let root;
   let S;
+  let keysBound = false;
 
   function freshState() {
     return {
@@ -160,17 +161,23 @@
       s.onload = () => {
         const m = window.monaco;
         if (!m) return reject(new Error('monaco missing'));
+        // VS Code's Light+ and Dark+ colors.
+        const control = ['if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default', 'break', 'continue', 'return', 'try', 'catch', 'finally', 'throw'];
+        const rules = (c) => [
+          { token: 'keyword', foreground: c.keyword }, { token: 'string', foreground: c.string },
+          { token: 'number', foreground: c.number }, { token: 'comment', foreground: c.comment, fontStyle: 'italic' },
+          { token: 'type.identifier', foreground: c.type }, { token: 'function', foreground: c.fn },
+          { token: 'identifier', foreground: c.ident }, { token: 'annotation', foreground: c.fn },
+          ...control.map((k) => ({ token: 'keyword.' + k, foreground: c.control })),
+        ];
         m.editor.defineTheme('bq-light', {
           base: 'vs', inherit: true,
-          rules: [
-            { token: 'keyword', foreground: '0033b3' }, { token: 'string', foreground: '067d17' },
-            { token: 'number', foreground: '1750eb' }, { token: 'comment', foreground: '8c8c8c', fontStyle: 'italic' },
-            { token: 'type.identifier', foreground: '7a3e9d' },
-          ],
+          rules: rules({ keyword: '0000ff', control: 'af00db', string: 'a31515', number: '098658', comment: '008000', type: '267f99', fn: '795e26', ident: '001080' }),
           colors: { 'editor.background': '#ffffff', 'editor.lineHighlightBackground': '#f4f5f7', 'editorLineNumber.foreground': '#98a1ab' },
         });
         m.editor.defineTheme('bq-dark', {
-          base: 'vs-dark', inherit: true, rules: [],
+          base: 'vs-dark', inherit: true,
+          rules: rules({ keyword: '569cd6', control: 'c586c0', string: 'ce9178', number: 'b5cea8', comment: '6a9955', type: '4ec9b0', fn: 'dcdcaa', ident: '9cdcfe' }),
           colors: { 'editor.background': '#1b1e23', 'editor.lineHighlightBackground': '#22262c', 'editorLineNumber.foreground': '#6e7681' },
         });
         m.editor.setTheme(editorTheme());
@@ -319,7 +326,7 @@
       try {
         await api.attempt({ runId: run.runId, rosterId: picked.id, studentId: sid.value.trim() });
         S.me = { name: picked.name };
-        screenWait();
+        if (run.practice) screenRules(); else screenWait();
       } catch (ex) {
         msg.textContent = errorText(ex);
         btn.disabled = false; btn.textContent = 'Continue';
@@ -361,7 +368,25 @@
     ];
   }
 
+  function screenPractice(err) {
+    if (S.run.hasCode) loadMonaco().catch(() => {});
+    const n = S.run.questionCount;
+    const mins = S.run.timeLimitMin;
+    const btn = h('button', { class: 'btn primary', type: 'button', text: 'Start' });
+    const msg = h('p', { class: 'error', role: 'alert', text: err || '' });
+    btn.addEventListener('click', () => beginQuiz(btn, msg, 'Start'));
+    mount(entry(h('div', { class: 'panel' },
+      h('p', { class: 'eyebrow', text: S.run.title }),
+      h('div', { class: 'heading' },
+        h('h1', { text: 'Practice' }),
+        h('p', { text: mins ? `${plural(n, 'question')} in ${plural(mins, 'minute')}.` : `${plural(n, 'question')}.` }),
+        h('p', { text: 'You see the answers when you finish.' })),
+      btn, msg)));
+    btn.focus();
+  }
+
   function screenRules(err) {
+    if (S.run.practice) return screenPractice(err);
     if (S.run.hasCode) loadMonaco().catch(() => {});
     const n = S.run.questionCount;
     const mins = S.run.timeLimitMin;
@@ -412,8 +437,9 @@
   // Shared by Start and Continue. Fullscreen has to be requested inside the click.
   async function beginQuiz(btn, msg, label) {
     btn.disabled = true; btn.textContent = 'Starting…'; msg.textContent = '';
-    const fsOk = await enterFullscreen();
-    if (!fsOk && !cfg.demo) {
+    const practice = !!S.run.practice;
+    const fsOk = practice ? false : await enterFullscreen();
+    if (!fsOk && !cfg.demo && !practice) {
       msg.textContent = 'Fullscreen was blocked. Click again.';
       btn.disabled = false; btn.textContent = label;
       return;
@@ -434,6 +460,7 @@
     S.skew = r.now ? r.now - Date.now() : 0;
     S.answers = restoreAnswers(r.saved || {});
     S.monitor = new BQ.Monitor(api, {
+      integrity: !practice,
       fullscreen: fsOk,
       getAnswers: serializeAnswers,
       onFullscreenLost: showFsOverlay,
@@ -566,11 +593,13 @@
       go(S.idx + 1);
     });
     const wrap = h('div', { class: 'quiz' },
-      h('header', { class: 'qbar' }, h('span', { class: 'qbar-name', text: S.quiz.title }), save, timer, themeButton()),
+      h('header', { class: 'qbar' }, h('span', { class: 'qbar-name', text: S.quiz.title }), save, timer, themeButton(),
+        cfg.preview ? null : h('button', { class: 'btn small ghost', type: 'button', text: 'Exit', onclick: () => openExit() })),
       conn,
       main,
       h('footer', { class: 'qnav' }, prev, sheet, next));
     S.el = { wrap, main, timer, sheet, prev, next, save, conn, fsOverlay: null };
+    if (!keysBound) { document.addEventListener('keydown', quizKeys); keysBound = true; }
     S.saveState = 'saved';
     mount(wrap);
     renderQuestion();
@@ -710,6 +739,8 @@
     return view;
   }
 
+  const editorFontSize = () => (window.innerWidth >= 2300 ? 18 : window.innerWidth >= 1700 ? 16 : 14);
+
   function mountEditor(q, host, ans) {
     const lang = ans.language;
     host.append(h('div', { class: 'editor-loading', text: 'Loading editor…' }));
@@ -720,13 +751,14 @@
       if (!S.models[key] || S.models[key].isDisposed()) S.models[key] = m.editor.createModel(ans.code[lang], lang);
       const editor = m.editor.create(host, {
         model: S.models[key], theme: editorTheme(), automaticLayout: true, ariaLabel: 'Code answer',
-        fontFamily: "ui-monospace, 'Cascadia Mono', Consolas, monospace", fontSize: 14, lineHeight: 22,
+        fontFamily: "ui-monospace, 'Cascadia Mono', Consolas, monospace", fontSize: editorFontSize(), lineHeight: Math.round(editorFontSize() * 1.6),
         tabSize: 4, insertSpaces: true, minimap: { enabled: false }, scrollBeyondLastLine: false,
         padding: { top: 12, bottom: 12 }, renderLineHighlight: 'line',
-        // No hints: these would be free help on an exam.
-        quickSuggestions: false, suggestOnTriggerCharacters: false, wordBasedSuggestions: 'off',
-        parameterHints: { enabled: false }, hover: { enabled: false }, snippetSuggestions: 'none',
-        acceptSuggestionOnEnter: 'off', tabCompletion: 'off', inlineSuggest: { enabled: false },
+        // Suggestions only from words already in the student's own code (their names, keywords they typed).
+        // Nothing else: API hints and snippets would be free help on an exam. Tab accepts, Enter is a new line.
+        quickSuggestions: { other: true, comments: false, strings: false }, wordBasedSuggestions: 'currentDocument',
+        suggestOnTriggerCharacters: false, parameterHints: { enabled: false }, hover: { enabled: false }, snippetSuggestions: 'none',
+        acceptSuggestionOnEnter: 'off', tabCompletion: 'off', inlineSuggest: { enabled: false }, suggest: { showWords: true, showSnippets: false },
         // Clipboard and drag rules are enforced by the monitor.
         contextmenu: false, dragAndDrop: false, emptySelectionClipboard: false, links: false,
       });
@@ -863,13 +895,87 @@
     const ov = h('div', { class: 'fs-overlay' },
       h('div', { class: 'fs-card', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'fs-title' },
         h('h2', { id: 'fs-title', text: 'The quiz runs in fullscreen' }),
-        h('div', {}, btn)));
+        h('div', { class: 'row-actions' }, btn, h('button', { class: 'btn', type: 'button', text: 'Exit', onclick: () => openExit() }))));
     S.el.fsOverlay = ov;
     S.el.wrap.append(ov);
     btn.focus();
   }
   function hideFsOverlay() {
     if (S.el && S.el.fsOverlay) { S.el.fsOverlay.remove(); S.el.fsOverlay = null; }
+  }
+
+  // Students can always get out: turn in now, or leave with answers saved and come back later.
+  function openExit() {
+    if (S.done || !S.el || S.el.wrap.querySelector('.modal-backdrop')) return;
+    let backdrop;
+    const close = () => { backdrop.remove(); };
+    const keep = h('button', { class: 'btn', type: 'button', text: 'Keep working', onclick: close });
+    const turnIn = h('button', { class: 'btn', type: 'button', text: 'Turn in', onclick: () => { backdrop.remove(); submitNow(); } });
+    const exit = h('button', { class: 'btn primary', type: 'button', text: 'Exit', onclick: () => { backdrop.remove(); exitQuiz(); } });
+    backdrop = h('div', { class: 'modal-backdrop' },
+      h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'exit-title' },
+        h('h2', { id: 'exit-title', text: 'Exit the quiz?' }),
+        h('p', { class: 'muted', text: 'Your answers are saved.' }),
+        h('div', { class: 'modal-actions' }, keep, turnIn, exit)));
+    const buttons = [keep, turnIn, exit];
+    backdrop.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const i = buttons.indexOf(document.activeElement);
+        buttons[(i + (e.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
+      }
+    });
+    S.el.wrap.append(backdrop);
+    keep.focus();
+  }
+  async function exitQuiz() {
+    S.done = true;
+    clearInterval(S.timer);
+    hideFsOverlay();
+    if (S.monitor && S.monitor.armed) await Promise.resolve(api.event('exit')).catch(() => {});
+    disposeEditor();
+    if (S.monitor) S.monitor.disarm(); // last heartbeat carries the answers
+    exitFullscreen();
+    const run = S.run;
+    const me = S.me;
+    S = freshState();
+    S.run = run;
+    S.me = me;
+    S.el = null;
+    const btn = h('button', { class: 'btn primary', type: 'button', text: 'Continue quiz' });
+    const msg = h('p', { class: 'error', role: 'alert' });
+    btn.addEventListener('click', () => beginQuiz(btn, msg, 'Continue quiz'));
+    mount(entry(h('div', { class: 'panel' },
+      h('p', { class: 'eyebrow', text: run.title }),
+      h('div', { class: 'heading' }, h('h1', { text: 'You left the quiz' }), h('p', { text: 'Your answers are saved.' })),
+      btn, msg)));
+  }
+
+  // Keyboard: 1–9 pick a choice, Enter goes to the next question (or opens Submit on the last one).
+  function quizKeys(e) {
+    if (S.done || !S.el || !S.quiz || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (S.el.wrap.querySelector('.modal-backdrop, .fs-overlay')) return;
+    const t = e.target;
+    const typing = t && t.closest && t.closest('textarea, .monaco-editor, select, input[type="text"], input:not([type])');
+    const q = S.quiz.questions[S.idx];
+    if (S.dirOpen) {
+      if (e.key === 'Enter' && !(t && t.closest && t.closest('button'))) { e.preventDefault(); closeDirections(); }
+      return;
+    }
+    if (!typing && /^[1-9]$/.test(e.key) && (q.type === 'single' || q.type === 'multi')) {
+      const input = S.el.main.querySelectorAll('.choice input')[Number(e.key) - 1];
+      if (!input) return;
+      e.preventDefault();
+      input.focus();
+      if (q.type === 'single') { if (!input.checked) input.click(); } else input.click();
+      return;
+    }
+    if (e.key !== 'Enter' || e.shiftKey || q.type === 'code') return;
+    const onChoice = t && t.closest && t.closest('.choice, .text-answer');
+    if (!onChoice && t !== S.el.main && t !== document.body) return;
+    e.preventDefault();
+    S.el.next.click();
   }
 
   function openSubmit() {
@@ -991,18 +1097,25 @@
     const colors = isDark()
       ? ['#7ea3ff', '#5ccb8a', '#ffa94d', '#f783ac', '#ffd43b']
       : ['#2257d6', '#1b7f45', '#f08c00', '#e64980', '#fab005'];
-    for (let i = 0; i < 48; i++) {
-      let left = Math.random() * 98;
-      const top = 6 + Math.random() * 80;
-      if (left > 30 && left < 70 && top < 36) left = left < 50 ? left - 22 : left + 22; // keep the message readable
-      const piece = h('span', { class: 'confetti' });
-      piece.style.left = left.toFixed(1) + '%';
-      piece.style.top = top.toFixed(1) + '%';
-      piece.style.animationDelay = (Math.random() * 0.5).toFixed(2) + 's';
-      const bit = h('span');
-      bit.style.background = colors[i % colors.length];
-      bit.style.transform = `rotate(${Math.round(Math.random() * 360)}deg)`;
-      piece.append(bit);
+    const rand = (a, b) => a + Math.random() * (b - a);
+    // Two cannons in the bottom corners: up and inward, then everything falls away.
+    for (let i = 0; i < 140; i++) {
+      const left = i % 2 === 0;
+      const dir = left ? 1 : -1;
+      const piece = h('span', { class: 'confetti ' + (left ? 'l' : 'r') });
+      const x1 = dir * rand(12, 55);
+      const set = (k, v) => piece.style.setProperty(k, v);
+      set('--x1', x1.toFixed(1) + 'vw');
+      set('--y1', -rand(40, 95).toFixed(1) + 'vh');
+      set('--x2', (x1 + dir * rand(4, 18)).toFixed(1) + 'vw');
+      set('--y2', rand(5, 30).toFixed(1) + 'vh');
+      set('--r1', Math.round(rand(-540, 540)) + 'deg');
+      set('--r2', Math.round(rand(-1080, 1080)) + 'deg');
+      piece.style.animationDuration = rand(2.2, 3.4).toFixed(2) + 's';
+      piece.style.animationDelay = rand(0, 0.45).toFixed(2) + 's';
+      piece.style.width = Math.round(rand(6, 10)) + 'px';
+      piece.style.height = Math.round(rand(10, 16)) + 'px';
+      piece.style.background = colors[i % colors.length];
       layer.append(piece);
     }
     return layer;
@@ -1028,6 +1141,23 @@
         }))),
         h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Start over', onclick: () => location.reload() }))) : null,
       cfg.demo ? h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Start the demo over', onclick: () => BQ.app.restart() })) : null));
+    if (S.run && S.run.practice && !cfg.preview) {
+      const again = h('button', { class: 'btn', type: 'button', text: 'Try again' });
+      again.addEventListener('click', async () => {
+        again.disabled = true;
+        try {
+          await api.practiceRetry();
+          const run = S.run;
+          const me = S.me;
+          S = freshState();
+          S.run = run;
+          S.me = me;
+          screenPractice();
+        } catch (e) { again.disabled = false; }
+      });
+      const see = h('a', { class: 'btn primary', href: '/teacher/report.html?practice=1', target: '_blank', rel: 'noopener', text: 'See answers' });
+      screen.querySelector('.panel').append(h('div', { class: 'row-actions' }, see, again));
+    }
     if (kind !== 'already') screen.prepend(confetti());
     mount(screen);
   }

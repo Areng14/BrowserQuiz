@@ -97,10 +97,11 @@ setInterval(() => {
   }
   for (const a of store.attempts.values()) {
     if (a.status !== 'active' || a.archived) continue;
-    const run = q('SELECT quiz_id FROM runs WHERE id = ?').get(a.runId);
+    const run = q('SELECT quiz_id, mode FROM runs WHERE id = ?').get(a.runId);
     if (!run) continue;
     const quiz = store.getQuiz(run.quiz_id);
-    if (a.lastBeat && now - a.lastBeat > 10000 && !a.beatLost) {
+    a.practice = run.mode === 'practice';
+    if (a.lastBeat && now - a.lastBeat > 10000 && !a.beatLost && !a.practice) {
       a.beatLost = true;
       store.record(a, 'heartbeat-lost', Math.round((now - a.lastBeat) / 1000) + 's silent', quiz);
     }

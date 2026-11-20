@@ -110,7 +110,9 @@ async function gradeAttempt(a, quiz) {
     for (const qq of codeQs) {
       if (a.result.code[qq.id].status === 'done') continue;
       try {
-        a.result.code[qq.id] = await gradeCode(qq, a.answers[qq.id]);
+        // Blank or untouched starter code: nothing to run.
+        if (!codeAnswered(qq, a.answers[qq.id])) a.result.code[qq.id] = { status: 'done', score: 0, max: a.result.code[qq.id].max, note: 'No answer', tests: [] };
+        else a.result.code[qq.id] = await gradeCode(qq, a.answers[qq.id]);
       } catch (e) {
         a.result.code[qq.id] = { status: 'error', score: 0, max: a.result.code[qq.id].max, message: e.message };
       }
@@ -157,4 +159,47 @@ function answerReport(quiz, a) {
   });
 }
 
-module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, codeAnswered, answerReport };
+// Printable report for one student: every question with their answer and the correct one.
+// Nothing about integrity goes in here, so a teacher can hand it to the student. Code questions show
+// the reference solution, not the hidden tests.
+function studentReport(quiz, a, name) {
+  const t = a.result ? totals(a.result, quiz, a.answers) : null;
+  const res = a.result || {};
+  return {
+    name,
+    submittedAt: a.submittedAt,
+    score: t ? t.score : null,
+    max: quiz.questions.reduce((sum, qq) => sum + qq.points, 0),
+    unfinished: t ? t.pending + t.failed : quiz.questions.length,
+    questions: quiz.questions.map((qq) => {
+      const ans = a.answers ? a.answers[qq.id] : undefined;
+      const sc = a.result ? questionScore(qq, res, a.answers) : null;
+      const row = { id: qq.id, type: qq.type, mode: qq.mode || null, prompt: qq.prompt, image: qq.image || null, imageAlt: qq.imageAlt || '', points: sc && sc.state === 'done' ? sc.points : null, max: qq.points };
+      if (qq.type === 'single' || qq.type === 'multi') {
+        const perm = a.layout && a.layout.perms ? a.layout.perms[qq.id] : null;
+        row.choices = qq.choices;
+        row.picked = (ans == null ? [] : [].concat(ans)).map((i) => (perm ? perm[i] : i));
+        row.correct = [].concat(qq.answer);
+      } else if (qq.type === 'text') {
+        row.answer = ans == null || String(ans).trim() === '' ? null : String(ans);
+        row.accepted = qq.answer;
+      } else {
+        const lang = ans && qq.languages.includes(ans.language) ? ans.language : qq.languages[0];
+        const c = (res.code || {})[qq.id];
+        const m = (res.manual || {})[qq.id] || {};
+        row.language = lang;
+        row.answer = codeAnswered(qq, ans) ? ans.code : null;
+        row.compileError = row.answer && c && c.compileError ? c.compileError : null;
+        const refs = qq.reference || {};
+        row.referenceLanguage = refs[lang] ? lang : Object.keys(refs)[0] || null;
+        row.reference = row.referenceLanguage ? refs[row.referenceLanguage] : null;
+        row.rubric = (qq.rubric || []).map((r) => ({ text: r.text, points: r.points, met: !!(m.rubric && m.rubric[r.id]) }));
+        row.rubricGraded = !!m.reviewed;
+      }
+      return row;
+    }),
+  };
+}
+const reportQuiz = (quiz, quizId) => ({ id: quizId, title: quiz.title, language: quiz.language || null });
+
+module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, codeAnswered, answerReport, studentReport, reportQuiz, grading: running };

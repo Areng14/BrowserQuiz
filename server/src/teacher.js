@@ -8,7 +8,7 @@ const path = require('node:path');
 const { loadQuizFile, normalizeQuiz, QuizError, ASSET_TYPES } = require('./quizfile');
 const { writeZip } = require('./zip');
 const { checkReferences, runnerConfigured, runnerHealthy, runSamples, gradeCode } = require('./coderun');
-const { totals, questionScore, codeAnswered, gradeAttempt, answerReport, cleanAnswers, gradeAuto } = require('./grade');
+const { totals, questionScore, gradeAttempt, answerReport, cleanAnswers, gradeAuto, studentReport, reportQuiz } = require('./grade');
 const { submit, hashSid, publicQuiz } = require('./student');
 const { HttpError, clientIp, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
 
@@ -77,48 +77,6 @@ function liveRow(student, a, quiz) {
   };
 }
 
-// Printable report for one student: every question with their answer and the correct one.
-// Nothing about integrity goes in here, so a teacher can hand it to the student. Code questions show
-// the reference solution, not the hidden tests.
-function studentReport(quiz, a, name) {
-  const t = a.result ? totals(a.result, quiz, a.answers) : null;
-  const res = a.result || {};
-  return {
-    name,
-    submittedAt: a.submittedAt,
-    score: t ? t.score : null,
-    max: quiz.questions.reduce((sum, qq) => sum + qq.points, 0),
-    unfinished: t ? t.pending + t.failed : quiz.questions.length,
-    questions: quiz.questions.map((qq) => {
-      const ans = a.answers ? a.answers[qq.id] : undefined;
-      const sc = a.result ? questionScore(qq, res, a.answers) : null;
-      const row = { id: qq.id, type: qq.type, mode: qq.mode || null, prompt: qq.prompt, image: qq.image || null, imageAlt: qq.imageAlt || '', points: sc && sc.state === 'done' ? sc.points : null, max: qq.points };
-      if (qq.type === 'single' || qq.type === 'multi') {
-        const perm = a.layout && a.layout.perms ? a.layout.perms[qq.id] : null;
-        row.choices = qq.choices;
-        row.picked = (ans == null ? [] : [].concat(ans)).map((i) => (perm ? perm[i] : i));
-        row.correct = [].concat(qq.answer);
-      } else if (qq.type === 'text') {
-        row.answer = ans == null || String(ans).trim() === '' ? null : String(ans);
-        row.accepted = qq.answer;
-      } else {
-        const lang = ans && qq.languages.includes(ans.language) ? ans.language : qq.languages[0];
-        const c = (res.code || {})[qq.id];
-        const m = (res.manual || {})[qq.id] || {};
-        row.language = lang;
-        row.answer = codeAnswered(qq, ans) ? ans.code : null;
-        row.compileError = row.answer && c && c.compileError ? c.compileError : null;
-        const refs = qq.reference || {};
-        row.referenceLanguage = refs[lang] ? lang : Object.keys(refs)[0] || null;
-        row.reference = row.referenceLanguage ? refs[row.referenceLanguage] : null;
-        row.rubric = (qq.rubric || []).map((r) => ({ text: r.text, points: r.points, met: !!(m.rubric && m.rubric[r.id]) }));
-        row.rubricGraded = !!m.reviewed;
-      }
-      return row;
-    }),
-  };
-}
-const reportQuiz = (quiz, quizId) => ({ id: quizId, title: quiz.title, language: quiz.language || null });
 
 // ---------- quizzes: shared by upload, the quiz maker and preview ----------
 async function checkQuiz(quiz) {
@@ -202,30 +160,45 @@ const imagePaths = (raw) => new Set((Array.isArray(raw && raw.questions) ? raw.q
   .map((qq) => (qq && qq.image != null ? String(qq.image).replace(/^\.?\//, '') : null)).filter(Boolean));
 
 // ---------- rosters ----------
-// One student per line: "Name, ID" or a spreadsheet paste (tab between). The last comma splits, so
-// "Martinez, Ava, 204511" works. A header line like "name, student_id" is skipped.
+// One student per line, pasted from anywhere: "Name, ID", a spreadsheet (tabs), or a CSV with a header
+// row and extra columns ("name, student_id, period" or "first name, last name, id"). Without a header,
+// the ID is the field with the most digits; "Martinez, Ava, 204511" keeps "Martinez, Ava" as the name.
 function parseRosterText(text) {
   const students = [];
   const problems = [];
-  String(text || '').split(/\r?\n/).forEach((line, i) => {
-    if (!line.trim()) return;
+  const lines = String(text || '').split(/\r?\n/).map((l, i) => [l, i]).filter(([l]) => l.trim());
+  const rows = lines.map(([l, i]) => [(l.includes('\t') ? l.split('\t') : parseCsv(l)[0] || []).map((c) => c.trim().replace(/^"|"$/g, '')), i]);
+  let cols = null;
+  if (rows.length) {
+    const head = rows[0][0].map((c) => c.toLowerCase());
+    if (head.some((c) => /name/.test(c)) && !head.some((c) => /\d/.test(c))) {
+      cols = {
+        name: head.findIndex((c) => /name/.test(c) && !/first|last|given|family|sur/.test(c)),
+        first: head.findIndex((c) => /first|given/.test(c)),
+        last: head.findIndex((c) => /last|family|sur/.test(c)),
+        id: head.findIndex((c) => /(^|[^a-z])id$|^id|student.?(id|number|no)|number|#/.test(c)),
+      };
+      rows.shift();
+    }
+  }
+  const digits = (c) => (c.match(/\d/g) || []).length;
+  for (const [cells, i] of rows) {
     let name;
     let sid;
-    if (line.includes('\t')) {
-      const parts = line.split('\t').map((x) => x.trim()).filter(Boolean);
-      sid = parts.pop();
-      name = parts.join(' ');
+    if (cols) {
+      name = cols.name >= 0 ? cells[cols.name] : [cells[cols.first], cells[cols.last]].filter(Boolean).join(' ');
+      sid = cols.id >= 0 ? cells[cols.id] : '';
     } else {
-      const at = line.lastIndexOf(',');
-      name = at < 0 ? '' : line.slice(0, at).trim();
-      sid = at < 0 ? '' : line.slice(at + 1).trim();
+      let idIdx = -1;
+      cells.forEach((c, k) => { if (digits(c) && (idIdx < 0 || digits(c) >= digits(cells[idIdx]))) idIdx = k; });
+      sid = idIdx >= 0 ? cells[idIdx] : '';
+      name = cells.filter((c, k) => k !== idIdx && c && !/^\d+$/.test(c)).join(', ');
     }
-    if (i === 0 && /name/i.test(name) && /id/i.test(sid) && !/\d/.test(sid)) return; // header
-    name = String(name || '').replace(/^"|"$/g, '').trim().slice(0, 80);
-    sid = String(sid || '').replace(/^"|"$/g, '').trim().slice(0, 40);
+    name = String(name || '').trim().slice(0, 80);
+    sid = String(sid || '').trim().slice(0, 40);
     if (!name || !sid) problems.push(`Line ${i + 1} needs a name and a student ID.`);
     else students.push({ name, sid });
-  });
+  }
   return { students, problems };
 }
 function retireRoster(id) {
@@ -275,7 +248,7 @@ module.exports = function teacherRoutes(r) {
     const runs = q(`SELECT runs.*, quizzes.title AS quiz_title, rosters.name AS roster_name,
         (SELECT COUNT(*) FROM attempts WHERE attempts.run_id = runs.id AND archived = 0) AS joined
       FROM runs JOIN quizzes ON quizzes.id = runs.quiz_id JOIN rosters ON rosters.id = runs.roster_id ORDER BY runs.created_at DESC LIMIT 50`).all()
-      .map((x) => ({ id: x.id, code: x.code, status: x.status, quiz: x.quiz_title, roster: x.roster_name, joined: x.joined, ipLock: !!x.ip_lock, createdAt: x.created_at }));
+      .map((x) => ({ id: x.id, code: x.code, status: x.status, quiz: x.quiz_title, roster: x.roster_name, joined: x.joined, ipLock: !!x.ip_lock, practice: x.mode === 'practice', createdAt: x.created_at }));
     json(res, 200, { quizzes, rosters, runs });
   });
 
@@ -493,8 +466,8 @@ module.exports = function teacherRoutes(r) {
     if (!q('SELECT 1 FROM rosters WHERE id = ?').get(String(body.rosterId || ''))) throw new HttpError(400, 'bad_roster');
     const id = crypto.randomUUID();
     const code = newJoinCode();
-    q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, created_at) VALUES (?, ?, ?, ?, 'open', ?, ?)")
-      .run(id, body.quizId, body.rosterId, code, body.ipLock ? clientIp(req) : null, Date.now());
+    q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?)")
+      .run(id, body.quizId, body.rosterId, code, body.ipLock ? clientIp(req) : null, body.practice ? 'practice' : 'exam', Date.now());
     audit('open-run', null, code);
     json(res, 200, { id, code });
   });
@@ -541,7 +514,7 @@ module.exports = function teacherRoutes(r) {
     const roster = rosterStudentsForRun(run);
     const byStudent = new Map(q('SELECT id, student_id FROM attempts WHERE run_id = ? AND archived = 0').all(run.id).map((x) => [x.student_id, store.getAttempt(x.id)]));
     json(res, 200, {
-      run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin },
+      run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin },
       students: roster.map((s) => liveRow(s, byStudent.get(s.id), quiz)),
     });
   });
@@ -589,7 +562,8 @@ module.exports = function teacherRoutes(r) {
       id: a.id, name: student ? student.name : '?', status: a.status, integrity: a.integrity, reason: a.reason,
       invalidatedAt: a.invalidatedAt, strikes: a.strikes, warnings: a.warnings, startedAt: a.startedAt, submittedAt: a.submittedAt,
       deadline: a.deadline, timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
-      totals: totals(a.result, quiz, a.answers), answers: answerReport(quiz, a), events, mouse: mouse.slice(-3000), ip: a.ip, userAgent: a.userAgent,
+      totals: totals(a.result, quiz, a.answers), answers: answerReport(quiz, a), events,
+      quiz: reportQuiz(quiz, run.quiz_id), report: studentReport(quiz, a, student ? student.name : ''), mouse: mouse.slice(-3000), ip: a.ip, userAgent: a.userAgent,
     });
   });
 
