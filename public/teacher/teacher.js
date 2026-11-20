@@ -82,7 +82,7 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       btn.disabled = true; msg.textContent = '';
-      try { await post('/api/t/login', { password: pw.value }); showHome(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message; btn.disabled = false; pw.select(); }
+      try { await post('/api/t/login', { password: pw.value }); showHome(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
     });
     mount(form);
     pw.focus();

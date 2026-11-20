@@ -200,7 +200,8 @@ function answerReport(quiz, a) {
 // Printable report for one student: every question with their answer and the correct one.
 // Nothing about integrity goes in here, so a teacher can hand it to the student. Code questions show
 // the reference solution, not the hidden tests.
-function studentReport(quiz, a, name) {
+// opts.forStudent: the practice review, which shows answers and references but never rubrics.
+function studentReport(quiz, a, name, opts = {}) {
   const t = a.result ? totals(a.result, quiz, a.answers) : null;
   const res = a.result || {};
   return {
@@ -265,6 +266,7 @@ function studentReport(quiz, a, name) {
         row.rubric = (qq.rubric || []).map((r) => ({ text: r.text, points: r.points, met: !!(m.rubric && m.rubric[r.id]) }));
         row.rubricGraded = !!m.reviewed;
       }
+      if (opts.forStudent && row.rubric) row.rubric = [];
       return row;
     }),
   };

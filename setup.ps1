@@ -71,6 +71,10 @@ function Save-Env {
   [System.IO.File]::WriteAllText($envPath, $text, (New-Object System.Text.UTF8Encoding($false)))
 }
 Save-Env
+# Only this Windows account can read .env (it holds the teacher password and secrets).
+$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+& icacls $envPath /inheritance:r /grant:r "${me}:(F)" *> $null
+if ($LASTEXITCODE -ne 0) { Write-Warning "Couldn't limit who can read .env. Keep this folder private." }
 
 # ---------- port ----------
 function Test-PortInUse([int]$Port) {

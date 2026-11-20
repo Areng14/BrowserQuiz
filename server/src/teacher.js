@@ -234,16 +234,36 @@ function retireRoster(id) {
 const rosterStudentsForRun = (run) => q(`SELECT id, name FROM roster_students WHERE roster_id = ?
   AND (removed = 0 OR id IN (SELECT student_id FROM attempts WHERE run_id = ?)) ORDER BY name`).all(run.roster_id, run.id);
 
+// Password guesses: each address gets 10 a minute and everyone together 60, counted before the check so
+// firing them all at once doesn't help. A spent budget only blocks new sign-ins for a minute; teachers already
+// signed in keep working, and the right password refunds its try.
+const loginBuckets = new Map();
+function loginBucket(key, cap, refillMs) {
+  const now = Date.now();
+  if (loginBuckets.size > 5000) for (const [k, b] of loginBuckets) if (now - b.at > 600000) loginBuckets.delete(k);
+  const b = loginBuckets.get(key) || { n: cap, at: now, cap };
+  b.n = Math.min(cap, b.n + (now - b.at) / refillMs);
+  b.at = now;
+  loginBuckets.set(key, b);
+  return b;
+}
+
 module.exports = function teacherRoutes(r) {
   r.post('/api/t/login', async (req, res) => {
     const body = await readJson(req, 4096);
     const want = process.env.ADMIN_PASSWORD || '';
+    const mine = loginBucket('ip:' + clientIp(req), 10, 6000);
+    const all = loginBucket('all', 60, 1000);
+    if (mine.n < 1 || all.n < 1) throw new HttpError(429, 'too_many');
+    mine.n--;
+    all.n--;
     await sleep(250);
-    // A wrong password costs a second but never locks anyone out, so students on the same IP can't block the teacher.
     if (!want || !crypto.timingSafeEqual(Buffer.from(sha256(body.password || '')), Buffer.from(sha256(want)))) {
       await sleep(1000);
       throw new HttpError(401, 'bad_password');
     }
+    mine.n = Math.min(mine.cap, mine.n + 1);
+    all.n = Math.min(all.cap, all.n + 1);
     const token = newToken();
     q('INSERT INTO sessions (token_hash, created_at) VALUES (?, ?)').run(sha256(token), Date.now());
     q('DELETE FROM sessions WHERE created_at < ?').run(Date.now() - SESSION_MS);

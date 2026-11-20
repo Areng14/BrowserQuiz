@@ -88,12 +88,14 @@ function logEvent(a, type, severity, detail) {
 
 // A strike is a move from "present" to "away". Everything that fires while already away (blur + hidden +
 // fullscreen-exit together, unfocused heartbeats) is logged but doesn't stack. The merge window is anchored
-// to the first event of a burst, so leaving every 1.9s still counts every time.
-function record(a, type, detail, quiz) {
+// to the first event of a burst, so leaving every 1.9s still counts every time. `at` is when it happened, for
+// events the client queued while offline: they arrive together but still count one strike per departure.
+function record(a, type, detail, quiz, at) {
   const severity = CLIENT_EVENTS[type] || SERVER_EVENTS[type];
   if (!severity) return;
   if (a.practice && severity !== 'info') return; // practice runs aren't monitored
   const now = Date.now();
+  const t = at == null ? now : at;
   if (severity === 'warning') {
     const n = (a.warnWindow.get(type) || []).filter((t) => now - t < 60000);
     if (n.length >= WARN_PER_TYPE_PER_MIN) return;
@@ -104,10 +106,10 @@ function record(a, type, detail, quiz) {
   if (type === 'return') a.away = false;
   if (severity === 'warning') a.warnings++;
   if (severity === 'violation' && a.status === 'active') {
-    const merged = a.away || (a.burstStart && now - a.burstStart < MERGE_MS);
+    const merged = a.away || (a.burstStart && Math.abs(t - a.burstStart) < MERGE_MS);
     a.away = true;
     if (!merged) {
-      a.burstStart = now;
+      a.burstStart = t;
       a.strikes++;
       const grace = quiz && quiz.integrity ? quiz.integrity.graceStrikes : 0;
       if (a.integrity === 'clean' && a.strikes > grace) {

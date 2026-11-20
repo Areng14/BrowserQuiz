@@ -97,10 +97,15 @@ function runInfo(run, quiz) {
   };
 }
 
+// Answers stop saving a little after time runs out (slow networks get a few seconds). The attempt itself
+// stays open until the sweeper turns it in, so a late student still gets a normal "submitted" screen.
+const ANSWER_GRACE_MS = 10000;
+const pastDeadline = (a, now) => !!a.deadline && now > a.deadline + ANSWER_GRACE_MS;
+
 function submit(a, quiz, answers, why) {
   if (a.status !== 'active') return;
-  if (answers) a.answers = cleanAnswers(quiz, a.layout, answers);
   const now = Date.now();
+  if (answers && !pastDeadline(a, now)) a.answers = cleanAnswers(quiz, a.layout, answers);
   if (a.deadline && now > a.deadline + 30000 && why === 'student') store.record(a, 'late-submit', Math.round((now - a.deadline) / 1000) + 's late', quiz);
   a.status = 'submitted';
   a.submittedAt = now;
@@ -238,11 +243,16 @@ module.exports = function studentRoutes(r) {
     const now = Date.now();
     if (a.status === 'active') {
       // Events the client couldn't send while offline arrive here, oldest first.
+      // Each keeps the time it happened (after the last good heartbeat, in order), so leaving five times
+      // while offline is five strikes, not one burst.
       if (Array.isArray(body.late)) {
+        let at = Math.min(now, a.lastBeat || 0);
         for (const e of body.late.slice(0, 50)) {
           if (!Array.isArray(e) || !store.CLIENT_EVENTS[e[0]]) continue;
-          const ago = Math.max(0, Math.round(Number(e[2]) / 1000) || 0);
-          store.record(a, e[0], [e[1] ? String(e[1]).slice(0, 120) : null, `sent ${ago}s late`].filter(Boolean).join(', '), quiz);
+          const agoMs = Math.max(0, Number(e[2]) || 0);
+          at = Math.min(now, Math.max(at, now - agoMs));
+          const ago = Math.round(agoMs / 1000);
+          store.record(a, e[0], [e[1] ? String(e[1]).slice(0, 120) : null, `sent ${ago}s late`].filter(Boolean).join(', '), quiz, at);
         }
       }
       if (a.beatLost) store.logEvent(a, 'reconnect', 'info', Math.round((now - a.lastBeat) / 1000) + 's offline');
@@ -263,7 +273,7 @@ module.exports = function studentRoutes(r) {
         q('INSERT INTO code_edits (attempt_id, t, deltas) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(edits).slice(0, 400000));
         a.edits += edits.length;
       }
-      if (body.answers) a.answers = cleanAnswers(quiz, a.layout, body.answers);
+      if (body.answers && !pastDeadline(a, now)) a.answers = cleanAnswers(quiz, a.layout, body.answers);
       store.save(a);
     }
     json(res, 200, { ok: true, now, deadline: a.deadline || null });
@@ -294,7 +304,7 @@ module.exports = function studentRoutes(r) {
     const until = Date.now() + 30000;
     while (Date.now() < until && (!a.result || totals(a.result, quiz, a.answers).pending)) await sleep(500);
     const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
-    json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: [studentReport(quiz, a, student ? student.name : '')] });
+    json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: [studentReport(quiz, a, student ? student.name : '', { forStudent: true })] });
   });
 
   // Practice only: start over with a fresh attempt.
