@@ -632,6 +632,7 @@
     const results = h('div', { class: 'results', 'aria-live': 'polite' });
     const host = h('div', { class: 'editor-host', 'data-answer-field': true });
     runBtn.addEventListener('click', () => runCode(q, runBtn, results));
+    runCooldown(runBtn);
 
     const view = h('div', { class: 'qview wide' },
       h('div', { class: 'code-q' },
@@ -706,19 +707,25 @@
     try {
       S.results[key] = await api.run({ questionId: q.id, language: ans.language, code: ans.code[ans.language] });
     } catch (ex) {
-      S.results[key] = { status: 'error', message: errorText(ex) };
+      S.results[key] = { status: 'error', message: ex && ex.code === 'too_many' ? 'Slow down a bit. Try again in a few seconds.' : errorText(ex) };
     }
     S.runBusy = false;
+    S.runReadyAt = Date.now() + 5000;
     if (results.isConnected) renderResults(q, results);
-    let left = 5;
-    const tick = () => {
-      if (!btn.isConnected) return;
+    runCooldown(btn);
+  }
+
+  // One cooldown for the whole quiz (the server limits runs per student, not per question).
+  function runCooldown(btn) {
+    const tick = (first) => {
+      if (!first && !btn.isConnected) return; // the view was closed
+      const left = Math.ceil(((S.runReadyAt || 0) - Date.now()) / 1000);
       if (left <= 0) { btn.disabled = false; btn.textContent = 'Run examples'; return; }
+      btn.disabled = true;
       btn.textContent = `Run again in ${left}s`;
-      left--;
-      setTimeout(tick, 1000);
+      setTimeout(tick, 250);
     };
-    tick();
+    tick(true);
   }
 
   function renderResults(q, el) {

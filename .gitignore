@@ -1,9 +1,13 @@
 node_modules/
 results/
+data/
 .env
 .env.*
+!.env.example
 *.b64
 .DS_Store
 Thumbs.db
 public/vendor/
 demo/dist/
+__pycache__/
+*.pyc

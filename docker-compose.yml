@@ -1,0 +1,66 @@
+# BrowserQuiz: self-host anywhere with Docker.
+#
+#   cp .env.example .env      # then fill in the secrets
+#   docker compose up -d --build
+#
+# Plain HTTP on port 8080 (good for trying it out). For a real class, put it behind HTTPS:
+#   set DOMAIN in .env, then: docker compose --profile https up -d --build
+services:
+  app:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      ID_PEPPER: ${ID_PEPPER:?set ID_PEPPER in .env}
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}
+      RUNNER_URL: http://runner:8080
+      TRUST_PROXY: ${TRUST_PROXY:-0}
+    ports:
+      - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"
+    volumes:
+      - bq-data:/data
+    networks: [web, sandbox]
+    depends_on: [runner]
+
+  # Student code runs here. Its network is internal: no internet, it can only answer the app.
+  runner:
+    build: ./runner
+    restart: unless-stopped
+    environment:
+      RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}
+      RUNNER_SLOTS: ${RUNNER_SLOTS:-4}
+    tmpfs:
+      - /jobs:size=256m,mode=0711
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, KILL, DAC_OVERRIDE, FOWNER]
+    mem_limit: ${RUNNER_MEMORY:-2g}
+    cpus: ${RUNNER_CPUS:-2}
+    pids_limit: 1024
+    networks: [sandbox]
+
+  # Optional HTTPS with an automatic certificate. Needs a domain pointing at this machine.
+  caddy:
+    image: caddy:2
+    profiles: [https]
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    networks: [web]
+    depends_on: [app]
+
+networks:
+  web: {}
+  sandbox:
+    internal: true
+
+volumes:
+  bq-data: {}
+  caddy-data: {}

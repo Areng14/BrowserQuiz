@@ -1,0 +1,104 @@
+{
+  "format": 1,
+  "title": "AP CSA Unit 4 Check",
+  "timeLimitMin": 20,
+  "language": "java",
+  "integrity": { "graceStrikes": 0 },
+  "questions": [
+    {
+      "id": "q1",
+      "type": "single",
+      "prompt": "What does this print?\n\n```java\nint x = 7;\nint y = x / 2 * 2;\nSystem.out.println(x - y);\n```",
+      "choices": ["`0`", "`1`", "`3`", "`3.5`"],
+      "answer": 1
+    },
+    {
+      "id": "q2",
+      "type": "multi",
+      "points": 2,
+      "prompt": "Which of these lines compile? Assume `java.util.*` is imported.",
+      "choices": [
+        "`ArrayList<String> a = new ArrayList<>();`",
+        "`List<String> b = new ArrayList<String>();`",
+        "`ArrayList<string> c = new ArrayList<>();`",
+        "`String[] d = new ArrayList<>();`"
+      ],
+      "answer": [0, 1]
+    },
+    {
+      "id": "q3",
+      "type": "text",
+      "prompt": "What is the worst-case time complexity of binary search on a sorted array of `n` items? Use Big-O notation.",
+      "answer": ["O(log n)", "O(logn)", "O(log(n))", "O(lg n)"]
+    },
+    {
+      "id": "q4",
+      "type": "code",
+      "points": 8,
+      "languages": ["java", "python"],
+      "prompt": "Write `countVowels(s)`, which returns how many vowels (`a e i o u`, upper or lower case) are in `s`.",
+      "signature": { "name": "countVowels", "params": [{ "name": "s", "type": "string" }], "returns": "int" },
+      "tests": {
+        "sample": [
+          { "args": ["hello"], "expected": 2 },
+          { "args": [""], "expected": 0 }
+        ],
+        "hidden": [
+          { "args": ["hello"] },
+          { "args": ["AEIOU"] },
+          { "args": ["rhythm"] },
+          { "args": ["Programming is fun"], "weight": 2 },
+          { "args": ["xyz AAA eee"] }
+        ]
+      },
+      "reference": {
+        "java": "class Solution {\n    public int countVowels(String s) {\n        int n = 0;\n        for (char c : s.toLowerCase().toCharArray()) {\n            if (\"aeiou\".indexOf(c) >= 0) n++;\n        }\n        return n;\n    }\n}\n",
+        "python": "class Solution:\n    def countVowels(self, s: str) -> int:\n        return sum(c in 'aeiouAEIOU' for c in s)\n"
+      }
+    },
+    {
+      "id": "q5",
+      "type": "code",
+      "mode": "class",
+      "points": 9,
+      "languages": ["java", "python"],
+      "prompt": "Write the complete `BankAccount` class.\n\n- A constructor that takes the owner's name and a starting balance\n- `deposit(amount)` adds to the balance\n- `withdraw(amount)` takes money out and returns `true`, or refuses and returns `false` if it would overdraw the account\n- `getBalance()` returns the balance",
+      "class": {
+        "name": "BankAccount",
+        "constructor": [{ "name": "owner", "type": "string" }, { "name": "balance", "type": "double" }],
+        "methods": [
+          { "name": "deposit", "params": [{ "name": "amount", "type": "double" }], "returns": "void" },
+          { "name": "withdraw", "params": [{ "name": "amount", "type": "double" }], "returns": "boolean" },
+          { "name": "getBalance", "params": [], "returns": "double" }
+        ]
+      },
+      "starter": "empty",
+      "tests": {
+        "sample": [
+          { "steps": [{ "new": ["Ava", 100.0] }, { "call": "deposit", "args": [50.0] }, { "call": "getBalance", "expect": 150.0 }] },
+          { "steps": [{ "new": ["Jo", 20.0] }, { "call": "withdraw", "args": [50.0], "expect": false }] }
+        ],
+        "hidden": [
+          { "steps": [{ "new": ["Ava", 100.0] }, { "call": "deposit", "args": [50.0] }, { "call": "getBalance", "expect": 150.0 }] },
+          { "steps": [{ "new": ["Jo", 20.0] }, { "call": "withdraw", "args": [50.0], "expect": false }, { "call": "getBalance", "expect": 20.0 }] },
+          { "steps": [{ "new": ["Sam", 10.0] }, { "call": "withdraw", "args": [10.0], "expect": true }, { "call": "getBalance", "expect": 0.0 }] },
+          {
+            "weight": 2,
+            "steps": [
+              { "new": ["Mia", 0.0], "as": "m" },
+              { "new": ["Lee", 5.0], "as": "l" },
+              { "call": "deposit", "on": "m", "args": [2.5] },
+              { "call": "getBalance", "on": "m", "expect": 2.5 },
+              { "call": "getBalance", "on": "l", "expect": 5.0 }
+            ]
+          }
+        ]
+      },
+      "rubric": [{ "id": "r1", "text": "Uses private instance variables", "points": 1 }],
+      "reference": {
+        "java": "public class BankAccount {\n    private String owner;\n    private double balance;\n\n    public BankAccount(String owner, double balance) {\n        this.owner = owner;\n        this.balance = balance;\n    }\n\n    public void deposit(double amount) {\n        balance += amount;\n    }\n\n    public boolean withdraw(double amount) {\n        if (amount > balance) return false;\n        balance -= amount;\n        return true;\n    }\n\n    public double getBalance() {\n        return balance;\n    }\n}\n",
+        "python": "class BankAccount:\n    def __init__(self, owner, balance):\n        self._owner = owner\n        self._balance = balance\n\n    def deposit(self, amount):\n        self._balance += amount\n\n    def withdraw(self, amount):\n        if amount > self._balance:\n            return False\n        self._balance -= amount\n        return True\n\n    def getBalance(self):\n        return self._balance\n"
+      }
+    }
+  ]
+}

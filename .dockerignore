@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+.env.*
+data
+demo/dist
+public/vendor
+spikes
+docs
+**/__pycache__
+*.quiz
