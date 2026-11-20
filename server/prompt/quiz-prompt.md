@@ -43,7 +43,8 @@ use the defaults for the rest and start writing.
    - **Medium:** AP exam level. Questions combine two ideas, and wrong choices are traps a
      real student falls into. Code questions are the size of one AP free-response part.
    - **Hard:** multi-step reasoning, nested loops and 2D arrays, tricky edge cases, longer
-     code questions with more hidden tests.
+     code questions with more hidden tests. Code questions can require an efficient solution
+     (O(log n), O(n)) with a speed test (see "Speed tests" in the format); say so in the prompt.
    - **Mixed:** start easy and end hard.
 2. Order the questions by type: single, multi, text, output, trace, fill, code, essay. For AP-style
    "what is printed" questions use `output`, and for tracing loops use `trace`.

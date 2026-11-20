@@ -29,6 +29,13 @@
         continue;
       }
       if (c === '"') { inStr = true; out += c; continue; }
+      // range(0, 1000000) or range(0, 1000000, 2): a big array made when the test runs
+      const rng = /^range\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*(?:,\s*(-?\d+)\s*)?\)/.exec(src.slice(i));
+      if (rng && !/\w/.test(src[i - 1] || '')) {
+        out += JSON.stringify({ range: [Number(rng[1]), Number(rng[2]), Number(rng[3] || 1)] });
+        i += rng[0].length - 1;
+        continue;
+      }
       const word = /^(True|False|None)\b/.exec(src.slice(i));
       if (word && !/\w/.test(src[i - 1] || '')) {
         out += { True: 'true', False: 'false', None: 'null' }[word[1]];
@@ -73,6 +80,13 @@
   // "-> value" and "*2" after a call.
   function parseRest(rest) {
     const out = { weight: 1 };
+    // "speed" or "speed x1000": timed against the reference, calling the method that many times
+    const sp = /(?:^|\s)speed(?:\s+x\s*(\d+))?(?=\s|$)/.exec(rest);
+    if (sp) {
+      out.speed = true;
+      out.calls = sp[1] ? Number(sp[1]) : 1;
+      rest = (rest.slice(0, sp.index) + rest.slice(sp.index + sp[0].length)).trim();
+    }
     const w = /\s*\*\s*(\d+(?:\.\d+)?)\s*$/.exec(rest);
     if (w) { out.weight = Number(w[1]); rest = rest.slice(0, w.index).trim(); }
     if (!rest) return out;
@@ -99,7 +113,10 @@
     return type.slice(5, -1);
   }
   // Values written back as text. Doubles keep their ".0" so 100.0 doesn't turn into 100.
+  const isRange = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && Array.isArray(v.range);
+  const RANGE_TYPES = ['int[]', 'long[]', 'list<int>'];
   function show(type, v) {
+    if (isRange(v)) return `range(${v.range[0]}, ${v.range[1]}${v.range[2] && v.range[2] !== 1 ? ', ' + v.range[2] : ''})`;
     if (type === 'double' && Number.isInteger(v)) return v.toFixed(1);
     if (Array.isArray(v) && type && VALUE_TYPES.includes(type) && elementType(type)) return `[${v.map((x) => show(elementType(type), x)).join(', ')}]`;
     return fmt(v);
@@ -131,7 +148,7 @@
 
   // ---------- tests as text ----------
   function methodTestsText(tests, sig) {
-    return (tests || []).map((t) => `(${showArgs(sig.params, t.args)})${t.expected !== undefined ? ' -> ' + show(sig.returns, t.expected) : ''}${t.weight && t.weight !== 1 ? ' *' + t.weight : ''}`).join('\n');
+    return (tests || []).map((t) => `(${showArgs(sig.params, t.args)})${t.expected !== undefined ? ' -> ' + show(sig.returns, t.expected) : ''}${t.speed ? ' speed' + (t.calls > 1 ? ' x' + t.calls : '') : ''}${t.weight && t.weight !== 1 ? ' *' + t.weight : ''}`).join('\n');
   }
   // -> { tests, at: where each test is, errors }
   function parseMethodTests(text) {
@@ -145,6 +162,7 @@
         const r = parseRest(c.rest);
         if (r.expected !== undefined) t.expected = r.expected;
         if (r.weight !== 1) t.weight = r.weight;
+        if (r.speed) { t.speed = true; if (r.calls > 1) t.calls = r.calls; }
         out.tests.push(t);
         out.at.push(`line ${i + 1}`);
       } catch (e) { out.errors.push(`line ${i + 1}: ${e.message}`); }
@@ -157,8 +175,9 @@
     p.tests.forEach((t, i) => {
       const bad = (msg) => p.errors.push(`${p.at[i]}: ${msg}`);
       if (t.args.length !== need) return bad(`needs ${need} value${need === 1 ? '' : 's'} in the ( ), one for each parameter`);
-      const k = t.args.findIndex((a, j) => !checkValue(sig.params[j].type, a));
-      if (k >= 0) return bad(`${fmt(t.args[k])} isn't ${an(sig.params[k].type)}`);
+      const k = t.args.findIndex((a, j) => (isRange(a) ? !RANGE_TYPES.includes(sig.params[j].type) : !checkValue(sig.params[j].type, a)));
+      if (k >= 0) return bad(isRange(t.args[k]) ? `range only works for ${RANGE_TYPES.join(', ')}` : `${fmt(t.args[k])} isn't ${an(sig.params[k].type)}`);
+      if (t.speed && !hasRef) return bad('speed tests are timed against the reference solution, so write one');
       if (t.expected === undefined) { if (!hasRef) bad('add -> and the expected value, or write a reference solution'); return undefined; }
       if (!checkValue(sig.returns, t.expected)) bad(`${fmt(t.expected)} isn't ${an(sig.returns)}`);
       return undefined;
@@ -204,6 +223,7 @@
           if (hm[1]) step.on = hm[1];
           const r = parseRest(c.rest);
           if (r.weight !== 1) throw new Error('put *' + r.weight + ' on its own line');
+          if (r.speed) throw new Error('speed tests only work when students write a method');
           if (r.check) step.check = true;
           else if (r.expected !== undefined) step.expect = r.expected;
           t.steps.push(step);
@@ -1046,7 +1066,7 @@
           const p = r[kind];
           const open = isClass ? 0 : p.tests.filter((t) => t.expected === undefined).length;
           notes[kind].textContent = p.errors.map((e) => e[0].toUpperCase() + e.slice(1)).join('\n')
-            || (p.tests.length ? `${plural(p.tests.length, 'test')}${open && hasRef ? `, ${open} filled in from ${from} when you save` : ''}` : '');
+            || (p.tests.length ? `${plural(p.tests.length, 'test')}${p.tests.some((t) => t.speed) ? `, ${plural(p.tests.filter((t) => t.speed).length, 'speed test')}` : ''}${open && hasRef ? `, ${open} filled in from ${from} when you save` : ''}` : '');
           notes[kind].classList.toggle('t-error', !!p.errors.length);
         }
         for (const s of starters) { s.btn.hidden = !!s.ta.value.trim(); s.btn.disabled = !r.shape; }

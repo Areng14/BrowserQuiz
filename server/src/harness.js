@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { elementType } = require('./quizfile');
+const { elementType, isRange, rangeLength } = require('./quizfile');
 
 const BQJ_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'BQJ.java'), 'utf8');
 const BQH_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bqh.py'), 'utf8');
@@ -38,6 +38,10 @@ function javaStr(s) {
 }
 function javaLit(type, v) {
   if (v === null) return 'null';
+  if (isRange(v)) { // built in the sandbox, so a 10-million-number array isn't written out in the code
+    const [a, b, s] = v.range;
+    return `BQJ.${type === 'long[]' ? 'rangeL' : type === 'list<int>' ? 'rangeList' : 'range'}(${a}L, ${b}L, ${s}L)`;
+  }
   switch (type) {
     case 'int': return String(v);
     case 'long': return v + 'L';
@@ -54,8 +58,17 @@ function javaLit(type, v) {
 }
 
 // ---------- what students see ----------
+// A range shows its first few numbers and its last: {0, 1, 2, ..., 9999999}.
+function showRange(type, v, lang) {
+  const [a, , s] = v.range;
+  const n = rangeLength(v.range);
+  const items = n <= 6 ? Array.from({ length: n }, (_, k) => a + k * s) : [a, a + s, a + 2 * s, '...', a + (n - 1) * s];
+  const inner = items.join(', ');
+  return lang === 'java' && type.endsWith('[]') ? `{${inner}}` : `[${inner}]`;
+}
 function show(type, v, lang) {
   if (v === null || v === undefined) return lang === 'python' ? 'None' : 'null';
+  if (isRange(v)) return showRange(type, v, lang);
   switch (type) {
     case 'string': return JSON.stringify(v);
     case 'boolean': return lang === 'python' ? (v ? 'True' : 'False') : String(v);
@@ -120,7 +133,14 @@ function javaMain(q, tests, marker) {
   const L = ['import java.util.*;', '', 'public class BQMain {'];
   tests.forEach((t, i) => {
     L.push(`    static void t${i}() throws Throwable {`);
-    if (q.mode === 'method') {
+    if (q.mode === 'method' && t.speed) {
+      // Speed test: the arguments are made first, then only the calls are timed.
+      const s = q.signature;
+      t.args.forEach((a, k) => L.push(`        ${JAVA_TYPE[s.params[k].type]} a${k} = ${javaLit(s.params[k].type, a)};`));
+      L.push('        Solution sol = new Solution();', '        Object r = null;', '        long t0 = System.nanoTime();',
+        `        for (int c = 0; c < ${t.calls || 1}; c++) r = sol.${s.name}(${t.args.map((_, k) => 'a' + k).join(', ')});`,
+        `        BQJ.timed(${i}, r, (System.nanoTime() - t0) / 1e6);`);
+    } else if (q.mode === 'method') {
       const s = q.signature;
       L.push(`        BQJ.ok(${i}, new Solution().${s.name}(${t.args.map((a, k) => javaLit(s.params[k].type, a)).join(', ')}));`);
     } else {
@@ -150,7 +170,7 @@ function javaMain(q, tests, marker) {
 
 function pyMain(q, tests, marker) {
   const a = (v) => `bqh.args(${JSON.stringify(JSON.stringify(v))})`;
-  const L = ['import sys', 'sys.setrecursionlimit(10000)', 'import bqh', `bqh.M = ${JSON.stringify(marker)}`];
+  const L = ['import sys', 'import time', 'sys.setrecursionlimit(10000)', 'import bqh', `bqh.M = ${JSON.stringify(marker)}`];
   if (q.support && q.support.python) {
     L.push('import builtins, support', 'for _k in dir(support):', '    if not _k.startswith("_"):', '        setattr(builtins, _k, getattr(support, _k))');
   }
@@ -159,7 +179,10 @@ function pyMain(q, tests, marker) {
     '    raise SystemExit(0)');
   tests.forEach((t, i) => {
     L.push(`def t${i}():`);
-    if (q.mode === 'method') {
+    if (q.mode === 'method' && t.speed) {
+      L.push(`    _a = ${a(t.args)}`, '    _s = solution.Solution()', '    _r = None', '    _t0 = time.perf_counter()',
+        `    for _c in range(${t.calls || 1}):`, `        _r = _s.${q.signature.name}(*_a)`, `    bqh.timed(${i}, _r, (time.perf_counter() - _t0) * 1000)`);
+    } else if (q.mode === 'method') {
       L.push(`    bqh.ok(${i}, solution.Solution().${q.signature.name}(*${a(t.args)}))`);
     } else {
       const C = q.class;
@@ -280,9 +303,14 @@ function readResults(q, lang, tests, res, marker) {
   const results = tests.map((t, i) => {
     const mine = records.filter((r) => r.i === i);
     const final = mine.find((r) => r.s === undefined && r.ok !== undefined);
-    if (!final) return { pass: false, error: stopped };
+    if (!final) return { pass: false, error: t.speed && res.status === 'timeout' ? 'Too slow: ran out of time' : stopped };
     if (!final.ok) return { pass: false, error: final.err || 'Crashed' };
-    if (q.mode === 'method') return { pass: t.expected === undefined ? null : same(q.signature.returns, t.expected, final.v, q.compare === 'unordered'), got: final.v };
+    if (q.mode === 'method') {
+      const pass = t.expected === undefined ? null : same(q.signature.returns, t.expected, final.v, q.compare === 'unordered');
+      const limit = t.speed && t.maxMs ? t.maxMs[lang] : null;
+      if (pass && limit && final.ms > limit) return { pass: false, got: final.v, ms: final.ms, error: `Too slow: ${Math.round(final.ms)} ms (limit ${limit} ms)` };
+      return final.ms === undefined ? { pass, got: final.v } : { pass, got: final.v, ms: final.ms };
+    }
     let pass = true;
     const gotSteps = {};
     t.steps.forEach((st, k) => {

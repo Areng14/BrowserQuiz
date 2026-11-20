@@ -22,7 +22,9 @@ Fill gaps with these defaults and say which ones you used. Don't stop to ask.
 - Medium difficulty. Easy: one idea per question, short code (about 5 lines), direct tracing
   or recall. Medium: AP exam level, two ideas per question, traps real students fall into,
   code questions the size of one free-response part. Hard: multi-step reasoning, nested loops
-  and 2D arrays, tricky edge cases. Mixed: start easy, end hard.
+  and 2D arrays, tricky edge cases, and speed tests that require an efficient solution (see
+  "Speed tests" in the format spec; say the required big-O in the prompt). Mixed: start easy,
+  end hard.
 - Rubric items on code questions grade themselves (`require`/`forbid`) unless the user wants
   to grade them by hand or wants no rubric
 

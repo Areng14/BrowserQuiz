@@ -221,6 +221,29 @@ Class mode tests are a list of steps:
 
 A test can appear in both `sample` and `hidden`.
 
+### Speed tests (O(log n), O(n), ...)
+
+To require an efficient solution, add a speed test: a big input, called many times, that a
+slow solution can't finish in time. Method mode only.
+
+```json
+{ "args": [{ "range": [0, 2000000, 2] }, 1999998], "speed": true, "calls": 1000, "weight": 2 }
+```
+
+- `{ "range": [start, stop, step] }` makes a big `int[]`, `long[]` or `list<int>` when the test
+  runs: `start`, `start + step`, ... up to (not including) `stop`, like Python's `range`. `step`
+  defaults to 1. At most 10,000,000 numbers. Keep Python questions to 1,000,000 or less.
+- `"speed": true` times the calls, not making the input. `calls` (default 1, at most 100,000)
+  calls the method that many times with the same arguments.
+- At upload, the reference solution runs the test and students get 10 times its time in
+  their language, never less than 100 ms. Correct but slower code fails that test with
+  "Too slow". Speed tests need a reference solution in every allowed language.
+- Pick sizes where the slow way takes seconds and the fast way milliseconds. For O(log n) vs
+  O(n), search a million numbers a thousand times. For O(n log n) vs O(n²), sort 100,000
+  numbers once.
+- In the quiz maker, write `range(0, 2000000, 2)` as an argument and end the line with
+  `speed x1000`.
+
 ### Scoring
 
 The code part is worth `points` minus the rubric points. Students earn the share of hidden

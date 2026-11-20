@@ -93,10 +93,33 @@ function checkParams(where, params) {
     return { name, type: p.type };
   });
 }
+// A big argument made in the sandbox instead of written out: { "range": [start, stop, step?] } is
+// start, start+step, ... up to (not including) stop, like Python's range. For int[], long[] and list<int>.
+const RANGE_TYPES = ['int[]', 'long[]', 'list<int>'];
+const MAX_RANGE = 10000000;
+const isRange = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && Array.isArray(v.range);
+function rangeLength([start, stop, step]) {
+  return step > 0 ? Math.max(0, Math.ceil((stop - start) / step)) : Math.max(0, Math.ceil((start - stop) / -step));
+}
+function checkRange(where, type, v) {
+  const r = v.range;
+  if (!RANGE_TYPES.includes(type)) fail(`${where}: range only works for ${RANGE_TYPES.join(', ')}.`);
+  if (r.length < 2 || r.length > 3 || !r.every(Number.isSafeInteger)) fail(`${where}: range needs [start, stop] or [start, stop, step], all whole numbers.`);
+  const [start, stop, step = 1] = r;
+  if (step === 0) fail(`${where}: a range's step can't be 0.`);
+  const n = rangeLength([start, stop, step]);
+  if (n > MAX_RANGE) fail(`${where}: a range can have at most ${MAX_RANGE.toLocaleString('en-US')} numbers.`);
+  const last = start + (n - 1) * step;
+  if (type !== 'long[]' && n && [start, last].some((x) => x < -2147483648 || x > 2147483647)) fail(`${where}: range goes past the int limits.`);
+  return { range: [start, stop, step] };
+}
 function checkArgs(where, params, args) {
   if (!Array.isArray(args) || args.length !== params.length) fail(`${where}: needs ${params.length} argument(s).`);
-  args.forEach((a, i) => { if (!checkValue(params[i].type, a)) fail(`${where}: argument ${i + 1} isn't a valid ${params[i].type}.`); });
-  return args;
+  return args.map((a, i) => {
+    if (isRange(a)) return checkRange(`${where}: argument ${i + 1}`, params[i].type, a);
+    if (!checkValue(params[i].type, a)) fail(`${where}: argument ${i + 1} isn't a valid ${params[i].type}.`);
+    return a;
+  });
 }
 
 // ---------- quiz ----------
@@ -281,13 +304,16 @@ function normalizeCode(where, q) {
     const weight = Number(raw.weight) > 0 ? Math.min(100, Number(raw.weight)) : 1;
     if (mode === 'method') {
       const args = checkArgs(w, out.signature.params, raw.args);
+      // Speed test: the method is called `calls` times and must finish within 10x the reference's time.
+      const speed = raw.speed === true ? { speed: true, calls: Math.max(1, Math.min(100000, Math.floor(Number(raw.calls) || 1))) } : {};
       if (raw.expected === undefined) {
         if (!hasRef) fail(`${w}: needs "expected", or add a reference solution to fill it in.`);
-        return { args, weight };
+        return { args, weight, ...speed };
       }
       if (!checkValue(out.signature.returns, raw.expected)) fail(`${w}: expected isn't a valid ${out.signature.returns}.`);
-      return { args, expected: raw.expected, weight };
+      return { args, expected: raw.expected, weight, ...speed };
     }
+    if (raw.speed) fail(`${w}: speed tests only work on "write a method" questions.`);
     if (!Array.isArray(raw.steps) || !raw.steps.length || raw.steps.length > 200) fail(`${w}: needs 1 to 200 steps.`);
     const objects = new Set();
     let lastObj = null;
@@ -319,6 +345,10 @@ function normalizeCode(where, q) {
     return { steps, weight };
   };
   out.tests = { sample: sample.map((x, i) => normTest('sample', x, i)), hidden: hidden.map((x, i) => normTest('hidden', x, i)) };
+  const noRef = languages.filter((l) => !reference[l]);
+  if (noRef.length && [...out.tests.sample, ...out.tests.hidden].some((t) => t.speed)) {
+    fail(`${where}: speed tests are timed against the reference solution, so add one for ${noRef.map((l) => (l === 'python' ? 'Python' : 'Java')).join(' and ')}.`);
+  }
   out.reference = reference;
   out.compare = q.compare === 'unordered' ? 'unordered' : 'ordered';
   const lim = q.limits || {};
@@ -366,4 +396,4 @@ function normalizeCode(where, q) {
   return out;
 }
 
-module.exports = { loadQuizFile, normalizeQuiz, checkValue, elementType, QuizError, VALUE_TYPES, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };
+module.exports = { loadQuizFile, normalizeQuiz, checkValue, elementType, isRange, rangeLength, QuizError, VALUE_TYPES, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };

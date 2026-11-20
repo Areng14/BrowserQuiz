@@ -12,6 +12,18 @@ final class BQJ {
     }
 
     static void ok(int i, Object v) { out("{\"i\":" + i + ",\"ok\":true,\"v\":" + json(v) + "}"); }
+    static void timed(int i, Object v, double ms) { out("{\"i\":" + i + ",\"ok\":true,\"v\":" + json(v) + ",\"ms\":" + ms + "}"); }
+
+    // Big test arguments, made here instead of written out: start, start+step, ... up to (not including) stop.
+    static int len(long a, long b, long s) { return (int) Math.max(0, s > 0 ? (b - a + s - 1) / s : (a - b - s - 1) / -s); }
+    static int[] range(long a, long b, long s) { int n = len(a, b, s); int[] x = new int[n]; for (int k = 0; k < n; k++) x[k] = (int) (a + k * s); return x; }
+    static long[] rangeL(long a, long b, long s) { int n = len(a, b, s); long[] x = new long[n]; for (int k = 0; k < n; k++) x[k] = a + k * s; return x; }
+    static java.util.ArrayList<Integer> rangeList(long a, long b, long s) {
+        int n = len(a, b, s);
+        java.util.ArrayList<Integer> x = new java.util.ArrayList<>(n);
+        for (int k = 0; k < n; k++) x.add((int) (a + k * s));
+        return x;
+    }
     static void step(int i, int s, Object v) { out("{\"i\":" + i + ",\"s\":" + s + ",\"v\":" + json(v) + "}"); }
     static void done(int i) { out("{\"i\":" + i + ",\"ok\":true}"); }
     static void fail(int i, Throwable e) {

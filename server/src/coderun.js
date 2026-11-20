@@ -129,6 +129,8 @@ async function checkReferences(quiz) {
           const t = tests[i];
           const label = `${q.id} ${kind} test ${i + 1} (${lang})`;
           if (res.error) { problems.push(`${label}: the reference solution failed: ${res.error}`); return; }
+          // Speed tests: students get 10x the reference's time in their language, and never less than 100 ms.
+          if (t.speed) t.maxMs = Object.assign({}, t.maxMs, { [lang]: Math.max(100, Math.ceil((res.ms || 0) * 10)) });
           if (q.mode === 'method') {
             if (t.expected === undefined) {
               if (checkValue(q.signature.returns, res.got)) t.expected = res.got;

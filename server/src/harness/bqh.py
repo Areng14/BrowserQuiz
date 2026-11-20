@@ -23,8 +23,19 @@ def _out(o):
     sys.stdout.flush()
 
 
+def _gen(v):
+    # {"range": [start, stop, step]}: a big test argument made here instead of written out
+    if isinstance(v, dict) and "range" in v:
+        return list(range(*v["range"]))
+    return v
+
+
 def args(s):
-    return json.loads(s)
+    return [_gen(v) for v in json.loads(s)]
+
+
+def timed(i, v, ms):
+    _out({"i": i, "ok": True, "v": _enc(v), "ms": ms})
 
 
 def ok(i, v):
