@@ -526,6 +526,25 @@ module.exports = function teacherRoutes(r) {
     json(res, 200, { id, code });
   });
 
+  // Deletes a run and everything in it: attempts, events, mouse trails, typing replays. A deleted quiz
+  // or class that was only kept for this run's results goes too. Anyone still taking it is signed out.
+  r.post('/api/t/runs/:id/delete', async (req, res, p) => {
+    requireTeacher(req);
+    const run = q('SELECT * FROM runs WHERE id = ?').get(p.id);
+    if (!run) throw new HttpError(404, 'not_found');
+    const quiz = store.getQuiz(run.quiz_id);
+    for (const x of q('SELECT id FROM attempts WHERE run_id = ?').all(run.id)) store.forget(x.id);
+    tx(() => {
+      q('DELETE FROM failed_ids WHERE run_id = ?').run(run.id);
+      q('DELETE FROM runs WHERE id = ?').run(run.id);
+      if (!q('SELECT 1 FROM runs WHERE quiz_id = ? LIMIT 1').get(run.quiz_id)) q('DELETE FROM quizzes WHERE id = ? AND archived = 1').run(run.quiz_id);
+      if (!q('SELECT 1 FROM runs WHERE roster_id = ? LIMIT 1').get(run.roster_id)) q('DELETE FROM rosters WHERE id = ? AND archived = 1').run(run.roster_id);
+    });
+    store.quizCache.delete(run.quiz_id);
+    audit('delete-run', null, `${run.code} ${quiz ? quiz.title : ''}`);
+    json(res, 200, { ok: true });
+  });
+
   r.post('/api/t/runs/:id/:action', async (req, res, p) => {
     requireTeacher(req);
     const run = q('SELECT * FROM runs WHERE id = ?').get(p.id);
