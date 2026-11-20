@@ -1,0 +1,15 @@
+{
+  "name": "browserquiz",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hosted quiz and CS exam app with server-side grading and silent integrity checks",
+  "scripts": {
+    "build:monaco": "node scripts/build-monaco.mjs",
+    "build:demo": "node scripts/build-demo.mjs",
+    "build": "npm run build:monaco && npm run build:demo"
+  },
+  "devDependencies": {
+    "esbuild": "0.21.5",
+    "monaco-editor": "0.45.0"
+  }
+}

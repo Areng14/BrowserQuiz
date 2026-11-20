@@ -1,0 +1,70 @@
+/* Demo page: the student app on the left, the teacher's view of the server on the right. */
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); }
+
+.demo {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+}
+.demo-student { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+.demo-teacher {
+  min-width: 0; min-height: 0; overflow: auto;
+  background: var(--surface-2);
+  font-family: var(--font-ui); font-size: 15px; line-height: 1.5; color: var(--ink);
+}
+
+.tp { display: grid; gap: 14px; padding: 20px max(18px, env(safe-area-inset-right, 0px)) 28px 18px; }
+.tp *, .tp *::before, .tp *::after { box-sizing: border-box; }
+.tp h2, .tp h3, .tp p { margin: 0; }
+.tp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.tp-head h2 { font-size: 20px; line-height: 1.2; }
+.tp-eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.tp-lead { color: var(--ink-2); font-size: 14px; }
+.tp-card { display: grid; gap: 12px; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.tp-card[hidden] { display: none; }
+.tp-card h3 { font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.tp-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.tp-who { min-width: 0; }
+.tp-name { font-size: 17px; font-weight: 700; }
+.tp-sub { font-size: 13px; color: var(--ink-2); }
+.tp-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.tp-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.tp-stat { display: grid; gap: 2px; padding: 8px; border-radius: 8px; background: var(--surface-2); }
+.tp-stat dt { font-size: 11px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.05em; }
+.tp-stat dd { margin: 0; font: 600 16px var(--font-mono); font-variant-numeric: tabular-nums; }
+.tp-stat dd.late { color: var(--warn); }
+.tp-reason { font-size: 14px; padding: 10px 12px; border-radius: 8px; background: var(--crit-soft); color: var(--crit); font-weight: 700; }
+.tp-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.tp-actions .btn[hidden] { display: none; }
+.tp-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); cursor: pointer; }
+.tp-toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
+.tp-big { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.tp-big > span:first-child { font: 600 30px var(--font-mono); }
+.tp-trail { width: 100%; aspect-ratio: 16 / 9; max-width: 100%; border-radius: 8px; border: 1px solid var(--line); display: block; }
+
+.tp-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 420px; overflow: auto; }
+.tp-ev {
+  display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 8px; align-items: baseline;
+  padding: 7px 8px 7px 10px; border-radius: 6px; border-left: 3px solid var(--line-strong); font-size: 13px;
+}
+.tp-ev.violation { border-left-color: var(--crit); background: var(--crit-soft); }
+.tp-ev.warning { border-left-color: var(--warn); }
+.tp-time { font-family: var(--font-mono); font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.tp-what { min-width: 0; display: grid; }
+.tp-label { font-weight: 700; }
+.tp-detail { color: var(--ink-2); overflow-wrap: anywhere; }
+.tp-sev { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); }
+.tp-ev.violation .tp-sev { color: var(--crit); }
+.tp-ev.warning .tp-sev { color: var(--warn); }
+.tp-empty { color: var(--ink-3); font-size: 14px; padding: 6px 0; }
+
+@media (max-width: 1040px) {
+  .demo { height: auto; min-height: 100%; grid-template-columns: minmax(0, 1fr); }
+  .demo-student { height: 100svh; min-height: 620px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .demo-teacher { overflow: visible; }
+  .tp { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+}
+@media (max-width: 420px) {
+  .tp-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

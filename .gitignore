@@ -5,3 +5,5 @@ results/
 *.b64
 .DS_Store
 Thumbs.db
+public/vendor/
+demo/dist/
