@@ -213,3 +213,8 @@
 @media (prefers-reduced-motion: reduce) {
   .confetti { animation: none; }
 }
+
+/* Teacher preview */
+.pv-score { display: grid; gap: 8px; }
+.pv-score p { margin: 0; }
+.pv-score ul { margin: 0; padding-left: 20px; color: var(--ink-2); font-size: 14px; }

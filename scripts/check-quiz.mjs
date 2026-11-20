@@ -42,7 +42,7 @@ const warnings = [];
 const buf = load(target);
 // ---------- warnings: typo'd keys and the like (shown even when the quiz is invalid) ----------
 const TOP = ['format', 'title', 'timeLimitMin', 'shuffleQuestions', 'shuffleChoices', 'language', 'integrity', 'directions', 'questions'];
-const QKEYS = ['id', 'type', 'prompt', 'points', 'image', 'imageAlt', 'answer', 'caseSensitive', 'choices', 'mode', 'languages',
+const QKEYS = ['id', 'type', 'prompt', 'points', 'image', 'imageAlt', 'answer', 'caseSensitive', 'choices', 'shuffleChoices', 'mode', 'languages',
   'signature', 'class', 'tests', 'reference', 'compare', 'limits', 'rubric', 'starter', 'support'];
 function near(word, list) {
   const d = (a, b) => {
@@ -67,6 +67,9 @@ for (const k of Object.keys(raw)) if (!TOP.includes(k)) warnings.push(`unknown k
   const label = `question ${i + 1} (${q.id || `q${i + 1}`})`;
   for (const k of Object.keys(q)) if (!QKEYS.includes(k)) warnings.push(`${label}: unknown key "${k}" is ignored${near(k, QKEYS)}`);
   if (q.points !== undefined && !(Number(q.points) > 0)) warnings.push(`${label}: points ${JSON.stringify(q.points)} isn't a positive number, so it counts as 1`);
+  (Array.isArray(q.choices) ? q.choices : []).forEach((c, k) => {
+    if (/```|\n/.test(String(c))) warnings.push(`${label}: choice ${k + 1} has a line break or code block, but choices show on one line. Put multi-line code in the prompt`);
+  });
 });
 let parsed;
 try {

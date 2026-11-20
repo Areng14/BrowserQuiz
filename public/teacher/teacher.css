@@ -69,3 +69,26 @@ input[type="file"].input { padding: 6px 10px; }
 .t-adjust { margin-top: 6px; }
 .t-adjust summary { cursor: pointer; color: var(--accent); width: max-content; }
 .t-adjust .t-row { margin-top: 8px; align-items: center; gap: 8px; }
+.t-head { display: flex; align-items: center; gap: 12px; }
+.t-head h2 { flex: 1; }
+.t-textarea { min-height: 120px; padding: 8px 10px; font: 14px/1.5 var(--mono); resize: vertical; }
+.t-removed td:first-child { text-decoration: line-through; color: var(--ink-2); }
+
+/* Quiz maker */
+.qe-list { display: grid; gap: 16px; }
+.qe-card { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; }
+.qe-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.qe-n { min-width: 1.5em; font-size: 18px; }
+.qe-narrow { width: auto; }
+.qe-pts { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink-2); }
+.qe-grow { flex: 1; }
+.qe-choices { display: grid; gap: 6px; }
+.qe-choice { display: flex; align-items: center; gap: 8px; }
+.qe-choice input[type="radio"], .qe-choice input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
+.qe-inline { align-items: center; gap: 16px; }
+.qe-mono, .qe-code { font-family: var(--mono); font-size: 14px; }
+.qe-code { min-height: 180px; tab-size: 4; white-space: pre; }
+.qe-save { position: sticky; bottom: 0; display: flex; align-items: center; gap: 12px; padding: 12px 0; background: var(--bg); border-top: 1px solid var(--line); }
+.t-problems { margin: 0; white-space: pre-wrap; font: inherit; }
+.t-problems:empty { display: none; }
+.t-list .t-actions { width: 1%; text-align: right; }

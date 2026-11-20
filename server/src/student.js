@@ -123,14 +123,14 @@ module.exports = function studentRoutes(r) {
     const term = String(body.q || '').trim().slice(0, 60);
     if (term.length < 2) return json(res, 200, { matches: [] });
     const like = '%' + term.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
-    const rows = q("SELECT id, name FROM roster_students WHERE roster_id = ? AND name LIKE ? ESCAPE '\\' ORDER BY name LIMIT 5").all(run.roster_id, like);
+    const rows = q("SELECT id, name FROM roster_students WHERE roster_id = ? AND removed = 0 AND name LIKE ? ESCAPE '\\' ORDER BY name LIMIT 5").all(run.roster_id, like);
     json(res, 200, { matches: rows.map((x) => ({ id: x.id, name: x.name })) });
   });
 
   r.post('/api/attempt', async (req, res) => {
     const body = await readJson(req, 4096);
     const run = openRun(body.runId, req);
-    const student = q('SELECT * FROM roster_students WHERE id = ? AND roster_id = ?').get(String(body.rosterId || ''), run.roster_id);
+    const student = q('SELECT * FROM roster_students WHERE id = ? AND roster_id = ? AND removed = 0').get(String(body.rosterId || ''), run.roster_id);
     if (!student) throw new HttpError(400, 'bad_id');
     const now = Date.now();
     const ft = q('SELECT * FROM failed_ids WHERE run_id = ? AND student_id = ?').get(run.id, student.id);
@@ -271,6 +271,7 @@ module.exports = function studentRoutes(r) {
 };
 
 module.exports.submit = submit;
+module.exports.publicQuiz = publicQuiz;
 module.exports.current = current;
 module.exports.hashSid = hashSid;
 module.exports.serveAsset = function serveAsset(req, res, rel) {

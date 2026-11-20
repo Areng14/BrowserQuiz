@@ -27,6 +27,7 @@
     network: "Can't reach the server.",
     no_attempt: 'Signed out. Sign in again.',
     not_admitted: 'Your teacher has to let you in first.',
+    teacher_login: 'Sign in on the teacher page first.',
   };
 
   let api;
@@ -468,6 +469,7 @@
     else if (S.saveState === 'offline') setSave(S.monitor && S.monitor.answersDirty ? 'saving' : 'saved');
   }
   function setSave(state) {
+    if (!S.monitor) return; // preview: nothing is saved
     S.saveState = state;
     if (!S.el || !S.el.save) return;
     S.el.save.textContent = state === 'saved' ? 'Saved' : state === 'saving' ? 'Saving…' : 'Not saved yet';
@@ -903,7 +905,7 @@
     const ov = submittingOverlay();
     for (let tries = 0; ; tries++) {
       try {
-        await api.submit(answers);
+        S.result = await api.submit(answers);
         break;
       } catch (e) {
         if (S.done) return;
@@ -1015,12 +1017,37 @@
   function screenDone(kind) {
     S.el = null;
     const [title, text] = DONE[kind] || DONE.submitted;
+    const r = cfg.preview && S.result && S.result.questions ? S.result : null;
     const screen = entry(h('div', { class: 'panel done-panel' },
       h('p', { class: 'eyebrow', text: S.quiz ? S.quiz.title : S.run ? S.run.title : '' }),
       h('div', { class: 'heading' }, h('h1', { text: title }), text ? h('p', { text }) : null),
+      r ? h('div', { class: 'pv-score' },
+        h('p', {}, 'Score: ', h('b', { text: `${r.score} / ${r.max}` })),
+        h('ul', {}, r.questions.map((x) => h('li', {
+          text: `Question ${x.n}: ${x.points == null ? 'not graded' : x.points} / ${x.max}${x.rubric ? ` (${x.rubric} by rubric)` : ''}`,
+        }))),
+        h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Start over', onclick: () => location.reload() }))) : null,
       cfg.demo ? h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Start the demo over', onclick: () => BQ.app.restart() })) : null));
     if (kind !== 'already') screen.prepend(confetti());
     mount(screen);
+  }
+
+  // Teacher preview: straight into the quiz. No sign-in, monitor, fullscreen or timer; nothing is saved.
+  async function startPreview() {
+    let r;
+    try {
+      r = await api.start();
+    } catch (e) {
+      mount(entry(h('div', { class: 'panel' }, h('p', { class: 'error', role: 'alert', text: errorText(e) }))));
+      return;
+    }
+    S.quiz = r.quiz;
+    S.run = { title: r.quiz.title, timeLimitMin: r.quiz.timeLimitMin, questionCount: r.quiz.questions.length, hasCode: r.quiz.questions.some((q) => q.type === 'code') };
+    S.deadline = 0;
+    S.answers = {};
+    S.monitor = null;
+    if (S.run.hasCode) loadMonaco().catch(() => {});
+    screenQuiz();
   }
 
   // ---------- lifecycle ----------
@@ -1039,6 +1066,7 @@
       root = el;
       api = apiImpl || BQ.api;
       S = freshState();
+      if (cfg.preview) { startPreview(); return; }
       if (!api.resume) { screenJoin(); return; }
       // Already signed in on this browser (say, after a reload)? Pick up where they were.
       api.resume().then((r) => {

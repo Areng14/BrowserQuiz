@@ -17,12 +17,14 @@ Upload the folder zipped, or pack it first:
 node scripts/pack-quiz.mjs path/to/folder out.quiz
 ```
 
-`examples/ap-csa-unit4/quiz.json` uses most features.
+`examples/ap-csa-unit4/quiz.json` uses most features. Teachers can also build quizzes in the
+dashboard (New quiz) and check how one looks with Preview. Both save this same format.
 
 ## Top level
 
 | Key | Default | Meaning |
 | --- | --- | --- |
+| `format` | `1` | Format version. Optional |
 | `title` | `"Untitled quiz"` | Shown to students and on reports |
 | `timeLimitMin` | `0` (no limit) | Minutes, up to 600. The quiz turns itself in at 0:00 |
 | `language` | `"java"` | `"java"` or `"python"`: how `inline code` and unlabeled code blocks are highlighted |
@@ -47,7 +49,7 @@ questions together.
 | `image` | none | `"assets/diagram.png"`, must exist in the zip |
 | `imageAlt` | `""` | Alt text for the image |
 
-**Markdown subset** (prompts and choices):
+**Prompts** use a Markdown subset:
 - paragraphs (blank line between)
 - `- ` or `1. ` lists
 - `**bold**` and `*italic*`
@@ -55,6 +57,10 @@ questions together.
 - fenced code blocks, written ```` ```java ```` … ```` ``` ````
 
 No HTML, links, headings or tables.
+
+**Choices** are one line each, with only `` `inline code` ``, `**bold**` and `*italic*`.
+Code that needs several lines goes in the prompt, labeled (Segment I, Segment II, …),
+and the choices refer to the labels.
 
 ## single and multi (multiple choice)
 
@@ -66,6 +72,7 @@ No HTML, links, headings or tables.
 - `choices`: 2 to 8 strings.
 - `answer` counts from 0: one index for `single`, a list of indexes for `multi` (`[0, 2]`).
 - `multi` is all or nothing: every correct choice and no wrong ones.
+- `"shuffleChoices": false` keeps this question's choices in order, for "I only", "I and II", … answers.
 
 ## text (short answer)
 

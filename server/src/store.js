@@ -142,7 +142,7 @@ function makeLayout(quiz) {
   for (const qq of quiz.questions) {
     if (!qq.choices) continue;
     const idx = qq.choices.map((_, i) => i);
-    perms[qq.id] = quiz.shuffleChoices ? shuffle(idx) : idx;
+    perms[qq.id] = quiz.shuffleChoices && qq.shuffleChoices !== false ? shuffle(idx) : idx;
   }
   return { order, perms };
 }

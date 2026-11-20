@@ -114,7 +114,7 @@ function normalizeQuiz(raw, assetNames) {
   if (raw.questions.length > LIMITS.questions) fail(`A quiz can have at most ${LIMITS.questions} questions.`);
   const ids = new Set();
   raw.questions.forEach((q, i) => {
-    const where = `questions[${i}]`;
+    const where = `Question ${i + 1}`;
     if (!q || typeof q !== 'object') fail(`${where} must be an object.`);
     const id = q.id == null ? `q${i + 1}` : String(q.id);
     if (!QID.test(id) || ['__proto__', 'constructor', 'prototype'].includes(id)) fail(`${where}: id "${id}" can only use letters, digits, - and _.`);
@@ -143,6 +143,7 @@ function normalizeQuiz(raw, assetNames) {
         fail(`${where}: answer must be ${type === 'single' ? 'one choice index' : 'a list of choice indexes'}, counting from 0.`);
       }
       out.answer = type === 'single' ? q.answer : [...new Set(q.answer)].sort((a, b) => a - b);
+      if (q.shuffleChoices === false) out.shuffleChoices = false; // e.g. "I only", "I and II", ... in order
     } else {
       Object.assign(out, normalizeCode(where, q));
     }

@@ -37,15 +37,24 @@ Doing it by hand instead: copy `.env.example` to `.env`, fill in the three secre
 
 If students can't reach it, open port 8080 in the server's firewall.
 
-A `.quiz` file is just a zip of a folder holding `quiz.json` (and an optional `assets/`
-folder). Zip it any way you like and upload it, renamed or not. To try the example quiz,
-zip `examples/ap-csa-unit4`, or with Node:
+## Making quizzes and classes
+
+- **Quizzes:** build them on the dashboard with **New quiz**, or upload a `.quiz` file. Every quiz
+  has **Preview**, which shows exactly what students see, lets you run code, and gives you the score.
+- **Classes:** use **New class** and paste one student per line (`name, student ID`, or straight
+  from a spreadsheet), or upload a CSV.
+- **With an AI:** this repo includes instructions for AI assistants (`AGENTS.md`, plus a Claude
+  Code skill). Ask one to "make a quiz on …" in this folder. It writes the quiz, checks it, and
+  packs a `.quiz` to upload.
+
+The format is in `docs/quiz-format.md`. A `.quiz` file is a zip of a folder holding `quiz.json`
+and an optional `assets/` folder. To try the example, zip `examples/ap-csa-unit4` and upload it
+along with `examples/roster-demo.csv` (Ava Martinez, ID 204511). To check a quiz, with its
+reference solutions, before uploading:
 
 ```bash
-node scripts/pack-quiz.mjs examples/ap-csa-unit4 unit4.quiz
+node scripts/check-quiz.mjs examples/ap-csa-unit4 --run
 ```
-
-Upload it with `examples/roster-demo.csv` (Ava Martinez, ID 204511).
 
 ## Do I just need the IP?
 

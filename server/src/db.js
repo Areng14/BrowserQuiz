@@ -61,6 +61,15 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 `);
 
+// Columns added after the first release. Old data is never deleted when a quiz or class is still used
+// by a past run: it's archived (hidden) instead, so old results keep working.
+function addColumn(table, col, def) {
+  if (!db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+}
+addColumn('quizzes', 'archived', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('rosters', 'archived', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('roster_students', 'removed', 'INTEGER NOT NULL DEFAULT 0');
+
 const cache = new Map();
 function q(sql) {
   let s = cache.get(sql);

@@ -3,10 +3,11 @@
 const crypto = require('node:crypto');
 const { q, tx } = require('./db');
 const store = require('./store');
-const { loadQuizFile, QuizError } = require('./quizfile');
-const { checkReferences, runnerConfigured, runnerHealthy } = require('./coderun');
-const { totals, questionScore, codeAnswered, gradeAttempt, answerReport } = require('./grade');
-const { submit, hashSid } = require('./student');
+const { loadQuizFile, normalizeQuiz, QuizError } = require('./quizfile');
+const { writeZip } = require('./zip');
+const { checkReferences, runnerConfigured, runnerHealthy, runSamples, gradeCode } = require('./coderun');
+const { totals, questionScore, codeAnswered, gradeAttempt, answerReport, cleanAnswers, gradeAuto } = require('./grade');
+const { submit, hashSid, publicQuiz } = require('./student');
 const { HttpError, clientIp, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
 
 const TCH = 'tch';
@@ -117,6 +118,101 @@ function studentReport(quiz, a, name) {
 }
 const reportQuiz = (quiz, quizId) => ({ id: quizId, title: quiz.title, language: quiz.language || null });
 
+// ---------- quizzes: shared by upload, the quiz maker and preview ----------
+async function checkQuiz(quiz) {
+  const hasRefs = quiz.questions.some((qq) => qq.type === 'code' && Object.keys(qq.reference || {}).length);
+  if (!hasRefs) return;
+  if (!runnerConfigured()) throw new QuizError('This quiz has reference solutions to check, but the code runner is not set up.');
+  await checkReferences(quiz);
+}
+function quizError(res, e) {
+  if (e instanceof QuizError) return json(res, 400, { error: 'bad_quiz', message: e.message });
+  if (e.code === 'runner_offline') return json(res, 503, { error: 'runner_offline', message: "Couldn't check the reference solutions: the code runner is offline." });
+  throw e;
+}
+// A quiz that a past run used is hidden instead of deleted, so old results keep working.
+function retireQuiz(id) {
+  if (q('SELECT 1 FROM runs WHERE quiz_id = ? LIMIT 1').get(id)) q('UPDATE quizzes SET archived = 1 WHERE id = ?').run(id);
+  else q('DELETE FROM quizzes WHERE id = ?').run(id);
+  store.quizCache.delete(id);
+}
+function saveQuiz(quiz, assets, replaces) {
+  const id = crypto.randomUUID();
+  tx(() => {
+    q('INSERT INTO quizzes (id, title, json, created_at) VALUES (?, ?, ?, ?)').run(id, quiz.title, JSON.stringify(quiz), Date.now());
+    for (const a of assets) q('INSERT INTO assets (quiz_id, path, mime, bytes) VALUES (?, ?, ?, ?)').run(id, a.path, a.mime, a.bytes);
+    if (replaces) retireQuiz(replaces);
+  });
+  return id;
+}
+function getQuizRow(id) {
+  const row = q('SELECT id, title FROM quizzes WHERE id = ?').get(String(id || ''));
+  if (!row) throw new HttpError(404, 'not_found');
+  return row;
+}
+// The stored (normalized) quiz back in the shape people write, for the quiz maker and downloads.
+function quizSource(quiz) {
+  const out = { format: 1, title: quiz.title, timeLimitMin: quiz.timeLimitMin, language: quiz.language,
+    shuffleQuestions: quiz.shuffleQuestions, shuffleChoices: quiz.shuffleChoices, integrity: quiz.integrity };
+  if (Object.keys(quiz.directions || {}).length) out.directions = quiz.directions;
+  out.questions = quiz.questions.map((qq) => {
+    const o = { id: qq.id, type: qq.type, prompt: qq.prompt, points: qq.points };
+    if (qq.image) { o.image = qq.image; if (qq.imageAlt) o.imageAlt = qq.imageAlt; }
+    if (qq.type === 'text') { o.answer = qq.answer; if (qq.caseSensitive) o.caseSensitive = true; }
+    if (qq.type === 'single' || qq.type === 'multi') { o.choices = qq.choices; o.answer = qq.answer; if (qq.shuffleChoices === false) o.shuffleChoices = false; }
+    if (qq.type === 'code') {
+      o.mode = qq.mode;
+      o.languages = qq.languages;
+      if (qq.mode === 'method') o.signature = qq.signature; else o.class = qq.class;
+      o.tests = qq.tests;
+      if (Object.keys(qq.reference || {}).length) o.reference = qq.reference;
+      if (qq.compare === 'unordered') o.compare = 'unordered';
+      if (qq.limits && (qq.limits.timeMs !== 2000 || qq.limits.memoryMb !== 256)) o.limits = qq.limits;
+      if (qq.rubric && qq.rubric.length) o.rubric = qq.rubric;
+      const custom = Object.fromEntries(Object.entries(qq.starter || {}).filter(([, v]) => typeof v === 'string'));
+      if (Object.keys(custom).length) o.starter = custom;
+      else if (qq.starterStyle === 'empty') o.starter = 'empty';
+      if (Object.keys(qq.support || {}).length) o.support = qq.support;
+    }
+    return o;
+  });
+  return out;
+}
+
+// ---------- rosters ----------
+// One student per line: "Name, ID" or a spreadsheet paste (tab between). The last comma splits, so
+// "Martinez, Ava, 204511" works. A header line like "name, student_id" is skipped.
+function parseRosterText(text) {
+  const students = [];
+  const problems = [];
+  String(text || '').split(/\r?\n/).forEach((line, i) => {
+    if (!line.trim()) return;
+    let name;
+    let sid;
+    if (line.includes('\t')) {
+      const parts = line.split('\t').map((x) => x.trim()).filter(Boolean);
+      sid = parts.pop();
+      name = parts.join(' ');
+    } else {
+      const at = line.lastIndexOf(',');
+      name = at < 0 ? '' : line.slice(0, at).trim();
+      sid = at < 0 ? '' : line.slice(at + 1).trim();
+    }
+    if (i === 0 && /name/i.test(name) && /id/i.test(sid) && !/\d/.test(sid)) return; // header
+    name = String(name || '').replace(/^"|"$/g, '').trim().slice(0, 80);
+    sid = String(sid || '').replace(/^"|"$/g, '').trim().slice(0, 40);
+    if (!name || !sid) problems.push(`Line ${i + 1} needs a name and a student ID.`);
+    else students.push({ name, sid });
+  });
+  return { students, problems };
+}
+function retireRoster(id) {
+  if (q('SELECT 1 FROM runs WHERE roster_id = ? LIMIT 1').get(id)) q('UPDATE rosters SET archived = 1 WHERE id = ?').run(id);
+  else q('DELETE FROM rosters WHERE id = ?').run(id);
+}
+const rosterStudentsForRun = (run) => q(`SELECT id, name FROM roster_students WHERE roster_id = ?
+  AND (removed = 0 OR id IN (SELECT student_id FROM attempts WHERE run_id = ?)) ORDER BY name`).all(run.roster_id, run.id);
+
 module.exports = function teacherRoutes(r) {
   r.post('/api/t/login', async (req, res) => {
     const body = await readJson(req, 4096);
@@ -148,11 +244,11 @@ module.exports = function teacherRoutes(r) {
 
   r.get('/api/t/overview', (req, res) => {
     requireTeacher(req);
-    const quizzes = q('SELECT id, title, json, created_at FROM quizzes ORDER BY created_at DESC').all().map((x) => {
+    const quizzes = q('SELECT id, title, json, created_at FROM quizzes WHERE archived = 0 ORDER BY created_at DESC').all().map((x) => {
       const quiz = JSON.parse(x.json);
       return { id: x.id, title: x.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin, createdAt: x.created_at };
     });
-    const rosters = q('SELECT r.id, r.name, r.created_at, COUNT(s.id) AS n FROM rosters r LEFT JOIN roster_students s ON s.roster_id = r.id GROUP BY r.id ORDER BY r.created_at DESC').all()
+    const rosters = q('SELECT r.id, r.name, r.created_at, COUNT(s.id) AS n FROM rosters r LEFT JOIN roster_students s ON s.roster_id = r.id AND s.removed = 0 WHERE r.archived = 0 GROUP BY r.id ORDER BY r.created_at DESC').all()
       .map((x) => ({ id: x.id, name: x.name, students: x.n, createdAt: x.created_at }));
     const runs = q(`SELECT runs.*, quizzes.title AS quiz_title, rosters.name AS roster_name,
         (SELECT COUNT(*) FROM attempts WHERE attempts.run_id = runs.id AND archived = 0) AS joined
@@ -167,52 +263,173 @@ module.exports = function teacherRoutes(r) {
     let parsed;
     try {
       parsed = loadQuizFile(buf);
-      const hasRefs = parsed.quiz.questions.some((qq) => qq.type === 'code' && Object.keys(qq.reference || {}).length);
-      if (hasRefs) {
-        if (!runnerConfigured()) throw new QuizError('This quiz has reference solutions to check, but the code runner is not set up.');
-        await checkReferences(parsed.quiz);
-      }
-    } catch (e) {
-      if (e instanceof QuizError) return json(res, 400, { error: 'bad_quiz', message: e.message });
-      if (e.code === 'runner_offline') return json(res, 503, { error: 'runner_offline', message: "Couldn't check the reference solutions: the code runner is offline." });
-      throw e;
-    }
-    const id = crypto.randomUUID();
-    tx(() => {
-      q('INSERT INTO quizzes (id, title, json, created_at) VALUES (?, ?, ?, ?)').run(id, parsed.quiz.title, JSON.stringify(parsed.quiz), Date.now());
-      for (const [p, asset] of parsed.assets) q('INSERT INTO assets (quiz_id, path, mime, bytes) VALUES (?, ?, ?, ?)').run(id, p, asset.mime, asset.bytes);
-    });
+      await checkQuiz(parsed.quiz);
+    } catch (e) { return quizError(res, e); }
+    const id = saveQuiz(parsed.quiz, [...parsed.assets].map(([path, a]) => ({ path, mime: a.mime, bytes: a.bytes })), null);
     audit('upload-quiz', null, parsed.quiz.title);
     json(res, 200, { id, title: parsed.quiz.title, questions: parsed.quiz.questions.length });
   });
 
+  // Quiz maker: save quiz.json from the editor. Editing saves a new copy and retires the old one
+  // (images carry over), so runs that used the old version keep grading the same way.
+  r.post('/api/t/quizzes/json', async (req, res) => {
+    requireTeacher(req);
+    const body = await readJson(req, 4 * 1024 * 1024);
+    const old = body.replaces ? getQuizRow(body.replaces) : null;
+    const assets = old ? q('SELECT path, mime, bytes FROM assets WHERE quiz_id = ?').all(old.id) : [];
+    let quiz;
+    try {
+      quiz = normalizeQuiz(body.quiz, new Set(assets.map((a) => a.path)));
+      await checkQuiz(quiz);
+    } catch (e) { return quizError(res, e); }
+    const id = saveQuiz(quiz, assets, old && old.id);
+    audit(old ? 'edit-quiz' : 'create-quiz', null, quiz.title);
+    json(res, 200, { id, title: quiz.title });
+  });
+
+  r.get('/api/t/quizzes/:id/source', (req, res, p) => {
+    requireTeacher(req);
+    const row = getQuizRow(p.id);
+    const assets = q('SELECT path FROM assets WHERE quiz_id = ?').all(row.id).map((a) => a.path);
+    json(res, 200, { id: row.id, quiz: quizSource(store.getQuiz(row.id)), assets });
+  });
+
+  r.get('/api/t/quizzes/:id/download', (req, res, p) => {
+    requireTeacher(req);
+    const row = getQuizRow(p.id);
+    const entries = [{ name: 'quiz.json', data: Buffer.from(JSON.stringify(quizSource(store.getQuiz(row.id)), null, 2)) }];
+    for (const a of q('SELECT path, bytes FROM assets WHERE quiz_id = ?').all(row.id)) entries.push({ name: a.path, data: Buffer.from(a.bytes) });
+    send(res, 200, writeZip(entries), {
+      'Content-Type': 'application/zip', 'Cache-Control': 'no-store',
+      'Content-Disposition': `attachment; filename="${row.title.replace(/[^\w -]/g, '').slice(0, 60) || 'quiz'}.quiz"`,
+    });
+  });
+
+  r.post('/api/t/quizzes/:id/delete', async (req, res, p) => {
+    requireTeacher(req);
+    const row = getQuizRow(p.id);
+    retireQuiz(row.id);
+    audit('delete-quiz', null, row.title);
+    json(res, 200, { ok: true });
+  });
+
+  // Preview: the quiz exactly as students see it (unshuffled), with Run and a score, nothing saved.
+  r.get('/api/t/quizzes/:id/preview', (req, res, p) => {
+    requireTeacher(req);
+    const quiz = store.getQuiz(getQuizRow(p.id).id);
+    const layout = { order: quiz.questions.map((qq) => qq.id), perms: Object.fromEntries(quiz.questions.filter((qq) => qq.choices).map((qq) => [qq.id, qq.choices.map((_, i) => i)])) };
+    json(res, 200, { quiz: publicQuiz(quiz, layout), deadline: null, now: Date.now(), saved: {} });
+  });
+
+  r.post('/api/t/quizzes/:id/run', async (req, res, p) => {
+    requireTeacher(req);
+    const body = await readJson(req, 128 * 1024);
+    const quiz = store.getQuiz(getQuizRow(p.id).id);
+    const qq = quiz.questions.find((x) => x.id === body.questionId && x.type === 'code');
+    if (!qq || !qq.languages.includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
+    try {
+      json(res, 200, await runSamples(qq, body.language, body.code.slice(0, 50000)));
+    } catch (e) {
+      json(res, 200, { status: 'error', message: 'Code runner offline.' });
+    }
+  });
+
+  r.post('/api/t/quizzes/:id/grade', async (req, res, p) => {
+    requireTeacher(req);
+    const body = await readJson(req, 1024 * 1024);
+    const quiz = store.getQuiz(getQuizRow(p.id).id);
+    const answers = cleanAnswers(quiz, null, body.answers);
+    const auto = gradeAuto(quiz, null, answers);
+    const questions = await Promise.all(quiz.questions.map(async (qq, i) => {
+      if (qq.type !== 'code') return { n: i + 1, id: qq.id, points: auto.detail[qq.id].points, max: qq.points };
+      const rubric = qq.rubric.reduce((sum, r2) => sum + r2.points, 0);
+      try {
+        const c = await gradeCode(qq, answers[qq.id]);
+        return { n: i + 1, id: qq.id, points: c.status === 'done' ? c.score : null, max: qq.points, rubric };
+      } catch (e) {
+        return { n: i + 1, id: qq.id, points: null, max: qq.points, rubric };
+      }
+    }));
+    const score = Math.round(questions.reduce((sum, x) => sum + (x.points || 0), 0) * 100) / 100;
+    json(res, 200, { ok: true, score, max: quiz.questions.reduce((sum, qq) => sum + qq.points, 0), questions });
+  });
+
+  // New class from a CSV file ({ csv }) or the roster maker's pasted list ({ text }).
   r.post('/api/t/rosters', async (req, res) => {
     requireTeacher(req);
     const body = await readJson(req, 2 * 1024 * 1024);
     const name = String(body.name || '').trim().slice(0, 80) || 'Class';
-    const rows = parseCsv(body.csv || '');
-    if (rows.length < 2) return json(res, 400, { error: 'bad_roster', message: 'The CSV needs a header row and at least one student.' });
-    const header = rows[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'));
-    const ni = header.indexOf('name');
-    const si = header.findIndex((h) => h === 'student_id' || h === 'id' || h === 'studentid');
-    if (ni < 0 || si < 0) return json(res, 400, { error: 'bad_roster', message: 'The header row needs "name" and "student_id" columns.' });
-    const students = [];
-    const problems = [];
-    rows.slice(1).forEach((r2, i) => {
-      const n = String(r2[ni] || '').trim().slice(0, 80);
-      const sid = String(r2[si] || '').trim().slice(0, 40);
-      if (!n || !sid) problems.push(`Row ${i + 2} is missing a name or student ID.`);
-      else students.push({ name: n, sid });
-    });
+    let students = [];
+    let problems = [];
+    if (typeof body.text === 'string') {
+      ({ students, problems } = parseRosterText(body.text));
+      if (!students.length && !problems.length) problems.push('Add at least one student.');
+    } else {
+      const rows = parseCsv(body.csv || '');
+      if (rows.length < 2) return json(res, 400, { error: 'bad_roster', message: 'The CSV needs a header row and at least one student.' });
+      const header = rows[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'));
+      const ni = header.indexOf('name');
+      const si = header.findIndex((h) => h === 'student_id' || h === 'id' || h === 'studentid');
+      if (ni < 0 || si < 0) return json(res, 400, { error: 'bad_roster', message: 'The header row needs "name" and "student_id" columns.' });
+      rows.slice(1).forEach((r2, i) => {
+        const n = String(r2[ni] || '').trim().slice(0, 80);
+        const sid = String(r2[si] || '').trim().slice(0, 40);
+        if (!n || !sid) problems.push(`Row ${i + 2} is missing a name or student ID.`);
+        else students.push({ name: n, sid });
+      });
+    }
     if (problems.length) return json(res, 400, { error: 'bad_roster', message: problems.slice(0, 5).join(' ') });
-    if (students.length > 500) return json(res, 400, { error: 'bad_roster', message: 'A roster can have at most 500 students.' });
+    if (students.length > 500) return json(res, 400, { error: 'bad_roster', message: 'A class can have at most 500 students.' });
     const id = crypto.randomUUID();
     tx(() => {
       q('INSERT INTO rosters (id, name, created_at) VALUES (?, ?, ?)').run(id, name, Date.now());
       for (const s of students) q('INSERT INTO roster_students (id, roster_id, name, sid_hash) VALUES (?, ?, ?, ?)').run(crypto.randomUUID(), id, s.name, hashSid(s.sid));
     });
-    audit('upload-roster', null, `${name} (${students.length})`);
+    audit('create-roster', null, `${name} (${students.length})`);
     json(res, 200, { id, name, students: students.length });
+  });
+
+  // Roster maker: IDs are stored hashed, so a class can be renamed and students added or removed,
+  // but an existing ID can't be shown.
+  r.get('/api/t/rosters/:id', (req, res, p) => {
+    requireTeacher(req);
+    const roster = q('SELECT id, name FROM rosters WHERE id = ? AND archived = 0').get(p.id);
+    if (!roster) throw new HttpError(404, 'not_found');
+    const students = q(`SELECT s.id, s.name, EXISTS(SELECT 1 FROM attempts a WHERE a.student_id = s.id) AS results
+      FROM roster_students s WHERE s.roster_id = ? AND s.removed = 0 ORDER BY s.name`).all(roster.id)
+      .map((x) => ({ id: x.id, name: x.name, results: !!x.results }));
+    json(res, 200, { id: roster.id, name: roster.name, students });
+  });
+
+  r.post('/api/t/rosters/:id/edit', async (req, res, p) => {
+    requireTeacher(req);
+    const body = await readJson(req, 2 * 1024 * 1024);
+    const roster = q('SELECT id, name FROM rosters WHERE id = ? AND archived = 0').get(p.id);
+    if (!roster) throw new HttpError(404, 'not_found');
+    const { students, problems } = parseRosterText(body.add || '');
+    if (problems.length) return json(res, 400, { error: 'bad_roster', message: problems.slice(0, 5).join(' ') });
+    const remove = Array.isArray(body.remove) ? body.remove.map(String) : [];
+    tx(() => {
+      const name = String(body.name || '').trim().slice(0, 80);
+      if (name) q('UPDATE rosters SET name = ? WHERE id = ?').run(name, roster.id);
+      for (const s of students) q('INSERT INTO roster_students (id, roster_id, name, sid_hash) VALUES (?, ?, ?, ?)').run(crypto.randomUUID(), roster.id, s.name, hashSid(s.sid));
+      for (const sid of remove) {
+        // Students with quiz results stay in the database (hidden) so old results keep their names.
+        if (q('SELECT 1 FROM attempts WHERE student_id = ? LIMIT 1').get(sid)) q('UPDATE roster_students SET removed = 1 WHERE id = ? AND roster_id = ?').run(sid, roster.id);
+        else q('DELETE FROM roster_students WHERE id = ? AND roster_id = ?').run(sid, roster.id);
+      }
+    });
+    audit('edit-roster', null, `${roster.name}: +${students.length} -${remove.length}`);
+    json(res, 200, { ok: true });
+  });
+
+  r.post('/api/t/rosters/:id/delete', async (req, res, p) => {
+    requireTeacher(req);
+    const roster = q('SELECT id, name FROM rosters WHERE id = ?').get(p.id);
+    if (!roster) throw new HttpError(404, 'not_found');
+    retireRoster(roster.id);
+    audit('delete-roster', null, roster.name);
+    json(res, 200, { ok: true });
   });
 
   r.post('/api/t/runs', async (req, res) => {
@@ -267,7 +484,7 @@ module.exports = function teacherRoutes(r) {
     const run = q('SELECT * FROM runs WHERE id = ?').get(p.id);
     if (!run) throw new HttpError(404, 'not_found');
     const quiz = store.getQuiz(run.quiz_id);
-    const roster = q('SELECT id, name FROM roster_students WHERE roster_id = ? ORDER BY name').all(run.roster_id);
+    const roster = rosterStudentsForRun(run);
     const byStudent = new Map(q('SELECT id, student_id FROM attempts WHERE run_id = ? AND archived = 0').all(run.id).map((x) => [x.student_id, store.getAttempt(x.id)]));
     json(res, 200, {
       run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin },
@@ -285,7 +502,7 @@ module.exports = function teacherRoutes(r) {
     const head = ['name', 'status', 'integrity', 'reason', 'strikes', 'warnings', 'raw_score', 'final_score', 'max',
       'grading_pending', 'grading_failed', 'needs_review', 'started_at', 'submitted_at', ...quiz.questions.map((qq, i) => `q${i + 1}_${qq.id}`)];
     const lines = [head.join(',')];
-    for (const s of q('SELECT id, name FROM roster_students WHERE roster_id = ? ORDER BY name').all(run.roster_id)) {
+    for (const s of rosterStudentsForRun(run)) {
       const row = q('SELECT id FROM attempts WHERE run_id = ? AND student_id = ? AND archived = 0').get(run.id, s.id);
       const a = row ? store.getAttempt(row.id) : null;
       const t = a ? totals(a.result, quiz, a.answers) : null;

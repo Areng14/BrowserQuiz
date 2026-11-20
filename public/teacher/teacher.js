@@ -145,19 +145,88 @@
             h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: r.status === 'open' ? 'Open' : 'Closed' }),
             h('td', { class: 'num', text: String(r.joined) }), h('td', { text: date(r.createdAt) })))))) : h('p', { class: 't-muted', text: 'None yet.' })),
       h('section', { class: 't-section' },
-        h('h2', { text: 'Quizzes' }),
-        data.quizzes.length ? h('ul', {}, data.quizzes.map((x) => h('li', { text: `${x.title} · ${plural(x.questions, 'question')}${x.timeLimitMin ? ` · ${x.timeLimitMin} min` : ''} · added ${date(x.createdAt)}` }))) : null,
-        h('div', { class: 't-row' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: '.quiz file' }), quizFile), quizBtn),
+        h('div', { class: 't-head' }, h('h2', { text: 'Quizzes' }),
+          h('button', { class: 'btn small primary', type: 'button', text: 'New quiz', onclick: () => window.BQT.showQuizEditor(null) })),
+        data.quizzes.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
+          h('tbody', {}, data.quizzes.map((x) => h('tr', {},
+            h('td', { text: x.title }),
+            h('td', { class: 't-muted', text: `${plural(x.questions, 'question')}${x.timeLimitMin ? ` · ${x.timeLimitMin} min` : ''} · ${date(x.createdAt)}` }),
+            h('td', { class: 't-actions' },
+              linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true),
+              h('button', { class: 'btn small', type: 'button', text: 'Edit', onclick: () => window.BQT.showQuizEditor(x.id) }),
+              linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
+              h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}? Past results stay.`) }))))))) : null,
+        h('div', { class: 't-row' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz file' }), quizFile), quizBtn),
         quizMsg),
       h('section', { class: 't-section' },
-        h('h2', { text: 'Classes' }),
-        data.rosters.length ? h('ul', {}, data.rosters.map((x) => h('li', { text: `${x.name} · ${x.students} students` }))) : null,
-        h('p', { class: 't-muted t-small', text: 'CSV columns: name, student_id' }),
+        h('div', { class: 't-head' }, h('h2', { text: 'Classes' }),
+          h('button', { class: 'btn small primary', type: 'button', text: 'New class', onclick: () => showRoster(null) })),
+        data.rosters.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
+          h('tbody', {}, data.rosters.map((x) => h('tr', {},
+            h('td', { text: x.name }),
+            h('td', { class: 't-muted', text: plural(x.students, 'student') }),
+            h('td', { class: 't-actions' },
+              h('button', { class: 'btn small', type: 'button', text: 'Edit', onclick: () => showRoster(x.id) }),
+              h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}? Past results stay.`) }))))))) : null,
         h('div', { class: 't-row' },
           h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
-          h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Roster CSV' }), rosterFile),
+          h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student_id)' }), rosterFile),
           rosterBtn),
         rosterMsg)));
+  }
+
+  function linkBtn(text, href, newTab) {
+    const a = h('a', { class: 'btn small', href, text, target: newTab ? '_blank' : null, rel: newTab ? 'noopener' : null });
+    a.style.cssText = 'display:inline-flex;align-items:center;text-decoration:none';
+    return a;
+  }
+  async function remove(path, question) {
+    if (!confirm(question)) return;
+    try { await post(path); } catch (e) { alert(e.message); }
+    showHome();
+  }
+
+  // ---------- roster maker ----------
+  async function showRoster(id) {
+    let roster = { name: '', students: [] };
+    if (id) {
+      try { roster = await api(`/api/t/rosters/${encodeURIComponent(id)}`); } catch (e) { return; }
+    }
+    const removing = new Set();
+    const name = h('input', { class: 'input', id: 'class-name', value: roster.name, placeholder: 'Period 3' });
+    const add = h('textarea', { class: 'input t-textarea', id: 'class-add', rows: 8, spellcheck: 'false', placeholder: 'Ava Martinez, 204511\nDiego Ramos, 204651' });
+    const msg = h('p', { class: 't-error', role: 'alert' });
+    const save = h('button', { class: 'btn primary', type: 'button', text: 'Save' });
+    const list = roster.students.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
+      h('tbody', {}, roster.students.map((st) => {
+        const row = h('tr', {});
+        const btn = h('button', { class: 'btn small', type: 'button', text: 'Remove' });
+        btn.addEventListener('click', () => {
+          if (removing.has(st.id)) { removing.delete(st.id); btn.textContent = 'Remove'; row.classList.remove('t-removed'); }
+          else { removing.add(st.id); btn.textContent = 'Undo'; row.classList.add('t-removed'); }
+        });
+        row.append(h('td', { text: st.name }), h('td', { class: 't-actions' }, btn));
+        return row;
+      })))) : null;
+    save.addEventListener('click', async () => {
+      save.disabled = true;
+      msg.textContent = '';
+      try {
+        if (id) await post(`/api/t/rosters/${encodeURIComponent(id)}/edit`, { name: name.value, add: add.value, remove: [...removing] });
+        else await post('/api/t/rosters', { name: name.value, text: add.value });
+        showHome();
+      } catch (e) { msg.textContent = e.message; save.disabled = false; }
+    });
+    mount(bar(h('button', { class: 't-link', type: 'button', text: '← All quizzes', onclick: () => showHome() })),
+      h('main', { class: 't-main' }, h('section', { class: 't-section' },
+        h('h1', { text: id ? 'Edit class' : 'New class' }),
+        h('label', { class: 'field', for: 'class-name' }, h('span', { class: 'field-label', text: 'Class name' }), name),
+        id ? h('h2', { text: plural(roster.students.length, 'student') }) : null,
+        list,
+        h('label', { class: 'field', for: 'class-add' }, h('span', { class: 'field-label', text: id ? 'Add students: name, student ID (one per line)' : 'Students: name, student ID (one per line)' }), add),
+        h('div', { class: 't-row' }, save, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => showHome() })),
+        msg)));
+    (id ? add : name).focus();
   }
 
   // ---------- one running quiz ----------
@@ -368,5 +437,6 @@
     ctx.globalAlpha = 1;
   }
 
+  window.BQT = { h, api, post, mount, bar, showHome, plural, date };
   api('/api/t/me').then(showHome).catch(() => {});
 })();

@@ -1,0 +1,284 @@
+{
+  "format": 1,
+  "title": "AP CSA Unit 6: Arrays",
+  "timeLimitMin": 15,
+  "language": "java",
+  "questions": [
+    {
+      "id": "q1",
+      "type": "single",
+      "prompt": "What does this print?\n\n```java\nint[] arr = {2, 4, 6, 8};\nint sum = 0;\nfor (int i = 1; i < arr.length; i++) {\n    sum += arr[i];\n}\nSystem.out.println(sum);\n```",
+      "choices": [
+        "`12`",
+        "`18`",
+        "`20`",
+        "An exception is thrown"
+      ],
+      "answer": 1
+    },
+    {
+      "id": "q2",
+      "type": "single",
+      "prompt": "What does this print?\n\n```java\nint[] a = {1, 2, 3};\nint[] b = a;\nb[0] = 10;\na = new int[] {7, 8, 9};\nSystem.out.println(b[0] + \" \" + a[0]);\n```",
+      "choices": [
+        "`1 7`",
+        "`10 10`",
+        "`7 7`",
+        "`10 7`"
+      ],
+      "answer": 3
+    },
+    {
+      "id": "q3",
+      "type": "single",
+      "prompt": "What does this print?\n\n```java\nint[] vals = {1, 2, 3};\nfor (int v : vals) {\n    v = v * 2;\n}\nSystem.out.println(vals[0] + vals[1] + vals[2]);\n```",
+      "choices": [
+        "`6`",
+        "`12`",
+        "`123`",
+        "`246`"
+      ],
+      "answer": 0
+    },
+    {
+      "id": "q4",
+      "type": "single",
+      "prompt": "What does this print?\n\n```java\nint[] scores = {90, 85, 80, 86};\nint total = 0;\nfor (int s : scores) {\n    total += s;\n}\ndouble avg = total / scores.length;\nSystem.out.println(avg);\n```",
+      "choices": [
+        "`85`",
+        "`85.0`",
+        "`85.25`",
+        "`86.0`"
+      ],
+      "answer": 1
+    },
+    {
+      "id": "q5",
+      "type": "multi",
+      "points": 2,
+      "prompt": "`nums` is an `int[]` with at least one element. Which code segments leave `max` holding the largest value in `nums`?\n\n**Segment I**\n\n```java\nint max = nums[0];\nfor (int i = 1; i < nums.length; i++) {\n    if (nums[i] > max) max = nums[i];\n}\n```\n\n**Segment II**\n\n```java\nint max = 0;\nfor (int n : nums) {\n    if (n > max) max = n;\n}\n```\n\n**Segment III**\n\n```java\nint max = nums[0];\nfor (int n : nums) {\n    if (n > max) max = n;\n}\n```\n\n**Segment IV**\n\n```java\nint max = nums[0];\nfor (int i = 1; i < nums.length; i++) {\n    if (nums[i] > nums[i - 1]) max = nums[i];\n}\n```",
+      "choices": [
+        "Segment I",
+        "Segment II",
+        "Segment III",
+        "Segment IV"
+      ],
+      "answer": [
+        0,
+        2
+      ],
+      "shuffleChoices": false
+    },
+    {
+      "id": "q6",
+      "type": "text",
+      "prompt": "What does this print?\n\n```java\nint[] a = {4, 7, 1, 9, 2};\nfor (int i = a.length - 1; i > 0; i--) {\n    a[i] = a[i - 1];\n}\nSystem.out.println(a[0] + a[4]);\n```",
+      "answer": [
+        "13"
+      ]
+    },
+    {
+      "id": "q7",
+      "type": "code",
+      "points": 6,
+      "languages": [
+        "java",
+        "python"
+      ],
+      "prompt": "Write `longestRun(nums)`, which returns the length of the longest run of equal values next to each other in `nums`. For example, the longest run in `[1, 2, 2, 2, 3, 3]` is the three `2`s, so it returns `3`.\n\nReturn `0` if `nums` is empty.",
+      "signature": {
+        "name": "longestRun",
+        "params": [
+          {
+            "name": "nums",
+            "type": "int[]"
+          }
+        ],
+        "returns": "int"
+      },
+      "tests": {
+        "sample": [
+          {
+            "args": [
+              [
+                1,
+                2,
+                2,
+                2,
+                3,
+                3
+              ]
+            ],
+            "expected": 3
+          },
+          {
+            "args": [
+              [
+                5,
+                1,
+                5
+              ]
+            ],
+            "expected": 1
+          }
+        ],
+        "hidden": [
+          {
+            "args": [
+              []
+            ],
+            "expected": 0,
+            "weight": 2
+          },
+          {
+            "args": [
+              [
+                7
+              ]
+            ],
+            "expected": 1
+          },
+          {
+            "args": [
+              [
+                -3,
+                -3,
+                0,
+                -3
+              ]
+            ],
+            "expected": 2
+          },
+          {
+            "args": [
+              [
+                0,
+                -1,
+                -1,
+                -1,
+                0
+              ]
+            ],
+            "expected": 3
+          },
+          {
+            "args": [
+              [
+                4,
+                4,
+                4,
+                4
+              ]
+            ],
+            "expected": 4
+          },
+          {
+            "args": [
+              [
+                1,
+                2,
+                3,
+                4
+              ]
+            ],
+            "expected": 1
+          },
+          {
+            "args": [
+              [
+                1,
+                2,
+                2,
+                3,
+                3,
+                3
+              ]
+            ],
+            "expected": 3,
+            "weight": 2
+          },
+          {
+            "args": [
+              [
+                2,
+                2,
+                1,
+                1,
+                1,
+                2,
+                2
+              ]
+            ],
+            "expected": 3,
+            "weight": 2
+          },
+          {
+            "args": [
+              [
+                3,
+                3,
+                1,
+                4,
+                4,
+                4,
+                1,
+                5,
+                9,
+                2,
+                6,
+                6,
+                5,
+                3,
+                5,
+                8,
+                9,
+                7,
+                9,
+                3,
+                2,
+                3,
+                8,
+                4,
+                6,
+                2,
+                6,
+                4,
+                3,
+                3,
+                8,
+                3,
+                2,
+                7,
+                9,
+                5,
+                0,
+                2,
+                8,
+                8,
+                8,
+                8,
+                8,
+                4,
+                1,
+                9,
+                7,
+                1,
+                6,
+                9,
+                9,
+                9,
+                9,
+                2
+              ]
+            ],
+            "expected": 5
+          }
+        ]
+      },
+      "reference": {
+        "java": "class Solution {\n    public int longestRun(int[] nums) {\n        if (nums.length == 0) return 0;\n        int best = 1;\n        int current = 1;\n        for (int i = 1; i < nums.length; i++) {\n            if (nums[i] == nums[i - 1]) {\n                current++;\n                if (current > best) best = current;\n            } else {\n                current = 1;\n            }\n        }\n        return best;\n    }\n}\n",
+        "python": "class Solution:\n    def longestRun(self, nums):\n        if not nums:\n            return 0\n        best = 1\n        current = 1\n        for i in range(1, len(nums)):\n            if nums[i] == nums[i - 1]:\n                current += 1\n                best = max(best, current)\n            else:\n                current = 1\n        return best\n"
+      }
+    }
+  ]
+}

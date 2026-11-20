@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Preview</title>
+  <link rel="stylesheet" href="/app.css">
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body { display: flex; flex-direction: column; background: var(--bg); }
+    .pv-bar { display: flex; align-items: center; gap: 12px; padding: 6px 16px; font: 600 13px system-ui, sans-serif; color: var(--ink); background: var(--soft); border-bottom: 1px solid var(--line); }
+    .pv-bar span { flex: 1; }
+    #bq-app { flex: 1; min-height: 0; }
+  </style>
+</head>
+<body>
+  <div class="pv-bar"><span>Preview</span><button class="btn small" type="button" id="pv-close">Close</button></div>
+  <div id="bq-app" class="bq-app"></div>
+  <script src="/teacher/preview-config.js"></script>
+  <script src="/md.js"></script>
+  <script src="/app.js"></script>
+  <script src="/teacher/preview.js"></script>
+</body>
+</html>
