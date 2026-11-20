@@ -45,7 +45,7 @@ questions together.
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `id` | `q1`, `q2`, … | Unique. Letters, digits, `-`, `_` |
-| `type` | `"single"` | `single`, `multi`, `text` or `code` |
+| `type` | `"single"` | `single`, `multi`, `text`, `code`, `output`, `trace`, `fill` or `essay` |
 | `prompt` | required | Markdown subset (below) |
 | `points` | `1` | Positive number |
 | `image` | none | `"assets/diagram.png"`, must exist in the zip |
@@ -85,6 +85,69 @@ and the choices refer to the labels.
 - `answer`: one string or a list of accepted strings.
 - Matching ignores leading and trailing spaces, repeated spaces, and capital letters.
 - To make capitals count, set `"caseSensitive": true`.
+
+## output (predict the output)
+
+```json
+{ "id": "q4", "type": "output", "prompt": "What does this print?",
+  "code": "int x = 7;\nSystem.out.println(x / 2);\nSystem.out.println(x % 2);" }
+```
+
+- `code`: the snippet students read.
+  - Java: statements, or a full class with `main`.
+  - Python: a script.
+- `language`: defaults to the quiz's `language`.
+- `answer` is optional. On upload the code is run and its output becomes the answer. If you
+  write an `answer` yourself, it has to match what the code prints.
+- Matching ignores spaces at the ends of lines and blank lines at the start and end. Everything
+  else counts, including capital letters.
+
+## trace (trace table)
+
+```json
+{ "id": "q5", "type": "trace", "points": 3, "prompt": "Fill in i and sum at the end of each pass.",
+  "code": "int sum = 0;\nfor (int i = 1; i <= 4; i++) {\n    sum += i;\n}",
+  "columns": ["i", "sum"],
+  "rows": [["1", "1"], ["2", "3"], ["3", "6"], ["4", "10"]],
+  "given": [[0, 0], [0, 1]] }
+```
+
+- `columns`: 1 to 8 headings.
+- `rows`: the correct value for every cell, with up to 40 rows.
+- `given`: cells shown already filled in, as `[row, column]` counting from 0. They aren't graded.
+- `code` is optional.
+- Each graded cell is worth the same. Spaces around a value and quotes around a string
+  (`"abc"` for `abc`) don't matter.
+
+## fill (fill in the blanks)
+
+```json
+{ "id": "q6", "type": "fill", "points": 2, "prompt": "Complete the code so total is the sum of nums.",
+  "code": "int total = ___;\nfor (int n : nums) {\n    total ___ n;\n}",
+  "answer": ["0", ["+=", "= total +"]] }
+```
+
+- `code` marks each blank with `___` (three or more underscores), up to 30 blanks.
+- `answer` has one entry per blank: a string, or a list of accepted strings. Spacing doesn't
+  matter.
+- Each blank is worth the same.
+- **Graded by running instead:** add the fields of a code question (`signature` or `class`, and
+  `tests`, as described under code). The code with the student's blanks filled in is then run
+  against the tests, so any blanks that make it work earn credit, not just the ones in `answer`.
+  - Students get Run examples for the sample tests.
+  - The `answer` blanks are the reference solution.
+  - The code must be the whole `Solution` class (or the class from `class`).
+
+## essay (written answer)
+
+```json
+{ "id": "q7", "type": "essay", "points": 3, "prompt": "Explain why a == b can be false for two equal Strings.",
+  "rubric": [{ "text": "Says == compares references", "points": 2 }, { "text": "Says .equals compares the text", "points": 1 }] }
+```
+
+- The teacher grades it, with the rubric checkboxes or by typing points.
+- `"language": "java"` (or `"python"`) gives students a code box instead of a text box. Use it
+  for AP-style free response graded by rubric.
 
 ## code
 

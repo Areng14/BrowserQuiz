@@ -17,7 +17,8 @@ Anything else:
    - AP CSA style, Java
    - 1 minute per multiple choice question, 2 per select-all, 1–2 per short answer, 5–10 per code question
    - 1 point per multiple choice, 2 per select-all, 1 per short answer, 6–9 per code question
-2. Order the questions by type: single, then multi, then text, then code.
+2. Order the questions by type: single, multi, text, output, trace, fill, code, essay. For AP-style
+   "what is printed" questions use `output`, and for tracing loops use `trace`.
 3. Prompts say exactly what's asked, including edge cases ("return 0 for an empty array").
    No hints and nothing that gives the answer away.
 4. Multiple choice:

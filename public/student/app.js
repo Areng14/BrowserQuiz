@@ -8,13 +8,20 @@
   const CODE_ALPHABET = /[^ABCDEFGHJKMNPQRSTUVWXYZ23456789]/g;
   const LANG_NAMES = { java: 'Java', python: 'Python' };
   const THEME_KEY = 'bq-theme';
-  const KIND = { single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', method: 'Write a method', class: 'Write a class' };
+  const KIND = {
+    single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', method: 'Write a method', class: 'Write a class',
+    output: 'Predict the output', trace: 'Trace table', fill: 'Fill in the blanks', essay: 'Written answer',
+  };
   // Default directions per part, AP style. A quiz can override any of them with quiz.directions[type].
   const PARTS = {
     single: { title: 'Multiple choice', text: 'Pick the one best answer. Blank answers earn no credit.' },
     multi: { title: 'Select all that apply', text: 'Credit only if you select every correct answer and no wrong ones.' },
     text: { title: 'Short answer', text: "Spelling counts. Capital letters and extra spaces don't." },
     code: { title: 'Free response', text: "Assume needed imports are there and inputs match the question. Partial credit is possible." },
+    output: { title: 'Predict the output', text: 'Type exactly what the code prints, one line per line of output.' },
+    trace: { title: 'Trace tables', text: 'Fill in each value as the code runs. Each correct cell earns credit.' },
+    fill: { title: 'Fill in the blanks', text: 'Fill in each blank so the code works. Partial credit is possible.' },
+    essay: { title: 'Written answers', text: 'Your teacher grades these.' },
   };
   const ERRORS = {
     bad_code: 'No open quiz with that code.',
@@ -141,6 +148,13 @@
   function onThemeChange() {
     if (root) root.querySelectorAll('.theme-btn').forEach(paintThemeButton);
     if (window.monaco) window.monaco.editor.setTheme(editorTheme());
+    // Colored code keeps the old theme's color classes, which point at the wrong colors after a switch.
+    // Redraw it: the question on screen, or any other colored blocks.
+    if (S && S.el && S.quiz && !S.done) renderQuestion();
+    else if (root) {
+      root.querySelectorAll('code[data-colored]').forEach((c) => { c.textContent = c.textContent; c.removeAttribute('data-colored'); });
+      colorize(root);
+    }
   }
   darkQuery.addEventListener('change', onThemeChange);
   new MutationObserver(onThemeChange).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
@@ -161,7 +175,7 @@
       s.onload = () => {
         const m = window.monaco;
         if (!m) return reject(new Error('monaco missing'));
-        // VS Code's Light+ and Dark+ colors.
+        // Light: calm, IntelliJ-like. Dark: VS Code's Dark+.
         const control = ['if', 'else', 'for', 'while', 'do', 'switch', 'case', 'default', 'break', 'continue', 'return', 'try', 'catch', 'finally', 'throw'];
         const rules = (c) => [
           { token: 'keyword', foreground: c.keyword }, { token: 'string', foreground: c.string },
@@ -172,7 +186,7 @@
         ];
         m.editor.defineTheme('bq-light', {
           base: 'vs', inherit: true,
-          rules: rules({ keyword: '0000ff', control: 'af00db', string: 'a31515', number: '098658', comment: '008000', type: '267f99', fn: '795e26', ident: '001080' }),
+          rules: rules({ keyword: '0033b3', control: '0033b3', string: '067d17', number: '1750eb', comment: '8c8c8c', type: '7a3e9d', fn: '00627a', ident: '16191d' }),
           colors: { 'editor.background': '#ffffff', 'editor.lineHighlightBackground': '#f4f5f7', 'editorLineNumber.foreground': '#98a1ab' },
         });
         m.editor.defineTheme('bq-dark', {
@@ -199,11 +213,14 @@
         if (code.hasAttribute('data-colored') || !code.isConnected) return;
         code.setAttribute('data-colored', '');
         const inlineCode = !code.closest('pre');
+        const inFill = !!code.closest('.fill-code'); // pieces of code between blanks: stay inline, keep line breaks
+        const endsWithNewline = /\n$/.test(code.textContent);
         m.editor.colorizeElement(code, { theme: editorTheme() }).then(() => {
-          if (!inlineCode) return;
-          // keep inline code inline: unwrap the colorizer's block wrapper and line breaks
+          if (!inlineCode && !inFill) return;
+          // keep inline code inline: unwrap the colorizer's block wrapper (and, for inline code, line breaks)
           code.querySelectorAll('div').forEach((d) => d.replaceWith(...d.childNodes));
-          code.querySelectorAll('br').forEach((b) => b.remove());
+          if (inlineCode) code.querySelectorAll('br').forEach((b) => b.remove());
+          else if (!endsWithNewline && code.lastChild && code.lastChild.nodeName === 'BR') code.lastChild.remove();
         }).catch(() => {});
       });
     }).catch(() => {});
@@ -544,6 +561,9 @@
     if (q.type === 'multi') return Array.isArray(a) && a.length > 0;
     if (q.type === 'text') return String(a).trim() !== '';
     if (q.type === 'code') return (a.code[a.language] || '').trim() !== ((q.starter && q.starter[a.language]) || '').trim();
+    if (q.type === 'output' || q.type === 'essay') return String(a).trim() !== '';
+    if (q.type === 'fill') return Array.isArray(a) && a.some((x) => String(x || '').trim());
+    if (q.type === 'trace') return Array.isArray(a) && a.some((r) => Array.isArray(r) && r.some((x) => String(x || '').trim()));
     return true;
   }
   function setAnswer(qid, value) {
@@ -640,7 +660,8 @@
     const last = S.idx === total - 1;
     S.el.next.textContent = S.dirOpen ? 'Continue' : last ? 'Review and submit' : 'Next';
     S.el.next.className = 'btn' + (last && !S.dirOpen ? ' primary' : '');
-    const view = S.dirOpen ? directionsView(partOf(S.idx)) : q.type === 'code' ? codeView(q) : basicView(q);
+    const views = { code: codeView, output: outputView, trace: traceView, fill: fillView, essay: essayView };
+    const view = S.dirOpen ? directionsView(partOf(S.idx)) : (views[q.type] || basicView)(q);
     S.el.main.replaceChildren(view);
     colorize(view);
     renderSheet();
@@ -697,6 +718,119 @@
       view.append(h('label', { class: 'field', for: q.id + '-text' }, h('span', { class: 'field-label', text: 'Your answer' }), input));
     }
     return view;
+  }
+
+  // ---------- predict the output, trace tables, fill in the blanks, written answers ----------
+  const codeBlock = (code, lang) => h('pre', { class: 'md-code' }, h('code', { 'data-lang': lang || S.quiz.language, text: code }));
+  // A textarea that grows with what's typed; Tab indents when it holds code.
+  function growArea(attrs, value, onChange, codeLike) {
+    const ta = h('textarea', Object.assign({ class: 'input long-answer' + (codeLike ? ' mono' : ''), spellcheck: codeLike ? 'false' : 'true', autocomplete: 'off' }, attrs));
+    ta.value = value || '';
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight + 2, 96) + 'px'; };
+    ta.addEventListener('input', () => { grow(); onChange(ta.value); });
+    if (codeLike) {
+      ta.addEventListener('keydown', (e) => {
+        if (e.key !== 'Tab' || e.shiftKey) return;
+        e.preventDefault();
+        ta.setRangeText('    ', ta.selectionStart, ta.selectionEnd, 'end');
+        onChange(ta.value);
+      });
+    }
+    requestAnimationFrame(grow);
+    return ta;
+  }
+
+  function outputView(q) {
+    const ta = growArea({ id: q.id + '-out', rows: 4 }, S.answers[q.id], (v) => setAnswer(q.id, v.trim() ? v : undefined), true);
+    return h('div', { class: 'qview' }, metaRow(q, KIND.output), prompt(q), codeBlock(q.code, q.codeLang),
+      h('label', { class: 'field', for: q.id + '-out' }, h('span', { class: 'field-label', text: 'Output' }), ta));
+  }
+
+  function traceView(q) {
+    const blank = () => q.cells.map((r) => r.map(() => ''));
+    const cur = S.answers[q.id] || blank();
+    const table = h('table', { class: 'trace' });
+    table.append(h('thead', {}, h('tr', {}, q.columns.map((c) => h('th', { text: c })))),
+      h('tbody', {}, q.cells.map((row, r) => h('tr', {}, row.map((given, c) => {
+        if (given != null) return h('td', { class: 'given', text: given });
+        const input = h('input', { class: 'trace-cell', autocomplete: 'off', spellcheck: 'false', 'aria-label': `${q.columns[c]}, row ${r + 1}`, 'data-r': r, 'data-c': c });
+        input.value = (cur[r] && cur[r][c]) || '';
+        input.addEventListener('input', () => {
+          const v = (S.answers[q.id] || blank()).map((rr) => rr.slice());
+          v[r][c] = input.value;
+          setAnswer(q.id, v.some((rr) => rr.some((x) => x.trim())) ? v : undefined);
+        });
+        // Enter goes down the column, like a spreadsheet.
+        input.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter') return;
+          e.preventDefault();
+          const next = table.querySelector(`input[data-r="${r + 1}"][data-c="${c}"]`) || table.querySelector(`input[data-r="0"][data-c="${c + 1}"]`);
+          if (next) next.focus();
+        });
+        return h('td', {}, input);
+      })))));
+    return h('div', { class: 'qview' }, metaRow(q, KIND.trace), prompt(q), q.code ? codeBlock(q.code, q.codeLang) : null,
+      h('div', { class: 'trace-wrap' }, table));
+  }
+
+  function fillView(q) {
+    const cur = S.answers[q.id] || [];
+    const pre = h('pre', { class: 'md-code fill-code' });
+    const inputs = [];
+    const pieces = q.code.split(/_{3,}/);
+    pieces.forEach((seg, i) => {
+      if (seg) pre.append(h('code', { 'data-lang': q.codeLang, text: seg }));
+      if (i === pieces.length - 1) return;
+      const input = h('input', { class: 'blank', autocomplete: 'off', spellcheck: 'false', 'aria-label': `Blank ${i + 1}` });
+      input.value = cur[i] || '';
+      const size = () => { input.style.width = Math.max(6, input.value.length + 2) + 'ch'; };
+      size();
+      input.addEventListener('input', () => {
+        size();
+        const v = inputs.map((x) => x.value);
+        setAnswer(q.id, v.some((x) => x.trim()) ? v : undefined);
+      });
+      input.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const next = inputs[inputs.indexOf(input) + 1];
+        if (next) next.focus();
+      });
+      inputs.push(input);
+      pre.append(input);
+    });
+    const view = h('div', { class: 'qview' }, metaRow(q, KIND.fill), prompt(q), pre);
+    if (q.run) {
+      const results = h('div', { class: 'results fill-results', 'aria-live': 'polite' });
+      const runBtn = h('button', { class: 'btn small primary', type: 'button', text: 'Run examples' });
+      runBtn.addEventListener('click', () => runFill(q, runBtn, results));
+      runCooldown(runBtn);
+      view.append(h('div', {}, runBtn), results);
+      renderResults(q, results, q.codeLang);
+    }
+    return view;
+  }
+  async function runFill(q, btn, results) {
+    if (S.runBusy) return;
+    S.runBusy = true;
+    btn.disabled = true;
+    btn.textContent = 'Running…';
+    const key = q.id + ':' + q.codeLang;
+    try {
+      S.results[key] = await api.run({ questionId: q.id, language: q.codeLang, blanks: S.answers[q.id] || [] });
+    } catch (ex) {
+      S.results[key] = { status: 'error', message: ex && ex.code === 'too_many' ? 'Wait a few seconds.' : errorText(ex) };
+    }
+    S.runBusy = false;
+    S.runReadyAt = Date.now() + 5000;
+    if (results.isConnected) renderResults(q, results, q.codeLang);
+    runCooldown(btn);
+  }
+
+  function essayView(q) {
+    const ta = growArea({ id: q.id + '-essay', rows: 8 }, S.answers[q.id], (v) => setAnswer(q.id, v.trim() ? v : undefined), !!q.codeLang);
+    return h('div', { class: 'qview' }, metaRow(q, KIND.essay), prompt(q),
+      h('label', { class: 'field', for: q.id + '-essay' }, h('span', { class: 'field-label', text: 'Your answer' }), ta));
   }
 
   function codeView(q) {
@@ -763,6 +897,8 @@
         contextmenu: false, dragAndDrop: false, emptySelectionClipboard: false, links: false,
       });
       S.editor = editor;
+      S.errDecor = [];
+      markErrorLines(S.results[q.id + ':' + lang]);
       if (S.monitor) {
         S.editorSubs.push(S.monitor.trackEditor(editor, q.id));
         S.monitor.selectionProvider = (target) => {
@@ -823,10 +959,31 @@
     tick(true);
   }
 
-  function renderResults(q, el) {
-    const ans = S.answers[q.id];
-    const lang = ans.language;
+  // Lines named in compile errors and crash traces get a red highlight in the editor (their own file only,
+  // not the test harness). They stay until the next Run and move with edits.
+  function markErrorLines(r) {
+    const m = window.monaco;
+    if (!S.editor || !m) return;
+    const model = S.editor.getModel();
+    const lines = new Set();
+    const texts = [];
+    if (r && (r.status === 'compile_error' || r.status === 'runtime_error')) texts.push(String(r.message || ''));
+    if (r && Array.isArray(r.tests)) r.tests.forEach((t) => { if (!t.pass && t.got) texts.push(String(t.got)); });
+    for (const text of texts) {
+      for (const hit of text.matchAll(/\b(\w+)\.java:(\d+)/g)) if (!/^(BQMain|BQJ)$/.test(hit[1])) lines.add(Number(hit[2]));
+      for (const hit of text.matchAll(/File "(?:solution|support)\.py", line (\d+)/g)) lines.add(Number(hit[1]));
+    }
+    const decor = [...lines].filter((n) => n >= 1 && n <= model.getLineCount()).map((n) => ({
+      range: new m.Range(n, 1, n, 1),
+      options: { isWholeLine: true, className: 'bq-err-line', linesDecorationsClassName: 'bq-err-gutter', overviewRuler: { color: '#e5534b', position: m.editor.OverviewRulerLane.Full } },
+    }));
+    S.errDecor = S.editor.deltaDecorations(S.errDecor || [], decor);
+  }
+
+  function renderResults(q, el, langOverride) {
+    const lang = langOverride || S.answers[q.id].language;
     const r = S.results[q.id + ':' + lang];
+    if (q.type === 'code') markErrorLines(r);
     if (!r) {
       el.replaceChildren();
       return;
@@ -843,10 +1000,13 @@
       const tests = r.tests || [];
       const passed = tests.filter((t) => t.pass).length;
       parts.push(h('p', { class: 'res-head ' + (passed === tests.length ? 'good' : 'bad'), text: `${passed} of ${tests.length} examples passed` }));
-      parts.push(h('ul', { class: 'res-tests' }, tests.map((t) => h('li', {},
-        h('span', { class: 'res-mark ' + (t.pass ? 'ok' : 'bad'), text: t.pass ? 'Pass' : 'Fail' }),
-        h('code', { class: 'res-call', 'data-lang': lang, text: t.call }),
-        t.pass ? null : h('span', { class: 'res-detail' }, 'Expected ', h('code', { 'data-lang': lang, text: t.expected }), ', got ', h('code', { 'data-lang': lang, text: t.got }))))));
+      parts.push(h('ul', { class: 'res-tests' }, tests.map((t) => h('li', { class: t.pass ? 'ok' : 'bad' },
+        h('span', { class: 'res-mark', text: t.pass ? '✓' : '✗', 'aria-label': t.pass ? 'Passed' : 'Failed' }),
+        h('div', { class: 'res-body' },
+          h('pre', { class: 'res-call' }, h('code', { 'data-lang': lang, text: t.call })),
+          t.pass
+            ? (t.expected ? h('div', { class: 'res-detail' }, 'Returns ', h('code', { 'data-lang': lang, text: t.expected })) : null)
+            : h('div', { class: 'res-detail' }, 'Expected ', h('code', { 'data-lang': lang, text: t.expected }), ', got ', h('code', { class: 'got', text: t.got })))))));
     }
     if (r.stdout) parts.push(h('p', { class: 'res-sub', text: 'Output' }), h('pre', { class: 'res-pre', text: r.stdout }));
     el.replaceChildren(...parts);
@@ -1092,32 +1252,63 @@
   }
 
   // Same screen for everyone, invalidated or not: confetti and all.
+  // Confetti from both bottom corners. A little physics so it moves like paper: launched up and inward,
+  // slowed by the air, then drifting down slowly, swaying and flipping, fading near the bottom.
   function confetti() {
     const layer = h('div', { class: 'confetti-layer', 'aria-hidden': 'true' });
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return layer;
     const colors = isDark()
-      ? ['#7ea3ff', '#5ccb8a', '#ffa94d', '#f783ac', '#ffd43b']
-      : ['#2257d6', '#1b7f45', '#f08c00', '#e64980', '#fab005'];
-    const rand = (a, b) => a + Math.random() * (b - a);
-    // Two cannons in the bottom corners: up and inward, then everything falls away.
-    for (let i = 0; i < 140; i++) {
+      ? ['#7ea3ff', '#5ccb8a', '#ffa94d', '#f783ac', '#ffd43b', '#b197fc']
+      : ['#2257d6', '#1b7f45', '#f08c00', '#e64980', '#fab005', '#7048e8'];
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+    const pieces = [];
+    for (let i = 0; i < 150; i++) {
       const left = i % 2 === 0;
-      const dir = left ? 1 : -1;
-      const piece = h('span', { class: 'confetti ' + (left ? 'l' : 'r') });
-      const x1 = dir * rand(12, 55);
-      const set = (k, v) => piece.style.setProperty(k, v);
-      set('--x1', x1.toFixed(1) + 'vw');
-      set('--y1', -rand(40, 95).toFixed(1) + 'vh');
-      set('--x2', (x1 + dir * rand(4, 18)).toFixed(1) + 'vw');
-      set('--y2', rand(5, 30).toFixed(1) + 'vh');
-      set('--r1', Math.round(rand(-540, 540)) + 'deg');
-      set('--r2', Math.round(rand(-1080, 1080)) + 'deg');
-      piece.style.animationDuration = rand(2.2, 3.4).toFixed(2) + 's';
-      piece.style.animationDelay = rand(0, 0.45).toFixed(2) + 's';
-      piece.style.width = Math.round(rand(6, 10)) + 'px';
-      piece.style.height = Math.round(rand(10, 16)) + 'px';
-      piece.style.background = colors[i % colors.length];
-      layer.append(piece);
+      const el = h('span', { class: 'confetti' });
+      el.style.width = rand(6, 11).toFixed(1) + 'px';
+      el.style.height = rand(9, 17).toFixed(1) + 'px';
+      el.style.background = colors[Math.floor(Math.random() * colors.length)];
+      layer.append(el);
+      const angle = rand(48, 82) * Math.PI / 180;
+      const speed = rand(0.022, 0.035) * H; // px per frame at 60 fps
+      pieces.push({
+        el, x: left ? -12 : W + 12, y: H + 12,
+        vx: Math.cos(angle) * speed * (left ? 1 : -1), vy: -Math.sin(angle) * speed,
+        rot: rand(0, 360), spin: rand(-14, 14), flip: rand(0, 6.3), flipSpeed: rand(0.06, 0.18),
+        sway: rand(0, 6.3), swaySpeed: rand(0.025, 0.06), swayAmp: rand(0.5, 1.6), fall: rand(2.2, 3.8),
+        delay: rand(0, 20), age: 0, launched: false,
+      });
     }
+    let last = 0;
+    const frame = (now) => {
+      if (!layer.isConnected) { if (!last) requestAnimationFrame(frame); return; } // wait until it's on screen
+      const dt = last ? Math.min(3, (now - last) / 16.7) : 1;
+      last = now;
+      let alive = 0;
+      for (const p of pieces) {
+        p.age += dt;
+        if (p.age < p.delay) { alive++; continue; }
+        if (!p.launched) { p.launched = true; p.el.style.opacity = '1'; }
+        p.vx *= Math.pow(0.975, dt);
+        p.vy = p.vy * Math.pow(0.985, dt) + 0.3 * dt;
+        if (p.vy > p.fall) p.vy = p.fall; // paper falls slowly
+        const falling = p.vy > 0;
+        p.sway += p.swaySpeed * dt;
+        p.x += (p.vx + (falling ? Math.sin(p.sway) * p.swayAmp : 0)) * dt;
+        p.y += p.vy * dt;
+        p.rot += p.spin * dt * (falling ? 0.4 : 1);
+        p.flip += p.flipSpeed * dt;
+        const fade = p.y > H * 0.8 ? Math.max(0, 1 - (p.y - H * 0.8) / (H * 0.2)) : 1;
+        p.el.style.opacity = falling ? fade.toFixed(2) : '1';
+        p.el.style.transform = `translate3d(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px, 0) rotate(${p.rot.toFixed(0)}deg) scaleY(${Math.cos(p.flip).toFixed(2)})`;
+        if (p.y < H + 30 && p.age < 900) alive++;
+      }
+      if (alive) requestAnimationFrame(frame);
+      else layer.remove();
+    };
+    requestAnimationFrame(frame);
     return layer;
   }
 
@@ -1206,8 +1397,7 @@
         if (r.status === 'waiting') return screenWait();
         if (r.status === 'admitted') return screenRules();
         if (r.status === 'active') return screenContinue();
-        if (r.status === 'submitted') return screenDone('already');
-        return screenJoin();
+        return screenJoin(); // turned in already: free to join the next quiz
       }).catch(() => screenJoin());
     },
     restart() {

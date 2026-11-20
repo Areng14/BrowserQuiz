@@ -128,6 +128,7 @@
 .timer.crit { color: var(--bad); }
 
 .qmain { overflow: auto; padding: 32px var(--gut-r) 48px var(--gut-l); outline: none; }
+.bq-app .qmain:focus, .bq-app .qmain:focus-visible { outline: none; } /* focus lands here between questions */
 .qview { max-width: 720px; margin: 0 auto; display: grid; gap: 18px; }
 .qview.wide { max-width: 2400px; }
 .meta-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; color: var(--ink-2); }
@@ -149,7 +150,7 @@
 /* code questions: prompt | editor */
 .code-q { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
 .code-left { flex: 0 1 clamp(320px, 30%, 600px); min-width: 0; display: grid; gap: 14px; }
-.code-right { flex: 1 1 520px; min-width: 0; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.code-right { flex: 1 1 520px; min-width: 0; height: max(420px, calc(100vh - var(--quiz-chrome, 200px))); display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 .bq-app .sub { font-size: 15px; font-weight: 600; margin: 0; }
 .samples { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 14px; }
 .sample-call { margin: 0; padding: 8px 10px; font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); border-radius: 6px 6px 0 0; }
@@ -163,20 +164,29 @@
 .conn-banner { padding: 8px var(--gut-r) 8px var(--gut-l); font-size: 14px; color: var(--ink); background: var(--soft); border-bottom: 1px solid var(--line); border-left: 3px solid var(--warn); }
 [hidden] { display: none !important; }
 .lang-label { font-size: 14px; font-weight: 600; padding-left: 4px; }
-.editor-host { height: max(320px, calc(100vh - 300px)); background: var(--editor); }
+/* The code panel is exactly the window's height: Run results take room from the editor instead of
+   making the page scroll. */
+.editor-host { flex: 1 1 0; min-height: 180px; background: var(--editor); }
 .editor-loading { padding: 16px; color: var(--ink-2); font-size: 14px; }
 .code-fallback { width: 100%; height: 100%; resize: none; border: 0; padding: 12px; font: 14px/22px var(--mono); color: var(--ink); background: var(--editor); tab-size: 4; }
 .code-fallback:focus { outline: none; }
-.results { border-top: 1px solid var(--line); padding: 10px 12px; display: grid; gap: 6px; font-size: 14px; max-height: 280px; overflow: auto; }
+.results { flex: none; border-top: 1px solid var(--line); padding: 10px 12px; display: grid; gap: 6px; font-size: 14px; max-height: 40%; overflow: auto; }
+.fill-results { max-height: 280px; }
 .results:empty { display: none; }
 .res-head { font-weight: 600; }
 .res-head.good { color: var(--good); }
 .res-head.bad { color: var(--bad); }
-.res-tests { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
-.res-mark { display: inline-block; width: 44px; font-weight: 600; }
-.res-call { font-family: var(--mono); font-size: 13px; white-space: pre-wrap; background: none; padding: 0; }
-.res-detail { display: block; padding-left: 44px; color: var(--ink-2); }
-.res-detail code { background: none; padding: 0; }
+.res-tests { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.res-tests li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid var(--good); border-radius: 6px; }
+.res-tests li.bad { border-left-color: var(--bad); }
+.res-mark { flex: none; width: 1em; font-weight: 700; line-height: 1.5; color: var(--good); }
+.res-tests li.bad .res-mark { color: var(--bad); }
+.res-body { min-width: 0; display: grid; gap: 4px; }
+.res-call { margin: 0; font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.res-call code { background: none; padding: 0; font-size: inherit; }
+.res-detail { font-size: 13px; color: var(--ink-2); }
+.res-detail code { background: none; padding: 0; font-family: var(--mono); }
+.res-detail code.got { color: var(--bad); }
 .res-sub { font-size: 13px; color: var(--ink-2); }
 .res-pre { margin: 0; padding: 8px 10px; font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); border-radius: 6px; max-height: 160px; overflow: auto; }
 .demo-note { color: var(--warn); font-size: 13px; }
@@ -200,15 +210,7 @@
 
 /* submitted */
 .confetti-layer { position: fixed; inset: 0; z-index: 40; overflow: hidden; pointer-events: none; }
-.confetti { position: absolute; bottom: -16px; border-radius: 2px; opacity: 0; animation-name: bq-shot; animation-fill-mode: forwards; }
-.confetti.l { left: -10px; }
-.confetti.r { right: -10px; }
-@keyframes bq-shot {
-  0% { opacity: 1; transform: translate(0, 0) rotate(0deg); animation-timing-function: cubic-bezier(0.15, 0.7, 0.35, 1); }
-  42% { opacity: 1; transform: translate(var(--x1), var(--y1)) rotate(var(--r1)); animation-timing-function: cubic-bezier(0.45, 0, 0.8, 0.6); }
-  85% { opacity: 1; }
-  100% { opacity: 0; transform: translate(var(--x2), var(--y2)) rotate(var(--r2)); }
-}
+.confetti { position: absolute; left: 0; top: 0; border-radius: 1px; opacity: 0; will-change: transform, opacity; }
 .done-panel { position: relative; }
 
 @media (max-width: 600px) {
@@ -233,7 +235,52 @@
    so its font size grows through its own setting instead (see editorFontSize in app.js). */
 @media (min-width: 1700px) {
   .qbar, .qnav, .qview:not(.wide), .code-left, .results, .screen > .panel { zoom: 1.15; }
+  :root { --quiz-chrome: 220px; }
 }
 @media (min-width: 2300px) {
   .qbar, .qnav, .qview:not(.wide), .code-left, .results, .screen > .panel { zoom: 1.3; }
+  :root { --quiz-chrome: 245px; }
 }
+
+/* Custom radio buttons and checkboxes: the browser's own are bright white in dark mode. */
+:is(.bq-app, .t-app) input:is([type="radio"], [type="checkbox"]) {
+  appearance: none; -webkit-appearance: none; flex: none; display: inline-grid; place-content: center;
+  width: 18px; height: 18px; margin: 0; cursor: pointer;
+  background: var(--bg); border: 2px solid var(--ink-2); transition: border-color 0.1s, background 0.1s;
+}
+:is(.bq-app, .t-app) input[type="radio"] { border-radius: 50%; }
+:is(.bq-app, .t-app) input[type="checkbox"] { border-radius: 4px; }
+:is(.bq-app, .t-app) input:is([type="radio"], [type="checkbox"])::before {
+  content: ''; transform: scale(0); transition: transform 0.1s; background: var(--accent-ink);
+}
+:is(.bq-app, .t-app) input[type="radio"]::before { width: 8px; height: 8px; border-radius: 50%; }
+:is(.bq-app, .t-app) input[type="checkbox"]::before { width: 10px; height: 10px; clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%); }
+:is(.bq-app, .t-app) input:is([type="radio"], [type="checkbox"]):checked { background: var(--accent); border-color: var(--accent); }
+:is(.bq-app, .t-app) input:is([type="radio"], [type="checkbox"]):checked::before { transform: scale(1); }
+:is(.bq-app, .t-app) input:is([type="radio"], [type="checkbox"]):hover:not(:checked) { border-color: var(--ink); }
+:is(.bq-app, .t-app) input:is([type="radio"], [type="checkbox"]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:is(.bq-app, .t-app) input:is([type="radio"], [type="checkbox"]):disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Predict the output, written answers */
+.long-answer { min-height: 96px; padding: 10px 12px; line-height: 1.5; resize: vertical; }
+.long-answer.mono { font: 14px/1.6 var(--mono); tab-size: 4; }
+/* Trace tables */
+.trace-wrap { overflow-x: auto; }
+.trace { border-collapse: collapse; font: 14px var(--mono); }
+.trace th, .trace td { border: 1px solid var(--line); padding: 0; text-align: center; min-width: 88px; }
+.trace th { padding: 6px 10px; font: 600 13px var(--font); color: var(--ink-2); background: var(--soft); }
+.trace td.given { padding: 6px 10px; color: var(--ink-2); background: var(--soft); }
+.trace-cell { width: 100%; min-width: 88px; padding: 7px 10px; font: inherit; text-align: center; color: var(--ink); background: var(--bg); border: 0; }
+.trace-cell:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Fill in the blanks */
+.fill-code { white-space: pre-wrap; line-height: 2; }
+.fill-code .blank {
+  min-width: 6ch; padding: 1px 6px; font: inherit; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-bottom: 2px solid var(--accent); border-radius: 4px; vertical-align: baseline;
+}
+.fill-code .blank:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+.fill-results { border: 1px solid var(--line); border-radius: 6px; }
+
+/* Lines the compiler or a crash points at */
+.bq-err-line { background: rgba(229, 83, 75, 0.16); }
+.bq-err-gutter { background: #e5534b; width: 3px !important; margin-left: 3px; }

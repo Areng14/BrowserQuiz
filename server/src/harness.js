@@ -177,6 +177,20 @@ function pyMain(q, tests, marker) {
   return L.join('\n');
 }
 
+// A snippet for "predict the output": Java statements get wrapped in a main method unless the code
+// already has one (then the class around main is the program). Python runs as is.
+function buildSnippetJob(lang, code) {
+  if (lang === 'python') return { language: 'python', files: { 'main.py': code }, main: 'main.py' };
+  const imports = 'import java.util.*; import java.util.function.*; import java.util.stream.*; ';
+  const at = code.search(/\bstatic\s+void\s+main\s*\(/);
+  if (at >= 0) {
+    const classes = [...code.slice(0, at).matchAll(/\bclass\s+(\w+)/g)];
+    const name = classes.length ? classes[classes.length - 1][1] : 'Main';
+    return { language: 'java', files: { [name + '.java']: imports + code }, main: name };
+  }
+  return { language: 'java', files: { 'Main.java': imports + 'public class Main { public static void main(String[] args) throws Exception {\n' + code + '\n} }' }, main: 'Main' };
+}
+
 function buildJob(q, lang, code, tests) {
   const marker = `@@BQ@@${crypto.randomBytes(12).toString('hex')}@@`;
   const files = {};
@@ -305,4 +319,4 @@ function studentView(q, lang, tests, r) {
   };
 }
 
-module.exports = { buildJob, readResults, studentView, starterCode, callText, expectedText, same, show, JAVA_TYPE, PY_TYPE };
+module.exports = { buildJob, readResults, studentView, starterCode, callText, expectedText, same, show, JAVA_TYPE, PY_TYPE, buildSnippetJob };

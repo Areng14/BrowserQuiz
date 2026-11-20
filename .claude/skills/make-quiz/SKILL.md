@@ -15,8 +15,8 @@ number of questions and mix of types, time limit, languages, and difficulty.
 Fill gaps with these defaults and say which ones you used. Don't stop to ask.
 - AP CSA style, Java (add Python to code questions only if asked). If a unit number is
   given, say which course outline you assumed (AP CSA renumbered its units in 2025).
-- Minutes per question: 1 for multiple choice, 2 for select-all, 1–2 for short answer,
-  5–10 for code
+- Minutes per question: 1 for multiple choice, 2 for select-all, 1–2 for short answer or output,
+  3–4 for a trace table, 2–4 for fill in the blanks, 5–10 for code, 5 for a written answer
 - Points per question: 1 for multiple choice, 2 for select-all, 1 for short answer, 6–9 for code
 - "A few" questions means 3–5
 
@@ -25,7 +25,10 @@ Fill gaps with these defaults and say which ones you used. Don't stop to ask.
 Create `quizzes/<short-name>/quiz.json`. `quizzes/` is gitignored, because quiz files hold
 answer keys. Images go in `quizzes/<short-name>/assets/`.
 
-- **Order** questions single → multi → text → code. Consecutive questions of one type form a part,
+- **Question types:** single, multi, text, code, plus output (predict what code prints), trace (trace
+  table), fill (fill in the blanks) and essay (teacher-graded). Prefer output and trace for AP-style
+  "what is printed" and tracing questions.
+- **Order** questions single → multi → text → output → trace → fill → code → essay. Consecutive questions of one type form a part,
   with its own directions page, and shuffling stays inside parts.
 - **Prompts** say exactly what's asked, including edge cases ("return 0 for an empty array").
   No flavor text, no hints, nothing that gives away the answer. Put code in backticks or

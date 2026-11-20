@@ -2,7 +2,7 @@
 // Talks to the sandboxed runner: Run (sample tests), grading (hidden tests), and checking
 // a quiz's reference solutions at upload time.
 const H = require('./harness');
-const { checkValue, QuizError } = require('./quizfile');
+const { checkValue, QuizError, normOutput } = require('./quizfile');
 
 const MAX_CONCURRENT = Math.max(1, Number(process.env.RUNNER_CONCURRENCY) || 4);
 let active = 0;
@@ -109,7 +109,7 @@ async function gradeCode(q, answer) {
 async function checkReferences(quiz) {
   const problems = [];
   for (const q of quiz.questions) {
-    if (q.type !== 'code') continue;
+    if (!(q.type === 'code' || (q.type === 'fill' && q.run))) continue;
     const refs = Object.entries(q.reference || {});
     for (const [lang, code] of refs) {
       for (const kind of ['sample', 'hidden']) {
@@ -153,4 +153,24 @@ async function checkReferences(quiz) {
   if (problems.length) throw new QuizError('The reference solution check failed:\n- ' + problems.slice(0, 20).join('\n- '));
 }
 
-module.exports = { runSamples, gradeCode, checkReferences, runnerConfigured, runnerHealthy };
+// "Predict the output": run each snippet. A missing answer is filled in from what it prints; an answer the
+// teacher typed has to match it.
+async function checkOutputs(quiz) {
+  const problems = [];
+  for (const [i, q] of quiz.questions.entries()) {
+    if (q.type !== 'output') continue;
+    const label = `Question ${i + 1}`;
+    const res = await callRunner(H.buildSnippetJob(q.language, q.code), 5000, 256);
+    const err = String(res.stderr || res.stdout || '').replace(/\/jobs\/[^/\s]+\//g, '').trim().slice(0, 400);
+    if (res.status === 'compile_error') { problems.push(`${label}: the code doesn't compile: ${err}`); continue; }
+    if (res.status === 'timeout') { problems.push(`${label}: the code ran out of time.`); continue; }
+    if (res.status !== 'ok' || res.exitCode) { problems.push(`${label}: the code crashed: ${err}`); continue; }
+    const printed = normOutput(res.stdout);
+    if (!printed) { problems.push(`${label}: the code doesn't print anything.`); continue; }
+    if (q.answer == null) q.answer = printed.slice(0, 5000);
+    else if (q.answer !== printed) problems.push(`${label}: the code prints ${JSON.stringify(printed.slice(0, 200))}, but the answer says ${JSON.stringify(q.answer.slice(0, 200))}.`);
+  }
+  if (problems.length) throw new QuizError('The output check failed:\n- ' + problems.slice(0, 20).join('\n- '));
+}
+
+module.exports = { runSamples, gradeCode, checkReferences, checkOutputs, runnerConfigured, runnerHealthy };

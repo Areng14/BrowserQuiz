@@ -12,7 +12,15 @@ const QID = /^[A-Za-z0-9_-]{1,40}$/;
 const RESERVED = new Set(('abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null var record yield sealed permits '
   + 'and as async await def del elif except from global in is lambda nonlocal not or pass raise with None True False print '
   + '__proto__ constructor prototype Main BQJ bqh solution support').split(/\s+/));
-const PART_TYPES = ['single', 'multi', 'text', 'code'];
+const PART_TYPES = ['single', 'multi', 'text', 'code', 'output', 'trace', 'fill', 'essay'];
+const BLANK = /_{3,}/g;
+
+// Program output, compared ignoring trailing spaces on each line and blank lines at the start and end.
+const normOutput = (s) => String(s == null ? '' : s).replace(/\r\n?/g, '\n').split('\n').map((l) => l.replace(/\s+$/, '')).join('\n').replace(/^\n+|\n+$/g, '');
+// A fill-in blank or a trace cell: spacing doesn't matter. Cells also accept "abc" for abc.
+const normBlank = (s) => String(s == null ? '' : s).replace(/\s+/g, '');
+const normCell = (s) => String(s == null ? '' : s).trim().replace(/\s+/g, ' ').replace(/^"(.*)"$/, '$1');
+const fillTemplate = (code, blanks) => { let i = 0; return code.replace(BLANK, () => String(blanks[i++] == null ? '' : blanks[i - 1])); };
 
 class QuizError extends Error {}
 const fail = (msg) => { throw new QuizError(msg); };
@@ -121,7 +129,7 @@ function normalizeQuiz(raw, assetNames) {
     if (ids.has(id)) fail(`${where}: duplicate id "${id}".`);
     ids.add(id);
     const type = q.type || 'single';
-    if (!PART_TYPES.includes(type)) fail(`${where}: type must be single, multi, text or code.`);
+    if (!PART_TYPES.includes(type)) fail(`${where}: type must be single, multi, text, code, output, trace, fill or essay.`);
     if (typeof q.prompt !== 'string' || !q.prompt.trim()) fail(`${where}: prompt is required.`);
     const out = { id, type, prompt: q.prompt.slice(0, 10000), points: Number(q.points) > 0 ? Math.min(1000, Number(q.points)) : 1 };
     if (q.image != null) {
@@ -144,12 +152,88 @@ function normalizeQuiz(raw, assetNames) {
       }
       out.answer = type === 'single' ? q.answer : [...new Set(q.answer)].sort((a, b) => a - b);
       if (q.shuffleChoices === false) out.shuffleChoices = false; // e.g. "I only", "I and II", ... in order
-    } else {
+    } else if (type === 'code') {
       Object.assign(out, normalizeCode(where, q));
+    } else {
+      Object.assign(out, normalizeNewType(where, type, q, quiz.language, out.points));
     }
     quiz.questions.push(out);
   });
   return quiz;
+}
+
+// output (predict what it prints), trace (trace table), fill (fill in the blanks), essay (teacher-graded).
+function normalizeNewType(where, type, q, quizLang, points) {
+  const out = {};
+  const lang = LANGS.includes(q.language) ? q.language : quizLang;
+  const code = (need) => {
+    if (typeof q.code !== 'string' || !q.code.trim()) {
+      if (need) fail(`${where}: needs "code".`);
+      return null;
+    }
+    return q.code.replace(/\r\n?/g, '\n').slice(0, 20000);
+  };
+  if (type === 'output') {
+    out.code = code(true);
+    out.language = lang;
+    // Optional: worked out by running the code at upload.
+    if (q.answer != null) {
+      if (typeof q.answer !== 'string') fail(`${where}: answer must be the exact output, as a string.`);
+      out.answer = normOutput(q.answer).slice(0, 5000);
+    }
+  } else if (type === 'trace') {
+    out.code = code(false);
+    out.language = lang;
+    if (!Array.isArray(q.columns) || q.columns.length < 1 || q.columns.length > 8) fail(`${where}: needs 1 to 8 columns.`);
+    out.columns = q.columns.map((c, i) => {
+      if (typeof c !== 'string' || !c.trim()) fail(`${where}: column ${i + 1} needs a name.`);
+      return c.trim().slice(0, 40);
+    });
+    if (!Array.isArray(q.rows) || q.rows.length < 1 || q.rows.length > 40) fail(`${where}: needs 1 to 40 rows.`);
+    out.rows = q.rows.map((r, ri) => {
+      if (!Array.isArray(r) || r.length !== out.columns.length) fail(`${where}: row ${ri + 1} needs ${out.columns.length} values, one per column.`);
+      return r.map((v, ci) => {
+        if (v == null || (typeof v === 'object')) fail(`${where}: row ${ri + 1}, column ${ci + 1} needs a value.`);
+        return String(v).trim().slice(0, 200);
+      });
+    });
+    // Cells shown filled in (not graded), as [row, column] counting from 0.
+    const given = new Set();
+    for (const g of Array.isArray(q.given) ? q.given : []) {
+      if (!Array.isArray(g) || !Number.isInteger(g[0]) || !Number.isInteger(g[1]) || g[0] < 0 || g[1] < 0 || g[0] >= out.rows.length || g[1] >= out.columns.length) {
+        fail(`${where}: each "given" cell is [row, column], counting from 0.`);
+      }
+      given.add(g[0] + ',' + g[1]);
+    }
+    out.given = [...given].map((k) => k.split(',').map(Number));
+    if (given.size >= out.rows.length * out.columns.length) fail(`${where}: at least one cell has to be left for the student.`);
+  } else if (type === 'fill') {
+    out.code = code(true);
+    out.language = lang;
+    const blanks = (out.code.match(BLANK) || []).length;
+    if (blanks < 1 || blanks > 30) fail(`${where}: mark 1 to 30 blanks in the code with ___ (three or more underscores).`);
+    if (!Array.isArray(q.answer) || q.answer.length !== blanks) fail(`${where}: answer needs ${blanks} entries, one per blank.`);
+    out.answer = q.answer.map((a, i) => {
+      const list = (Array.isArray(a) ? a : [a]).map((x) => (x == null ? '' : String(x)));
+      if (!list.length || list.some((x) => !x.trim())) fail(`${where}: blank ${i + 1} needs an answer (a string, or a list of accepted ones).`);
+      return list.map((x) => x.slice(0, 500));
+    });
+    // With tests, the filled-in code is run and any blanks that work earn credit.
+    if (q.tests) {
+      const c = normalizeCode(where, Object.assign({}, q, {
+        languages: [lang], reference: { [lang]: fillTemplate(out.code, out.answer.map((a) => a[0])) }, starter: null, support: q.support,
+      }));
+      Object.assign(out, c, { run: true, language: lang, code: out.code, answer: out.answer });
+    }
+  } else if (type === 'essay') {
+    // Graded by the teacher. With a language, students get a code box instead of a text box.
+    out.language = LANGS.includes(q.language) ? q.language : null;
+    out.rubric = (Array.isArray(q.rubric) ? q.rubric : []).slice(0, 20).map((r, i) => ({
+      id: String(r.id || `r${i + 1}`).slice(0, 40), text: String(r.text || '').slice(0, 500), points: Math.max(0, Number(r.points) || 0),
+    }));
+    if (out.rubric.reduce((s, r) => s + r.points, 0) > points) fail(`${where}: rubric points add up to more than the question is worth.`);
+  }
+  return out;
 }
 
 function normalizeCode(where, q) {
@@ -260,4 +344,4 @@ function normalizeCode(where, q) {
   return out;
 }
 
-module.exports = { loadQuizFile, normalizeQuiz, checkValue, elementType, QuizError, VALUE_TYPES, LIMITS, ASSET_TYPES };
+module.exports = { loadQuizFile, normalizeQuiz, checkValue, elementType, QuizError, VALUE_TYPES, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };

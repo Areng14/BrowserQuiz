@@ -35,7 +35,7 @@ input[type="file"].input { padding: 6px 10px; }
 .t-actions { white-space: nowrap; }
 .t-actions .btn + .btn { margin-left: 6px; }
 
-.t-code { display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px; }
+.t-code { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .t-joincode { font: 600 44px var(--mono); letter-spacing: 0.15em; }
 .st-waiting { color: var(--warn); font-weight: 600; }
 .st-bad { color: var(--bad); font-weight: 600; }

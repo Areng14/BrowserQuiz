@@ -43,6 +43,7 @@ const buf = load(target);
 // ---------- warnings: typo'd keys and the like (shown even when the quiz is invalid) ----------
 const TOP = ['format', 'title', 'timeLimitMin', 'shuffleQuestions', 'shuffleChoices', 'language', 'integrity', 'directions', 'questions'];
 const QKEYS = ['id', 'type', 'prompt', 'points', 'image', 'imageAlt', 'answer', 'caseSensitive', 'choices', 'shuffleChoices', 'mode', 'languages',
+  'language', 'code', 'columns', 'rows', 'given',
   'signature', 'class', 'tests', 'reference', 'compare', 'limits', 'rubric', 'starter', 'support'];
 function near(word, list) {
   const d = (a, b) => {
@@ -85,7 +86,7 @@ try {
 const quiz = parsed.quiz;
 
 for (const q of quiz.questions) {
-  if (q.type !== 'code') continue;
+  if (q.type !== 'code') continue; // fill-in questions build their reference from the answer key
   const missing = q.languages.filter((l) => !q.reference[l]);
   if (missing.length) warnings.push(`${q.id}: no reference solution for ${missing.join(', ')}; nothing checks those tests until a student fails them`);
   if (!q.tests.sample.length) warnings.push(`${q.id}: no sample tests, so Run examples has nothing to run`);
@@ -95,7 +96,7 @@ for (const q of quiz.questions) {
 const count = (t) => quiz.questions.filter((q) => q.type === t).length;
 const total = quiz.questions.reduce((s, q) => s + q.points, 0);
 console.log(`${quiz.title}: ${quiz.questions.length} questions, ${total} points${quiz.timeLimitMin ? `, ${quiz.timeLimitMin} min` : ', no time limit'}`);
-console.log(`  single ${count('single')}, multi ${count('multi')}, text ${count('text')}, code ${count('code')}, images ${parsed.assets.size}`);
+console.log(`  ${['single', 'multi', 'text', 'code', 'output', 'trace', 'fill', 'essay'].filter((t) => count(t)).map((t) => `${t} ${count(t)}`).join(', ')}, images ${parsed.assets.size}`);
 for (const q of quiz.questions) {
   if (q.type !== 'code') continue;
   const what = q.mode === 'class' ? `class ${q.class.name}` : `method ${q.signature.name}`;
@@ -104,13 +105,16 @@ for (const q of quiz.questions) {
 for (const w of warnings) console.log('warning: ' + w);
 
 // ---------- --run: reference solutions against every test, on this computer ----------
+const needsRun = quiz.questions.some((q) => q.type === 'code' || q.type === 'output' || (q.type === 'fill' && q.run));
 if (!run) {
-  console.log('VALID' + (quiz.questions.some((q) => q.type === 'code') ? ' (add --run to test the reference solutions)' : ''));
+  console.log('VALID' + (needsRun ? ' (add --run to run the code: reference solutions and output questions)' : ''));
   process.exit(0);
 }
 const has = (cmd) => spawnSync(cmd, ['--version'], { stdio: 'ignore' }).status === 0;
 const tools = { java: has('javac') && has('java'), python: has('python3') };
-for (const q of quiz.questions) {
+const outputsSkipped = [];
+for (const [i, q] of quiz.questions.entries()) {
+  if (q.type === 'output' && !tools[q.language]) { outputsSkipped.push(i); console.log(`skipped: question ${i + 1} output (${q.language === 'java' ? 'no JDK' : 'no python3'} here; the server runs it on upload)`); }
   for (const lang of Object.keys(q.reference || {})) {
     if (!tools[lang]) {
       delete q.reference[lang];
@@ -153,12 +157,14 @@ const server = http.createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 process.env.RUNNER_URL = `http://127.0.0.1:${server.address().port}`;
 process.env.RUNNER_TOKEN = 'local-check';
-const { checkReferences } = require('../server/src/coderun.js');
+const { checkReferences, checkOutputs } = require('../server/src/coderun.js');
 let ok = true;
 try {
+  await checkOutputs({ questions: quiz.questions.map((q, i) => (outputsSkipped.includes(i) ? { type: 'skip' } : q)) });
+  for (const [i, q] of quiz.questions.entries()) if (q.type === 'output' && !outputsSkipped.includes(i)) console.log(`question ${i + 1} prints: ${JSON.stringify(q.answer)}`);
   await checkReferences(quiz);
   let n = 0;
-  for (const q of quiz.questions) if (q.type === 'code') n += Object.keys(q.reference).length * (q.tests.sample.length + q.tests.hidden.length);
+  for (const q of quiz.questions) if (q.type === 'code' || (q.type === 'fill' && q.run)) n += Object.keys(q.reference).length * (q.tests.sample.length + q.tests.hidden.length);
   if (n) console.log(`references: ${n} test runs passed`);
 } catch (e) {
   ok = false;

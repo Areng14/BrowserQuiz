@@ -31,3 +31,18 @@
 .r-view .r-rubric { list-style: none; margin: 4px 0; padding: 0; }
 .r-view .r-empty { color: var(--ink-2); }
 .r-view code { font-family: var(--mono, ui-monospace, Consolas, monospace); }
+.r-view pre.r-good { border-color: var(--good); }
+.r-view pre.r-bad { border-color: var(--bad); }
+.r-view .r-trace { border-collapse: collapse; margin: 6px 0; font: 13px var(--mono, ui-monospace, Consolas, monospace); }
+.r-view .r-trace th, .r-view .r-trace td { border: 1px solid var(--line); padding: 4px 10px; text-align: center; }
+.r-view .r-trace th { font-weight: 600; background: var(--soft); }
+.r-view .r-trace td.given { color: var(--ink-2); background: var(--soft); }
+.r-view .r-trace td.ok .r-mark { color: var(--good); }
+.r-view .r-trace td.no .r-mark { color: var(--bad); }
+.r-view .r-trace td.no s { color: var(--ink-2); }
+.r-view .r-trace .r-mark { width: auto; margin-right: 4px; }
+.r-view .r-blank { padding: 0 4px; border-bottom: 2px solid; }
+.r-view .r-blank.ok { border-color: var(--good); }
+.r-view .r-blank.no { border-color: var(--bad); }
+.r-view .r-blanks { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 2px; }
+.r-view .r-essay { margin: 0; white-space: pre-wrap; }

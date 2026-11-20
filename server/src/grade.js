@@ -3,6 +3,12 @@
 const store = require('./store');
 const { gradeCode } = require('./coderun');
 const H = require('./harness');
+const { normOutput, normBlank, normCell, fillTemplate } = require('./quizfile');
+
+// Questions graded by running code: code, and fill-in-the-blanks that have tests.
+const isRun = (qq) => qq.type === 'code' || (qq.type === 'fill' && !!qq.run);
+const strArray = (v, n, max) => (Array.isArray(v) ? v.slice(0, n).map((x) => (typeof x === 'string' ? x.slice(0, max) : '')) : null);
+const isGiven = (qq, r, c) => qq.given.some((g) => g[0] === r && g[1] === c);
 
 const norm = (s, cs) => { const t = String(s).trim().replace(/\s+/g, ' '); return cs ? t : t.toLowerCase(); };
 
@@ -19,6 +25,12 @@ function cleanAnswers(quiz, layout, answers) {
     else if (qq.type === 'text' && typeof v === 'string') out[qq.id] = v.slice(0, 500);
     else if (qq.type === 'code' && v && typeof v === 'object' && qq.languages.includes(v.language) && typeof v.code === 'string') {
       out[qq.id] = { language: v.language, code: v.code.slice(0, 50000) };
+    } else if ((qq.type === 'output' || qq.type === 'essay') && typeof v === 'string') {
+      out[qq.id] = v.slice(0, qq.type === 'essay' ? 50000 : 5000);
+    } else if (qq.type === 'trace' && Array.isArray(v)) {
+      out[qq.id] = qq.rows.map((row, r) => row.map((_, c) => (isGiven(qq, r, c) ? '' : String((Array.isArray(v[r]) && typeof v[r][c] === 'string' ? v[r][c] : '')).slice(0, 200))));
+    } else if (qq.type === 'fill' && Array.isArray(v)) {
+      out[qq.id] = strArray(v, qq.answer.length, 500);
     }
   }
   return out;
@@ -29,7 +41,7 @@ function gradeAuto(quiz, layout, answers) {
   let max = 0;
   const detail = {};
   for (const qq of quiz.questions) {
-    if (qq.type === 'code') continue;
+    if (isRun(qq)) continue;
     max += qq.points;
     const a = answers[qq.id];
     const perm = layout && layout.perms ? layout.perms[qq.id] : null;
@@ -40,8 +52,25 @@ function gradeAuto(quiz, layout, answers) {
       const got = new Set((Array.isArray(a) ? a : []).map(orig));
       ok = got.size === qq.answer.length && qq.answer.every((x) => got.has(x));
     } else if (qq.type === 'text') ok = typeof a === 'string' && qq.answer.some((x) => norm(x, qq.caseSensitive) === norm(a, qq.caseSensitive));
-    if (ok) score += qq.points;
-    detail[qq.id] = { correct: ok, points: ok ? qq.points : 0, max: qq.points };
+    else if (qq.type === 'output') ok = typeof a === 'string' && normOutput(a) === qq.answer;
+    // Partial credit: each trace cell and each blank counts the same.
+    let share = ok ? 1 : 0;
+    if (qq.type === 'trace') {
+      let right = 0;
+      let cells = 0;
+      qq.rows.forEach((row, r) => row.forEach((want, c) => {
+        if (isGiven(qq, r, c)) return;
+        cells++;
+        if (Array.isArray(a) && Array.isArray(a[r]) && normCell(a[r][c]) !== '' && normCell(a[r][c]) === normCell(want)) right++;
+      }));
+      share = cells ? right / cells : 0;
+    } else if (qq.type === 'fill') {
+      const right = qq.answer.filter((acc, i) => Array.isArray(a) && normBlank(a[i]) !== '' && acc.some((x) => normBlank(x) === normBlank(a[i]))).length;
+      share = right / qq.answer.length;
+    } else if (qq.type === 'essay') share = 0; // the teacher grades it
+    const pts = Math.round(qq.points * share * 100) / 100;
+    score += pts;
+    detail[qq.id] = { correct: share === 1, points: pts, max: qq.points };
   }
   return { score, max, detail };
 }
@@ -52,6 +81,7 @@ const rubricMax = (qq) => (qq.rubric || []).reduce((sum, r) => sum + r.points, 0
 // teacher typed an override. state: done | pending | failed.
 // A code answer that's blank or untouched starter code has nothing for the teacher to review.
 function codeAnswered(qq, ans) {
+  if (qq.type === 'fill') return Array.isArray(ans) && ans.some((x) => String(x || '').trim());
   if (!ans || typeof ans.code !== 'string' || !ans.code.trim()) return false;
   return ans.code.trim() !== String(H.starterCode(qq, ans.language) || '').trim();
 }
@@ -60,7 +90,7 @@ function questionScore(qq, result, answers) {
   const m = (result.manual || {})[qq.id] || {};
   let points = 0;
   let state = 'done';
-  if (qq.type === 'code') {
+  if (isRun(qq)) {
     const c = (result.code || {})[qq.id];
     if (!c || c.status === 'pending') state = 'pending';
     else if (c.status === 'error') state = 'failed';
@@ -70,8 +100,11 @@ function questionScore(qq, result, answers) {
     points = d ? d.points : 0;
   }
   for (const r of qq.rubric || []) if (m.rubric && m.rubric[r.id]) points += r.points;
-  const answered = qq.type === 'code' ? codeAnswered(qq, answers && answers[qq.id]) : answers ? answers[qq.id] != null : true;
-  const review = rubricMax(qq) > 0 && answered && !m.reviewed && m.override == null;
+  const ans = answers ? answers[qq.id] : undefined;
+  const answered = isRun(qq) ? codeAnswered(qq, ans)
+    : qq.type === 'essay' ? typeof ans === 'string' && ans.trim() !== '' : answers ? ans != null : true;
+  // Written answers always need the teacher; others only when they have rubric points.
+  const review = (rubricMax(qq) > 0 || qq.type === 'essay') && answered && !m.reviewed && m.override == null;
   if (m.override != null) { points = m.override; state = 'done'; }
   return { points: Math.round(points * 100) / 100, max: qq.points, state, review, override: m.override != null };
 }
@@ -102,7 +135,7 @@ async function gradeAttempt(a, quiz) {
     const auto = gradeAuto(quiz, a.layout, a.answers);
     const prev = a.result && a.result.code ? a.result.code : {};
     a.result = { auto, code: {}, manual: (a.result && a.result.manual) || {} };
-    const codeQs = quiz.questions.filter((qq) => qq.type === 'code');
+    const codeQs = quiz.questions.filter(isRun);
     for (const qq of codeQs) {
       a.result.code[qq.id] = prev[qq.id] && prev[qq.id].status === 'done' ? prev[qq.id] : { status: 'pending', max: qq.points - rubricMax(qq) };
     }
@@ -111,8 +144,10 @@ async function gradeAttempt(a, quiz) {
       if (a.result.code[qq.id].status === 'done') continue;
       try {
         // Blank or untouched starter code: nothing to run.
-        if (!codeAnswered(qq, a.answers[qq.id])) a.result.code[qq.id] = { status: 'done', score: 0, max: a.result.code[qq.id].max, note: 'No answer', tests: [] };
-        else a.result.code[qq.id] = await gradeCode(qq, a.answers[qq.id]);
+        const ans = a.answers[qq.id];
+        if (!codeAnswered(qq, ans)) a.result.code[qq.id] = { status: 'done', score: 0, max: a.result.code[qq.id].max, note: 'No answer', tests: [] };
+        else if (qq.type === 'fill') a.result.code[qq.id] = await gradeCode(qq, { language: qq.language, code: fillTemplate(qq.code, ans) });
+        else a.result.code[qq.id] = await gradeCode(qq, ans);
       } catch (e) {
         a.result.code[qq.id] = { status: 'error', score: 0, max: a.result.code[qq.id].max, message: e.message };
       }
@@ -137,6 +172,9 @@ function answerReport(quiz, a) {
     } else if (qq.type === 'text') {
       row.answer = ans == null ? null : ans;
       row.correctAnswer = qq.answer.join(' | ');
+    } else if (qq.type !== 'code') {
+      row.answer = ans == null ? null : ans;
+      if (isRun(qq)) row.code = res.code ? res.code[qq.id] : null;
     } else {
       row.answer = ans ? ans.code : null;
       row.language = ans ? ans.language : null;
@@ -183,6 +221,34 @@ function studentReport(quiz, a, name) {
       } else if (qq.type === 'text') {
         row.answer = ans == null || String(ans).trim() === '' ? null : String(ans);
         row.accepted = qq.answer;
+      } else if (qq.type === 'output') {
+        Object.assign(row, { code: qq.code, codeLang: qq.language, answer: typeof ans === 'string' && ans.trim() ? ans : null, correct: qq.answer });
+      } else if (qq.type === 'trace') {
+        Object.assign(row, {
+          code: qq.code, codeLang: qq.language, columns: qq.columns,
+          cells: qq.rows.map((r, ri) => r.map((want, ci) => {
+            if (isGiven(qq, ri, ci)) return { given: true, value: want };
+            const got = Array.isArray(ans) && Array.isArray(ans[ri]) ? ans[ri][ci] : '';
+            return { value: got || '', correct: want, ok: normCell(got) !== '' && normCell(got) === normCell(want) };
+          })),
+        });
+      } else if (qq.type === 'fill') {
+        const c = (res.code || {})[qq.id];
+        Object.assign(row, {
+          code: qq.code, codeLang: qq.language, run: !!qq.run,
+          blanks: qq.answer.map((acc, i) => {
+            const got = Array.isArray(ans) ? String(ans[i] || '') : '';
+            return { value: got, accepted: acc, ok: normBlank(got) !== '' && acc.some((x) => normBlank(x) === normBlank(got)) };
+          }),
+          compileError: qq.run && c && c.compileError ? c.compileError : null,
+        });
+      } else if (qq.type === 'essay') {
+        const m = (res.manual || {})[qq.id] || {};
+        Object.assign(row, {
+          answer: typeof ans === 'string' && ans.trim() ? ans : null, codeLang: qq.language,
+          rubric: (qq.rubric || []).map((r) => ({ text: r.text, points: r.points, met: !!(m.rubric && m.rubric[r.id]) })),
+          rubricGraded: !!m.reviewed || m.override != null,
+        });
       } else {
         const lang = ans && qq.languages.includes(ans.language) ? ans.language : qq.languages[0];
         const c = (res.code || {})[qq.id];
@@ -202,4 +268,4 @@ function studentReport(quiz, a, name) {
 }
 const reportQuiz = (quiz, quizId) => ({ id: quizId, title: quiz.title, language: quiz.language || null });
 
-module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, codeAnswered, answerReport, studentReport, reportQuiz, grading: running };
+module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, codeAnswered, answerReport, studentReport, reportQuiz, grading: running, isRun };

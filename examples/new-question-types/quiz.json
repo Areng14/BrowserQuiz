@@ -1,0 +1,61 @@
+{
+  "format": 1,
+  "title": "New question types",
+  "timeLimitMin": 15,
+  "language": "java",
+  "questions": [
+    {
+      "id": "o1",
+      "type": "output",
+      "prompt": "What does this print?",
+      "code": "int x = 7;\nint y = 2;\nSystem.out.println(x / y);\nSystem.out.println(x % y);"
+    },
+    {
+      "id": "o2",
+      "type": "output",
+      "prompt": "What does this print?",
+      "code": "for (int i = 1; i <= 3; i++) {\n    System.out.print(i * i + \" \");\n}"
+    },
+    {
+      "id": "t1",
+      "type": "trace",
+      "points": 3,
+      "prompt": "Trace the loop. Fill in `i` and `sum` at the end of each pass.",
+      "code": "int sum = 0;\nfor (int i = 1; i <= 4; i++) {\n    sum += i;\n}",
+      "columns": ["i", "sum"],
+      "rows": [["1", "1"], ["2", "3"], ["3", "6"], ["4", "10"]],
+      "given": [[0, 0], [0, 1]]
+    },
+    {
+      "id": "f1",
+      "type": "fill",
+      "points": 2,
+      "prompt": "Complete the code so `total` ends up as the sum of `nums`.",
+      "code": "int total = ___;\nfor (int n : nums) {\n    total ___ n;\n}",
+      "answer": ["0", ["+=", "= total +"]]
+    },
+    {
+      "id": "f2",
+      "type": "fill",
+      "points": 4,
+      "prompt": "Complete `countEvens` so it returns how many numbers in `nums` are even.",
+      "code": "class Solution {\n    public int countEvens(int[] nums) {\n        int count = 0;\n        for (int i = 0; i < ___; i++) {\n            if (___) {\n                count++;\n            }\n        }\n        return count;\n    }\n}",
+      "answer": ["nums.length", "nums[i] % 2 == 0"],
+      "signature": { "name": "countEvens", "params": [{ "name": "nums", "type": "int[]" }], "returns": "int" },
+      "tests": {
+        "sample": [{ "args": [[1, 2, 4]] }],
+        "hidden": [{ "args": [[1, 2, 4]] }, { "args": [[]] }, { "args": [[-2, 3, 0]] }, { "args": [[7]] }]
+      }
+    },
+    {
+      "id": "e1",
+      "type": "essay",
+      "points": 3,
+      "prompt": "Explain why `a == b` can be `false` for two `String` variables that hold the same text.",
+      "rubric": [
+        { "text": "Says == compares references (whether they are the same object)", "points": 2 },
+        { "text": "Says .equals compares the text", "points": 1 }
+      ]
+    }
+  ]
+}

@@ -6,7 +6,8 @@ const { q } = require('./db');
 const store = require('./store');
 const H = require('./harness');
 const { runSamples } = require('./coderun');
-const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz } = require('./grade');
+const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } = require('./grade');
+const { fillTemplate } = require('./quizfile');
 const { HttpError, clientIp, sameNetwork, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
 
 const PEPPER = process.env.ID_PEPPER || '';
@@ -59,6 +60,21 @@ function publicQuiz(quiz, layout) {
       const pub = { id, type: qq.type, prompt: qq.prompt, points: qq.points };
       if (qq.image) { pub.image = qq.image; pub.imageAlt = qq.imageAlt || ''; }
       if (qq.choices) pub.choices = layout.perms[id].map((i) => qq.choices[i]); // positions only
+      // New types: what's needed to show the question, never the answers.
+      if (qq.type === 'output') Object.assign(pub, { code: qq.code, codeLang: qq.language });
+      if (qq.type === 'trace') {
+        Object.assign(pub, {
+          code: qq.code, codeLang: qq.language, columns: qq.columns,
+          cells: qq.rows.map((r, ri) => r.map((v, ci) => (qq.given.some((g) => g[0] === ri && g[1] === ci) ? v : null))),
+        });
+      }
+      if (qq.type === 'fill') {
+        Object.assign(pub, { code: qq.code, codeLang: qq.language, blanks: qq.answer.length, run: !!qq.run });
+        if (qq.run) {
+          pub.samples = qq.tests.sample.map((t) => ({ call: { [qq.language]: H.callText(qq, t, qq.language) }, expected: { [qq.language]: H.expectedText(qq, t, qq.language) } }));
+        }
+      }
+      if (qq.type === 'essay') pub.codeLang = qq.language || null;
       if (qq.type === 'code') {
         pub.mode = qq.mode;
         pub.languages = qq.languages;
@@ -76,7 +92,7 @@ function publicQuiz(quiz, layout) {
 function runInfo(run, quiz) {
   return {
     runId: run.id, title: quiz.title, timeLimitMin: quiz.timeLimitMin,
-    questionCount: quiz.questions.length, hasCode: quiz.questions.some((qq) => qq.type === 'code'),
+    questionCount: quiz.questions.length, hasCode: quiz.questions.some((qq) => qq.type !== 'single' && qq.type !== 'multi' && qq.type !== 'text'),
     practice: run.mode === 'practice',
   };
 }
@@ -258,7 +274,9 @@ module.exports = function studentRoutes(r) {
     const { a, quiz } = current(req);
     if (a.status !== 'active') throw new HttpError(403, 'run_closed');
     if (!runLimit(a.id)) throw new HttpError(429, 'too_many');
-    const qq = quiz.questions.find((x) => x.id === body.questionId && x.type === 'code');
+    const qq = quiz.questions.find((x) => x.id === body.questionId && isRun(x));
+    // Fill-in-the-blank: the server fills its own template; students only send the blanks.
+    if (qq && qq.type === 'fill') body.code = Array.isArray(body.blanks) ? fillTemplate(qq.code, body.blanks.map((b) => String(b || '').slice(0, 500))) : null;
     if (!qq || !qq.languages.includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
     store.logEvent(a, 'run', 'info', `${qq.id} (${body.language === 'python' ? 'Python' : 'Java'})`);
     try {

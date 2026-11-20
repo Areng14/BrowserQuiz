@@ -7,8 +7,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { loadQuizFile, normalizeQuiz, QuizError, ASSET_TYPES } = require('./quizfile');
 const { writeZip } = require('./zip');
-const { checkReferences, runnerConfigured, runnerHealthy, runSamples, gradeCode } = require('./coderun');
-const { totals, questionScore, gradeAttempt, answerReport, cleanAnswers, gradeAuto, studentReport, reportQuiz } = require('./grade');
+const { checkReferences, checkOutputs, runnerConfigured, runnerHealthy, runSamples, gradeCode } = require('./coderun');
+const { totals, questionScore, gradeAttempt, answerReport, cleanAnswers, gradeAuto, studentReport, reportQuiz, isRun } = require('./grade');
+const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
 const { HttpError, clientIp, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
 
@@ -80,10 +81,15 @@ function liveRow(student, a, quiz) {
 
 // ---------- quizzes: shared by upload, the quiz maker and preview ----------
 async function checkQuiz(quiz) {
-  const hasRefs = quiz.questions.some((qq) => qq.type === 'code' && Object.keys(qq.reference || {}).length);
-  if (!hasRefs) return;
-  if (!runnerConfigured()) throw new QuizError('This quiz has reference solutions to check, but the code runner is not set up.');
-  await checkReferences(quiz);
+  const hasRefs = quiz.questions.some((qq) => isRun(qq) && Object.keys(qq.reference || {}).length);
+  const outputs = quiz.questions.filter((qq) => qq.type === 'output');
+  if (!hasRefs && !outputs.length) return;
+  if (!runnerConfigured()) {
+    if (hasRefs || outputs.some((qq) => qq.answer == null)) throw new QuizError('This quiz has code to run, but the code runner is not set up.');
+    return;
+  }
+  if (outputs.length) await checkOutputs(quiz);
+  if (hasRefs) await checkReferences(quiz);
 }
 function quizError(res, e) {
   if (e instanceof QuizError) return json(res, 400, { error: 'bad_quiz', message: e.message });
@@ -120,6 +126,26 @@ function quizSource(quiz) {
     if (qq.image) { o.image = qq.image; if (qq.imageAlt) o.imageAlt = qq.imageAlt; }
     if (qq.type === 'text') { o.answer = qq.answer; if (qq.caseSensitive) o.caseSensitive = true; }
     if (qq.type === 'single' || qq.type === 'multi') { o.choices = qq.choices; o.answer = qq.answer; if (qq.shuffleChoices === false) o.shuffleChoices = false; }
+    if (qq.type === 'output') Object.assign(o, { code: qq.code, language: qq.language, answer: qq.answer });
+    if (qq.type === 'trace') {
+      if (qq.code) o.code = qq.code;
+      Object.assign(o, { language: qq.language, columns: qq.columns, rows: qq.rows });
+      if (qq.given.length) o.given = qq.given;
+    }
+    if (qq.type === 'fill') {
+      Object.assign(o, { code: qq.code, language: qq.language, answer: qq.answer.map((a) => (a.length === 1 ? a[0] : a)) });
+      if (qq.run) {
+        o.mode = qq.mode;
+        if (qq.mode === 'method') o.signature = qq.signature; else o.class = qq.class;
+        o.tests = qq.tests;
+        if (qq.compare === 'unordered') o.compare = 'unordered';
+        if (qq.rubric && qq.rubric.length) o.rubric = qq.rubric;
+      }
+    }
+    if (qq.type === 'essay') {
+      if (qq.language) o.language = qq.language;
+      if (qq.rubric.length) o.rubric = qq.rubric;
+    }
     if (qq.type === 'code') {
       o.mode = qq.mode;
       o.languages = qq.languages;
@@ -352,10 +378,11 @@ module.exports = function teacherRoutes(r) {
     requireTeacher(req);
     const body = await readJson(req, 128 * 1024);
     const quiz = store.getQuiz(getQuizRow(p.id).id);
-    const qq = quiz.questions.find((x) => x.id === body.questionId && x.type === 'code');
-    if (!qq || !qq.languages.includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
+    const qq = quiz.questions.find((x) => x.id === body.questionId && isRun(x));
+    const code = qq && qq.type === 'fill' ? (Array.isArray(body.blanks) ? fillTemplate(qq.code, body.blanks.map((b) => String(b || '').slice(0, 500))) : null) : body.code;
+    if (!qq || !qq.languages.includes(body.language) || typeof code !== 'string') throw new HttpError(400, 'bad_request');
     try {
-      json(res, 200, await runSamples(qq, body.language, body.code.slice(0, 50000)));
+      json(res, 200, await runSamples(qq, body.language, code.slice(0, 50000)));
     } catch (e) {
       json(res, 200, { status: 'error', message: 'Code runner offline.' });
     }
@@ -368,10 +395,12 @@ module.exports = function teacherRoutes(r) {
     const answers = cleanAnswers(quiz, null, body.answers);
     const auto = gradeAuto(quiz, null, answers);
     const questions = await Promise.all(quiz.questions.map(async (qq, i) => {
-      if (qq.type !== 'code') return { n: i + 1, id: qq.id, points: auto.detail[qq.id].points, max: qq.points };
+      if (qq.type === 'essay') return { n: i + 1, id: qq.id, points: null, max: qq.points, manual: true };
+      if (!isRun(qq)) return { n: i + 1, id: qq.id, points: auto.detail[qq.id].points, max: qq.points };
       const rubric = qq.rubric.reduce((sum, r2) => sum + r2.points, 0);
       try {
-        const c = await gradeCode(qq, answers[qq.id]);
+        const ans = qq.type === 'fill' ? { language: qq.language, code: fillTemplate(qq.code, answers[qq.id] || []) } : answers[qq.id];
+        const c = await gradeCode(qq, ans);
         return { n: i + 1, id: qq.id, points: c.status === 'done' ? c.score : null, max: qq.points, rubric };
       } catch (e) {
         return { n: i + 1, id: qq.id, points: null, max: qq.points, rubric };

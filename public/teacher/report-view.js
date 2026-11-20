@@ -2,7 +2,10 @@
 // practice review, and the teacher's student panel. Needs BQ.md (md.js).
 (function () {
   'use strict';
-  const KIND = { single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', method: 'Write a method', class: 'Write a class' };
+  const KIND = {
+    single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', method: 'Write a method', class: 'Write a class',
+    output: 'Predict the output', trace: 'Trace table', fill: 'Fill in the blanks', essay: 'Written answer',
+  };
   const LANG = { java: 'Java', python: 'Python' };
 
   function h(tag, attrs, ...kids) {
@@ -43,6 +46,40 @@
         q.answer == null ? h('p', { class: 'r-none', text: 'No answer' }) : h('p', { class: 'r-text', text: q.answer }));
       body.push(h('p', { class: 'r-label', text: 'Correct answer' }), h('p', { class: 'r-text', text: q.accepted[0] }));
       if (q.accepted.length > 1) body.push(h('p', { class: 'r-label', text: 'Also accepted' }), h('p', { class: 'r-text', text: q.accepted.slice(1).join(', ') }));
+    } else if (q.type === 'output') {
+      body.push(h('pre', {}, h('code', { text: q.code })),
+        h('p', { class: 'r-label', text: 'Your answer' }),
+        q.answer == null ? h('p', { class: 'r-none', text: 'No answer' }) : h('pre', { class: q.points === q.max ? 'r-good' : 'r-bad' }, q.answer),
+        h('p', { class: 'r-label', text: 'Correct answer' }), h('pre', {}, q.correct));
+    } else if (q.type === 'trace') {
+      if (q.code) body.push(h('pre', {}, h('code', { text: q.code })));
+      body.push(h('table', { class: 'r-trace' },
+        h('thead', {}, h('tr', {}, q.columns.map((c) => h('th', { text: c })))),
+        h('tbody', {}, q.cells.map((row) => h('tr', {}, row.map((cell) => {
+          if (cell.given) return h('td', { class: 'given', text: cell.value });
+          if (cell.ok) return h('td', { class: 'ok' }, h('span', { class: 'r-mark', text: '✓' }), cell.value);
+          return h('td', { class: 'no' }, h('span', { class: 'r-mark', text: '✗' }), cell.value ? h('s', { text: cell.value }) : '', ' ', h('b', { text: cell.correct }));
+        }))))));
+    } else if (q.type === 'fill') {
+      // The code with each blank showing what was typed, then the blanks one by one.
+      const pieces = q.code.split(/_{3,}/);
+      body.push(h('pre', {}, pieces.map((seg, i) => [seg, i < pieces.length - 1
+        ? h('span', { class: 'r-blank ' + (q.blanks[i].ok ? 'ok' : 'no') }, q.blanks[i].value || `(${i + 1})`) : null])));
+      body.push(h('ul', { class: 'r-blanks' }, q.blanks.map((b, i) => h('li', {},
+        h('span', { class: b.ok ? 'r-ok' : 'r-no', text: b.ok ? '✓ ' : '✗ ' }),
+        `Blank ${i + 1}: `, b.value ? h('code', { text: b.value }) : h('span', { class: 'r-none', text: 'no answer' }),
+        b.ok ? null : [' (correct: ', b.accepted.map((x, k) => [k ? ' or ' : '', h('code', { text: x })]), ')']))));
+      if (q.run) body.push(h('p', { class: 'r-label', text: 'Any answer that makes the code work counts.' }));
+      if (q.compileError) body.push(h('p', { class: 'r-label', text: "Didn't compile" }), h('pre', { class: 'r-err', text: q.compileError }));
+    } else if (q.type === 'essay') {
+      body.push(h('p', { class: 'r-label', text: 'Your answer' }),
+        q.answer == null ? h('p', { class: 'r-none', text: 'No answer' }) : q.codeLang ? h('pre', {}, h('code', { text: q.answer })) : h('p', { class: 'r-essay', text: q.answer }));
+      if (q.rubric.length && !o.teacher) {
+        const unit = (n) => `${fmtPts(n)} ${n === 1 ? 'point' : 'points'}`;
+        body.push(h('p', { class: 'r-label', text: q.rubricGraded ? 'Rubric' : 'Rubric (not graded yet)' }), h('ul', { class: 'r-rubric' }, q.rubric.map((r) => h('li', {},
+          !q.rubricGraded ? h('span', { class: 'r-empty', text: '– ' }) : h('span', { class: r.met ? 'r-ok' : 'r-no', text: r.met ? '✓ ' : '✗ ' }),
+          `${r.text} (${unit(r.points)})`))));
+      }
     } else {
       body.push(h('p', { class: 'r-label', text: `Your answer (${LANG[q.language] || q.language})` }),
         q.answer == null ? h('p', { class: 'r-none', text: 'No answer' }) : h('pre', {}, h('code', { text: q.answer })));
