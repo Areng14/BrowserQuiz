@@ -5,7 +5,13 @@
 //   method test  ("hello") -> 2        class test  a = new BankAccount("Ava", 100.0) / a.getBalance() -> 100.0
 (function () {
   'use strict';
-  const TYPES = { single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', code: 'Code' };
+  // In the order the parts usually come in a quiz.
+  const TYPES = {
+    single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', output: 'Predict the output',
+    trace: 'Trace table', fill: 'Fill in the blanks', code: 'Code', essay: 'Written answer',
+  };
+  const BLANK = /_{3,}/g;
+  const countBlanks = (code) => (String(code || '').match(BLANK) || []).length;
   const VALUE_TYPES = ['int', 'long', 'double', 'boolean', 'string', 'int[]', 'long[]', 'double[]', 'boolean[]', 'string[]', 'int[][]', 'list<int>', 'list<string>'];
   const LANGS = { java: 'Java', python: 'Python' };
 
@@ -266,38 +272,82 @@
 
   // ---------- questions ----------
   function blank(type, keep) {
-    const q = { id: keep.id, type, prompt: keep.prompt || '', points: keep.points || (type === 'code' ? 6 : type === 'multi' ? 2 : 1) };
+    const points = { multi: 2, trace: 3, fill: 2, code: 6, essay: 3 };
+    const q = { id: keep.id, type, prompt: keep.prompt || '', points: keep.points || points[type] || 1 };
     if (keep.image) { q.image = keep.image; if (keep.imageAlt) q.imageAlt = keep.imageAlt; }
     if (type === 'single') Object.assign(q, { choices: ['', '', '', ''], answer: null });
     if (type === 'multi') Object.assign(q, { choices: ['', '', '', ''], answer: [] });
     if (type === 'text') q.answer = [''];
+    if (type === 'output' || type === 'trace' || type === 'fill') {
+      q.code = typeof keep.code === 'string' ? keep.code : '';
+      if (keep.language) q.language = keep.language;
+    }
+    if (type === 'trace') Object.assign(q, { columns: ['', ''], rows: [['', ''], ['', ''], ['', '']], given: [] });
+    if (type === 'fill') q.answer = Array(countBlanks(q.code)).fill('');
+    if (type === 'essay') q.rubric = [];
     if (type === 'code') {
       Object.assign(q, { mode: keep.mode || 'method', languages: keep.languages || ['java'], tests: { sample: [], hidden: [] }, reference: {} });
       if (q.mode === 'class') q.class = { name: '', constructor: [], methods: [] };
     }
     return withUi(q);
   }
-  // Text-format fields live in q._ui while editing and are parsed back on save.
+  // Fields that are edited as text, or in a shape of their own, live in q._ui and are read back on save.
   function withUi(q) {
-    if (q.type !== 'code') return q;
-    const C = q.class || { name: '', constructor: [], methods: [] };
-    const S = q.signature;
-    q._ui = {
-      sig: S ? sigText(S.name, S.params, S.returns) : '',
-      className: C.name,
-      ctor: C.constructor && C.constructor.length ? sigText('', C.constructor, '') : '',
-      methods: (C.methods || []).map((m) => sigText(m.name, m.params, m.returns)).join('\n'),
-      sample: q.mode === 'class' ? classTestsText(q.tests.sample, C) : S ? methodTestsText(q.tests.sample, S) : '',
-      hidden: q.mode === 'class' ? classTestsText(q.tests.hidden, C) : S ? methodTestsText(q.tests.hidden, S) : '',
-    };
+    const u = {};
+    if (q.type === 'code' || q.type === 'fill') {
+      const C = q.class || { name: '', constructor: [], methods: [] };
+      const S = q.signature;
+      const T = q.tests || { sample: [], hidden: [] };
+      Object.assign(u, {
+        sig: S ? sigText(S.name, S.params, S.returns) : '',
+        className: C.name,
+        ctor: C.constructor && C.constructor.length ? sigText('', C.constructor, '') : '',
+        methods: (C.methods || []).map((m) => sigText(m.name, m.params, m.returns)).join('\n'),
+        sample: q.mode === 'class' ? classTestsText(T.sample, C) : S ? methodTestsText(T.sample, S) : '',
+        hidden: q.mode === 'class' ? classTestsText(T.hidden, C) : S ? methodTestsText(T.hidden, S) : '',
+      });
+    }
+    if (q.type === 'fill') {
+      u.run = !!q.tests; // graded by running the tests
+      u.blanks = (q.answer || []).map((a) => [].concat(a).join('\n')); // accepted answers, one per line
+    }
+    if (q.type === 'output') u.auto = q.answer; // the output the server worked out, as opposed to one typed here
+    if (q.type === 'trace') {
+      const given = new Set((q.given || []).map((g) => g.join(',')));
+      u.cols = (q.columns || []).map(String);
+      u.cells = (q.rows || []).map((row, r) => row.map((v, c) => ({ v: String(v), given: given.has(`${r},${c}`) })));
+    }
+    if (q.type === 'code' || q.type === 'fill' || q.type === 'output' || q.type === 'trace') q._ui = u;
     return q;
+  }
+  // Keeps each blank's answers with its blank when the code around them is edited.
+  function realign(oldCode, newCode, old) {
+    const n = countBlanks(newCode);
+    const max = Math.min(oldCode.length, newCode.length);
+    let p = 0;
+    while (p < max && oldCode[p] === newCode[p]) p++;
+    let e = 0;
+    while (e < max - p && oldCode[oldCode.length - 1 - e] === newCode[newCode.length - 1 - e]) e++;
+    const head = Math.min(countBlanks(newCode.slice(0, p)), n, old.length);
+    const tail = Math.min(countBlanks(newCode.slice(newCode.length - e)), n - head, old.length - head);
+    const was = old.slice(head, old.length - tail);
+    const mid = Array.from({ length: n - head - tail }, (_, i) => (was.length === n - head - tail ? was[i] : ''));
+    return [...old.slice(0, head), ...mid, ...old.slice(old.length - tail, tail ? undefined : old.length - tail)];
+  }
+  // A trace table as it will be saved: empty rows left out.
+  function readTrace(q) {
+    const u = q._ui;
+    const rows = u.cells.filter((row) => row.some((c) => c.v.trim()));
+    const given = [];
+    rows.forEach((row, r) => row.forEach((c, k) => { if (c.given) given.push([r, k]); }));
+    return { columns: u.cols.map((c) => c.trim()), rows: rows.map((row) => row.map((c) => c.v.trim())), given };
   }
 
   // Everything the text fields of a code question say, with what's wrong in them.
   function readCode(q) {
     const u = q._ui;
     const isClass = q.mode === 'class';
-    const hasRef = q.languages.some((l) => ((q.reference || {})[l] || '').trim());
+    const hasRef = q.type === 'fill' || q.languages.some((l) => ((q.reference || {})[l] || '').trim()); // a fill question's answers are its reference
     const r = { shape: null, shapeErrors: [], sample: null, hidden: null, problems: [] };
     try {
       if (isClass) {
@@ -350,14 +400,32 @@
         o.choices = keep.map((k) => q.choices[k].trim());
         o.answer = q.type === 'multi' ? q.answer.map((x) => keep.indexOf(x)).filter((x) => x >= 0).sort((x, y) => x - y) : keep.indexOf(q.answer);
       }
-      if (q.type === 'code') {
+      const rubric = () => (q.rubric || []).filter((x) => x.text.trim()).map((x, k) => ({ id: x.id || `r${k + 1}`, text: x.text.trim(), points: Number(x.points) || 0 }));
+      if (q.type === 'output' && !(q.answer || '').trim()) delete o.answer; // worked out by running the code
+      if (q.type === 'trace') {
+        Object.assign(o, readTrace(q));
+        if (!(q.code || '').trim()) delete o.code;
+      }
+      if (q.type === 'fill') {
+        o.answer = q._ui.blanks.map((b) => { const list = b.split('\n').map((x) => x.trim()).filter(Boolean); return list.length === 1 ? list[0] : list; });
+        for (const k of ['signature', 'class', 'tests', 'mode', 'languages', 'reference']) delete o[k];
+        if (!q._ui.run) { delete o.compare; delete o.rubric; }
+      }
+      if (q.type === 'essay') {
+        if (!q.language) delete o.language;
+        o.rubric = rubric();
+      }
+      if (q.type === 'code' || (q.type === 'fill' && q._ui.run)) {
         const r = readCode(q);
         delete o.signature;
         delete o.class;
         Object.assign(o, r.shape);
+        o.mode = q.mode === 'class' ? 'class' : 'method';
         o.tests = { sample: r.sample.tests, hidden: r.hidden.tests };
+      }
+      if (q.type === 'code') {
         o.reference = Object.fromEntries(Object.entries(q.reference || {}).filter(([l, v]) => q.languages.includes(l) && v.trim()));
-        o.rubric = (q.rubric || []).filter((x) => x.text.trim()).map((x, k) => ({ id: x.id || `r${k + 1}`, text: x.text.trim(), points: Number(x.points) || 0 }));
+        o.rubric = rubric();
       }
       out.questions.push(o);
     }
@@ -527,6 +595,25 @@
       }
       if (q.type === 'text' && !q.answer.some((a) => a.trim())) out.push('Add an accepted answer.');
       if (q.type === 'code') out.push(...readCode(q).problems);
+      if (q.type === 'output' && !(q.code || '').trim()) out.push('Write the code.');
+      if (q.type === 'trace') {
+        const t = readTrace(q);
+        if (t.columns.some((c) => !c)) out.push('Name every column.');
+        if (!t.rows.length) out.push('Fill in the table.');
+        else if (t.rows.some((row) => row.some((v) => !v))) out.push('Fill in every cell, or clear the whole row.');
+        else if (t.given.length >= t.rows.length * t.columns.length) out.push('Leave at least one cell for students.');
+      }
+      if (q.type === 'fill') {
+        const n = countBlanks(q.code);
+        if (!(q.code || '').trim()) out.push('Write the code.');
+        else if (!n) out.push('Mark a blank in the code with ___.');
+        else if (n > 30) out.push('At most 30 blanks.');
+        q._ui.blanks.forEach((b, k) => { if (!b.trim()) out.push(`Blank ${k + 1} needs an answer.`); });
+        if (q._ui.run) out.push(...readCode(q).problems);
+      }
+      if (q.type === 'essay' && (q.rubric || []).filter((x) => x.text.trim()).reduce((sum, x) => sum + (Number(x.points) || 0), 0) > Number(q.points)) {
+        out.push('Rubric points add up to more than the question\'s points.');
+      }
       return out.concat(fromServer.get(q) || []);
     }
 
@@ -697,6 +784,29 @@
         })));
       }
       if (q.type === 'text') out.push(h('input', { class: 'input text-answer', tabindex: '-1', 'aria-hidden': 'true' }));
+      const codeBlock = () => ((q.code || '').trim() ? h('pre', { class: 'md-code' }, h('code', { text: q.code.trimEnd() })) : null);
+      const box = (label, rows, mono) => h('div', { class: 'field' }, h('span', { class: 'field-label', text: label }),
+        h('textarea', { class: `input long-answer${mono ? ' mono' : ''}`, rows, tabindex: '-1', 'aria-hidden': 'true' }));
+      if (q.type === 'output') out.push(codeBlock(), box('Output', 4, true));
+      if (q.type === 'trace') {
+        const t = readTrace(q);
+        const given = new Set(t.given.map((g) => g.join(',')));
+        out.push(codeBlock(), h('div', { class: 'trace-wrap' }, h('table', { class: 'trace' },
+          h('thead', {}, h('tr', {}, t.columns.map((c) => h('th', { text: c || ' ' })))),
+          h('tbody', {}, t.rows.map((row, r) => h('tr', {}, row.map((v, c) => (given.has(`${r},${c}`)
+            ? h('td', { class: 'given', text: v }) : h('td', {}, h('input', { class: 'trace-cell', tabindex: '-1', 'aria-hidden': 'true' }))))))))));
+      }
+      if (q.type === 'fill') {
+        const pre = h('pre', { class: 'md-code fill-code' });
+        const pieces = (q.code || '').trimEnd().split(BLANK);
+        pieces.forEach((seg, i) => {
+          if (seg) pre.append(h('code', { text: seg }));
+          if (i < pieces.length - 1) pre.append(h('input', { class: 'blank', tabindex: '-1', 'aria-hidden': 'true', style: 'width: 6ch' }));
+        });
+        if ((q.code || '').trim()) out.push(pre);
+        if (q._ui.run) out.push(h('div', {}, h('button', { class: 'btn small primary', type: 'button', tabindex: '-1', text: 'Run examples' })));
+      }
+      if (q.type === 'essay') out.push(box('Your answer', 6, !!q.language));
       if (q.type === 'code') {
         const lang = q.languages[0];
         const custom = q.starter && typeof q.starter === 'object' ? q.starter[lang] : null;
@@ -704,14 +814,143 @@
         const code = custom || (shape ? starterCode(shape, lang, q.starter === 'empty') : '');
         if (code) out.push(h('pre', { class: 'md-code' }, h('code', { text: code.trimEnd() })));
       }
-      return out;
+      return out.filter(Boolean);
     }
 
-    // ---------- code questions ----------
+    // ---------- rubric, for code and written answers ----------
+    function rubricEditor(q, placeholder) {
+      q.rubric = q.rubric || [];
+      const worth = h('span', { class: 't-small t-muted' });
+      const add = () => { q.rubric.push({ text: '', points: 1 }); touch(q); renderPane(); const all = pane.querySelectorAll('.qe-rubric input[type=text]'); all[all.length - 1].focus(); };
+      const rows = q.rubric.map((r, k) => {
+        const text = input(q, r.text, (v) => { r.text = v; }, { type: 'text', placeholder });
+        text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); add(); } });
+        return h('div', { class: 'qe-choice' }, text,
+          input(q, r.points, (v) => { r.points = v; }, { type: 'number', min: '0', step: '0.5', class: 'input t-points', 'aria-label': 'Points' }),
+          xBtn('Remove rubric item', () => { q.rubric.splice(k, 1); touch(q); renderPane(); }));
+      });
+      return { worth, node: h('div', { class: 'field qe-rubric' }, h('span', { class: 'field-label', text: 'Rubric (points you give by hand)' }), rows,
+        h('div', { class: 'qe-line' }, h('button', { class: 'btn small', type: 'button', text: 'Add rubric item', onclick: add }), worth)) };
+    }
+
+    // ---------- the code students read: output, trace and fill questions ----------
+    const codeAttrs = (rows, more) => Object.assign({ rows, class: 'input qe-area qe-mono qe-code', autocomplete: 'off' }, more || {});
+    function langSelect(q, onChange) {
+      const sel = h('select', { class: 'input qe-narrow', 'aria-label': 'Language' }, Object.entries(LANGS).map(([v, t]) => h('option', { value: v, text: t, selected: (q.language || quiz.language) === v })));
+      sel.addEventListener('change', () => { q.language = sel.value; if (onChange) onChange(); touch(q); });
+      return sel;
+    }
+    const codeHead = (q, label, onLang, ...tools) => h('div', { class: 'qe-tools' },
+      h('label', { class: 'field-label', for: 'qe-code', text: label }), h('span', { class: 'qe-grow' }), ...tools, langSelect(q, onLang));
+
+    function outputEditor(q) {
+      const u = q._ui;
+      const out = area(q, q.answer, (v) => { if (v.trim()) q.answer = v; else delete q.answer; },
+        codeAttrs(2, { 'data-out': '', placeholder: 'Leave empty. Saving runs the code and fills this in' }));
+      // An output the server worked out goes stale when the code changes; one typed here stays, as a check.
+      const stale = () => { if (q.answer != null && q.answer === u.auto) { delete q.answer; out.value = ''; grow(out); } };
+      const code = area(q, q.code, (v) => { q.code = v; stale(); }, codeAttrs(5, { id: 'qe-code', placeholder: (q.language || quiz.language) === 'python' ? 'x = 7\nprint(x // 2)' : 'int x = 7;\nSystem.out.println(x / 2);' }));
+      codeKeys(code);
+      return [h('div', { class: 'field' }, codeHead(q, 'Code', stale), code), field('Output', out)];
+    }
+
+    function traceEditor(q) {
+      const u = q._ui;
+      const code = area(q, q.code, (v) => { q.code = v; }, codeAttrs(4, { id: 'qe-code' }));
+      codeKeys(code);
+      const cell = (r, c) => pane.querySelector(`.qe-grid input[data-r="${r}"][data-c="${c}"]`);
+      const edit = (fn, r, c) => { fn(); touch(q); renderPane(); const el = cell(r, c); if (el) el.focus(); };
+      const addRow = (r, c) => edit(() => u.cells.push(u.cols.map(() => ({ v: '', given: false }))), r, c);
+      const wide = u.cols.length >= 8;
+      const tall = u.cells.length >= 40;
+      const head = h('tr', {}, u.cols.map((name, c) => {
+        const el = input(q, name, (v) => { u.cols[c] = v; }, { type: 'text', class: 'qe-gridcell', placeholder: 'Name', 'aria-label': `Column ${c + 1}`, 'data-r': '-1', 'data-c': c, maxlength: '40', autocomplete: 'off', spellcheck: 'false' });
+        el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const next = cell(0, c); if (next) next.focus(); } });
+        return h('th', {}, h('div', { class: 'qe-cell' }, el,
+          h('button', { class: 'qe-tool', type: 'button', text: '✕', title: 'Remove column', 'aria-label': `Remove column ${c + 1}`, tabindex: '-1', disabled: u.cols.length <= 1,
+            onclick: () => edit(() => { u.cols.splice(c, 1); u.cells.forEach((row) => row.splice(c, 1)); }) })));
+      }), h('td', { class: 'qe-grid-side' }, h('button', { class: 'btn small', type: 'button', text: 'Add column', disabled: wide,
+        onclick: () => edit(() => { u.cols.push(''); u.cells.forEach((row) => row.push({ v: '', given: false })); }, -1, u.cols.length) })));
+      const body = u.cells.map((row, r) => h('tr', {}, row.map((cl, c) => {
+        const td = h('td', { class: cl.given ? 'given' : '' });
+        const el = input(q, cl.v, (v) => { cl.v = v; }, { type: 'text', class: 'qe-gridcell', 'aria-label': `${u.cols[c] || `Column ${c + 1}`}, row ${r + 1}`, 'data-r': r, 'data-c': c, autocomplete: 'off', spellcheck: 'false' });
+        // Enter goes down the column, like a spreadsheet, and adds a row at the bottom.
+        el.addEventListener('keydown', (e) => {
+          if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey) return;
+          e.preventDefault();
+          if (cell(r + 1, c)) cell(r + 1, c).focus(); else if (!tall) addRow(r + 1, c);
+        });
+        // A block copied from a spreadsheet fills the cells from here.
+        el.addEventListener('paste', (e) => {
+          const text = (e.clipboardData.getData('text') || '').replace(/\r/g, '').replace(/\n+$/, '');
+          if (!/[\t\n]/.test(text)) return;
+          e.preventDefault();
+          edit(() => text.split('\n').forEach((line, i) => {
+            if (r + i >= 40) return;
+            while (u.cells.length <= r + i) u.cells.push(u.cols.map(() => ({ v: '', given: false })));
+            line.split('\t').forEach((v, k) => { if (u.cells[r + i][c + k]) u.cells[r + i][c + k].v = v.trim(); });
+          }), r, c);
+        });
+        const given = h('input', { type: 'checkbox', checked: cl.given, title: 'Given to students', 'aria-label': `Given to students: ${u.cols[c] || `column ${c + 1}`}, row ${r + 1}`, tabindex: '-1' });
+        given.addEventListener('change', () => { cl.given = given.checked; td.classList.toggle('given', cl.given); touch(q); });
+        td.append(h('div', { class: 'qe-cell' }, el, given));
+        return td;
+      }), h('td', { class: 'qe-grid-side' }, h('button', { class: 'qe-tool', type: 'button', text: '✕', title: 'Remove row', 'aria-label': `Remove row ${r + 1}`, tabindex: '-1', disabled: u.cells.length <= 1,
+        onclick: () => edit(() => u.cells.splice(r, 1)) }))));
+      return [h('div', { class: 'field' }, codeHead(q, 'Code (optional)'), code),
+        h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'Table, with the correct values' }),
+          h('div', { class: 'qe-grid-wrap' }, h('table', { class: 'qe-grid' }, h('thead', {}, head), h('tbody', {}, body))),
+          h('div', { class: 'qe-line' },
+            h('button', { class: 'btn small', type: 'button', text: 'Add row', disabled: tall, onclick: () => addRow(u.cells.length, 0) }),
+            h('span', { class: 't-small t-muted', text: 'Tick a cell to give it to students already filled in.' })))];
+    }
+
+    function fillEditor(q) {
+      const u = q._ui;
+      const list = h('div', { class: 'qe-blanks' });
+      const note = h('p', { class: 't-small t-muted' });
+      const label = h('span', { class: 'field-label', text: 'Accepted answers for each blank, one per line' });
+      function renderBlanks() {
+        const lines = [];
+        (q.code || '').split('\n').forEach((line) => { for (let k = countBlanks(line); k > 0; k--) lines.push(line.trim()); });
+        list.replaceChildren(...u.blanks.map((text, k) => {
+          const ta = area(q, text, (v) => { u.blanks[k] = v; }, { rows: 1, class: 'input qe-area qe-mono', 'aria-label': `Accepted answers for blank ${k + 1}`, autocomplete: 'off' });
+          return h('div', { class: 'qe-blank' }, h('span', { class: 'qe-row-n', text: String(k + 1) }), h('div', { class: 'qe-stack qe-tight' }, h('code', { class: 't-small t-muted qe-blank-line', text: lines[k] || '' }), ta));
+        }));
+        list.querySelectorAll('textarea').forEach(grow);
+        label.hidden = !u.blanks.length;
+        note.hidden = !!u.blanks.length;
+        note.textContent = 'Type ___ where students fill something in, or select the code to hide and press Blank.';
+      }
+      const code = area(q, q.code, (v) => { u.blanks = realign(q.code || '', v, u.blanks); q.code = v; renderBlanks(); },
+        codeAttrs(6, { id: 'qe-code', placeholder: 'int total = ___;\nfor (int n : nums) {\n    total ___ n;\n}' }));
+      codeKeys(code);
+      // Write working code, then turn pieces of it into blanks: the piece becomes the blank's answer.
+      const makeBlank = () => {
+        const start = code.selectionStart;
+        const text = code.value.slice(start, code.selectionEnd).trim();
+        const k = countBlanks(code.value.slice(0, start));
+        insert(code, '___');
+        if (text && u.blanks[k] === '') { u.blanks[k] = text; renderBlanks(); touch(q); }
+      };
+      const run = check(q, u.run, 'Grade by running tests', (v) => { u.run = v; if (v && !q.mode) q.mode = 'method'; renderPane(); });
+      return {
+        after: renderBlanks,
+        nodes: [
+          h('div', { class: 'field' }, codeHead(q, 'Code', null, h('button', { class: 'qe-tool', type: 'button', text: 'Blank', title: 'Turn the selected code into a blank', tabindex: '-1', onclick: makeBlank })), code, note),
+          h('div', { class: 'field' }, label, list),
+          run,
+          u.run ? h('p', { class: 't-small t-muted', text: 'Any blanks that make the tests pass earn credit. The code has to be the whole class, as students write it in a code question.' }) : null],
+      };
+    }
+
+    // ---------- code questions, and fill questions graded by running ----------
     function codeEditor(q) {
       const u = q._ui;
+      const fill = q.type === 'fill';
+      const from = fill ? 'your answers for the blanks' : 'the reference solution';
       const isClass = q.mode === 'class';
-      const langs = h('div', { class: 'qe-line' }, Object.entries(LANGS).map(([l, name]) => check(q, q.languages.includes(l), name, (v) => {
+      const langs = fill ? null : h('div', { class: 'qe-line' }, Object.entries(LANGS).map(([l, name]) => check(q, q.languages.includes(l), name, (v) => {
         q.languages = Object.keys(LANGS).filter((x) => (x === l ? v : q.languages.includes(x)));
         if (!q.languages.length) q.languages = [l === 'java' ? 'python' : 'java'];
         renderPane();
@@ -731,7 +970,7 @@
       const notes = { sample: h('p', { class: 't-small qe-note' }), hidden: h('p', { class: 't-small qe-note' }) };
       const tests = (kind, rows, placeholder) => area(q, u[kind], (v) => { u[kind] = v; }, { rows, placeholder, class: 'input qe-area qe-mono qe-code', 'data-tests': kind });
       const starters = [];
-      const refs = q.languages.map((l) => {
+      const refs = (fill ? [] : q.languages).map((l) => {
         const ta = area(q, (q.reference || {})[l], (v) => { q.reference = Object.assign({}, q.reference, { [l]: v }); }, { rows: 8, class: 'input qe-area qe-mono qe-code' });
         codeKeys(ta);
         const btn = h('button', { class: 'btn small', type: 'button', text: 'Insert the starter code', onclick: () => {
@@ -743,34 +982,25 @@
         starters.push({ ta, btn });
         return h('div', { class: 'qe-ref' }, field(`Reference solution (${LANGS[l]})`, ta), h('div', {}, btn));
       });
-      q.rubric = q.rubric || [];
-      const worth = h('span', { class: 't-small t-muted' });
-      const addRubric = () => { q.rubric.push({ text: '', points: 1 }); touch(q); renderPane(); const all = pane.querySelectorAll('.qe-rubric input[type=text]'); all[all.length - 1].focus(); };
-      const rub = q.rubric.map((r, k) => {
-        const text = input(q, r.text, (v) => { r.text = v; }, { type: 'text', placeholder: 'Uses private instance variables' });
-        text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); addRubric(); } });
-        return h('div', { class: 'qe-choice' }, text,
-          input(q, r.points, (v) => { r.points = v; }, { type: 'number', min: '0', step: '0.5', class: 'input t-points', 'aria-label': 'Points' }),
-          xBtn('Remove rubric item', () => { q.rubric.splice(k, 1); touch(q); renderPane(); }));
-      });
+      const rubric = fill ? null : rubricEditor(q, 'Uses private instance variables');
 
       const tick = () => {
         const r = readCode(q);
-        const hasRef = q.languages.some((l) => ((q.reference || {})[l] || '').trim());
+        const hasRef = fill || q.languages.some((l) => ((q.reference || {})[l] || '').trim());
         shapeNote.textContent = r.shapeErrors.join('\n') || `Types: int, long, double, boolean, string, any of them with [], int[][], list<int>, list<string>${isClass ? ', void' : ''}`;
         shapeNote.classList.toggle('t-error', !!r.shapeErrors.length);
         for (const kind of ['sample', 'hidden']) {
           const p = r[kind];
           const open = isClass ? 0 : p.tests.filter((t) => t.expected === undefined).length;
           notes[kind].textContent = p.errors.map((e) => e[0].toUpperCase() + e.slice(1)).join('\n')
-            || (p.tests.length ? `${plural(p.tests.length, 'test')}${open && hasRef ? `, ${open} filled in by the reference solution when you save` : ''}` : '');
+            || (p.tests.length ? `${plural(p.tests.length, 'test')}${open && hasRef ? `, ${open} filled in from ${from} when you save` : ''}` : '');
           notes[kind].classList.toggle('t-error', !!p.errors.length);
         }
         for (const s of starters) { s.btn.hidden = !!s.ta.value.trim(); s.btn.disabled = !r.shape; }
-        worth.textContent = q.rubric.some((x) => x.text.trim()) && r.rubric < Number(q.points) ? `Tests are worth ${Number(q.points) - r.rubric} of ${q.points}` : '';
+        if (rubric) rubric.worth.textContent = q.rubric.some((x) => x.text.trim()) && r.rubric < Number(q.points) ? `Tests are worth ${Number(q.points) - r.rubric} of ${q.points}` : '';
       };
 
-      const setup = h('div', { class: 'qe-stack' },
+      const shape = [
         h('div', { class: 'qe-line' }, mode, langs),
         isClass
           ? [h('div', { class: 'qe-pair' },
@@ -778,19 +1008,19 @@
             field('Constructor', input(q, u.ctor, (v) => { u.ctor = v; }, Object.assign({}, mono, { placeholder: '(owner: string, balance: double)' })))),
           field('Methods, one per line', area(q, u.methods, (v) => { u.methods = v; }, { rows: 3, class: 'input qe-area qe-mono', placeholder: 'deposit(amount: double): void\ngetBalance(): double' }))]
           : field('Signature', input(q, u.sig, (v) => { u.sig = v; }, Object.assign({}, mono, { placeholder: 'countVowels(s: string): int' }))),
-        shapeNote,
+        shapeNote];
+      const testFields = [
         field('Sample tests (students can run these)', tests('sample', 2, isClass ? 'new BankAccount("Ava", 100.0)\ndeposit(50.0)\ngetBalance() -> 150.0' : '("hello") -> 2'), notes.sample),
         field('Hidden tests (used for grading)', tests('hidden', 4, isClass ? 'a = new BankAccount("Jo", 20.0)\na.withdraw(50.0) -> false\na.getBalance() -> ?\n*2' : '("AEIOU") -> 5\n("rhythm") -> 0\n("Programming is fun") *2'), notes.hidden),
         h('p', { class: 't-muted t-small', text: isClass
-          ? 'A blank line starts the next test. -> ? takes the value from the reference solution. A line with *2 makes the test count double.'
-          : 'One test per line. Leave out -> to take the value from the reference solution. *2 at the end counts double.' }));
-      const extras = h('div', { class: 'qe-stack' },
-        h('div', { class: 'field qe-rubric' }, h('span', { class: 'field-label', text: 'Rubric (points you give by hand)' }), rub,
-          h('div', { class: 'qe-line' }, h('button', { class: 'btn small', type: 'button', text: 'Add rubric item', onclick: addRubric }), worth)),
-        h('div', { class: 'qe-line' },
-          check(q, q.compare === 'unordered', 'Array/list results can be in any order', (v) => { if (v) q.compare = 'unordered'; else delete q.compare; }),
-          isClass ? check(q, q.starter === 'empty', 'Start with an empty class', (v) => { if (v) q.starter = 'empty'; else delete q.starter; }) : null));
-      return { node: h('div', { class: 'qe-codegrid' }, setup, h('div', { class: 'qe-stack' }, refs, extras)), tick };
+          ? `A blank line starts the next test. -> ? takes the value from ${from}. A line with *2 makes the test count double.`
+          : `One test per line. Leave out -> to take the value from ${from}. *2 at the end counts double.` })];
+      const unordered = check(q, q.compare === 'unordered', 'Array/list results can be in any order', (v) => { if (v) q.compare = 'unordered'; else delete q.compare; });
+      const stack = (...kids) => h('div', { class: 'qe-stack' }, ...kids);
+      // A fill question has no reference field: what students are to write, then the tests.
+      if (fill) return { node: h('div', { class: 'qe-codegrid' }, stack(shape, unordered), stack(testFields)), tick };
+      return { tick, node: h('div', { class: 'qe-codegrid' }, stack(shape, testFields), stack(refs, rubric.node, h('div', { class: 'qe-line' }, unordered,
+        isClass ? check(q, q.starter === 'empty', 'Start with an empty class', (v) => { if (v) q.starter = 'empty'; else delete q.starter; }) : null))) };
     }
 
     // ---------- the open question ----------
@@ -799,10 +1029,10 @@
       const type = h('select', { class: 'input qe-narrow', 'aria-label': 'Type' }, Object.entries(TYPES).map(([v, t]) => h('option', { value: v, text: t, selected: q.type === v })));
       type.addEventListener('change', () => {
         const to = type.value;
-        if (q.type !== 'code' && q.type !== 'text' && to !== 'code' && to !== 'text') { // choices stay
+        if ((q.type === 'single' || q.type === 'multi') && (to === 'single' || to === 'multi')) { // choices stay
           q.answer = to === 'multi' ? (q.answer == null ? [] : [q.answer]) : q.answer.length === 1 ? q.answer[0] : null;
           q.type = to;
-        } else quiz.questions[i] = blank(to, q);
+        } else quiz.questions[i] = blank(to, Object.assign({}, q, { language: to === 'essay' || q.type === 'essay' ? null : q.language }));
         touch(quiz.questions[i]);
         renderPane();
       });
@@ -822,7 +1052,17 @@
         fields.append(field('Accepted answers, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2 })),
           check(q, q.caseSensitive, 'Capital letters count', (v) => { if (v) q.caseSensitive = true; else delete q.caseSensitive; }));
       }
-      const code = q.type === 'code' ? codeEditor(q) : null;
+      const add = (nodes) => fields.append(...nodes.filter(Boolean));
+      let fillParts = null;
+      if (q.type === 'output') add(outputEditor(q));
+      if (q.type === 'trace') add(traceEditor(q));
+      if (q.type === 'fill') { fillParts = fillEditor(q); add(fillParts.nodes); fillParts.after(); }
+      if (q.type === 'essay') {
+        const kind = h('select', { class: 'input qe-narrow' }, [['', 'Text'], ['java', 'Java code'], ['python', 'Python code']].map(([v, t]) => h('option', { value: v, text: t, selected: (q.language || '') === v })));
+        kind.addEventListener('change', () => { if (kind.value) q.language = kind.value; else delete q.language; touch(q); });
+        add([h('div', { class: 'qe-line' }, field('Students write', kind)), rubricEditor(q, 'Says == compares references').node]);
+      }
+      const code = q.type === 'code' || (q.type === 'fill' && q._ui.run) ? codeEditor(q) : null;
       paneTick = () => {
         view.replaceChildren(...studentView(q));
         const list = tried || fromServer.has(q) ? problemsOf(q) : [];
@@ -917,9 +1157,12 @@
     function addQuestion(type) {
       const cur = quiz.questions[sel];
       const like = cur && cur.type === type ? cur : null;
-      const last = quiz.questions.map((q) => q.type).lastIndexOf(type);
-      const at = like ? sel + 1 : last >= 0 ? last + 1 : quiz.questions.length;
-      const q = blank(type, like ? { id: nextId(), points: like.points, mode: like.mode, languages: like.languages && like.languages.slice() } : { id: nextId() });
+      // After the last of its kind, or else where its part belongs: multiple choice first, written answers last.
+      const order = Object.keys(TYPES);
+      const rank = order.indexOf(type);
+      let at = sel + 1;
+      if (!like) { at = 0; quiz.questions.forEach((q, i) => { if (order.indexOf(q.type) <= rank) at = i + 1; }); }
+      const q = blank(type, like ? { id: nextId(), points: like.points, mode: type === 'code' ? like.mode : null, languages: like.languages && like.languages.slice(), language: like.language } : { id: nextId() });
       if (like && like.shuffleChoices === false) q.shuffleChoices = false;
       quiz.questions.splice(at, 0, q);
       removed = null;
@@ -955,8 +1198,8 @@
     // ---------- save ----------
     // Puts what the server said on the questions it's about; returns the lines that fit nowhere.
     function placeServerError(message) {
-      const head = 'The reference solution check failed:\n- ';
-      const items = message.startsWith(head) ? message.slice(head.length).split('\n- ') : [message];
+      const head = /^The (reference solution|output) check failed:\n- /.exec(message);
+      const items = head ? message.slice(head[0].length).split('\n- ') : [message];
       const rest = [];
       for (const item of items) {
         let q = null;
@@ -1008,7 +1251,13 @@
           if (src && at === edits && src.quiz.questions.length === quiz.questions.length) {
             quiz.questions.forEach((q, i) => {
               const s = src.quiz.questions[i];
-              if (q.type !== 'code' || s.type !== 'code') return;
+              if (q.type !== s.type) return;
+              if (q.type === 'output') { // what the code printed
+                q.answer = s.answer;
+                q._ui.auto = s.answer;
+                if (i === sel) pane.querySelectorAll('textarea[data-out]').forEach((ta) => { ta.value = s.answer || ''; grow(ta); });
+              }
+              if (q.type !== 'code' && !(q.type === 'fill' && q._ui.run && s.tests)) return;
               const fresh = withUi(s)._ui;
               q._ui.sample = fresh.sample;
               q._ui.hidden = fresh.hidden;
@@ -1042,7 +1291,7 @@
 
     const title = h('input', { class: 'input qe-title', value: quiz.title || '', placeholder: 'Quiz title', 'aria-label': 'Title', maxlength: '120' });
     title.addEventListener('input', () => { quiz.title = title.value; touch(); });
-    const short = { single: 'Multiple choice', multi: 'Select all', text: 'Short answer', code: 'Code' };
+    const short = { single: 'Multiple choice', multi: 'Select all', text: 'Short answer', output: 'Output', trace: 'Trace table', fill: 'Fill in blanks', code: 'Code', essay: 'Written' };
     const keys = [[`${MOD}Enter`, 'New question'], [`${ALT}↑ ↓`, 'Previous, next question'], [`${ALT}Shift+↑ ↓`, 'Move question'], ['Enter', 'Next choice'], [`${MOD}S`, 'Save']];
     const root = h('div', { class: 'qe' },
       h('div', { class: 'qe-bar' }, title, h('span', { class: 'qe-grow' }), status, previewBtn, saveBtn),
