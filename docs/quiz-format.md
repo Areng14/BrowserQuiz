@@ -72,16 +72,22 @@ questions together.
 | `imageAlt` | `""` | Alt text for the image |
 | `shared` | none | The `id` of a shared material this question uses |
 
-**Prompts** use a Markdown subset:
+**Prompts** (and shared material) use Markdown:
 - paragraphs (blank line between)
 - `- ` or `1. ` lists
-- `**bold**` and `*italic*`
-- `` `inline code` ``
+- `**bold**`, `*italic*`, `~~struck~~` and `` `inline code` ``
 - fenced code blocks, written ```` ```java ```` … ```` ``` ````
+- `#`, `##` and `###` headings, `> ` quotes, and `---` for a line across
+- tables: `| a | b |`, then `| --- | --- |`, then one row per line. `:---:` centers a column and
+  `---:` right-aligns it. Write `\|` for a `|` inside a cell
+- LaTeX math: `$x^2$` in a line, and `$$\frac{n(n+1)}{2}$$` on a line of its own (or `$$`,
+  lines, `$$`). A `$` only starts math when the next character isn't a space, so "costs $5 and
+  $10" stays text. Write `\$` for a dollar sign
+- `\` before a character keeps it as is: `\*not italic\*`
 
-No HTML, links, headings or tables.
+Links show as their text only, so nothing on the page leads out of the quiz. No HTML.
 
-**Choices** are one line each, with only `` `inline code` ``, `**bold**` and `*italic*`.
+**Choices** are one line each, with inline Markdown only: code, bold, italic, struck and `$math$`.
 Code that needs several lines goes in the prompt, labeled (Segment I, Segment II, …),
 and the choices refer to the labels.
 

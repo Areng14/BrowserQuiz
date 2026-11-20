@@ -839,6 +839,11 @@
           tool('I', `Italic (${MOD}I)`, () => wrap(ta, '*', '*'), 'i'),
           tool('Code', `Inline code (${MOD}E)`, () => wrap(ta, '`', '`')),
           tool('Code block', 'A block of code on its own lines', fence),
+          tool('Math', 'LaTeX math: $x^2$ in a line, $$...$$ on its own lines', () => wrap(ta, '$', '$')),
+          tool('Table', 'A table: | cells | split | by bars |, with a --- line under the header', () => {
+            const s = ta.value.slice(0, ta.selectionStart);
+            insert(ta, `${s && !s.endsWith('\n') ? '\n\n' : s && !s.endsWith('\n\n') ? '\n' : ''}| Column | Column |\n| --- | --- |\n|  |  |\n`);
+          }),
           q.image ? null : tool('Image', 'Add an image. You can also paste or drop one into the prompt', () => file.click())),
         ta, file), imageEditor(q, file)];
     }

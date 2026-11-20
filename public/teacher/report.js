@@ -35,6 +35,7 @@
     status.textContent = many ? `${data.students.length} students` : '';
     printBtn.disabled = true;
     await highlight(root); // colors first, so the PDF has them
+    await window.BQ.md.ready(); // and typeset math
     printBtn.disabled = false;
   }
 

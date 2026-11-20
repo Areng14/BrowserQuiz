@@ -68,6 +68,17 @@
 .r-view .r-shared-title { margin: 0 0 4px; font-weight: 700; }
 .r-view .r-shared pre { background: var(--bg); }
 .r-view .r-prompt ul, .r-view .r-prompt ol { margin: 4px 0; padding-left: 22px; }
+.r-view .md-h { margin: 10px 0 4px; font-weight: 700; line-height: 1.3; }
+.r-view h3.md-h { font-size: 1.1em; }
+.r-view h4.md-h, .r-view h5.md-h { font-size: 1em; }
+.r-view blockquote { margin: 6px 0; padding: 2px 0 2px 12px; border-left: 3px solid var(--line); color: var(--ink-2); }
+.r-view blockquote p { margin: 2px 0; }
+.r-view hr { margin: 8px 0; border: 0; border-top: 1px solid var(--line); }
+.r-view .md-table { max-width: 100%; margin: 6px 0; overflow-x: auto; }
+.r-view .md-table table { border-collapse: collapse; font-size: 14px; }
+.r-view .md-table th, .r-view .md-table td { padding: 5px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.r-view .md-table th { font-weight: 600; background: var(--soft); }
+.r-view .math.display { display: block; margin: 6px 0; overflow-x: auto; overflow-y: hidden; text-align: center; }
 .r-view .r-img { display: block; max-width: 100%; max-height: 320px; margin: 8px 0; border-radius: 6px; }
 .r-view .r-label { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink-2); }
 .r-view .r-none { margin: 0; color: var(--ink-2); font-style: italic; }
