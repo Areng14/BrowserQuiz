@@ -26,6 +26,7 @@ import queue
 import resource
 import shutil
 import signal
+import socket
 import struct
 import subprocess
 import sys
@@ -409,4 +410,16 @@ if __name__ == "__main__":
     print(f"runner: sandbox ok (landlock ABI {ABI}{', signal scoping on' if ABI >= 6 else ''}), {SLOTS} slots, listening on :{PORT}", flush=True)
     # PID 1 ignores SIGTERM unless it asks for it, so docker stop would wait 10s and SIGKILL.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
-    ThreadingHTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+    # Listen on IPv6 and IPv4 both: Railway's private network can be IPv6-only.
+    class DualStackServer(ThreadingHTTPServer):
+        address_family = socket.AF_INET6
+
+        def server_bind(self):
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+            super().server_bind()
+
+    try:
+        server = DualStackServer(("::", PORT), Handler)
+    except OSError:  # no IPv6 in this container
+        server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    server.serve_forever()
