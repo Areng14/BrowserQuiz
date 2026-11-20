@@ -5,7 +5,7 @@ const { q, tx } = require('./db');
 const store = require('./store');
 const { loadQuizFile, QuizError } = require('./quizfile');
 const { checkReferences, runnerConfigured, runnerHealthy } = require('./coderun');
-const { totals, questionScore, gradeAttempt, answerReport } = require('./grade');
+const { totals, questionScore, codeAnswered, gradeAttempt, answerReport } = require('./grade');
 const { submit, hashSid } = require('./student');
 const { HttpError, clientIp, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
 
@@ -73,6 +73,49 @@ function liveRow(student, a, quiz) {
     },
   };
 }
+
+// Printable report for one student: every question with their answer and the correct one.
+// Nothing about integrity goes in here, so a teacher can hand it to the student. Code questions show
+// the reference solution, not the hidden tests.
+function studentReport(quiz, a, name) {
+  const t = a.result ? totals(a.result, quiz, a.answers) : null;
+  const res = a.result || {};
+  return {
+    name,
+    submittedAt: a.submittedAt,
+    score: t ? t.score : null,
+    max: quiz.questions.reduce((sum, qq) => sum + qq.points, 0),
+    unfinished: t ? t.pending + t.failed : quiz.questions.length,
+    questions: quiz.questions.map((qq) => {
+      const ans = a.answers ? a.answers[qq.id] : undefined;
+      const sc = a.result ? questionScore(qq, res, a.answers) : null;
+      const row = { id: qq.id, type: qq.type, mode: qq.mode || null, prompt: qq.prompt, image: qq.image || null, imageAlt: qq.imageAlt || '', points: sc && sc.state === 'done' ? sc.points : null, max: qq.points };
+      if (qq.type === 'single' || qq.type === 'multi') {
+        const perm = a.layout && a.layout.perms ? a.layout.perms[qq.id] : null;
+        row.choices = qq.choices;
+        row.picked = (ans == null ? [] : [].concat(ans)).map((i) => (perm ? perm[i] : i));
+        row.correct = [].concat(qq.answer);
+      } else if (qq.type === 'text') {
+        row.answer = ans == null || String(ans).trim() === '' ? null : String(ans);
+        row.accepted = qq.answer;
+      } else {
+        const lang = ans && qq.languages.includes(ans.language) ? ans.language : qq.languages[0];
+        const c = (res.code || {})[qq.id];
+        const m = (res.manual || {})[qq.id] || {};
+        row.language = lang;
+        row.answer = codeAnswered(qq, ans) ? ans.code : null;
+        row.compileError = row.answer && c && c.compileError ? c.compileError : null;
+        const refs = qq.reference || {};
+        row.referenceLanguage = refs[lang] ? lang : Object.keys(refs)[0] || null;
+        row.reference = row.referenceLanguage ? refs[row.referenceLanguage] : null;
+        row.rubric = (qq.rubric || []).map((r) => ({ text: r.text, points: r.points, met: !!(m.rubric && m.rubric[r.id]) }));
+        row.rubricGraded = !!m.reviewed;
+      }
+      return row;
+    }),
+  };
+}
+const reportQuiz = (quiz, quizId) => ({ id: quizId, title: quiz.title, language: quiz.language || null });
 
 module.exports = function teacherRoutes(r) {
   r.post('/api/t/login', async (req, res) => {
@@ -277,6 +320,35 @@ module.exports = function teacherRoutes(r) {
       deadline: a.deadline, timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
       totals: totals(a.result, quiz, a.answers), answers: answerReport(quiz, a), events, mouse: mouse.slice(-3000), ip: a.ip, userAgent: a.userAgent,
     });
+  });
+
+  r.get('/api/t/attempts/:id/report', (req, res, p) => {
+    requireTeacher(req);
+    const a = store.getAttempt(p.id);
+    if (!a) throw new HttpError(404, 'not_found');
+    const run = q('SELECT * FROM runs WHERE id = ?').get(a.runId);
+    const quiz = store.getQuiz(run.quiz_id);
+    const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
+    json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: [studentReport(quiz, a, student ? student.name : '')] });
+  });
+
+  r.get('/api/t/runs/:id/report', (req, res, p) => {
+    requireTeacher(req);
+    const run = q('SELECT * FROM runs WHERE id = ?').get(p.id);
+    if (!run) throw new HttpError(404, 'not_found');
+    const quiz = store.getQuiz(run.quiz_id);
+    const rows = q(`SELECT attempts.id, roster_students.name FROM attempts JOIN roster_students ON roster_students.id = attempts.student_id
+      WHERE attempts.run_id = ? AND attempts.archived = 0 AND attempts.status = 'submitted' ORDER BY roster_students.name`).all(run.id);
+    json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: rows.map((x) => studentReport(quiz, store.getAttempt(x.id), x.name)) });
+  });
+
+  // Quiz images for the report page (students get theirs through /asset/ with their own cookie).
+  r.get('/api/t/quizzes/:id/asset', (req, res, p) => {
+    requireTeacher(req);
+    const rel = new URL(req.url, 'http://x').searchParams.get('path') || '';
+    const row = q('SELECT mime, bytes FROM assets WHERE quiz_id = ? AND path = ?').get(p.id, rel);
+    if (!row) throw new HttpError(404, 'not_found');
+    send(res, 200, Buffer.from(row.bytes), { 'Content-Type': row.mime, 'Cache-Control': 'private, max-age=3600', 'Content-Security-Policy': "default-src 'none'; sandbox" });
   });
 
   r.post('/api/t/attempts/:id/:action', async (req, res, p) => {

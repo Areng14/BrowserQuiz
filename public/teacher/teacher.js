@@ -191,9 +191,12 @@
     let lastDetail = '';
     const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => act(`/api/t/runs/${runId}/admit-all`) });
     const exportLink = h('a', { class: 'btn', href: `/api/t/runs/${runId}/export.csv`, download: true, text: 'Export CSV' });
-    exportLink.style.display = 'inline-flex';
-    exportLink.style.alignItems = 'center';
-    exportLink.style.textDecoration = 'none';
+    const classReport = h('a', { class: 'btn', href: `/teacher/report.html?run=${encodeURIComponent(runId)}`, target: '_blank', rel: 'noopener', text: 'Class report' });
+    for (const a of [exportLink, classReport]) {
+      a.style.display = 'inline-flex';
+      a.style.alignItems = 'center';
+      a.style.textDecoration = 'none';
+    }
 
     async function act(path, body) {
       try { await post(path, body); } catch (e) { alertBox(e.message); }
@@ -289,6 +292,7 @@
           d.integrity !== 'invalidated' ? h('button', { class: 'btn small', type: 'button', text: 'Invalidate', onclick: () => { const note = prompt('Why? (kept in the log)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } }) : null,
           d.status === 'active' && d.deadline ? h('span', { class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }) : null,
           d.status === 'active' && d.deadline ? h('button', { class: 'btn small', type: 'button', text: '+5 min', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } }) : null,
+          d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
           d.status === 'submitted' ? h('button', { class: 'btn small', type: 'button', text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) }) : null,
           h('button', { class: 'btn small', type: 'button', text: 'Close', onclick: () => { selected = null; detail.replaceChildren(); refresh(); } })),
         d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}. The student wasn't told.` }) : null,
@@ -338,7 +342,7 @@
         h('section', { class: 't-section' },
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
           howTo,
-          h('div', { class: 't-row' }, admitAll, toggle, lockBtn, exportLink),
+          h('div', { class: 't-row' }, admitAll, toggle, lockBtn, exportLink, classReport),
           failedBox),
         h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
           h('thead', {}, h('tr', {}, ['Student', 'Status', 'Integrity', 'Strikes', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score', ''].map((x) => h('th', { text: x })))),

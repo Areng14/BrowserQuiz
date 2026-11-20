@@ -1,0 +1,50 @@
+/* Printable student report. Always light: it's meant for paper and PDF. */
+:root { color-scheme: light; --ink: #16181d; --ink-2: #5b6170; --line: #d9dce3; --soft: #f4f5f8; --good: #1b7f45; --bad: #c0352d; --accent: #2257d6; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #fff; color: var(--ink); font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+.r-bar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--soft); border-bottom: 1px solid var(--line); }
+.r-btn { font: inherit; font-weight: 600; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+.r-btn:disabled { opacity: 0.5; cursor: default; }
+#r-status { color: var(--ink-2); font-size: 14px; }
+main { max-width: 800px; margin: 0 auto; padding: 24px 16px 48px; }
+.r-student + .r-student { margin-top: 48px; padding-top: 32px; border-top: 2px solid var(--line); }
+.r-head h1 { margin: 0; font-size: 22px; }
+.r-meta { display: flex; flex-wrap: wrap; gap: 4px 24px; margin: 6px 0 20px; color: var(--ink-2); }
+.r-meta b { color: var(--ink); }
+.r-q { padding: 14px 0; border-top: 1px solid var(--line); }
+.r-qhead { display: flex; gap: 12px; align-items: baseline; font-size: 13px; color: var(--ink-2); margin-bottom: 4px; }
+.r-qhead .n { font-weight: 700; color: var(--ink); font-size: 15px; }
+.r-qhead .pts { margin-left: auto; font-weight: 600; color: var(--ink); white-space: nowrap; }
+.r-prompt p { margin: 4px 0; }
+.r-prompt ul, .r-prompt ol { margin: 4px 0; padding-left: 22px; }
+.r-img { display: block; max-width: 100%; max-height: 320px; margin: 6px 0; }
+.r-label { margin: 10px 0 2px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.r-choices { list-style: none; margin: 8px 0 0; padding: 0; }
+.r-choices li { display: flex; gap: 10px; align-items: baseline; padding: 4px 8px; border-left: 3px solid transparent; }
+.r-choices li.correct { border-left-color: var(--good); }
+.r-choices li.wrong { border-left-color: var(--bad); }
+.r-mark { width: 1.2em; flex: none; font-weight: 700; }
+.r-choices .correct .r-mark { color: var(--good); }
+.r-choices .wrong .r-mark { color: var(--bad); }
+.r-tag { margin-left: auto; font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.r-text { margin: 0; }
+.r-none { color: var(--ink-2); font-style: italic; margin: 0; }
+.r-ok { color: var(--good); }
+.r-no { color: var(--bad); }
+pre, code { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+code { font-size: 0.92em; background: var(--soft); padding: 0 3px; border-radius: 3px; }
+pre { margin: 4px 0; padding: 10px 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; font-size: 12.5px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+pre code { background: none; padding: 0; }
+pre.r-err { color: var(--bad); }
+.r-rubric { list-style: none; margin: 4px 0; padding: 0; }
+.r-empty { color: var(--ink-2); }
+@media print {
+  .r-bar { display: none; }
+  main { max-width: none; padding: 0; }
+  .r-student + .r-student { margin-top: 0; padding-top: 0; border-top: 0; break-before: page; }
+  .r-q { break-inside: avoid; }
+  .r-q.code { break-inside: auto; } /* long code would leave half-empty pages */
+  .r-qhead, .r-label { break-after: avoid; }
+  pre { break-inside: auto; }
+  @page { margin: 16mm 14mm; }
+}

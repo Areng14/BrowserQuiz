@@ -157,4 +157,4 @@ function answerReport(quiz, a) {
   });
 }
 
-module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, answerReport };
+module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, codeAnswered, answerReport };
