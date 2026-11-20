@@ -11,3 +11,6 @@ public/vendor/
 demo/dist/
 __pycache__/
 *.pyc
+
+# Quizzes hold answer keys
+quizzes/

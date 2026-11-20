@@ -181,7 +181,10 @@ function buildJob(q, lang, code, tests) {
   const marker = `@@BQ@@${crypto.randomBytes(12).toString('hex')}@@`;
   const files = {};
   if (lang === 'java') {
-    files[q.mode === 'class' ? `${q.class.name}.java` : 'Solution.java'] = code;
+    // The directions promise common imports. Same line as the student's first line, so compile errors
+    // still point at the line numbers they see. (Duplicate imports are legal Java; a package line isn't.)
+    const imports = /^\s*package\s/m.test(code) ? '' : 'import java.util.*; import java.util.function.*; import java.util.stream.*; ';
+    files[q.mode === 'class' ? `${q.class.name}.java` : 'Solution.java'] = imports + code;
     files['BQJ.java'] = BQJ_SRC;
     if (q.support && q.support.java) files['Support.java'] = q.support.java;
     files['BQMain.java'] = javaMain(q, tests, marker);

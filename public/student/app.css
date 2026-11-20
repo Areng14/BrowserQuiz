@@ -17,6 +17,7 @@
   --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --gut-l: max(16px, env(safe-area-inset-left, 0px));
   --gut-r: max(16px, env(safe-area-inset-right, 0px));
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -70,6 +71,13 @@
 }
 .select { width: auto; min-height: 34px; padding: 0 8px; font-size: 14px; }
 .input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+/* The browser's own "Choose File" button ignores the theme unless styled. */
+.input[type="file"] { box-sizing: border-box; height: 40px; padding: 4px 5px; font-size: 14px; color: var(--ink-2); }
+.input[type="file"]::file-selector-button {
+  margin-right: 12px; padding: 4px 12px; font: 600 14px var(--font);
+  color: var(--ink); background: var(--soft); border: 1px solid var(--line); border-radius: 5px; cursor: pointer;
+}
+.input[type="file"]::file-selector-button:hover { border-color: var(--ink-2); }
 .input.mono { font-family: var(--mono); }
 .input.picked { border-color: var(--accent); }
 .field { display: grid; gap: 6px; }
