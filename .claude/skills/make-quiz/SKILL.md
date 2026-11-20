@@ -58,8 +58,9 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
 - **Short answer:** use only when there are few ways to say the answer. List every accepted
   form in `answer` (`"O(log n)"`, `"O(logn)"`).
 - **Code:**
-  - Use only the types in the spec's table. A `char` becomes a 1-character `string`;
-    objects, maps and custom types aren't supported (use class mode instead).
+  - Use only the types in the spec's table: scalars (including `char`), arrays and 2D arrays,
+    `list<...>` and `map<string|int, ...>`. Custom classes as parameters aren't supported (use
+    class mode instead). Overloads only work in Java-only class questions.
   - Write 2 simple `sample` tests that students can run, and 5–10 `hidden` tests. Only hidden
     tests are graded, so repeat the sample cases in `hidden` too. Cover:
     - empty input

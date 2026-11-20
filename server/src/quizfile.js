@@ -3,10 +3,10 @@
 // Everything that reaches the database has passed through here.
 const { readZip } = require('./zip');
 const R = require('./rubric');
+const T = require('../../public/teacher/types.js');
 
 const LIMITS = { uploadBytes: 25 * 1024 * 1024, files: 500, questions: 300, arrayLen: 1000 };
 const ASSET_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
-const VALUE_TYPES = ['int', 'long', 'double', 'boolean', 'string', 'int[]', 'long[]', 'double[]', 'boolean[]', 'string[]', 'int[][]', 'list<int>', 'list<string>'];
 const LANGS = ['java', 'python'];
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 const QID = /^[A-Za-z0-9_-]{1,40}$/;
@@ -58,24 +58,13 @@ function loadQuizFile(buf) {
 }
 
 // ---------- values ----------
-function checkValue(type, v) {
-  if (v === null) return type === 'string' || type.endsWith('[]') || type.startsWith('list<');
-  switch (type) {
-    case 'int': return Number.isInteger(v) && v >= -2147483648 && v <= 2147483647;
-    case 'long': return Number.isSafeInteger(v);
-    case 'double': return typeof v === 'number' && Number.isFinite(v);
-    case 'boolean': return typeof v === 'boolean';
-    case 'string': return typeof v === 'string' && v.length <= 10000;
-    default: break;
-  }
-  if (!Array.isArray(v) || v.length > LIMITS.arrayLen) return false;
-  return v.every((x) => checkValue(elementType(type), x));
-}
-function elementType(type) {
-  if (type === 'int[][]') return 'int[]';
-  if (type.endsWith('[]')) return type.slice(0, -2);
-  if (type.startsWith('list<')) return type.slice(5, -1);
-  return null;
+// Types and their values live in public/teacher/types.js, shared with the quiz maker.
+const { checkValue, elementType } = T;
+function checkType(where, t, allowVoid) {
+  const c = T.canon(t);
+  if (allowVoid && c === 'void') return c;
+  if (!T.isValueType(c)) fail(`${where}: "${t}" isn't a type. Use ${T.HELP}${allowVoid ? ', or void' : ''}.`);
+  return c;
 }
 
 function checkIdent(where, name) {
@@ -89,8 +78,7 @@ function checkParams(where, params) {
     const name = checkIdent(`${where}.params[${i}]`, p && p.name);
     if (seen.has(name)) fail(`${where}: duplicate parameter "${name}".`);
     seen.add(name);
-    if (!VALUE_TYPES.includes(p.type)) fail(`${where}.params[${i}]: type must be one of ${VALUE_TYPES.join(', ')}.`);
-    return { name, type: p.type };
+    return { name, type: checkType(`${where}.params[${i}]`, p.type) };
   });
 }
 // A big argument made in the sandbox instead of written out: { "range": [start, stop, step?] } is
@@ -116,7 +104,7 @@ function checkRange(where, type, v) {
 function checkArgs(where, params, args) {
   if (!Array.isArray(args) || args.length !== params.length) fail(`${where}: needs ${params.length} argument(s).`);
   return args.map((a, i) => {
-    if (isRange(a)) return checkRange(`${where}: argument ${i + 1}`, params[i].type, a);
+    if (isRange(a) && !T.mapTypes(params[i].type)) return checkRange(`${where}: argument ${i + 1}`, params[i].type, a);
     if (!checkValue(params[i].type, a)) fail(`${where}: argument ${i + 1} isn't a valid ${params[i].type}.`);
     return a;
   });
@@ -268,23 +256,27 @@ function normalizeCode(where, q) {
   const out = { mode, languages };
   if (mode === 'method') {
     const s = q.signature || {};
-    out.signature = { name: checkIdent(`${where}.signature.name`, s.name), params: checkParams(`${where}.signature`, s.params || []), returns: s.returns };
-    if (!VALUE_TYPES.includes(s.returns)) fail(`${where}.signature.returns must be one of ${VALUE_TYPES.join(', ')}.`);
+    out.signature = { name: checkIdent(`${where}.signature.name`, s.name), params: checkParams(`${where}.signature`, s.params || []), returns: checkType(`${where}.signature.returns`, s.returns) };
   } else {
     const c = q.class || {};
     const name = checkIdent(`${where}.class.name`, c.name);
     if (!/^[A-Z]/.test(name)) fail(`${where}.class.name should start with a capital letter.`);
     const methods = Array.isArray(c.methods) ? c.methods : [];
+    // Overloads (two methods with one name) are Java only: Python has no overloading.
     const seen = new Set();
     out.class = {
       name,
       constructor: checkParams(`${where}.class.constructor`, c.constructor || []),
       methods: methods.map((m, i) => {
         const mn = checkIdent(`${where}.class.methods[${i}].name`, m && m.name);
-        if (seen.has(mn)) fail(`${where}: method "${mn}" is listed twice (overloads aren't supported).`);
-        seen.add(mn);
-        if (m.returns !== 'void' && !VALUE_TYPES.includes(m.returns)) fail(`${where}.class.methods[${i}].returns must be void or one of ${VALUE_TYPES.join(', ')}.`);
-        return { name: mn, params: checkParams(`${where}.class.methods[${i}]`, m.params || []), returns: m.returns };
+        const params = checkParams(`${where}.class.methods[${i}]`, m.params || []);
+        const key = `${mn}(${params.map((p) => p.type).join(',')})`;
+        if (seen.has(key)) fail(`${where}: method ${key} is listed twice.`);
+        if ([...seen].some((k) => k.startsWith(mn + '(')) && languages.includes('python')) {
+          fail(`${where}: there are two methods named ${mn}. Overloads only work when the question is Java only (Python has no overloading).`);
+        }
+        seen.add(key);
+        return { name: mn, params, returns: checkType(`${where}.class.methods[${i}].returns`, m.returns, true) };
       }),
     };
   }
@@ -326,12 +318,18 @@ function normalizeCode(where, q) {
         lastObj = as;
         return { new: s.new, as };
       }
-      const m = out.class.methods.find((x) => x.name === (s && s.call));
-      if (!m) fail(`${sw}: call must name one of the class's methods.`);
+      // With overloads, the first method of that name whose parameters fit the arguments.
+      const named = out.class.methods.map((x, k) => [x, k]).filter(([x]) => x.name === (s && s.call));
+      if (!named.length) fail(`${sw}: call must name one of the class's methods.`);
+      const fits = (x) => Array.isArray(s.args || []) && (s.args || []).length === x.params.length
+        && (s.args || []).every((a, j) => (isRange(a) && RANGE_TYPES.includes(x.params[j].type)) || checkValue(x.params[j].type, a));
+      const [m, mi] = named.find(([x]) => fits(x)) || named[0];
       const on = s.on == null ? lastObj : String(s.on);
       if (!on || !objects.has(on)) fail(`${sw}: there's no object "${on}" to call ${m.name} on yet.`);
+      if (named.length > 1 && !fits(m)) fail(`${sw}: no ${m.name} method takes these arguments.`);
       const args = checkArgs(sw, m.params, s.args || []);
       const step = { call: m.name, args, on };
+      if (named.length > 1) step.m = mi;
       if (s.expect !== undefined) {
         if (m.returns === 'void') fail(`${sw}: ${m.name} returns nothing, so it can't have expect.`);
         if (!checkValue(m.returns, s.expect)) fail(`${sw}: expect isn't a valid ${m.returns}.`);
@@ -396,4 +394,4 @@ function normalizeCode(where, q) {
   return out;
 }
 
-module.exports = { loadQuizFile, normalizeQuiz, checkValue, elementType, isRange, rangeLength, QuizError, VALUE_TYPES, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };
+module.exports = { loadQuizFile, normalizeQuiz, checkValue, elementType, isRange, rangeLength, QuizError, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };

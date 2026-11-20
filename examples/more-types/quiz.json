@@ -1,0 +1,496 @@
+{
+  "title": "More types: chars, maps, 2D arrays, overloads",
+  "questions": [
+    {
+      "id": "freq",
+      "type": "code",
+      "points": 4,
+      "languages": [
+        "java",
+        "python"
+      ],
+      "prompt": "Return how many times each word appears in `words`.",
+      "signature": {
+        "name": "freq",
+        "params": [
+          {
+            "name": "words",
+            "type": "string[]"
+          }
+        ],
+        "returns": "map<string, int>"
+      },
+      "tests": {
+        "sample": [
+          {
+            "args": [
+              [
+                "a",
+                "b",
+                "a"
+              ]
+            ],
+            "expected": {
+              "a": 2,
+              "b": 1
+            }
+          }
+        ],
+        "hidden": [
+          {
+            "args": [
+              [
+                "a",
+                "b",
+                "a"
+              ]
+            ]
+          },
+          {
+            "args": [
+              []
+            ]
+          },
+          {
+            "args": [
+              [
+                "x",
+                "x",
+                "x",
+                "y"
+              ]
+            ]
+          }
+        ]
+      },
+      "reference": {
+        "java": "class Solution {\n    public HashMap<String, Integer> freq(String[] words) {\n        HashMap<String, Integer> m = new HashMap<>();\n        for (String w : words) m.put(w, m.getOrDefault(w, 0) + 1);\n        return m;\n    }\n}\n",
+        "python": "class Solution:\n    def freq(self, words):\n        m = {}\n        for w in words:\n            m[w] = m.get(w, 0) + 1\n        return m\n"
+      }
+    },
+    {
+      "id": "invert",
+      "type": "code",
+      "points": 3,
+      "languages": [
+        "java",
+        "python"
+      ],
+      "prompt": "Swap the keys and values of `m`.",
+      "signature": {
+        "name": "invert",
+        "params": [
+          {
+            "name": "m",
+            "type": "map<int,string>"
+          }
+        ],
+        "returns": "map<string,int>"
+      },
+      "tests": {
+        "sample": [
+          {
+            "args": [
+              {
+                "1": "one",
+                "2": "two"
+              }
+            ],
+            "expected": {
+              "one": 1,
+              "two": 2
+            }
+          }
+        ],
+        "hidden": [
+          {
+            "args": [
+              {
+                "1": "one",
+                "-5": "minus five"
+              }
+            ]
+          },
+          {
+            "args": [
+              {}
+            ]
+          }
+        ]
+      },
+      "reference": {
+        "java": "class Solution {\n    public HashMap<String, Integer> invert(HashMap<Integer, String> m) {\n        HashMap<String, Integer> r = new HashMap<>();\n        for (Map.Entry<Integer, String> e : m.entrySet()) r.put(e.getValue(), e.getKey());\n        return r;\n    }\n}\n",
+        "python": "class Solution:\n    def invert(self, m):\n        return {v: k for k, v in m.items()}\n"
+      }
+    },
+    {
+      "id": "firstUpper",
+      "type": "code",
+      "points": 2,
+      "languages": [
+        "java",
+        "python"
+      ],
+      "prompt": "Return the first uppercase letter in `s`, or `'?'` if there isn't one.",
+      "signature": {
+        "name": "firstUpper",
+        "params": [
+          {
+            "name": "s",
+            "type": "string"
+          }
+        ],
+        "returns": "char"
+      },
+      "tests": {
+        "sample": [
+          {
+            "args": [
+              "helLo"
+            ],
+            "expected": "L"
+          }
+        ],
+        "hidden": [
+          {
+            "args": [
+              "helLo"
+            ]
+          },
+          {
+            "args": [
+              "none"
+            ]
+          },
+          {
+            "args": [
+              "'Quote"
+            ]
+          }
+        ]
+      },
+      "reference": {
+        "java": "class Solution {\n    public char firstUpper(String s) {\n        for (char c : s.toCharArray()) if (Character.isUpperCase(c)) return c;\n        return '?';\n    }\n}\n",
+        "python": "class Solution:\n    def firstUpper(self, s):\n        for c in s:\n            if c.isupper():\n                return c\n        return '?'\n"
+      }
+    },
+    {
+      "id": "vowels",
+      "type": "code",
+      "points": 2,
+      "languages": [
+        "java",
+        "python"
+      ],
+      "prompt": "Return the vowels in `letters`, in order.",
+      "signature": {
+        "name": "vowels",
+        "params": [
+          {
+            "name": "letters",
+            "type": "char[]"
+          },
+          {
+            "name": "extra",
+            "type": "char"
+          }
+        ],
+        "returns": "list<char>"
+      },
+      "tests": {
+        "sample": [
+          {
+            "args": [
+              [
+                "h",
+                "e",
+                "y",
+                "o"
+              ],
+              "y"
+            ],
+            "expected": [
+              "e",
+              "y",
+              "o"
+            ]
+          }
+        ],
+        "hidden": [
+          {
+            "args": [
+              [
+                "a",
+                "b"
+              ],
+              "z"
+            ]
+          },
+          {
+            "args": [
+              [],
+              "'"
+            ]
+          }
+        ]
+      },
+      "reference": {
+        "java": "class Solution {\n    public ArrayList<Character> vowels(char[] letters, char extra) {\n        ArrayList<Character> r = new ArrayList<>();\n        for (char c : letters) if (\"aeiou\".indexOf(c) >= 0 || c == extra) r.add(c);\n        return r;\n    }\n}\n",
+        "python": "class Solution:\n    def vowels(self, letters, extra):\n        return [c for c in letters if c in 'aeiou' or c == extra]\n"
+      }
+    },
+    {
+      "id": "transpose",
+      "type": "code",
+      "points": 3,
+      "languages": [
+        "java",
+        "python"
+      ],
+      "prompt": "Return the transpose of `m`.",
+      "signature": {
+        "name": "transpose",
+        "params": [
+          {
+            "name": "m",
+            "type": "double[][]"
+          }
+        ],
+        "returns": "double[][]"
+      },
+      "tests": {
+        "sample": [
+          {
+            "args": [
+              [
+                [
+                  1.5,
+                  2
+                ],
+                [
+                  3,
+                  4
+                ]
+              ]
+            ],
+            "expected": [
+              [
+                1.5,
+                3
+              ],
+              [
+                2,
+                4
+              ]
+            ]
+          }
+        ],
+        "hidden": [
+          {
+            "args": [
+              [
+                [
+                  1,
+                  2,
+                  3
+                ]
+              ]
+            ]
+          },
+          {
+            "args": [
+              [
+                [
+                  0.25
+                ],
+                [
+                  0.5
+                ]
+              ]
+            ]
+          }
+        ]
+      },
+      "reference": {
+        "java": "class Solution {\n    public double[][] transpose(double[][] m) {\n        double[][] t = new double[m[0].length][m.length];\n        for (int i = 0; i < m.length; i++) for (int j = 0; j < m[0].length; j++) t[j][i] = m[i][j];\n        return t;\n    }\n}\n",
+        "python": "class Solution:\n    def transpose(self, m):\n        return [list(r) for r in zip(*m)]\n"
+      }
+    },
+    {
+      "id": "means",
+      "type": "code",
+      "points": 2,
+      "languages": [
+        "java",
+        "python"
+      ],
+      "prompt": "Return the average of each list, or 0.0 for an empty one.",
+      "signature": {
+        "name": "means",
+        "params": [
+          {
+            "name": "xs",
+            "type": "map<string,list<int>>"
+          }
+        ],
+        "returns": "map<string,double>"
+      },
+      "tests": {
+        "sample": [
+          {
+            "args": [
+              {
+                "a": [
+                  1,
+                  2
+                ],
+                "b": []
+              }
+            ],
+            "expected": {
+              "a": 1.5,
+              "b": 0.0
+            }
+          }
+        ],
+        "hidden": [
+          {
+            "args": [
+              {
+                "x": [
+                  5
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "reference": {
+        "java": "class Solution {\n    public HashMap<String, Double> means(HashMap<String, ArrayList<Integer>> xs) {\n        HashMap<String, Double> r = new HashMap<>();\n        for (String k : xs.keySet()) {\n            ArrayList<Integer> v = xs.get(k);\n            double s = 0;\n            for (int x : v) s += x;\n            r.put(k, v.isEmpty() ? 0.0 : s / v.size());\n        }\n        return r;\n    }\n}\n",
+        "python": "class Solution:\n    def means(self, xs):\n        return {k: (sum(v) / len(v) if v else 0.0) for k, v in xs.items()}\n"
+      }
+    },
+    {
+      "id": "calc",
+      "type": "code",
+      "points": 3,
+      "languages": [
+        "java"
+      ],
+      "mode": "class",
+      "prompt": "Write `Calculator` with three `add` methods: two ints, two doubles, two Strings (joined).",
+      "class": {
+        "name": "Calculator",
+        "constructor": [],
+        "methods": [
+          {
+            "name": "add",
+            "params": [
+              {
+                "name": "a",
+                "type": "int"
+              },
+              {
+                "name": "b",
+                "type": "int"
+              }
+            ],
+            "returns": "int"
+          },
+          {
+            "name": "add",
+            "params": [
+              {
+                "name": "a",
+                "type": "double"
+              },
+              {
+                "name": "b",
+                "type": "double"
+              }
+            ],
+            "returns": "double"
+          },
+          {
+            "name": "add",
+            "params": [
+              {
+                "name": "a",
+                "type": "string"
+              },
+              {
+                "name": "b",
+                "type": "string"
+              }
+            ],
+            "returns": "string"
+          }
+        ]
+      },
+      "tests": {
+        "sample": [
+          {
+            "steps": [
+              {
+                "new": []
+              },
+              {
+                "call": "add",
+                "args": [
+                  2,
+                  3
+                ],
+                "expect": 5
+              },
+              {
+                "call": "add",
+                "args": [
+                  "a",
+                  "b"
+                ],
+                "expect": "ab"
+              }
+            ]
+          }
+        ],
+        "hidden": [
+          {
+            "steps": [
+              {
+                "new": []
+              },
+              {
+                "call": "add",
+                "args": [
+                  2,
+                  3
+                ],
+                "check": true
+              },
+              {
+                "call": "add",
+                "args": [
+                  1.5,
+                  2.25
+                ],
+                "check": true
+              },
+              {
+                "call": "add",
+                "args": [
+                  "x",
+                  "y"
+                ],
+                "check": true
+              }
+            ]
+          }
+        ]
+      },
+      "reference": {
+        "java": "public class Calculator {\n    public int add(int a, int b) { return a + b; }\n    public double add(double a, double b) { return a + b; }\n    public String add(String a, String b) { return a + b; }\n}\n"
+      }
+    }
+  ],
+  "timeLimitMin": 30
+}

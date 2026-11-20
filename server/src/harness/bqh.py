@@ -14,6 +14,8 @@ def _enc(v):
         return v if math.isfinite(v) else str(v)
     if isinstance(v, (list, tuple)):
         return [_enc(x) for x in v]
+    if isinstance(v, dict):  # keys become strings, as in JSON
+        return {str(k): _enc(x) for k, x in v.items()}
     return str(v)
 
 
@@ -24,7 +26,10 @@ def _out(o):
 
 
 def _gen(v):
-    # {"range": [start, stop, step]}: a big test argument made here instead of written out
+    # {"range": [start, stop, step]}: a big test argument made here instead of written out.
+    # {"__map__": [[key, value], ...]}: a dict, with int keys kept as ints.
+    if isinstance(v, dict) and "__map__" in v:
+        return {k: x for k, x in v["__map__"]}
     if isinstance(v, dict) and "range" in v:
         return list(range(*v["range"]))
     return v

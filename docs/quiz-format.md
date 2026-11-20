@@ -172,18 +172,28 @@ Grading uses the hidden tests, which students never see.
 
 Every parameter and return value uses one of these:
 
-| Type | Java | Python |
-| --- | --- | --- |
-| `int`, `long` | `int`, `long` | `int` |
-| `double` | `double` | `float` |
-| `boolean` | `boolean` | `bool` |
-| `string` | `String` | `str` |
-| `int[]`, `long[]`, `double[]`, `boolean[]`, `string[]` | arrays | `list[...]` |
-| `int[][]` | `int[][]` | `list[list[int]]` |
-| `list<int>`, `list<string>` | `ArrayList<Integer>`, `ArrayList<String>` | `list[int]`, `list[str]` |
+| Type | Java | Python | JSON value |
+| --- | --- | --- | --- |
+| `int`, `long` | `int`, `long` | `int` | `3` |
+| `double` | `double` | `float` | `2.5` |
+| `boolean` | `boolean` | `bool` | `true` |
+| `string` | `String` | `str` | `"hi"` |
+| `char` | `char` | `str` (one letter) | `"a"` |
+| any of those with `[]` or `[][]`, like `char[]`, `string[][]` | arrays | `list[...]` | `[1, 2]`, `[[1], [2, 3]]` |
+| `list<int>`, `list<string>`, `list<double>`, ... (any of the first six) | `ArrayList<Integer>`, ... | `list[...]` | `[1, 2]` |
+| `map<string, V>`, `map<int, V>` | `HashMap<String, V>`, ... | `dict[str, V]`, ... | `{"a": 1}`, `{"3": "c"}` |
 
-Class methods can also return `void`. Doubles match within a relative 1e-6. Overloaded
-methods aren't supported. Names can't be keywords in either language.
+A map's values (`V`) can be any of the first six types, `list<int>` or `list<string>`. Map keys
+are strings in JSON, so an `int` key is written `"3"`. Maps match when they have the same keys
+and values, in any order. Doubles match within a relative 1e-6. Custom classes as parameters
+or return values aren't supported: use class mode to have students write a class.
+
+Class methods can also return `void`. A class can have overloads (two methods with one name and
+different parameters) when the question is Java only, since Python has no overloading. A test
+step calls the first one listed whose parameters fit its arguments. Names can't be keywords in
+either language.
+
+In the quiz maker, write map values like Python: `{"a": 1}` or `{3: "c"}`.
 
 ### What students write
 

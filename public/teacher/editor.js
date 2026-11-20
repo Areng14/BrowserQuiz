@@ -12,7 +12,7 @@
   };
   const BLANK = /_{3,}/g;
   const countBlanks = (code) => (String(code || '').match(BLANK) || []).length;
-  const VALUE_TYPES = ['int', 'long', 'double', 'boolean', 'string', 'int[]', 'long[]', 'double[]', 'boolean[]', 'string[]', 'int[][]', 'list<int>', 'list<string>'];
+  const BT = window.BQTypes; // value types, shared with the server (types.js)
   const LANGS = { java: 'Java', python: 'Python' };
 
   // ---------- text formats ----------
@@ -21,6 +21,7 @@
   function jsonish(src) {
     let out = '';
     let inStr = false;
+    const lastSig = () => out.trimEnd().slice(-1);
     for (let i = 0; i < src.length; i++) {
       const c = src[i];
       if (inStr) {
@@ -29,6 +30,13 @@
         continue;
       }
       if (c === '"') { inStr = true; out += c; continue; }
+      // map keys that are numbers: {1: "one"} -> {"1": "one"}
+      const key = /^(-?\d+)\s*:/.exec(src.slice(i));
+      if (key && (lastSig() === '{' || lastSig() === ',') && /[{,]/.test(lastSig())) {
+        out += `"${key[1]}":`;
+        i += key[0].length - 1;
+        continue;
+      }
       // range(0, 1000000) or range(0, 1000000, 2): a big array made when the test runs
       const rng = /^range\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*(?:,\s*(-?\d+)\s*)?\)/.exec(src.slice(i));
       if (rng && !/\w/.test(src[i - 1] || '')) {
@@ -98,29 +106,24 @@
   }
 
   // ---------- types ----------
-  function checkValue(type, v) {
-    if (v === null) return type === 'string' || type.endsWith('[]') || type.startsWith('list<');
-    if (type === 'int') return Number.isInteger(v) && v >= -2147483648 && v <= 2147483647;
-    if (type === 'long') return Number.isSafeInteger(v);
-    if (type === 'double') return typeof v === 'number' && Number.isFinite(v);
-    if (type === 'boolean') return typeof v === 'boolean';
-    if (type === 'string') return typeof v === 'string';
-    return Array.isArray(v) && v.every((x) => checkValue(elementType(type), x));
-  }
-  function elementType(type) {
-    if (type === 'int[][]') return 'int[]';
-    if (type.endsWith('[]')) return type.slice(0, -2);
-    return type.slice(5, -1);
-  }
+  const checkValue = BT.checkValue;
+  const elementType = BT.elementType;
   // Values written back as text. Doubles keep their ".0" so 100.0 doesn't turn into 100.
   const isRange = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && Array.isArray(v.range);
   const RANGE_TYPES = ['int[]', 'long[]', 'list<int>'];
   function show(type, v) {
-    if (isRange(v)) return `range(${v.range[0]}, ${v.range[1]}${v.range[2] && v.range[2] !== 1 ? ', ' + v.range[2] : ''})`;
+    const kv = type ? BT.mapTypes(type) : null;
+    if (isRange(v) && !kv) return `range(${v.range[0]}, ${v.range[1]}${v.range[2] && v.range[2] !== 1 ? ', ' + v.range[2] : ''})`;
     if (type === 'double' && Number.isInteger(v)) return v.toFixed(1);
-    if (Array.isArray(v) && type && VALUE_TYPES.includes(type) && elementType(type)) return `[${v.map((x) => show(elementType(type), x)).join(', ')}]`;
+    if (kv && v && typeof v === 'object' && !Array.isArray(v)) {
+      return `{${Object.entries(v).map(([k, x]) => `${kv[0] === 'int' ? k : fmt(k)}: ${show(kv[1], x)}`).join(', ')}}`;
+    }
+    if (Array.isArray(v) && type && BT.isValueType(type) && elementType(type)) return `[${v.map((x) => show(elementType(type), x)).join(', ')}]`;
     return fmt(v);
   }
+  // A range only stands in for int[], long[] and list<int>; anything else must be a real value.
+  const argOk = (type, a) => (isRange(a) && RANGE_TYPES.includes(type)) || checkValue(type, a);
+  const argProblem = (type, a) => (isRange(a) && !BT.mapTypes(type) ? `range only works for ${RANGE_TYPES.join(', ')}` : `${fmt(a)} isn't ${an(type)}`);
   const showArgs = (params, args) => (args || []).map((a, i) => show(params && params[i] ? params[i].type : '', a)).join(', ');
 
   // ---------- signatures ----------
@@ -128,21 +131,32 @@
     const m = /^\s*([A-Za-z_]\w*)?\s*\(([^)]*)\)\s*(?::\s*(\S.*?))?\s*$/.exec(text || '');
     if (!m) throw new Error('write it like countVowels(s: string): int');
     const seen = new Set();
-    const params = m[2].trim() ? m[2].split(',').map((p) => {
-      const pm = /^\s*([A-Za-z_]\w*)\s*:\s*(\S+)\s*$/.exec(p);
+    // commas inside map<string, int> don't separate parameters
+    const parts = [];
+    let depth = 0;
+    let cur = '';
+    for (const ch of m[2]) {
+      if (ch === '<') depth++;
+      if (ch === '>') depth--;
+      if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; } else cur += ch;
+    }
+    if (cur.trim() || parts.length) parts.push(cur);
+    const params = parts.map((p) => {
+      const pm = /^\s*([A-Za-z_]\w*)\s*:\s*(\S.*?)\s*$/.exec(p);
       if (!pm) throw new Error(`"${p.trim()}" should be name: type`);
-      if (!VALUE_TYPES.includes(pm[2])) throw new Error(`${pm[2]} isn't a type. Use ${VALUE_TYPES.join(', ')}`);
+      const type = BT.canon(pm[2]);
+      if (!BT.isValueType(type)) throw new Error(`${pm[2]} isn't a type. Use ${BT.HELP}`);
       if (seen.has(pm[1])) throw new Error(`two parameters are named ${pm[1]}`);
       seen.add(pm[1]);
-      return { name: pm[1], type: pm[2] };
-    }) : [];
-    return { name: m[1] || '', params, returns: m[3] || '' };
+      return { name: pm[1], type };
+    });
+    return { name: m[1] || '', params, returns: m[3] ? BT.canon(m[3]) : '' };
   }
   const sigText = (name, params, returns) => `${name || ''}(${(params || []).map((p) => `${p.name}: ${p.type}`).join(', ')})${returns ? `: ${returns}` : ''}`;
   function fullSig(text, allowVoid) {
     const s = parseSig(text);
     if (!s.name || !s.returns) throw new Error(`write it like ${allowVoid ? 'deposit(amount: double): void' : 'countVowels(s: string): int'}`);
-    if (!VALUE_TYPES.includes(s.returns) && !(allowVoid && s.returns === 'void')) throw new Error(`${s.returns} isn't a type. Use ${VALUE_TYPES.join(', ')}${allowVoid ? ', void' : ''}`);
+    if (!BT.isValueType(s.returns) && !(allowVoid && s.returns === 'void')) throw new Error(`${s.returns} isn't a type. Use ${BT.HELP}${allowVoid ? ', or void' : ''}`);
     return s;
   }
 
@@ -175,8 +189,8 @@
     p.tests.forEach((t, i) => {
       const bad = (msg) => p.errors.push(`${p.at[i]}: ${msg}`);
       if (t.args.length !== need) return bad(`needs ${need} value${need === 1 ? '' : 's'} in the ( ), one for each parameter`);
-      const k = t.args.findIndex((a, j) => (isRange(a) ? !RANGE_TYPES.includes(sig.params[j].type) : !checkValue(sig.params[j].type, a)));
-      if (k >= 0) return bad(isRange(t.args[k]) ? `range only works for ${RANGE_TYPES.join(', ')}` : `${fmt(t.args[k])} isn't ${an(sig.params[k].type)}`);
+      const k = t.args.findIndex((a, j) => !argOk(sig.params[j].type, a));
+      if (k >= 0) return bad(argProblem(sig.params[k].type, t.args[k]));
       if (t.speed && !hasRef) return bad('speed tests are timed against the reference solution, so write one');
       if (t.expected === undefined) { if (!hasRef) bad('add -> and the expected value, or write a reference solution'); return undefined; }
       if (!checkValue(sig.returns, t.expected)) bad(`${fmt(t.expected)} isn't ${an(sig.returns)}`);
@@ -240,17 +254,21 @@
   function checkClassTests(p, C, hasRef) {
     const argsOk = (params, args, bad) => {
       if (args.length !== params.length) { bad(`needs ${params.length} value${params.length === 1 ? '' : 's'} in the ( )`); return; }
-      const k = args.findIndex((a, j) => !checkValue(params[j].type, a));
-      if (k >= 0) bad(`${fmt(args[k])} isn't ${an(params[k].type)}`);
+      const k = args.findIndex((a, j) => !argOk(params[j].type, a));
+      if (k >= 0) bad(argProblem(params[k].type, args[k]));
     };
+    const fits = (params, args) => args.length === params.length && args.every((a, j) => argOk(params[j].type, a));
     p.tests.forEach((t, i) => {
       const objects = new Set();
       let last = null;
       t.steps.forEach((s, k) => {
         const bad = (msg) => p.errors.push(`${p.at[i][k]}: ${msg}`);
         if (s.new) { last = s.as || 'a'; objects.add(last); argsOk(C.constructor, s.new, bad); return; }
-        const m = C.methods.find((x) => x.name === s.call);
-        if (!m) { bad(`${s.call} isn't one of the methods`); return; }
+        // overloads: the first method of that name whose parameters fit
+        const named = C.methods.filter((x) => x.name === s.call);
+        if (!named.length) { bad(`${s.call} isn't one of the methods`); return; }
+        const m = named.find((x) => fits(x.params, s.args)) || named[0];
+        if (named.length > 1 && !fits(m.params, s.args)) { bad(`no ${s.call} method takes these values`); return; }
         const on = s.on || last;
         if (!on) { bad(`start the test with new ${C.name}(…)`); return; }
         if (!objects.has(on)) { bad(`there's no object named ${on}`); return; }
@@ -263,14 +281,9 @@
   }
 
   // ---------- what students start with (the server builds the same) ----------
-  const JAVA_TYPE = { string: 'String', 'string[]': 'String[]', 'list<int>': 'ArrayList<Integer>', 'list<string>': 'ArrayList<String>' };
-  const PY_TYPE = {
-    int: 'int', long: 'int', double: 'float', boolean: 'bool', string: 'str', void: 'None',
-    'int[]': 'list[int]', 'long[]': 'list[int]', 'double[]': 'list[float]', 'boolean[]': 'list[bool]', 'string[]': 'list[str]',
-    'int[][]': 'list[list[int]]', 'list<int>': 'list[int]', 'list<string>': 'list[str]',
-  };
+  const PY_TYPE = new Proxy({}, { get: (_, t) => BT.pyType(t) });
   function starterCode(shape, lang, emptyClass) {
-    const jt = (t) => JAVA_TYPE[t] || t;
+    const jt = (t) => BT.javaType(t);
     const jp = (ps) => ps.map((p) => `${jt(p.type)} ${p.name}`).join(', ');
     const pp = (ps) => ps.map((p) => `, ${p.name}: ${PY_TYPE[p.type]}`).join('');
     if (shape.signature) {
@@ -375,12 +388,16 @@
         if (!/^[A-Z]\w*$/.test(name)) throw new Error('Class name: one word that starts with a capital letter');
         let ctor;
         try { ctor = parseSig(u.ctor.trim() ? u.ctor : '()').params; } catch (e) { throw new Error(`Constructor: ${e.message.replace('countVowels(s: string): int', '(owner: string, balance: double)')}`); }
+        // Two methods can share a name (overloads) when the question is Java only.
         const seen = new Set();
+        const javaOnly = q.languages.length === 1 && q.languages[0] === 'java';
         const methods = u.methods.split('\n').filter((l) => l.trim()).map((l, i) => {
           let m;
           try { m = fullSig(l, true); } catch (e) { throw new Error(`Methods, line ${i + 1}: ${e.message}`); }
-          if (seen.has(m.name)) throw new Error(`Methods: ${m.name} is listed twice`);
-          seen.add(m.name);
+          const key = `${m.name}(${m.params.map((x) => x.type).join(',')})`;
+          if (seen.has(key)) throw new Error(`Methods: ${key} is listed twice`);
+          if ([...seen].some((k) => k.startsWith(m.name + '(')) && !javaOnly) throw new Error(`Methods: two methods are named ${m.name}. That only works when the question is Java only`);
+          seen.add(key);
           return m;
         });
         r.shape = { class: { name, constructor: ctor, methods } };
@@ -1060,7 +1077,7 @@
       const tick = () => {
         const r = readCode(q);
         const hasRef = fill || q.languages.some((l) => ((q.reference || {})[l] || '').trim());
-        shapeNote.textContent = r.shapeErrors.join('\n') || `Types: int, long, double, boolean, string, any of them with [], int[][], list<int>, list<string>${isClass ? ', void' : ''}`;
+        shapeNote.textContent = r.shapeErrors.join('\n') || `Types: ${BT.HELP}${isClass ? ', void' : ''}`;
         shapeNote.classList.toggle('t-error', !!r.shapeErrors.length);
         for (const kind of ['sample', 'hidden']) {
           const p = r[kind];

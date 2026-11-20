@@ -5,20 +5,17 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { elementType, isRange, rangeLength } = require('./quizfile');
+const T = require('../../public/teacher/types.js');
 
 const BQJ_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'BQJ.java'), 'utf8');
 const BQH_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bqh.py'), 'utf8');
 
-const JAVA_TYPE = {
-  int: 'int', long: 'long', double: 'double', boolean: 'boolean', string: 'String', void: 'void',
-  'int[]': 'int[]', 'long[]': 'long[]', 'double[]': 'double[]', 'boolean[]': 'boolean[]', 'string[]': 'String[]',
-  'int[][]': 'int[][]', 'list<int>': 'ArrayList<Integer>', 'list<string>': 'ArrayList<String>',
-};
-const PY_TYPE = {
-  int: 'int', long: 'int', double: 'float', boolean: 'bool', string: 'str', void: 'None',
-  'int[]': 'list[int]', 'long[]': 'list[int]', 'double[]': 'list[float]', 'boolean[]': 'list[bool]', 'string[]': 'list[str]',
-  'int[][]': 'list[list[int]]', 'list<int>': 'list[int]', 'list<string>': 'list[str]',
-};
+const javaType = T.javaType;
+const pyType = T.pyType;
+// Boxed Java type, for generics: int -> Integer, list<int> -> ArrayList<Integer>.
+const boxed = (t) => (T.SCALARS.includes(t) ? javaType(`list<${t}>`).slice('ArrayList<'.length, -1) : javaType(t));
+// With overloads, a step names its method by position; older quizzes only by name.
+const stepMethod = (C, st) => (st.m != null && C.methods[st.m]) || C.methods.find((x) => x.name === st.call);
 
 // ---------- Java literals ----------
 function javaStr(s) {
@@ -36,9 +33,10 @@ function javaStr(s) {
   }
   return o + '"';
 }
+const charLit = (c) => "'" + String(c).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\t/g, '\\t') + "'";
 function javaLit(type, v) {
   if (v === null) return 'null';
-  if (isRange(v)) { // built in the sandbox, so a 10-million-number array isn't written out in the code
+  if (isRange(v) && !T.mapTypes(type)) { // built in the sandbox, so a 10-million-number array isn't written out in the code
     const [a, b, s] = v.range;
     return `BQJ.${type === 'long[]' ? 'rangeL' : type === 'list<int>' ? 'rangeList' : 'range'}(${a}L, ${b}L, ${s}L)`;
   }
@@ -48,12 +46,20 @@ function javaLit(type, v) {
     case 'double': return Number.isInteger(v) ? v.toFixed(1) : String(v);
     case 'boolean': return String(v);
     case 'string': return javaStr(v);
+    case 'char': return charLit(v);
     default: break;
   }
+  const kv = T.mapTypes(type);
+  if (kv) {
+    const pairs = Object.entries(v).map(([k, x]) => `${javaLit(kv[0], kv[0] === 'int' ? Number(k) : k)}, ${javaLit(kv[1], x)}`);
+    return `BQJ.<${boxed(kv[0])}, ${boxed(kv[1])}>map(${pairs.join(', ')})`;
+  }
   const e = elementType(type);
-  if (type === 'int[][]') return 'new int[][]{' + v.map((r) => (r === null ? 'null' : '{' + r.join(', ') + '}')).join(', ') + '}';
-  if (type.endsWith('[]')) return `new ${JAVA_TYPE[type]}{${v.map((x) => javaLit(e, x)).join(', ')}}`;
-  const box = e === 'int' ? 'Integer' : 'String';
+  if (type.endsWith('[][]')) {
+    return `new ${javaType(type)}{${v.map((r) => (r === null ? 'null' : '{' + r.map((x) => javaLit(e.slice(0, -2), x)).join(', ') + '}')).join(', ')}}`;
+  }
+  if (type.endsWith('[]')) return `new ${javaType(type)}{${v.map((x) => javaLit(e, x)).join(', ')}}`;
+  const box = boxed(e);
   return v.length ? `new ArrayList<${box}>(Arrays.asList(${v.map((x) => javaLit(e, x)).join(', ')}))` : `new ArrayList<${box}>()`;
 }
 
@@ -68,13 +74,19 @@ function showRange(type, v, lang) {
 }
 function show(type, v, lang) {
   if (v === null || v === undefined) return lang === 'python' ? 'None' : 'null';
-  if (isRange(v)) return showRange(type, v, lang);
+  if (isRange(v) && !T.mapTypes(type)) return showRange(type, v, lang);
   switch (type) {
     case 'string': return JSON.stringify(v);
+    case 'char': return typeof v === 'string' ? charLit(v) : JSON.stringify(v);
     case 'boolean': return lang === 'python' ? (v ? 'True' : 'False') : String(v);
     case 'double': return Number.isInteger(v) ? v.toFixed(1) : String(v);
     case 'int': case 'long': return String(v);
     default: break;
+  }
+  const kv = T.mapTypes(type);
+  if (kv && v && typeof v === 'object' && !Array.isArray(v)) {
+    const items = Object.entries(v).map(([k, x]) => [show(kv[0], kv[0] === 'int' ? Number(k) : k, lang), show(kv[1], x, lang)]);
+    return lang === 'python' ? `{${items.map(([a, b]) => `${a}: ${b}`).join(', ')}}` : `Map.of(${items.map(([a, b]) => `${a}, ${b}`).join(', ')})`;
   }
   if (!Array.isArray(v)) return JSON.stringify(v);
   const inner = v.map((x) => show(elementType(type), x, lang)).join(', ');
@@ -95,7 +107,7 @@ function callText(q, test, lang) {
       const args = s.new.map((a, i) => show(C.constructor[i].type, a, lang)).join(', ');
       return lang === 'java' ? `${C.name} ${s.as} = new ${C.name}(${args});` : `${s.as} = ${C.name}(${args})`;
     }
-    const m = C.methods.find((x) => x.name === s.call);
+    const m = stepMethod(C, s);
     const args = s.args.map((a, i) => show(m.params[i].type, a, lang)).join(', ');
     return lang === 'java' ? `${s.on}.${s.call}(${args});` : `${s.on}.${s.call}(${args})`;
   }).join('\n');
@@ -103,28 +115,28 @@ function callText(q, test, lang) {
 function expectedText(q, test, lang) {
   if (q.mode === 'method') return show(q.signature.returns, test.expected, lang);
   return test.steps.filter((s) => s.expect !== undefined)
-    .map((s) => show(q.class.methods.find((m) => m.name === s.call).returns, s.expect, lang)).join(', ');
+    .map((s) => show(stepMethod(q.class, s).returns, s.expect, lang)).join(', ');
 }
 
 // ---------- starter code ----------
 function starterCode(q, lang) {
   if (q.starter && q.starter[lang]) return q.starter[lang];
-  const jp = (ps) => ps.map((p) => `${JAVA_TYPE[p.type]} ${p.name}`).join(', ');
-  const pp = (ps) => ps.map((p) => `, ${p.name}: ${PY_TYPE[p.type]}`).join('');
+  const jp = (ps) => ps.map((p) => `${javaType(p.type)} ${p.name}`).join(', ');
+  const pp = (ps) => ps.map((p) => `, ${p.name}: ${pyType(p.type)}`).join('');
   if (q.mode === 'method') {
     const s = q.signature;
-    if (lang === 'java') return `class Solution {\n    public ${JAVA_TYPE[s.returns]} ${s.name}(${jp(s.params)}) {\n        \n    }\n}\n`;
-    return `class Solution:\n    def ${s.name}(self${pp(s.params)}) -> ${PY_TYPE[s.returns]}:\n        pass\n`;
+    if (lang === 'java') return `class Solution {\n    public ${javaType(s.returns)} ${s.name}(${jp(s.params)}) {\n        \n    }\n}\n`;
+    return `class Solution:\n    def ${s.name}(self${pp(s.params)}) -> ${pyType(s.returns)}:\n        pass\n`;
   }
   const C = q.class;
   if (q.starterStyle === 'empty') return lang === 'java' ? `public class ${C.name} {\n    \n}\n` : `class ${C.name}:\n    pass\n`;
   if (lang === 'java') {
     const body = [`    public ${C.name}(${jp(C.constructor)}) {\n    }`]
-      .concat(C.methods.map((m) => `    public ${JAVA_TYPE[m.returns]} ${m.name}(${jp(m.params)}) {\n    }`));
+      .concat(C.methods.map((m) => `    public ${javaType(m.returns)} ${m.name}(${jp(m.params)}) {\n    }`));
     return `public class ${C.name} {\n${body.join('\n\n')}\n}\n`;
   }
   const body = [`    def __init__(self${pp(C.constructor)}):\n        pass`]
-    .concat(C.methods.map((m) => `    def ${m.name}(self${pp(m.params)}) -> ${PY_TYPE[m.returns]}:\n        pass`));
+    .concat(C.methods.map((m) => `    def ${m.name}(self${pp(m.params)}) -> ${pyType(m.returns)}:\n        pass`));
   return `class ${C.name}:\n${body.join('\n\n')}\n`;
 }
 
@@ -136,7 +148,7 @@ function javaMain(q, tests, marker) {
     if (q.mode === 'method' && t.speed) {
       // Speed test: the arguments are made first, then only the calls are timed.
       const s = q.signature;
-      t.args.forEach((a, k) => L.push(`        ${JAVA_TYPE[s.params[k].type]} a${k} = ${javaLit(s.params[k].type, a)};`));
+      t.args.forEach((a, k) => L.push(`        ${javaType(s.params[k].type)} a${k} = ${javaLit(s.params[k].type, a)};`));
       L.push('        Solution sol = new Solution();', '        Object r = null;', '        long t0 = System.nanoTime();',
         `        for (int c = 0; c < ${t.calls || 1}; c++) r = sol.${s.name}(${t.args.map((_, k) => 'a' + k).join(', ')});`,
         `        BQJ.timed(${i}, r, (System.nanoTime() - t0) / 1e6);`);
@@ -153,7 +165,7 @@ function javaMain(q, tests, marker) {
           L.push(`        ${decl}o_${st.as} = new ${C.name}(${st.new.map((a, j) => javaLit(C.constructor[j].type, a)).join(', ')});`);
           return;
         }
-        const m = C.methods.find((x) => x.name === st.call);
+        const m = stepMethod(C, st);
         const call = `o_${st.on}.${st.call}(${st.args.map((a, j) => javaLit(m.params[j].type, a)).join(', ')})`;
         if (m.returns !== 'void' && (st.expect !== undefined || st.check)) L.push(`        BQJ.step(${i}, ${k}, ${call});`);
         else L.push(`        ${call};`);
@@ -169,7 +181,10 @@ function javaMain(q, tests, marker) {
 }
 
 function pyMain(q, tests, marker) {
-  const a = (v) => `bqh.args(${JSON.stringify(JSON.stringify(v))})`;
+  const a = (params, v) => `bqh.args(${JSON.stringify(JSON.stringify(v.map((x, j) => {
+    const kv = params[j] && T.mapTypes(params[j].type);
+    return kv && x && typeof x === 'object' ? { __map__: Object.entries(x).map(([k, val]) => [kv[0] === 'int' ? Number(k) : k, val]) } : x;
+  })))})`;
   const L = ['import sys', 'import time', 'sys.setrecursionlimit(10000)', 'import bqh', `bqh.M = ${JSON.stringify(marker)}`];
   if (q.support && q.support.python) {
     L.push('import builtins, support', 'for _k in dir(support):', '    if not _k.startswith("_"):', '        setattr(builtins, _k, getattr(support, _k))');
@@ -180,16 +195,16 @@ function pyMain(q, tests, marker) {
   tests.forEach((t, i) => {
     L.push(`def t${i}():`);
     if (q.mode === 'method' && t.speed) {
-      L.push(`    _a = ${a(t.args)}`, '    _s = solution.Solution()', '    _r = None', '    _t0 = time.perf_counter()',
+      L.push(`    _a = ${a(q.signature.params, t.args)}`, '    _s = solution.Solution()', '    _r = None', '    _t0 = time.perf_counter()',
         `    for _c in range(${t.calls || 1}):`, `        _r = _s.${q.signature.name}(*_a)`, `    bqh.timed(${i}, _r, (time.perf_counter() - _t0) * 1000)`);
     } else if (q.mode === 'method') {
-      L.push(`    bqh.ok(${i}, solution.Solution().${q.signature.name}(*${a(t.args)}))`);
+      L.push(`    bqh.ok(${i}, solution.Solution().${q.signature.name}(*${a(q.signature.params, t.args)}))`);
     } else {
       const C = q.class;
       t.steps.forEach((st, k) => {
-        if (st.new) { L.push(`    o_${st.as} = solution.${C.name}(*${a(st.new)})`); return; }
-        const m = C.methods.find((x) => x.name === st.call);
-        const call = `o_${st.on}.${st.call}(*${a(st.args)})`;
+        if (st.new) { L.push(`    o_${st.as} = solution.${C.name}(*${a(C.constructor, st.new)})`); return; }
+        const m = stepMethod(C, st);
+        const call = `o_${st.on}.${st.call}(*${a(m.params, st.args)})`;
         if (m.returns !== 'void' && (st.expect !== undefined || st.check)) L.push(`    bqh.step(${i}, ${k}, ${call})`);
         else L.push(`    ${call}`);
       });
@@ -251,8 +266,16 @@ function same(type, exp, got, unordered) {
   if (exp === null || got === null || got === undefined) return exp === got;
   switch (type) {
     case 'double': return typeof got === 'number' && Math.abs(exp - got) <= 1e-6 * Math.max(1, Math.abs(exp));
-    case 'int': case 'long': case 'boolean': case 'string': return got === exp;
+    case 'int': case 'long': case 'boolean': case 'string': case 'char': return got === exp;
     default: break;
+  }
+  const kv = T.mapTypes(type);
+  if (kv) { // same keys (int keys compared as numbers), same value for each
+    if (!got || typeof got !== 'object' || Array.isArray(got)) return false;
+    const norm = (o) => new Map(Object.entries(o).map(([k, x]) => [kv[0] === 'int' ? String(Number(k)) : k, x]));
+    const a = norm(exp);
+    const b = norm(got);
+    return a.size === b.size && [...a].every(([k, x]) => b.has(k) && same(kv[1], x, b.get(k), false));
   }
   if (!Array.isArray(got) || got.length !== exp.length) return false;
   const e = elementType(type);
@@ -318,7 +341,7 @@ function readResults(q, lang, tests, res, marker) {
       const rec = mine.find((r) => r.s === k);
       gotSteps[k] = rec ? rec.v : undefined;
       if (st.expect === undefined) return;
-      const m = q.class.methods.find((x) => x.name === st.call);
+      const m = stepMethod(q.class, st);
       if (!rec || !same(m.returns, st.expect, rec.v, q.compare === 'unordered')) pass = false;
     });
     return { pass, gotSteps };
@@ -338,7 +361,7 @@ function studentView(q, lang, tests, r) {
       if (res.error) got = res.error;
       else if (q.mode === 'method') got = showGot(q.signature.returns, res.got, lang);
       else {
-        got = t.steps.map((st, k) => (st.expect === undefined ? null : showGot(q.class.methods.find((m) => m.name === st.call).returns, res.gotSteps[k], lang)))
+        got = t.steps.map((st, k) => (st.expect === undefined ? null : showGot(stepMethod(q.class, st).returns, res.gotSteps[k], lang)))
           .filter((x) => x !== null).join(', ');
       }
       return { call: callText(q, t, lang), expected: expectedText(q, t, lang), got, pass: !!res.pass };
@@ -347,4 +370,4 @@ function studentView(q, lang, tests, r) {
   };
 }
 
-module.exports = { buildJob, readResults, studentView, starterCode, callText, expectedText, same, show, JAVA_TYPE, PY_TYPE, buildSnippetJob };
+module.exports = { buildJob, readResults, studentView, starterCode, callText, expectedText, same, show, javaType, pyType, buildSnippetJob };

@@ -18,6 +18,13 @@ final class BQJ {
     static int len(long a, long b, long s) { return (int) Math.max(0, s > 0 ? (b - a + s - 1) / s : (a - b - s - 1) / -s); }
     static int[] range(long a, long b, long s) { int n = len(a, b, s); int[] x = new int[n]; for (int k = 0; k < n; k++) x[k] = (int) (a + k * s); return x; }
     static long[] rangeL(long a, long b, long s) { int n = len(a, b, s); long[] x = new long[n]; for (int k = 0; k < n; k++) x[k] = a + k * s; return x; }
+    // Map test arguments: BQJ.<String, Integer>map("a", 1, "b", 2)
+    @SuppressWarnings("unchecked")
+    static <K, V> java.util.HashMap<K, V> map(Object... kv) {
+        java.util.HashMap<K, V> m = new java.util.HashMap<>();
+        for (int k = 0; k + 1 < kv.length; k += 2) m.put((K) kv[k], (V) kv[k + 1]);
+        return m;
+    }
     static java.util.ArrayList<Integer> rangeList(long a, long b, long s) {
         int n = len(a, b, s);
         java.util.ArrayList<Integer> x = new java.util.ArrayList<>(n);
@@ -62,12 +69,21 @@ final class BQJ {
         if (o instanceof Character) return str(String.valueOf(o));
         if (o instanceof Boolean || o instanceof Integer || o instanceof Long || o instanceof Short || o instanceof Byte) return String.valueOf(o);
         if (o instanceof Double || o instanceof Float) return num(((Number) o).doubleValue());
+        if (o instanceof java.util.Map) { // keys become strings, as in JSON
+            StringBuilder m = new StringBuilder("{");
+            int i = 0;
+            for (java.util.Map.Entry<?, ?> e : ((java.util.Map<?, ?>) o).entrySet()) {
+                if (i++ > 0) m.append(',');
+                m.append(str(String.valueOf(e.getKey()))).append(':').append(json(e.getValue()));
+            }
+            return m.append('}').toString();
+        }
         StringBuilder b = new StringBuilder("[");
         if (o instanceof int[]) { int[] x = (int[]) o; for (int i = 0; i < x.length; i++) { if (i > 0) b.append(','); b.append(x[i]); } }
         else if (o instanceof long[]) { long[] x = (long[]) o; for (int i = 0; i < x.length; i++) { if (i > 0) b.append(','); b.append(x[i]); } }
         else if (o instanceof double[]) { double[] x = (double[]) o; for (int i = 0; i < x.length; i++) { if (i > 0) b.append(','); b.append(num(x[i])); } }
         else if (o instanceof boolean[]) { boolean[] x = (boolean[]) o; for (int i = 0; i < x.length; i++) { if (i > 0) b.append(','); b.append(x[i]); } }
-        else if (o instanceof char[]) return str(new String((char[]) o));
+        else if (o instanceof char[]) { char[] x = (char[]) o; for (int i = 0; i < x.length; i++) { if (i > 0) b.append(','); b.append(str(String.valueOf(x[i]))); } }
         else if (o instanceof Object[]) { Object[] x = (Object[]) o; for (int i = 0; i < x.length; i++) { if (i > 0) b.append(','); b.append(json(x[i])); } }
         else if (o instanceof Iterable) { int i = 0; for (Object x : (Iterable<?>) o) { if (i++ > 0) b.append(','); b.append(json(x)); } }
         else return str(String.valueOf(o));
