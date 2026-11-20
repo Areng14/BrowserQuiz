@@ -53,9 +53,11 @@
 
   function rubricList(q) {
     const unit = (n) => `${fmtPts(n)} ${n === 1 ? 'point' : 'points'}`;
-    return [h('p', { class: 'r-label', text: q.rubricGraded ? 'Rubric' : 'Rubric (not graded yet)' }),
-      h('ul', { class: 'r-rubric' }, q.rubric.map((r) => h('li', { class: !q.rubricGraded ? '' : r.met ? 'met' : 'unmet' },
-        h('span', { class: 'r-mark', text: !q.rubricGraded ? '–' : r.met ? '✓' : '✗' }), `${r.text} (${unit(r.points)})`)))];
+    // Each item is graded on its own: some are checked by the server, the rest wait for the teacher.
+    const graded = (r) => (r.graded != null ? r.graded : !!q.rubricGraded);
+    return [h('p', { class: 'r-label', text: q.rubric.some(graded) ? 'Rubric' : 'Rubric (not graded yet)' }),
+      h('ul', { class: 'r-rubric' }, q.rubric.map((r) => h('li', { class: !graded(r) ? '' : r.met ? 'met' : 'unmet' },
+        h('span', { class: 'r-mark', text: !graded(r) ? '–' : r.met ? '✓' : '✗' }), `${r.text} (${unit(r.points)})`)))];
   }
 
   function body(quiz, q, o) {

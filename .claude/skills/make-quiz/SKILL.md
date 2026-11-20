@@ -65,7 +65,9 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
   - Always write a `reference` solution in every allowed language. Write `expected` for
     samples. Hidden tests can omit it, and the reference fills it in on upload.
   - Use `rubric` only for what tests can't check, like private fields or recursion.
-    Keep it to 1–2 points.
+    Keep it to 1–2 points. Add a `require`/`forbid` regex when a pattern can decide the
+    item, so it grades itself (see "Rubric checks" in the format spec). Keep the patterns
+    simple, and check them against the reference: the checker refuses ones it fails.
   - For `list`/array answers where order doesn't matter, set `"compare": "unordered"`.
 
 ## 3. Check it, and fix until it's clean

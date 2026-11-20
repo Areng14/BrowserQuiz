@@ -3,6 +3,7 @@
 // a quiz's reference solutions at upload time.
 const H = require('./harness');
 const { checkValue, QuizError, normOutput } = require('./quizfile');
+const { autoRubric } = require('./rubric');
 
 const MAX_CONCURRENT = Math.max(1, Number(process.env.RUNNER_CONCURRENCY) || 4);
 let active = 0;
@@ -85,7 +86,10 @@ async function gradeCode(q, answer) {
   }
   const r = await runTests(q, answer.language, answer.code, tests, { perTest: true });
   if (r.status === 'compile_error') {
-    return { status: 'done', score: 0, max, language: answer.language, compileError: r.message, tests: tests.map(() => ({ pass: false, error: "Didn't compile" })) };
+    return {
+      status: 'done', score: 0, max, language: answer.language, compileError: r.message, tests: tests.map(() => ({ pass: false, error: "Didn't compile" })),
+      rubric: autoRubric(q, answer.language, answer.code, false),
+    };
   }
   if (r.status !== 'ok') return { status: 'error', score: 0, max, message: r.message };
   const total = tests.reduce((s, t) => s + t.weight, 0);
@@ -95,6 +99,7 @@ async function gradeCode(q, answer) {
     language: answer.language,
     score: Math.round((max * passed / total) * 100) / 100,
     max,
+    rubric: autoRubric(q, answer.language, answer.code, r.tests.some((t) => t.pass)),
     tests: r.tests.map((t, i) => ({
       pass: !!t.pass,
       call: H.callText(q, tests[i], answer.language),

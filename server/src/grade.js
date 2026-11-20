@@ -77,8 +77,17 @@ function gradeAuto(quiz, layout, answers) {
 
 const rubricMax = (qq) => (qq.rubric || []).reduce((sum, r) => sum + r.points, 0);
 
-// One question's points: auto or runner score, plus rubric items the teacher ticked, unless the
-// teacher typed an override. state: done | pending | failed.
+// Rubric items the server checked on this answer: { itemId: met }. Once the teacher grades the
+// question, their ticks replace these.
+const autoMarks = (qq, result) => {
+  const c = isRun(qq) && result.code ? result.code[qq.id] : null;
+  return (c && c.status === 'done' && c.rubric) || {};
+};
+const rubricMet = (r, m, auto) => (m.reviewed ? !!(m.rubric && m.rubric[r.id]) : !!auto[r.id]);
+const rubricGraded = (r, m, auto) => !!m.reviewed || m.override != null || r.id in auto;
+
+// One question's points: auto or runner score, plus rubric items that are met (checked by the server
+// or ticked by the teacher), unless the teacher typed an override. state: done | pending | failed.
 // A code answer that's blank or untouched starter code has nothing for the teacher to review.
 function codeAnswered(qq, ans) {
   if (qq.type === 'fill') return Array.isArray(ans) && ans.some((x) => String(x || '').trim());
@@ -99,12 +108,14 @@ function questionScore(qq, result, answers) {
     const d = result.auto && result.auto.detail[qq.id];
     points = d ? d.points : 0;
   }
-  for (const r of qq.rubric || []) if (m.rubric && m.rubric[r.id]) points += r.points;
+  const auto = autoMarks(qq, result);
+  for (const r of qq.rubric || []) if (rubricMet(r, m, auto)) points += r.points;
   const ans = answers ? answers[qq.id] : undefined;
   const answered = isRun(qq) ? codeAnswered(qq, ans)
     : qq.type === 'essay' ? typeof ans === 'string' && ans.trim() !== '' : answers ? ans != null : true;
-  // Written answers always need the teacher; others only when they have rubric points.
-  const review = (rubricMax(qq) > 0 || qq.type === 'essay') && answered && !m.reviewed && m.override == null;
+  // Written answers always need the teacher; others only when a rubric item isn't checked automatically.
+  const byHand = (qq.rubric || []).some((r) => r.points > 0 && !(r.id in auto));
+  const review = state !== 'pending' && (byHand || qq.type === 'essay') && answered && !m.reviewed && m.override == null;
   if (m.override != null) { points = m.override; state = 'done'; }
   return { points: Math.round(points * 100) / 100, max: qq.points, state, review, override: m.override != null };
 }
@@ -191,7 +202,8 @@ function answerReport(quiz, a) {
       row.review = sc.review;
     }
     const m = (res.manual || {})[qq.id] || {};
-    row.rubric = (qq.rubric || []).map((r) => ({ id: r.id, text: r.text, points: r.points, checked: !!(m.rubric && m.rubric[r.id]) }));
+    const auto = autoMarks(qq, res);
+    row.rubric = (qq.rubric || []).map((r) => ({ id: r.id, text: r.text, points: r.points, checked: rubricMet(r, m, auto), auto: r.id in auto && !m.reviewed }));
     row.overridePoints = m.override != null ? m.override : null;
     return row;
   });
@@ -250,8 +262,7 @@ function studentReport(quiz, a, name, opts = {}) {
         const m = (res.manual || {})[qq.id] || {};
         Object.assign(row, {
           answer: typeof ans === 'string' && ans.trim() ? ans : null, codeLang: qq.language,
-          rubric: (qq.rubric || []).map((r) => ({ text: r.text, points: r.points, met: !!(m.rubric && m.rubric[r.id]) })),
-          rubricGraded: !!m.reviewed || m.override != null,
+          rubric: (qq.rubric || []).map((r) => ({ text: r.text, points: r.points, met: rubricMet(r, m, {}), graded: rubricGraded(r, m, {}) })),
         });
       } else {
         const lang = ans && qq.languages.includes(ans.language) ? ans.language : qq.languages[0];
@@ -263,8 +274,8 @@ function studentReport(quiz, a, name, opts = {}) {
         const refs = qq.reference || {};
         row.referenceLanguage = refs[lang] ? lang : Object.keys(refs)[0] || null;
         row.reference = row.referenceLanguage ? refs[row.referenceLanguage] : null;
-        row.rubric = (qq.rubric || []).map((r) => ({ text: r.text, points: r.points, met: !!(m.rubric && m.rubric[r.id]) }));
-        row.rubricGraded = !!m.reviewed;
+        const auto = autoMarks(qq, res);
+        row.rubric = (qq.rubric || []).map((r) => ({ text: r.text, points: r.points, met: rubricMet(r, m, auto), graded: rubricGraded(r, m, auto) }));
       }
       if (opts.forStudent && row.rubric) row.rubric = [];
       return row;

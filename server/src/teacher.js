@@ -417,11 +417,16 @@ module.exports = function teacherRoutes(r) {
     const questions = await Promise.all(quiz.questions.map(async (qq, i) => {
       if (qq.type === 'essay') return { n: i + 1, id: qq.id, points: null, max: qq.points, manual: true };
       if (!isRun(qq)) return { n: i + 1, id: qq.id, points: auto.detail[qq.id].points, max: qq.points };
-      const rubric = qq.rubric.reduce((sum, r2) => sum + r2.points, 0);
+      // rubric: points only the teacher can give (items the server can't check)
+      let rubric = qq.rubric.reduce((sum, r2) => sum + r2.points, 0);
       try {
         const ans = qq.type === 'fill' ? { language: qq.language, code: fillTemplate(qq.code, answers[qq.id] || []) } : answers[qq.id];
         const c = await gradeCode(qq, ans);
-        return { n: i + 1, id: qq.id, points: c.status === 'done' ? c.score : null, max: qq.points, rubric };
+        const auto = c.rubric || {};
+        const checked = qq.rubric.filter((r2) => r2.id in auto);
+        rubric -= checked.reduce((sum, r2) => sum + r2.points, 0);
+        const points = c.status === 'done' ? c.score + checked.reduce((sum, r2) => sum + (auto[r2.id] ? r2.points : 0), 0) : null;
+        return { n: i + 1, id: qq.id, points: points == null ? null : Math.round(points * 100) / 100, max: qq.points, rubric };
       } catch (e) {
         return { n: i + 1, id: qq.id, points: null, max: qq.points, rubric };
       }

@@ -94,7 +94,9 @@
           }
         ]
       },
-      "rubric": [{ "id": "r1", "text": "Uses private instance variables", "points": 1 }],
+      "rubric": [{ "id": "r1", "text": "Uses private instance variables", "points": 1,
+        "require": { "java": "\\bprivate\\s+[\\w<>\\[\\], ]+\\s+\\w+\\s*[;=]", "python": "self\\._\\w+\\s*=(?!=)" },
+        "forbid": { "java": "\\bpublic\\s+(static\\s+)?(final\\s+)?[\\w<>\\[\\]]+\\s+\\w+\\s*[;=]", "python": "self\\.[a-zA-Z]\\w*\\s*=(?!=)" } }],
       "reference": {
         "java": "public class BankAccount {\n    private String owner;\n    private double balance;\n\n    public BankAccount(String owner, double balance) {\n        this.owner = owner;\n        this.balance = balance;\n    }\n\n    public void deposit(double amount) {\n        balance += amount;\n    }\n\n    public boolean withdraw(double amount) {\n        if (amount > balance) return false;\n        balance -= amount;\n        return true;\n    }\n\n    public double getBalance() {\n        return balance;\n    }\n}\n",
         "python": "class BankAccount:\n    def __init__(self, owner, balance):\n        self._owner = owner\n        self._balance = balance\n\n    def deposit(self, amount):\n        self._balance += amount\n\n    def withdraw(self, amount):\n        if amount > self._balance:\n            return False\n        self._balance -= amount\n        return True\n\n    def getBalance(self):\n        return self._balance\n"

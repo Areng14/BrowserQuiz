@@ -383,6 +383,13 @@
     if (r.hidden.tests.length > 100) r.problems.push('At most 100 hidden tests.');
     const rubric = (q.rubric || []).filter((x) => x.text.trim()).reduce((s, x) => s + (Number(x.points) || 0), 0);
     if (rubric >= Number(q.points)) r.problems.push('Rubric points must add up to less than the question\'s points.');
+    (q.rubric || []).forEach((x, k) => {
+      for (const v of [x.require, x.forbid]) {
+        for (const p of typeof v === 'string' ? [v] : Object.values(v || {})) {
+          try { new RegExp(p, 'm'); } catch (e) { r.problems.push(`Rubric item ${k + 1}: the regex isn't valid (${e.message}).`); return; }
+        }
+      }
+    });
     r.rubric = rubric;
     r.problems = r.problems.map(cap);
     return r;
@@ -400,7 +407,24 @@
         o.choices = keep.map((k) => q.choices[k].trim());
         o.answer = q.type === 'multi' ? q.answer.map((x) => keep.indexOf(x)).filter((x) => x >= 0).sort((x, y) => x - y) : keep.indexOf(q.answer);
       }
-      const rubric = () => (q.rubric || []).filter((x) => x.text.trim()).map((x, k) => ({ id: x.id || `r${k + 1}`, text: x.text.trim(), points: Number(x.points) || 0 }));
+      // A pattern is one string when every language uses the same one, else { java, python }.
+      const pattern = (v) => {
+        if (typeof v === 'string') return v.trim() || undefined;
+        if (!v || typeof v !== 'object') return undefined;
+        const e = q.languages.map((l) => [l, String(v[l] || '').trim()]).filter(([, p]) => p);
+        if (!e.length) return undefined;
+        return e.length === q.languages.length && new Set(e.map(([, p]) => p)).size === 1 ? e[0][1] : Object.fromEntries(e);
+      };
+      const rubric = (checks) => (q.rubric || []).filter((x) => x.text.trim()).map((x, k) => {
+        const item = { id: x.id || `r${k + 1}`, text: x.text.trim(), points: Number(x.points) || 0 };
+        if (checks) {
+          const require = pattern(x.require);
+          const forbid = pattern(x.forbid);
+          if (require) item.require = require;
+          if (forbid) item.forbid = forbid;
+        }
+        return item;
+      });
       if (q.type === 'output' && !(q.answer || '').trim()) delete o.answer; // worked out by running the code
       if (q.type === 'trace') {
         Object.assign(o, readTrace(q));
@@ -413,7 +437,7 @@
       }
       if (q.type === 'essay') {
         if (!q.language) delete o.language;
-        o.rubric = rubric();
+        o.rubric = rubric(false);
       }
       if (q.type === 'code' || (q.type === 'fill' && q._ui.run)) {
         const r = readCode(q);
@@ -425,7 +449,7 @@
       }
       if (q.type === 'code') {
         o.reference = Object.fromEntries(Object.entries(q.reference || {}).filter(([l, v]) => q.languages.includes(l) && v.trim()));
-        o.rubric = rubric();
+        o.rubric = rubric(true);
       }
       out.questions.push(o);
     }
@@ -818,18 +842,47 @@
     }
 
     // ---------- rubric, for code and written answers ----------
-    function rubricEditor(q, placeholder) {
+    // On code questions (langs given) an item can grade itself: a regex the code must have, or must not
+    // have, one per language. Comments and strings don't count. Otherwise the teacher ticks it.
+    const PATTERN_HINT = {
+      require: { java: 'private\\s+\\w+\\s+\\w+\\s*;', python: 'self\\._\\w+\\s*=' },
+      forbid: { java: 'Arrays\\.sort', python: 'sorted\\(' },
+    };
+    function rubricEditor(q, placeholder, langs) {
       q.rubric = q.rubric || [];
       const worth = h('span', { class: 't-small t-muted' });
-      const add = () => { q.rubric.push({ text: '', points: 1 }); touch(q); renderPane(); const all = pane.querySelectorAll('.qe-rubric input[type=text]'); all[all.length - 1].focus(); };
+      const add = () => { q.rubric.push({ text: '', points: 1 }); touch(q); renderPane(); const all = pane.querySelectorAll('.qe-rubric .qe-choice input[type=text]'); all[all.length - 1].focus(); };
       const rows = q.rubric.map((r, k) => {
         const text = input(q, r.text, (v) => { r.text = v; }, { type: 'text', placeholder });
         text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey) { e.preventDefault(); add(); } });
-        return h('div', { class: 'qe-choice' }, text,
+        const line = h('div', { class: 'qe-choice' }, text,
           input(q, r.points, (v) => { r.points = v; }, { type: 'number', min: '0', step: '0.5', class: 'input t-points', 'aria-label': 'Points' }),
           xBtn('Remove rubric item', () => { q.rubric.splice(k, 1); touch(q); renderPane(); }));
+        if (!langs) return line;
+        if (r.require || r.forbid) r._auto = true;
+        const by = h('select', { class: 'input qe-narrow', 'aria-label': 'Who grades it' },
+          [['', 'You grade it'], ['auto', 'Auto']].map(([v, t]) => h('option', { value: v, text: t, selected: (r._auto ? 'auto' : '') === v })));
+        by.addEventListener('change', () => {
+          r._auto = by.value === 'auto';
+          if (!r._auto) { delete r.require; delete r.forbid; }
+          touch(q);
+          renderPane();
+          if (r._auto) { const el = pane.querySelectorAll('.qe-rubric-item')[k]; if (el) el.querySelector('.qe-pattern input').focus(); }
+        });
+        // One regex per language; either row can be left empty.
+        const patternRow = (key, label) => h('div', { class: 'qe-pattern-group' }, h('span', { class: 't-small qe-pattern-label', text: label }), langs.map((l) => {
+          const cur = r[key];
+          const el = input(q, typeof cur === 'string' ? cur : (cur && cur[l]) || '', (v) => {
+            const all = typeof r[key] === 'string' ? Object.fromEntries(langs.map((x) => [x, r[key]])) : Object.assign({}, r[key]);
+            all[l] = v;
+            r[key] = all;
+          }, { type: 'text', class: 'input qe-mono', spellcheck: 'false', autocomplete: 'off', placeholder: PATTERN_HINT[key][l], 'aria-label': `${label} (${LANGS[l]} regex)` });
+          return h('label', { class: 'qe-pattern' }, langs.length > 1 ? h('span', { class: 't-small', text: LANGS[l] }) : null, el);
+        }));
+        return h('div', { class: 'qe-rubric-item' }, line, h('div', { class: 'qe-rubric-auto' }, by),
+          r._auto ? patternRow('require', 'Code has') : null, r._auto ? patternRow('forbid', "Code doesn't have") : null);
       });
-      return { worth, node: h('div', { class: 'field qe-rubric' }, h('span', { class: 'field-label', text: 'Rubric (points you give by hand)' }), rows,
+      return { worth, node: h('div', { class: 'field qe-rubric' }, h('span', { class: 'field-label', text: 'Rubric' }), rows,
         h('div', { class: 'qe-line' }, h('button', { class: 'btn small', type: 'button', text: 'Add rubric item', onclick: add }), worth)) };
     }
 
@@ -982,7 +1035,7 @@
         starters.push({ ta, btn });
         return h('div', { class: 'qe-ref' }, field(`Reference solution (${LANGS[l]})`, ta), h('div', {}, btn));
       });
-      const rubric = fill ? null : rubricEditor(q, 'Uses private instance variables');
+      const rubric = fill ? null : rubricEditor(q, 'Uses private instance variables', q.languages);
 
       const tick = () => {
         const r = readCode(q);

@@ -162,7 +162,7 @@ Grading uses the hidden tests, which students never see.
 | `class` | — | Class mode: `{ "name", "constructor": [params], "methods": [{ "name", "params", "returns" }] }` |
 | `tests` | — | `{ "sample": [...], "hidden": [...] }`: up to 10 sample, 1 to 100 hidden |
 | `reference` | none | `{ "java": "...", "python": "..." }` correct solutions. Strongly recommended |
-| `rubric` | none | `[{ "id", "text", "points" }]` points the teacher awards by hand |
+| `rubric` | none | `[{ "id", "text", "points", "require", "forbid" }]` points for things tests can't see. See [Rubric checks](#rubric-checks) |
 | `compare` | `"ordered"` | `"unordered"`: array/list results can come back in any order |
 | `starter` | `"stubs"` | `"stubs"` (generated signatures), `"empty"` (class mode: bare class), or `{ "java": "...", "python": "..." }` |
 | `support` | none | `{ "java": "...", "python": "..." }` extra code compiled with the student's (helper classes) |
@@ -224,8 +224,35 @@ A test can appear in both `sample` and `hidden`.
 ### Scoring
 
 The code part is worth `points` minus the rubric points. Students earn the share of hidden
-test weight they pass. The teacher ticks rubric items in the dashboard. Rubric points must
-total less than `points`.
+test weight they pass. Rubric items with a check (below) grade themselves; the teacher ticks
+the rest in the dashboard. Rubric points must total less than `points`.
+
+### Rubric checks
+
+A rubric item on a code question can grade itself with a regex:
+
+- `"require"`: the code must match it
+- `"forbid"`: the code must not match it
+
+Use one pattern for every language, or `{ "java": "...", "python": "..." }`. Comments and
+the inside of strings are removed before matching, so `// private` doesn't count. Patterns
+match per line (`^` and `$` are line starts and ends) and are case-sensitive.
+
+```json
+"rubric": [
+  { "text": "Uses private instance variables", "points": 1,
+    "require": { "java": "\\bprivate\\s+[\\w<>\\[\\], ]+\\s+\\w+\\s*[;=]", "python": "self\\._\\w+\\s*=(?!=)" },
+    "forbid": { "java": "\\bpublic\\s+(static\\s+)?(final\\s+)?[\\w<>\\[\\]]+\\s+\\w+\\s*[;=]", "python": "self\\.[a-zA-Z]\\w*\\s*=(?!=)" } },
+  { "text": "Doesn't sort with a library call", "points": 1, "forbid": { "java": "Arrays\\.sort|Collections\\.sort", "python": "sorted\\(|\\.sort\\(" } }
+]
+```
+
+- Checked items only give points to code that compiles and passes at least one hidden test.
+  An empty class doesn't earn "doesn't use Arrays.sort".
+- Every check must pass on the reference solutions, or the upload is refused.
+- A language with no pattern leaves that item to the teacher. So does a written answer: checks
+  only work on code questions.
+- The teacher can still change any item in the dashboard. Once they save, their ticks count.
 
 ### Reference solutions
 

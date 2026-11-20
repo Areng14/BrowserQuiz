@@ -36,7 +36,9 @@ Anything else:
    - Write 2 simple sample tests, plus 5–10 hidden tests. The hidden tests repeat the samples
      and cover empty input, one element, negatives, duplicates, boundaries, and a larger case.
    - Always include a reference solution in every allowed language.
-   - Use a rubric only for things tests can't check (1–2 points).
+   - Use a rubric only for things tests can't check (1–2 points). Give each item a `require`
+     or `forbid` regex when a pattern can decide it (private fields, no library sort,
+     recursion), so it grades itself. Leave it off for things only a person can judge.
 
 ## Images
 

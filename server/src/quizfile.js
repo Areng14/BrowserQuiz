@@ -2,6 +2,7 @@
 // Loads and validates a .quiz upload: a zip with quiz.json at the root and images under assets/.
 // Everything that reaches the database has passed through here.
 const { readZip } = require('./zip');
+const R = require('./rubric');
 
 const LIMITS = { uploadBytes: 25 * 1024 * 1024, files: 500, questions: 300, arrayLen: 1000 };
 const ASSET_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
@@ -228,9 +229,10 @@ function normalizeNewType(where, type, q, quizLang, points) {
   } else if (type === 'essay') {
     // Graded by the teacher. With a language, students get a code box instead of a text box.
     out.language = LANGS.includes(q.language) ? q.language : null;
-    out.rubric = (Array.isArray(q.rubric) ? q.rubric : []).slice(0, 20).map((r, i) => ({
-      id: String(r.id || `r${i + 1}`).slice(0, 40), text: String(r.text || '').slice(0, 500), points: Math.max(0, Number(r.points) || 0),
-    }));
+    out.rubric = (Array.isArray(q.rubric) ? q.rubric : []).slice(0, 20).map((r, i) => {
+      if (r && (r.require || r.forbid)) fail(`${where}, rubric item ${i + 1}: "require" and "forbid" only work on code questions. The teacher grades written answers.`);
+      return { id: String(r.id || `r${i + 1}`).slice(0, 40), text: String(r.text || '').slice(0, 500), points: Math.max(0, Number(r.points) || 0) };
+    });
     if (out.rubric.reduce((s, r) => s + r.points, 0) > points) fail(`${where}: rubric points add up to more than the question is worth.`);
   }
   return out;
@@ -326,10 +328,30 @@ function normalizeCode(where, q) {
   };
   out.rubric = [];
   if (Array.isArray(q.rubric)) {
-    out.rubric = q.rubric.slice(0, 20).map((r, i) => ({
-      id: String(r.id || `r${i + 1}`).slice(0, 40), text: String(r.text || '').slice(0, 500), points: Math.max(0, Number(r.points) || 0),
-    }));
+    out.rubric = q.rubric.slice(0, 20).map((r, i) => {
+      const item = { id: String(r.id || `r${i + 1}`).slice(0, 40), text: String(r.text || '').slice(0, 500), points: Math.max(0, Number(r.points) || 0) };
+      try {
+        const require = R.normalizePattern(r.require, languages, 'require');
+        const forbid = R.normalizePattern(r.forbid, languages, 'forbid');
+        if (require) item.require = require;
+        if (forbid) item.forbid = forbid;
+      } catch (e) {
+        fail(`${where}, rubric item ${i + 1}: ${e.message}`);
+      }
+      return item;
+    });
   }
+  // Checked rubric items must give the reference solution its points, the same way the tests must.
+  out.rubric.forEach((item, i) => {
+    for (const lang of languages) {
+      const rule = R.ruleFor(item, lang);
+      if (!rule || !reference[lang]) continue;
+      const r = R.check(rule, R.stripCode(reference[lang], lang));
+      const name = lang === 'python' ? 'Python' : 'Java';
+      if (r.ok === null) fail(`${where}, rubric item ${i + 1}: the ${name} pattern takes too long to run. Make it simpler.`);
+      if (!r.ok) fail(`${where}, rubric item ${i + 1}: the ${name} reference solution ${r.why === 'require' ? "doesn't match \"require\"" : 'matches "forbid"'}.`);
+    }
+  });
   const rubricPoints = out.rubric.reduce((s, r) => s + r.points, 0);
   if (rubricPoints >= Number(q.points || 1)) fail(`${where}: rubric points must be less than the question's points, so the tests are worth something.`);
   // starter: "empty" | "stubs" (default) | { java: "...custom...", python: "..." }
