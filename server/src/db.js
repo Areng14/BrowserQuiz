@@ -71,6 +71,21 @@ addColumn('rosters', 'archived', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('roster_students', 'removed', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('runs', 'mode', "TEXT NOT NULL DEFAULT 'exam'"); // exam | practice
 
+// Teacher accounts (see accounts.js). Quizzes, classes and runs belong to the teacher who made them.
+db.exec(`CREATE TABLE IF NOT EXISTS teachers (
+  id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE, name TEXT NOT NULL, pw_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'teacher', disabled INTEGER NOT NULL DEFAULT 0, must_change INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
+)`);
+addColumn('sessions', 'teacher_id', 'TEXT');
+addColumn('quizzes', 'owner_id', 'TEXT');
+addColumn('rosters', 'owner_id', 'TEXT');
+addColumn('runs', 'owner_id', 'TEXT');
+addColumn('audit', 'teacher_id', 'TEXT');
+db.exec(`CREATE INDEX IF NOT EXISTS quizzes_owner ON quizzes(owner_id);
+CREATE INDEX IF NOT EXISTS rosters_owner ON rosters(owner_id);
+CREATE INDEX IF NOT EXISTS runs_owner ON runs(owner_id);`);
+
 const cache = new Map();
 function q(sql) {
   let s = cache.get(sql);

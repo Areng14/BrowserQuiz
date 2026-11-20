@@ -120,7 +120,10 @@ for (const row of q("SELECT id, run_id FROM attempts WHERE archived = 0 AND stat
   if (run) gradeAttempt(a, store.getQuiz(run.quiz_id)).catch((e) => console.error('regrade failed', a.id, e.message));
 }
 
-server.listen(PORT, () => console.log(`BrowserQuiz listening on :${PORT}`));
+// The admin account follows ADMIN_PASSWORD; start taking requests once it's in place.
+require('./accounts').ensureAdmin()
+  .then(() => server.listen(PORT, () => console.log(`BrowserQuiz listening on :${PORT}`)))
+  .catch((e) => { console.error('Could not set up the admin account:', e); process.exit(1); });
 // docker stop sends SIGTERM to PID 1. Finish in-flight requests briefly, then fold the WAL into the database.
 function shutdown() {
   server.close();

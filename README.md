@@ -37,6 +37,18 @@ Doing it by hand instead: copy `.env.example` to `.env`, fill in the three secre
 
 If students can't reach it, open port 8080 in the server's firewall.
 
+## Teachers
+
+Sign in as `admin` with the teacher password from setup (`ADMIN_PASSWORD` in `.env`; leaving the
+username blank also means admin). To add teachers, go to **Teachers** at the bottom of the
+dashboard. Each new teacher gets a temporary password to pass on, and picks their own the first
+time they sign in. Each teacher sees only their own quizzes, classes and results.
+
+- **Reset password** gives a teacher a new temporary password and signs them out.
+- **Disable** stops someone signing in, and keeps their quizzes and results.
+- The admin password lives in `.env`. To change it, edit `.env` and run `docker compose up -d`
+  again. That's also the way back in if you forget it.
+
 ## Making quizzes and classes
 
 - **Quizzes:** build them on the dashboard with **New quiz**, or upload a `.quiz` file. Every quiz

@@ -42,6 +42,7 @@
     let data = null;
     try { data = await res.json(); } catch (e) { /* no body */ }
     if (res.status === 401 && data && data.error === 'login') { showLogin(); throw new Error('login'); }
+    if (res.status === 403 && data && data.error === 'must_change') { showSetPassword(true); throw new Error('login'); }
     if (!res.ok) throw new Error((data && data.message) || (data && data.error) || `Request failed (${res.status})`);
     return data;
   }
@@ -63,29 +64,109 @@
     });
     return b;
   }
+  let who = null; // the signed-in teacher, from /api/t/me
   function bar(...left) {
-    return h('header', { class: 't-bar' }, h('span', { class: 'grow' }, ...left), themeButton(),
-      h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); showLogin(); } }));
+    return h('header', { class: 't-bar' }, h('span', { class: 'grow' }, ...left),
+      who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null, themeButton(),
+      who && who.role !== 'admin' ? h('button', { class: 'btn small', type: 'button', text: 'Password', onclick: () => showSetPassword(false) }) : null,
+      h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } }));
   }
   function mount(...nodes) { clearInterval(pollTimer); root.replaceChildren(...nodes); }
 
   // ---------- sign in ----------
   function showLogin() {
+    const user = h('input', { class: 'input', id: 'user', autocomplete: 'username', autocapitalize: 'none', spellcheck: 'false' });
     const pw = h('input', { class: 'input', type: 'password', id: 'pw', autocomplete: 'current-password' });
     const msg = h('p', { class: 't-error', role: 'alert' });
     const btn = h('button', { class: 'btn primary', type: 'submit', text: 'Sign in' });
     const form = h('form', { class: 't-login' },
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
       h('h1', { text: 'Teacher sign in' }),
+      h('label', { class: 'field', for: 'user' }, h('span', { class: 'field-label', text: 'Username' }), user),
       h('label', { class: 'field', for: 'pw' }, h('span', { class: 'field-label', text: 'Password' }), pw),
       btn, msg);
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       btn.disabled = true; msg.textContent = '';
-      try { await post('/api/t/login', { password: pw.value }); showHome(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
+      try { await post('/api/t/login', { username: user.value.trim(), password: pw.value }); showHome(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
     });
     mount(form);
-    pw.focus();
+    user.focus();
+  }
+
+  // A teacher on a temporary password picks their own before anything else (first), or changes it later.
+  function showSetPassword(first) {
+    const cur = h('input', { class: 'input', type: 'password', id: 'pw-cur', autocomplete: 'current-password' });
+    const next = h('input', { class: 'input', type: 'password', id: 'pw-new', autocomplete: 'new-password', minlength: '10' });
+    const again = h('input', { class: 'input', type: 'password', id: 'pw-again', autocomplete: 'new-password' });
+    const msg = h('p', { class: 't-error', role: 'alert' });
+    const btn = h('button', { class: 'btn primary', type: 'submit', text: 'Save password' });
+    const form = h('form', { class: 't-login' },
+      h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
+      h('h1', { text: first ? 'Pick your password' : 'Change your password' }),
+      h('label', { class: 'field', for: 'pw-cur' }, h('span', { class: 'field-label', text: first ? 'Temporary password' : 'Current password' }), cur),
+      h('label', { class: 'field', for: 'pw-new' }, h('span', { class: 'field-label', text: 'New password (10+ characters)' }), next),
+      h('label', { class: 'field', for: 'pw-again' }, h('span', { class: 'field-label', text: 'New password again' }), again),
+      h('div', { class: 't-row' }, btn, first ? null : h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => showHome() })), msg);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.textContent = '';
+      if (next.value !== again.value) { msg.textContent = "The new passwords don't match."; return; }
+      btn.disabled = true;
+      try { await post('/api/t/me/password', { current: cur.value, next: next.value }); showHome(); } catch (ex) { msg.textContent = ex.message; btn.disabled = false; }
+    });
+    mount(form);
+    cur.focus();
+  }
+
+  // ---------- teacher accounts (admin) ----------
+  function teachersSection() {
+    const list = h('div', {});
+    const msg = h('p', { class: 't-small', role: 'status' });
+    const name = h('input', { class: 'input', id: 'teacher-name', placeholder: 'Jordan Lee', maxlength: '80' });
+    const username = h('input', { class: 'input', id: 'teacher-user', placeholder: 'jlee', autocapitalize: 'none', spellcheck: 'false', maxlength: '32' });
+    const add = h('button', { class: 'btn', type: 'submit', text: 'Add teacher' });
+    // The temporary password shows once, here: the teacher picks their own when they first sign in.
+    const showTemp = (who2, temp) => msg.replaceChildren(`Give ${who2} this temporary password: `, h('code', { class: 't-temp', text: temp }), '. They pick their own when they sign in.');
+    async function load() {
+      let r;
+      try { r = await api('/api/t/teachers'); } catch (e) { return; }
+      const act = async (x, action) => {
+        if (action === 'disable' && !confirm(`Disable ${x.name}? They're signed out and can't sign in. Their quizzes and results stay.`)) return;
+        try {
+          const out = await post(`/api/t/teachers/${x.id}/${action}`);
+          if (out.tempPassword) showTemp(x.name, out.tempPassword); else msg.textContent = '';
+          load();
+        } catch (e) { msg.textContent = e.message; }
+      };
+      list.replaceChildren(h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
+        h('thead', {}, h('tr', {}, ['Name', 'Username', 'Quizzes', 'Classes', 'Status', ''].map((x) => h('th', { text: x })))),
+        h('tbody', {}, r.teachers.map((x) => h('tr', {},
+          h('td', { text: x.name }), h('td', { class: 't-muted', text: x.username }),
+          h('td', { class: 'num', text: String(x.quizzes) }), h('td', { class: 'num', text: String(x.classes) }),
+          h('td', { class: x.disabled ? 't-muted' : x.pending ? 'st-waiting' : 'st-good', text: x.role === 'admin' ? 'Admin' : x.disabled ? 'Disabled' : x.pending ? 'Not signed in yet' : 'Active' }),
+          h('td', { class: 't-actions' }, x.role === 'admin' ? null : [
+            h('button', { class: 'btn small', type: 'button', text: 'Reset password', onclick: () => act(x, 'reset') }),
+            h('button', { class: 'btn small', type: 'button', text: x.disabled ? 'Enable' : 'Disable', onclick: () => act(x, x.disabled ? 'enable' : 'disable') }),
+          ])))))));
+    }
+    const form = h('form', { class: 't-row' },
+      h('label', { class: 'field', for: 'teacher-name' }, h('span', { class: 'field-label', text: 'Name' }), name),
+      h('label', { class: 'field', for: 'teacher-user' }, h('span', { class: 'field-label', text: 'Username' }), username), add);
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      add.disabled = true;
+      try {
+        const out = await post('/api/t/teachers', { name: name.value, username: username.value });
+        showTemp(name.value.trim(), out.tempPassword);
+        name.value = '';
+        username.value = '';
+        load();
+      } catch (ex) { msg.textContent = ex.message; }
+      add.disabled = false;
+    });
+    load();
+    return h('section', { class: 't-section' }, h('h2', { text: 'Teachers' }), list, form, msg);
   }
 
   // ---------- home ----------
@@ -93,6 +174,7 @@
     let data;
     let me = null;
     try { [data, me] = await Promise.all([api('/api/t/overview'), api('/api/t/me').catch(() => null)]); } catch (e) { if (e.message !== 'login') mount(h('p', { class: 't-error', text: e.message })); return; }
+    who = me && me.teacher;
     const runner = !me || !me.runner || me.runnerOk ? null
       : h('p', { class: 't-error t-small' }, h('span', { class: 'dot bad' }), 'Code runner offline. Code questions get graded once it is back.');
     const quizSel = picker('run-quiz', 'Quiz', data.quizzes.map((x) => ({ value: x.id, label: x.title, meta: [plural(x.questions, 'question'), date(x.createdAt)] })));
@@ -188,7 +270,8 @@
           h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
           h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student_id)' }), rosterFile),
           rosterBtn),
-        rosterMsg)));
+        rosterMsg),
+      who && who.role === 'admin' ? teachersSection() : null));
   }
 
   function linkBtn(text, href, newTab) {

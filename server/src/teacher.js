@@ -12,21 +12,49 @@ const { totals, questionScore, gradeAttempt, answerReport, cleanAnswers, gradeAu
 const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
 const { HttpError, clientIp, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
+const A = require('./accounts');
 
 const TCH = 'tch';
 const SESSION_MS = 12 * 3600 * 1000;
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const LET_IN_MS = 10 * 60000; // how long "Let back in" stays open
 
-function requireTeacher(req) {
-  const t = cookies(req)[TCH];
-  if (!t) throw new HttpError(401, 'login');
-  const row = q('SELECT created_at FROM sessions WHERE token_hash = ?').get(sha256(t));
-  if (!row || Date.now() - row.created_at > SESSION_MS) throw new HttpError(401, 'login');
+// The signed-in teacher, or 401. Someone on a temporary password can only set their own (opts.setup).
+function requireTeacher(req, opts = {}) {
+  const tok = cookies(req)[TCH];
+  if (!tok) throw new HttpError(401, 'login');
+  const row = q(`SELECT s.created_at, t.id, t.username, t.name, t.role, t.disabled, t.must_change FROM sessions s
+    JOIN teachers t ON t.id = s.teacher_id WHERE s.token_hash = ?`).get(sha256(tok));
+  if (!row || row.disabled || Date.now() - row.created_at > SESSION_MS) throw new HttpError(401, 'login');
+  if (row.must_change && !opts.setup) throw new HttpError(403, 'must_change');
+  return row;
+}
+function requireAdmin(req) {
+  const me = requireTeacher(req);
+  if (me.role !== 'admin') throw new HttpError(404, 'not_found');
+  return me;
 }
 
-function audit(action, attemptId, note) {
-  q('INSERT INTO audit (t, action, attempt_id, note) VALUES (?, ?, ?, ?)').run(Date.now(), action, attemptId || null, note ? String(note).slice(0, 300) : null);
+function audit(me, action, attemptId, note) {
+  q('INSERT INTO audit (t, action, attempt_id, note, teacher_id) VALUES (?, ?, ?, ?, ?)').run(Date.now(), action, attemptId || null, note ? String(note).slice(0, 300) : null, me ? me.id : null);
+}
+
+// Everything below is looked up through its owner: another teacher's id is simply not found.
+function getRun(me, id) {
+  const run = q('SELECT * FROM runs WHERE id = ? AND owner_id = ?').get(String(id || ''), me.id);
+  if (!run) throw new HttpError(404, 'not_found');
+  return run;
+}
+function getAttemptRun(me, id) {
+  const a = store.getAttempt(String(id || ''));
+  const run = a && q('SELECT * FROM runs WHERE id = ? AND owner_id = ?').get(a.runId, me.id);
+  if (!run) throw new HttpError(404, 'not_found');
+  return { a, run };
+}
+function getRoster(me, id, includeArchived) {
+  const roster = q(`SELECT id, name FROM rosters WHERE id = ? AND owner_id = ?${includeArchived ? '' : ' AND archived = 0'}`).get(String(id || ''), me.id);
+  if (!roster) throw new HttpError(404, 'not_found');
+  return roster;
 }
 
 function newJoinCode() {
@@ -102,17 +130,17 @@ function retireQuiz(id) {
   else q('DELETE FROM quizzes WHERE id = ?').run(id);
   store.quizCache.delete(id);
 }
-function saveQuiz(quiz, assets, replaces) {
+function saveQuiz(me, quiz, assets, replaces) {
   const id = crypto.randomUUID();
   tx(() => {
-    q('INSERT INTO quizzes (id, title, json, created_at) VALUES (?, ?, ?, ?)').run(id, quiz.title, JSON.stringify(quiz), Date.now());
+    q('INSERT INTO quizzes (id, title, json, created_at, owner_id) VALUES (?, ?, ?, ?, ?)').run(id, quiz.title, JSON.stringify(quiz), Date.now(), me.id);
     for (const a of assets) q('INSERT INTO assets (quiz_id, path, mime, bytes) VALUES (?, ?, ?, ?)').run(id, a.path, a.mime, a.bytes);
     if (replaces) retireQuiz(replaces);
   });
   return id;
 }
-function getQuizRow(id) {
-  const row = q('SELECT id, title FROM quizzes WHERE id = ?').get(String(id || ''));
+function getQuizRow(me, id) {
+  const row = q('SELECT id, title FROM quizzes WHERE id = ? AND owner_id = ?').get(String(id || ''), me.id);
   if (!row) throw new HttpError(404, 'not_found');
   return row;
 }
@@ -251,23 +279,25 @@ function loginBucket(key, cap, refillMs) {
 }
 
 module.exports = function teacherRoutes(r) {
+  // Username + password. No username means admin, the account from .env.
   r.post('/api/t/login', async (req, res) => {
     const body = await readJson(req, 4096);
-    const want = process.env.ADMIN_PASSWORD || '';
     const mine = loginBucket('ip:' + clientIp(req), 10, 6000);
     const all = loginBucket('all', 60, 1000);
     if (mine.n < 1 || all.n < 1) throw new HttpError(429, 'too_many');
     mine.n--;
     all.n--;
     await sleep(250);
-    if (!want || !crypto.timingSafeEqual(Buffer.from(sha256(body.password || '')), Buffer.from(sha256(want)))) {
+    const teacher = A.byUsername(String(body.username || '').trim() || 'admin');
+    const ok = await A.checkPassword(String(body.password || ''), teacher && !teacher.disabled ? teacher.pw_hash : null);
+    if (!ok) {
       await sleep(1000);
       throw new HttpError(401, 'bad_password');
     }
     mine.n = Math.min(mine.cap, mine.n + 1);
     all.n = Math.min(all.cap, all.n + 1);
     const token = newToken();
-    q('INSERT INTO sessions (token_hash, created_at) VALUES (?, ?)').run(sha256(token), Date.now());
+    q('INSERT INTO sessions (token_hash, created_at, teacher_id) VALUES (?, ?, ?)').run(sha256(token), Date.now(), teacher.id);
     q('DELETE FROM sessions WHERE created_at < ?').run(Date.now() - SESSION_MS);
     setCookie(req, res, TCH, token, SESSION_MS / 1000);
     json(res, 200, { ok: true });
@@ -281,27 +311,92 @@ module.exports = function teacherRoutes(r) {
   });
 
   r.get('/api/t/me', async (req, res) => {
-    requireTeacher(req);
-    json(res, 200, { ok: true, runner: runnerConfigured(), runnerOk: runnerConfigured() ? await runnerHealthy() : false });
+    const me = requireTeacher(req, { setup: true });
+    json(res, 200, {
+      ok: true, runner: runnerConfigured(), runnerOk: runnerConfigured() ? await runnerHealthy() : false,
+      teacher: { username: me.username, name: me.name, role: me.role, mustChange: !!me.must_change },
+    });
+  });
+
+  // A teacher sets their own password (the first time, from the temporary one). Admin's is in .env.
+  r.post('/api/t/me/password', async (req, res) => {
+    const me = requireTeacher(req, { setup: true });
+    const body = await readJson(req, 4096);
+    if (me.role === 'admin') throw new HttpError(400, 'admin_env', 'The admin password is ADMIN_PASSWORD in .env. Change it there and restart.');
+    const next = String(body.next || '');
+    if (next.length < A.MIN_PASSWORD) throw new HttpError(400, 'weak', `Use at least ${A.MIN_PASSWORD} characters.`);
+    if (!(await A.checkPassword(String(body.current || ''), A.byId(me.id).pw_hash))) throw new HttpError(400, 'bad_password', 'The current password is wrong.');
+    q('UPDATE teachers SET pw_hash = ?, must_change = 0 WHERE id = ?').run(await A.hashPassword(next), me.id);
+    // Signed out everywhere else.
+    q('DELETE FROM sessions WHERE teacher_id = ? AND token_hash != ?').run(me.id, sha256(cookies(req)[TCH]));
+    audit(me, 'change-password', null, null);
+    json(res, 200, { ok: true });
+  });
+
+  // ---------- teacher accounts (admin) ----------
+  r.get('/api/t/teachers', (req, res) => {
+    requireAdmin(req);
+    const rows = q(`SELECT t.id, t.username, t.name, t.role, t.disabled, t.must_change, t.created_at,
+        (SELECT COUNT(*) FROM quizzes WHERE owner_id = t.id AND archived = 0) AS quizzes,
+        (SELECT COUNT(*) FROM rosters WHERE owner_id = t.id AND archived = 0) AS classes
+      FROM teachers t ORDER BY t.role = 'admin' DESC, t.name COLLATE NOCASE`).all();
+    json(res, 200, { teachers: rows.map((x) => ({ id: x.id, username: x.username, name: x.name, role: x.role, disabled: !!x.disabled, pending: !!x.must_change, quizzes: x.quizzes, classes: x.classes, createdAt: x.created_at })) });
+  });
+
+  // New teacher: they get a temporary password to give them, and pick their own when they sign in.
+  r.post('/api/t/teachers', async (req, res) => {
+    const me = requireAdmin(req);
+    const body = await readJson(req, 4096);
+    const username = String(body.username || '').trim();
+    const name = String(body.name || '').trim().slice(0, 80);
+    if (!A.USERNAME.test(username)) throw new HttpError(400, 'bad_username', 'Usernames are 2 to 32 letters, digits, dots, dashes or underscores.');
+    if (!name) throw new HttpError(400, 'bad_name', 'Add their name.');
+    if (A.byUsername(username)) throw new HttpError(400, 'taken', `${username} is taken.`);
+    const temp = A.tempPassword();
+    const id = crypto.randomUUID();
+    q("INSERT INTO teachers (id, username, name, pw_hash, role, must_change, created_at) VALUES (?, ?, ?, ?, 'teacher', 1, ?)").run(id, username, name, await A.hashPassword(temp), Date.now());
+    audit(me, 'add-teacher', null, username);
+    json(res, 200, { id, username, tempPassword: temp });
+  });
+
+  r.post('/api/t/teachers/:id/:action', async (req, res, p) => {
+    const me = requireAdmin(req);
+    const t = A.byId(p.id);
+    if (!t) throw new HttpError(404, 'not_found');
+    if (t.role === 'admin') throw new HttpError(400, 'admin_env', 'The admin account is set up from .env.');
+    let out = { ok: true };
+    if (p.action === 'reset') {
+      const temp = A.tempPassword();
+      q('UPDATE teachers SET pw_hash = ?, must_change = 1 WHERE id = ?').run(await A.hashPassword(temp), t.id);
+      q('DELETE FROM sessions WHERE teacher_id = ?').run(t.id);
+      out = { ok: true, tempPassword: temp };
+    } else if (p.action === 'disable') {
+      q('UPDATE teachers SET disabled = 1 WHERE id = ?').run(t.id);
+      q('DELETE FROM sessions WHERE teacher_id = ?').run(t.id);
+    } else if (p.action === 'enable') {
+      q('UPDATE teachers SET disabled = 0 WHERE id = ?').run(t.id);
+    } else throw new HttpError(404, 'not_found');
+    audit(me, `${p.action}-teacher`, null, t.username);
+    json(res, 200, out);
   });
 
   r.get('/api/t/overview', (req, res) => {
-    requireTeacher(req);
-    const quizzes = q('SELECT id, title, json, created_at FROM quizzes WHERE archived = 0 ORDER BY created_at DESC').all().map((x) => {
+    const me = requireTeacher(req);
+    const quizzes = q('SELECT id, title, json, created_at FROM quizzes WHERE archived = 0 AND owner_id = ? ORDER BY created_at DESC').all(me.id).map((x) => {
       const quiz = JSON.parse(x.json);
       return { id: x.id, title: x.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin, createdAt: x.created_at };
     });
-    const rosters = q('SELECT r.id, r.name, r.created_at, COUNT(s.id) AS n FROM rosters r LEFT JOIN roster_students s ON s.roster_id = r.id AND s.removed = 0 WHERE r.archived = 0 GROUP BY r.id ORDER BY r.created_at DESC').all()
+    const rosters = q('SELECT r.id, r.name, r.created_at, COUNT(s.id) AS n FROM rosters r LEFT JOIN roster_students s ON s.roster_id = r.id AND s.removed = 0 WHERE r.archived = 0 AND r.owner_id = ? GROUP BY r.id ORDER BY r.created_at DESC').all(me.id)
       .map((x) => ({ id: x.id, name: x.name, students: x.n, createdAt: x.created_at }));
     const runs = q(`SELECT runs.*, quizzes.title AS quiz_title, rosters.name AS roster_name,
         (SELECT COUNT(*) FROM attempts WHERE attempts.run_id = runs.id AND archived = 0) AS joined
-      FROM runs JOIN quizzes ON quizzes.id = runs.quiz_id JOIN rosters ON rosters.id = runs.roster_id ORDER BY runs.created_at DESC LIMIT 50`).all()
+      FROM runs JOIN quizzes ON quizzes.id = runs.quiz_id JOIN rosters ON rosters.id = runs.roster_id WHERE runs.owner_id = ? ORDER BY runs.created_at DESC LIMIT 50`).all(me.id)
       .map((x) => ({ id: x.id, code: x.code, status: x.status, quiz: x.quiz_title, roster: x.roster_name, joined: x.joined, ipLock: !!x.ip_lock, practice: x.mode === 'practice', createdAt: x.created_at }));
     json(res, 200, { quizzes, rosters, runs });
   });
 
   r.post('/api/t/quizzes', async (req, res) => {
-    requireTeacher(req);
+    const me = requireTeacher(req);
     const buf = await readBody(req, 26 * 1024 * 1024);
     let parsed;
     try {
@@ -309,17 +404,17 @@ module.exports = function teacherRoutes(r) {
       parsed = head.startsWith('{') ? { quiz: normalizeQuiz(parseQuizJson(buf), new Set()), assets: new Map() } : loadQuizFile(buf);
       await checkQuiz(parsed.quiz);
     } catch (e) { return quizError(res, e); }
-    const id = saveQuiz(parsed.quiz, [...parsed.assets].map(([path, a]) => ({ path, mime: a.mime, bytes: a.bytes })), null);
-    audit('upload-quiz', null, parsed.quiz.title);
+    const id = saveQuiz(me, parsed.quiz, [...parsed.assets].map(([path, a]) => ({ path, mime: a.mime, bytes: a.bytes })), null);
+    audit(me, 'upload-quiz', null, parsed.quiz.title);
     json(res, 200, { id, title: parsed.quiz.title, questions: parsed.quiz.questions.length });
   });
 
   // Quiz maker: save quiz.json from the editor. Editing saves a new copy and retires the old one
   // (images carry over), so runs that used the old version keep grading the same way.
   r.post('/api/t/quizzes/json', async (req, res) => {
-    requireTeacher(req);
+    const me = requireTeacher(req);
     const body = await readJson(req, 32 * 1024 * 1024);
-    const old = body.replaces ? getQuizRow(body.replaces) : null;
+    const old = body.replaces ? getQuizRow(me, body.replaces) : null;
     const assets = old ? q('SELECT path, mime, bytes FROM assets WHERE quiz_id = ?').all(old.id) : [];
     let quiz;
     try {
@@ -336,8 +431,8 @@ module.exports = function teacherRoutes(r) {
       quiz = normalizeQuiz(body.quiz, new Set(assets.map((a) => a.path)));
       await checkQuiz(quiz);
     } catch (e) { return quizError(res, e); }
-    const id = saveQuiz(quiz, assets, old && old.id);
-    audit(old ? 'edit-quiz' : 'create-quiz', null, quiz.title);
+    const id = saveQuiz(me, quiz, assets, old && old.id);
+    audit(me, old ? 'edit-quiz' : 'create-quiz', null, quiz.title);
     json(res, 200, { id, title: quiz.title });
   });
 
@@ -363,15 +458,15 @@ module.exports = function teacherRoutes(r) {
   });
 
   r.get('/api/t/quizzes/:id/source', (req, res, p) => {
-    requireTeacher(req);
-    const row = getQuizRow(p.id);
+    const me = requireTeacher(req);
+    const row = getQuizRow(me, p.id);
     const assets = q('SELECT path FROM assets WHERE quiz_id = ?').all(row.id).map((a) => a.path);
     json(res, 200, { id: row.id, quiz: quizSource(store.getQuiz(row.id)), assets });
   });
 
   r.get('/api/t/quizzes/:id/download', (req, res, p) => {
-    requireTeacher(req);
-    const row = getQuizRow(p.id);
+    const me = requireTeacher(req);
+    const row = getQuizRow(me, p.id);
     const entries = [{ name: 'quiz.json', data: Buffer.from(JSON.stringify(quizSource(store.getQuiz(row.id)), null, 2)) }];
     for (const a of q('SELECT path, bytes FROM assets WHERE quiz_id = ?').all(row.id)) entries.push({ name: a.path, data: Buffer.from(a.bytes) });
     send(res, 200, writeZip(entries), {
@@ -381,25 +476,25 @@ module.exports = function teacherRoutes(r) {
   });
 
   r.post('/api/t/quizzes/:id/delete', async (req, res, p) => {
-    requireTeacher(req);
-    const row = getQuizRow(p.id);
+    const me = requireTeacher(req);
+    const row = getQuizRow(me, p.id);
     retireQuiz(row.id);
-    audit('delete-quiz', null, row.title);
+    audit(me, 'delete-quiz', null, row.title);
     json(res, 200, { ok: true });
   });
 
   // Preview: the quiz exactly as students see it (unshuffled), with Run and a score, nothing saved.
   r.get('/api/t/quizzes/:id/preview', (req, res, p) => {
-    requireTeacher(req);
-    const quiz = store.getQuiz(getQuizRow(p.id).id);
+    const me = requireTeacher(req);
+    const quiz = store.getQuiz(getQuizRow(me, p.id).id);
     const layout = { order: quiz.questions.map((qq) => qq.id), perms: Object.fromEntries(quiz.questions.filter((qq) => qq.choices).map((qq) => [qq.id, qq.choices.map((_, i) => i)])) };
     json(res, 200, { quiz: publicQuiz(quiz, layout), deadline: null, now: Date.now(), saved: {} });
   });
 
   r.post('/api/t/quizzes/:id/run', async (req, res, p) => {
-    requireTeacher(req);
+    const me = requireTeacher(req);
     const body = await readJson(req, 128 * 1024);
-    const quiz = store.getQuiz(getQuizRow(p.id).id);
+    const quiz = store.getQuiz(getQuizRow(me, p.id).id);
     const qq = quiz.questions.find((x) => x.id === body.questionId && isRun(x));
     const code = qq && qq.type === 'fill' ? (Array.isArray(body.blanks) ? fillTemplate(qq.code, body.blanks.map((b) => String(b || '').slice(0, 500))) : null) : body.code;
     if (!qq || !qq.languages.includes(body.language) || typeof code !== 'string') throw new HttpError(400, 'bad_request');
@@ -411,9 +506,9 @@ module.exports = function teacherRoutes(r) {
   });
 
   r.post('/api/t/quizzes/:id/grade', async (req, res, p) => {
-    requireTeacher(req);
+    const me = requireTeacher(req);
     const body = await readJson(req, 1024 * 1024);
-    const quiz = store.getQuiz(getQuizRow(p.id).id);
+    const quiz = store.getQuiz(getQuizRow(me, p.id).id);
     const answers = cleanAnswers(quiz, null, body.answers);
     const auto = gradeAuto(quiz, null, answers);
     const questions = await Promise.all(quiz.questions.map(async (qq, i) => {
@@ -439,7 +534,7 @@ module.exports = function teacherRoutes(r) {
 
   // New class from a CSV file ({ csv }) or the roster maker's pasted list ({ text }).
   r.post('/api/t/rosters', async (req, res) => {
-    requireTeacher(req);
+    const me = requireTeacher(req);
     const body = await readJson(req, 2 * 1024 * 1024);
     const name = String(body.name || '').trim().slice(0, 80) || 'Class';
     let students = [];
@@ -465,19 +560,18 @@ module.exports = function teacherRoutes(r) {
     if (students.length > 500) return json(res, 400, { error: 'bad_roster', message: 'A class can have at most 500 students.' });
     const id = crypto.randomUUID();
     tx(() => {
-      q('INSERT INTO rosters (id, name, created_at) VALUES (?, ?, ?)').run(id, name, Date.now());
+      q('INSERT INTO rosters (id, name, created_at, owner_id) VALUES (?, ?, ?, ?)').run(id, name, Date.now(), me.id);
       for (const s of students) q('INSERT INTO roster_students (id, roster_id, name, sid_hash) VALUES (?, ?, ?, ?)').run(crypto.randomUUID(), id, s.name, hashSid(s.sid));
     });
-    audit('create-roster', null, `${name} (${students.length})`);
+    audit(me, 'create-roster', null, `${name} (${students.length})`);
     json(res, 200, { id, name, students: students.length });
   });
 
   // Roster maker: IDs are stored hashed, so a class can be renamed and students added or removed,
   // but an existing ID can't be shown.
   r.get('/api/t/rosters/:id', (req, res, p) => {
-    requireTeacher(req);
-    const roster = q('SELECT id, name FROM rosters WHERE id = ? AND archived = 0').get(p.id);
-    if (!roster) throw new HttpError(404, 'not_found');
+    const me = requireTeacher(req);
+    const roster = getRoster(me, p.id);
     const students = q(`SELECT s.id, s.name, EXISTS(SELECT 1 FROM attempts a WHERE a.student_id = s.id) AS results
       FROM roster_students s WHERE s.roster_id = ? AND s.removed = 0 ORDER BY s.name`).all(roster.id)
       .map((x) => ({ id: x.id, name: x.name, results: !!x.results }));
@@ -485,10 +579,9 @@ module.exports = function teacherRoutes(r) {
   });
 
   r.post('/api/t/rosters/:id/edit', async (req, res, p) => {
-    requireTeacher(req);
+    const me = requireTeacher(req);
     const body = await readJson(req, 2 * 1024 * 1024);
-    const roster = q('SELECT id, name FROM rosters WHERE id = ? AND archived = 0').get(p.id);
-    if (!roster) throw new HttpError(404, 'not_found');
+    const roster = getRoster(me, p.id);
     const { students, problems } = parseRosterText(body.add || '');
     if (problems.length) return json(res, 400, { error: 'bad_roster', message: problems.slice(0, 5).join(' ') });
     const remove = Array.isArray(body.remove) ? body.remove.map(String) : [];
@@ -502,38 +595,36 @@ module.exports = function teacherRoutes(r) {
         else q('DELETE FROM roster_students WHERE id = ? AND roster_id = ?').run(sid, roster.id);
       }
     });
-    audit('edit-roster', null, `${roster.name}: +${students.length} -${remove.length}`);
+    audit(me, 'edit-roster', null, `${roster.name}: +${students.length} -${remove.length}`);
     json(res, 200, { ok: true });
   });
 
   r.post('/api/t/rosters/:id/delete', async (req, res, p) => {
-    requireTeacher(req);
-    const roster = q('SELECT id, name FROM rosters WHERE id = ?').get(p.id);
-    if (!roster) throw new HttpError(404, 'not_found');
+    const me = requireTeacher(req);
+    const roster = getRoster(me, p.id, true);
     retireRoster(roster.id);
-    audit('delete-roster', null, roster.name);
+    audit(me, 'delete-roster', null, roster.name);
     json(res, 200, { ok: true });
   });
 
   r.post('/api/t/runs', async (req, res) => {
-    requireTeacher(req);
+    const me = requireTeacher(req);
     const body = await readJson(req, 4096);
-    if (!q('SELECT 1 FROM quizzes WHERE id = ?').get(String(body.quizId || ''))) throw new HttpError(400, 'bad_quiz');
-    if (!q('SELECT 1 FROM rosters WHERE id = ?').get(String(body.rosterId || ''))) throw new HttpError(400, 'bad_roster');
+    if (!q('SELECT 1 FROM quizzes WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.quizId || ''), me.id)) throw new HttpError(400, 'bad_quiz');
+    if (!q('SELECT 1 FROM rosters WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.rosterId || ''), me.id)) throw new HttpError(400, 'bad_roster');
     const id = crypto.randomUUID();
     const code = newJoinCode();
-    q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?)")
-      .run(id, body.quizId, body.rosterId, code, body.ipLock ? clientIp(req) : null, body.practice ? 'practice' : 'exam', Date.now());
-    audit('open-run', null, code);
+    q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at, owner_id) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?)")
+      .run(id, body.quizId, body.rosterId, code, body.ipLock ? clientIp(req) : null, body.practice ? 'practice' : 'exam', Date.now(), me.id);
+    audit(me, 'open-run', null, code);
     json(res, 200, { id, code });
   });
 
   // Deletes a run and everything in it: attempts, events, mouse trails, typing replays. A deleted quiz
   // or class that was only kept for this run's results goes too. Anyone still taking it is signed out.
   r.post('/api/t/runs/:id/delete', async (req, res, p) => {
-    requireTeacher(req);
-    const run = q('SELECT * FROM runs WHERE id = ?').get(p.id);
-    if (!run) throw new HttpError(404, 'not_found');
+    const me = requireTeacher(req);
+    const run = getRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     for (const x of q('SELECT id FROM attempts WHERE run_id = ?').all(run.id)) store.forget(x.id);
     tx(() => {
@@ -543,14 +634,13 @@ module.exports = function teacherRoutes(r) {
       if (!q('SELECT 1 FROM runs WHERE roster_id = ? LIMIT 1').get(run.roster_id)) q('DELETE FROM rosters WHERE id = ? AND archived = 1').run(run.roster_id);
     });
     store.quizCache.delete(run.quiz_id);
-    audit('delete-run', null, `${run.code} ${quiz ? quiz.title : ''}`);
+    audit(me, 'delete-run', null, `${run.code} ${quiz ? quiz.title : ''}`);
     json(res, 200, { ok: true });
   });
 
   r.post('/api/t/runs/:id/:action', async (req, res, p) => {
-    requireTeacher(req);
-    const run = q('SELECT * FROM runs WHERE id = ?').get(p.id);
-    if (!run) throw new HttpError(404, 'not_found');
+    const me = requireTeacher(req);
+    const run = getRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     if (p.action === 'close') {
       q("UPDATE runs SET status = 'closed', closed_at = ? WHERE id = ?").run(Date.now(), run.id);
@@ -577,14 +667,13 @@ module.exports = function teacherRoutes(r) {
         if (!a.result || (t && t.failed)) gradeAttempt(a, quiz).catch(() => {});
       }
     } else throw new HttpError(404, 'not_found');
-    audit(p.action + '-run', null, run.code);
+    audit(me, p.action + '-run', null, run.code);
     json(res, 200, { ok: true });
   });
 
   r.get('/api/t/runs/:id/live', (req, res, p) => {
-    requireTeacher(req);
-    const run = q('SELECT * FROM runs WHERE id = ?').get(p.id);
-    if (!run) throw new HttpError(404, 'not_found');
+    const me = requireTeacher(req);
+    const run = getRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     const roster = rosterStudentsForRun(run);
     const byStudent = new Map(q('SELECT id, student_id FROM attempts WHERE run_id = ? AND archived = 0').all(run.id).map((x) => [x.student_id, store.getAttempt(x.id)]));
@@ -595,9 +684,8 @@ module.exports = function teacherRoutes(r) {
   });
 
   r.get('/api/t/runs/:id/export.csv', (req, res, p) => {
-    requireTeacher(req);
-    const run = q('SELECT * FROM runs WHERE id = ?').get(p.id);
-    if (!run) throw new HttpError(404, 'not_found');
+    const me = requireTeacher(req);
+    const run = getRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const iso = (t) => (t ? new Date(t).toISOString() : '');
@@ -624,10 +712,8 @@ module.exports = function teacherRoutes(r) {
   });
 
   r.get('/api/t/attempts/:id', (req, res, p) => {
-    requireTeacher(req);
-    const a = store.getAttempt(p.id);
-    if (!a) throw new HttpError(404, 'not_found');
-    const run = q('SELECT * FROM runs WHERE id = ?').get(a.runId);
+    const me = requireTeacher(req);
+    const { a, run } = getAttemptRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
     const events = q('SELECT t, type, severity, detail FROM events WHERE attempt_id = ? ORDER BY id DESC LIMIT 400').all(a.id);
@@ -643,19 +729,16 @@ module.exports = function teacherRoutes(r) {
   });
 
   r.get('/api/t/attempts/:id/report', (req, res, p) => {
-    requireTeacher(req);
-    const a = store.getAttempt(p.id);
-    if (!a) throw new HttpError(404, 'not_found');
-    const run = q('SELECT * FROM runs WHERE id = ?').get(a.runId);
+    const me = requireTeacher(req);
+    const { a, run } = getAttemptRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
     json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: [studentReport(quiz, a, student ? student.name : '')] });
   });
 
   r.get('/api/t/runs/:id/report', (req, res, p) => {
-    requireTeacher(req);
-    const run = q('SELECT * FROM runs WHERE id = ?').get(p.id);
-    if (!run) throw new HttpError(404, 'not_found');
+    const me = requireTeacher(req);
+    const run = getRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     const rows = q(`SELECT attempts.id, roster_students.name FROM attempts JOIN roster_students ON roster_students.id = attempts.student_id
       WHERE attempts.run_id = ? AND attempts.archived = 0 AND attempts.status = 'submitted' ORDER BY roster_students.name`).all(run.id);
@@ -664,19 +747,18 @@ module.exports = function teacherRoutes(r) {
 
   // Quiz images for the report page (students get theirs through /asset/ with their own cookie).
   r.get('/api/t/quizzes/:id/asset', (req, res, p) => {
-    requireTeacher(req);
+    const me = requireTeacher(req);
     const rel = new URL(req.url, 'http://x').searchParams.get('path') || '';
-    const row = q('SELECT mime, bytes FROM assets WHERE quiz_id = ? AND path = ?').get(p.id, rel);
+    const quizId = q('SELECT id FROM quizzes WHERE id = ? AND owner_id = ?').get(String(p.id || ''), me.id);
+    const row = quizId && q('SELECT mime, bytes FROM assets WHERE quiz_id = ? AND path = ?').get(quizId.id, rel);
     if (!row) throw new HttpError(404, 'not_found');
     send(res, 200, Buffer.from(row.bytes), { 'Content-Type': row.mime, 'Cache-Control': 'private, max-age=3600', 'Content-Security-Policy': "default-src 'none'; sandbox" });
   });
 
   r.post('/api/t/attempts/:id/:action', async (req, res, p) => {
-    requireTeacher(req);
+    const me = requireTeacher(req);
     const body = await readJson(req, 4096);
-    const a = store.getAttempt(p.id);
-    if (!a) throw new HttpError(404, 'not_found');
-    const run = q('SELECT * FROM runs WHERE id = ?').get(a.runId);
+    const { a, run } = getAttemptRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     const note = String(body.note || '').slice(0, 300);
     if (p.action === 'admit') {
@@ -723,7 +805,7 @@ module.exports = function teacherRoutes(r) {
       store.logEvent(a, 'grade', 'info', `${qq.id}: ${override != null ? override + ' pts (override)' : Object.keys(rubric).length + ' rubric item(s)'}`);
       store.save(a);
     } else throw new HttpError(404, 'not_found');
-    audit(p.action, a.id, note);
+    audit(me, p.action, a.id, note);
     json(res, 200, { ok: true });
   });
 };
