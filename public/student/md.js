@@ -1,6 +1,7 @@
 // Safe markdown subset for question prompts and choices.
 // Builds DOM nodes with textContent only. Never innerHTML, so quiz text can't inject markup.
 // Supports: paragraphs, - / 1. lists, ```fenced code```, `inline code`, **bold**, *italic*.
+// opts.lang tags code (inline and unlabeled fences) so the app can syntax-highlight it.
 (function () {
   'use strict';
   const BQ = (window.BQ = window.BQ || {});
@@ -10,7 +11,7 @@
   const OL = /^\s*\d+[.)]\s+/;
   const FENCE = /^```\s*([\w+#-]*)\s*$/;
 
-  function inline(text, parent) {
+  function inline(text, parent, lang) {
     let last = 0;
     let m;
     INLINE.lastIndex = 0;
@@ -21,6 +22,7 @@
       if (tok[0] === '`') {
         el = document.createElement('code');
         el.textContent = tok.slice(1, -1);
+        if (lang) el.dataset.lang = lang;
       } else if (tok.startsWith('**')) {
         el = document.createElement('strong');
         el.textContent = tok.slice(2, -2);
@@ -34,7 +36,8 @@
     if (last < text.length) parent.append(text.slice(last));
   }
 
-  function render(src) {
+  function render(src, opts) {
+    const lang = opts && opts.lang;
     const frag = document.createDocumentFragment();
     const lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n');
     let i = 0;
@@ -50,7 +53,8 @@
         pre.className = 'md-code';
         const code = document.createElement('code');
         code.textContent = buf.join('\n');
-        if (fence[1]) code.dataset.lang = fence[1].toLowerCase();
+        const fenceLang = (fence[1] || lang || '').toLowerCase();
+        if (fenceLang) code.dataset.lang = fenceLang;
         pre.append(code);
         frag.append(pre);
         continue;
@@ -62,7 +66,7 @@
         const list = document.createElement(ordered ? 'ol' : 'ul');
         while (i < lines.length && re.test(lines[i])) {
           const li = document.createElement('li');
-          inline(lines[i].replace(re, ''), li);
+          inline(lines[i].replace(re, ''), li, lang);
           list.append(li);
           i++;
         }
@@ -74,15 +78,15 @@
         buf.push(lines[i++]);
       }
       const p = document.createElement('p');
-      inline(buf.join(' '), p);
+      inline(buf.join(' '), p, lang);
       frag.append(p);
     }
     return frag;
   }
 
-  function renderInline(src) {
+  function renderInline(src, opts) {
     const span = document.createElement('span');
-    inline(String(src == null ? '' : src), span);
+    inline(String(src == null ? '' : src), span, opts && opts.lang);
     return span;
   }
 

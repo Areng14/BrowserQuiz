@@ -83,7 +83,7 @@
       const ctx = canvas.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, hgt);
-      ctx.fillStyle = css.getPropertyValue('--surface').trim() || '#fff';
+      ctx.fillStyle = css.getPropertyValue('--bg').trim() || '#fff';
       ctx.fillRect(0, 0, w, hgt);
       ctx.strokeStyle = css.getPropertyValue('--line').trim() || '#ddd';
       ctx.lineWidth = 1;

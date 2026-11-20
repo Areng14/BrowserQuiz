@@ -23,7 +23,7 @@ const scripts = [
   "BQ.app.start(document.getElementById('bq-app'), BQ.api);\nBQ.teacherPanel.mount(document.getElementById('bq-teacher'));",
 ];
 
-const fonts = '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">';
+const fonts = ''; // system fonts only
 
 const body = `<div class="demo">
   <div class="demo-student"><div id="bq-app" class="bq-app"></div></div>

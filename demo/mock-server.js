@@ -18,6 +18,7 @@
   const QUIZ = {
     title: 'AP CSA Unit 4 Check',
     timeLimitMin: 20,
+    language: 'java', // highlights code in prompts and choices
     graceStrikes: 0,
     questions: [
       {
@@ -150,6 +151,8 @@
     return {
       title: QUIZ.title,
       timeLimitMin: QUIZ.timeLimitMin,
+      language: QUIZ.language,
+      directions: QUIZ.directions || {},
       questions: QUIZ.questions.map((q) => {
         const pub = { id: q.id, type: q.type, prompt: q.prompt, points: q.points };
         if (q.choices) {
@@ -221,8 +224,13 @@
       return {
         runId: 'demo-run', title: QUIZ.title, timeLimitMin: QUIZ.timeLimitMin,
         questionCount: QUIZ.questions.length, hasCode: QUIZ.questions.some((q) => q.type === 'code'),
-        roster: ROSTER.map(({ id, name }) => ({ id, name })),
       };
+    },
+    async findNames({ q }) {
+      await delay(60);
+      const term = String(q || '').trim().toLowerCase();
+      if (term.length < 2) return { matches: [] };
+      return { matches: ROSTER.filter((r) => r.name.toLowerCase().includes(term)).slice(0, 5).map(({ id, name }) => ({ id, name })) };
     },
     async attempt({ rosterId, studentId }) {
       await delay(400);

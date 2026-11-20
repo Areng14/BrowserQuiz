@@ -31,6 +31,8 @@
 
   BQ.api = {
     join: (code) => post('/api/join', { code }),
+    // Typeahead: only names matching what the student typed come back, never the whole roster.
+    findNames: (body) => post('/api/names', body),
     attempt: (body) => post('/api/attempt', body),
     admitStatus: () => post('/api/admit-status'),
     start: () => post('/api/start'),
