@@ -41,6 +41,9 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
 - **Prompts** say exactly what's asked, including edge cases ("return 0 for an empty array").
   No flavor text, no hints, nothing that gives away the answer. Put code in backticks or
   fenced blocks.
+- **Shared material:** when several questions use the same case, passage or code, write it
+  once in top-level `shared` and give each question `"shared": "<id>"`. Keep the set's
+  questions next to each other.
 - **Multiple choice:** one clearly correct answer. Wrong choices come from real mistakes:
   - integer division
   - off-by-one errors

@@ -130,6 +130,32 @@ function normalizeQuiz(raw, assetNames) {
       if (typeof raw.directions[t] === 'string' && raw.directions[t].trim()) quiz.directions[t] = raw.directions[t].trim().slice(0, 2000);
     }
   }
+  // An image on a question or a shared material: a file in assets/, with alt text.
+  const imageOf = (where, src, out) => {
+    if (src.image == null) return;
+    const img = String(src.image).replace(/^\.?\//, '');
+    if (!assetNames.has(img)) fail(`${where}: image "${img}" isn't in the assets folder.`);
+    out.image = img;
+    if (typeof src.imageAlt === 'string') out.imageAlt = src.imageAlt.slice(0, 300);
+  };
+  // Shared material: a passage, case or code listing that several questions use, written once.
+  if (raw.shared != null) {
+    if (!Array.isArray(raw.shared)) fail('"shared" must be a list.');
+    if (raw.shared.length > 50) fail('A quiz can have at most 50 shared materials.');
+    const sids = new Set();
+    quiz.shared = raw.shared.map((m, i) => {
+      const where = `Shared material ${i + 1}`;
+      if (!m || typeof m !== 'object') fail(`${where} must be an object.`);
+      const id = m.id == null ? `s${i + 1}` : String(m.id);
+      if (!QID.test(id) || ['__proto__', 'constructor', 'prototype'].includes(id)) fail(`${where}: id "${id}" can only use letters, digits, - and _.`);
+      if (sids.has(id)) fail(`${where}: duplicate id "${id}".`);
+      sids.add(id);
+      const out = { id, title: typeof m.title === 'string' ? m.title.trim().slice(0, 120) : '', text: typeof m.text === 'string' ? m.text.slice(0, 20000) : '' };
+      imageOf(where, m, out);
+      if (!out.text.trim() && !out.image) fail(`${where}: needs text or an image.`);
+      return out;
+    });
+  }
   if (!Array.isArray(raw.questions) || raw.questions.length === 0) fail('quiz.json needs a non-empty "questions" list.');
   if (raw.questions.length > LIMITS.questions) fail(`A quiz can have at most ${LIMITS.questions} questions.`);
   const ids = new Set();
@@ -144,12 +170,12 @@ function normalizeQuiz(raw, assetNames) {
     if (!PART_TYPES.includes(type)) fail(`${where}: type must be single, multi, text, code, output, trace, fill or essay.`);
     if (typeof q.prompt !== 'string' || !q.prompt.trim()) fail(`${where}: prompt is required.`);
     const out = { id, type, prompt: q.prompt.slice(0, 10000), points: Number(q.points) > 0 ? Math.min(1000, Number(q.points)) : 1 };
-    if (q.image != null) {
-      const img = String(q.image).replace(/^\.?\//, '');
-      if (!assetNames.has(img)) fail(`${where}: image "${img}" isn't in the assets folder.`);
-      out.image = img;
-      if (typeof q.imageAlt === 'string') out.imageAlt = q.imageAlt.slice(0, 300);
+    if (q.shared != null && q.shared !== '') {
+      const sid = String(q.shared);
+      if (!(quiz.shared || []).some((m) => m.id === sid)) fail(`${where}: shared "${sid}" isn't one of the quiz's shared materials.`);
+      out.shared = sid;
     }
+    imageOf(where, q, out);
     if (type === 'text') {
       const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
       if (!ans.length || ans.some((a) => typeof a !== 'string' || !a.trim())) fail(`${where}: answer must be a string or a list of strings.`);

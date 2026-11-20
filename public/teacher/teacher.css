@@ -163,6 +163,9 @@ input[type="file"].input { padding: 6px 10px; }
 .qe-tool.i { font-style: italic; font-family: Georgia, serif; }
 .qe-choices { display: grid; gap: 6px; }
 .qe-choice { display: flex; align-items: center; gap: 8px; }
+.qe-shared { display: grid; gap: 8px; }
+.qe-shared.on { padding: 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; }
+.qe-shared .qe-line { gap: 8px 12px; }
 .qe-rubric-item { display: grid; gap: 6px; }
 .qe-rubric-item + .qe-rubric-item { margin-top: 6px; }
 .qe-rubric-auto { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }

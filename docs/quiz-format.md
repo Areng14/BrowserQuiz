@@ -34,7 +34,27 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `shuffleChoices` | `true` | Shuffle multiple choice options per student |
 | `integrity.graceStrikes` | `0` | Times a student can leave the window before the attempt is invalidated (0–10) |
 | `directions` | built in | Override the directions text per part: `{ "single": "...", "multi": "...", "text": "...", "code": "..." }` |
+| `shared` | none | Shared material that several questions use (below) |
 | `questions` | required | List of questions |
+
+**Shared material.** A case, passage, table or code listing that several questions use goes
+in `shared` once, instead of being copied into each prompt:
+
+```json
+"shared": [
+  { "id": "caseA", "title": "Case A", "text": "Lab subnet `10.21.8.0/24`. Every device is on switch S..." }
+],
+"questions": [
+  { "type": "single", "shared": "caseA", "prompt": "After K sends its 09:01 frame, what is S's forwarding state?", ... },
+  { "type": "single", "shared": "caseA", "prompt": "Which port does S send H's next frame to J on?", ... }
+]
+```
+
+- `id` (letters, digits, `-`, `_`) is what questions point to with `"shared"`. `title` is
+  optional. `text` is Markdown like a prompt. `image` and `imageAlt` work as on questions.
+- Students see the material beside each question that uses it (above it on small screens).
+  Reports show it once, at the first question of the set.
+- Put a set's questions next to each other: shuffling keeps them together, in order.
 
 **Parts.** Consecutive questions of the same `type` form a part. Each part gets a
 directions page, and shuffling never moves a question out of its part. Keep same-type
@@ -50,6 +70,7 @@ questions together.
 | `points` | `1` | Positive number |
 | `image` | none | `"assets/diagram.png"`, must exist in the zip |
 | `imageAlt` | `""` | Alt text for the image |
+| `shared` | none | The `id` of a shared material this question uses |
 
 **Prompts** use a Markdown subset:
 - paragraphs (blank line between)

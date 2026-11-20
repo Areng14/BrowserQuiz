@@ -64,6 +64,9 @@
 .r-view .r-waiting { font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .r-view .r-qhead .pts { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .r-view .r-prompt p { margin: 4px 0; }
+.r-view .r-shared { margin: 6px 0 10px; padding: 12px 14px; background: var(--soft); border: 1px solid var(--line); border-radius: 6px; }
+.r-view .r-shared-title { margin: 0 0 4px; font-weight: 700; }
+.r-view .r-shared pre { background: var(--bg); }
 .r-view .r-prompt ul, .r-view .r-prompt ol { margin: 4px 0; padding-left: 22px; }
 .r-view .r-img { display: block; max-width: 100%; max-height: 320px; margin: 8px 0; border-radius: 6px; }
 .r-view .r-label { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink-2); }

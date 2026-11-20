@@ -131,11 +131,22 @@ function shuffle(arr) {
   }
   return a;
 }
-// Shuffle questions only within each part (same-type run) so the directions still line up.
+// Shuffle questions only within each part (same-type run) so the directions still line up. Questions
+// next to each other that use the same shared material move together, in their order.
 function makeLayout(quiz) {
   const order = [];
   let run = [];
-  const flush = () => { order.push(...(quiz.shuffleQuestions ? shuffle(run) : run)); run = []; };
+  const sharedOf = new Map(quiz.questions.map((qq) => [qq.id, qq.shared || null]));
+  const flush = () => {
+    const blocks = [];
+    for (const id of run) {
+      const last = blocks[blocks.length - 1];
+      if (sharedOf.get(id) && last && last.shared === sharedOf.get(id)) last.ids.push(id);
+      else blocks.push({ shared: sharedOf.get(id), ids: [id] });
+    }
+    order.push(...(quiz.shuffleQuestions ? shuffle(blocks) : blocks).flatMap((b) => b.ids));
+    run = [];
+  };
   quiz.questions.forEach((qq, i) => {
     if (run.length && quiz.questions[i - 1].type !== qq.type) flush();
     run.push(qq.id);

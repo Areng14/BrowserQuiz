@@ -50,14 +50,17 @@ function current(req, { mustBeOpen = true } = {}) {
 
 function publicQuiz(quiz, layout) {
   const byId = new Map(quiz.questions.map((qq) => [qq.id, qq]));
+  const used = new Set(quiz.questions.map((qq) => qq.shared).filter(Boolean));
   return {
     title: quiz.title,
     timeLimitMin: quiz.timeLimitMin,
     language: quiz.language,
     directions: quiz.directions,
+    shared: Object.fromEntries((quiz.shared || []).filter((m) => used.has(m.id)).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
     questions: layout.order.map((id) => {
       const qq = byId.get(id);
       const pub = { id, type: qq.type, prompt: qq.prompt, points: qq.points };
+      if (qq.shared) pub.shared = qq.shared;
       if (qq.image) { pub.image = qq.image; pub.imageAlt = qq.imageAlt || ''; }
       if (qq.choices) pub.choices = layout.perms[id].map((i) => qq.choices[i]); // positions only
       // New types: what's needed to show the question, never the answers.

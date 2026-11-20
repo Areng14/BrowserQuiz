@@ -308,6 +308,7 @@
     const points = { multi: 2, trace: 3, fill: 2, code: 6, essay: 3 };
     const q = { id: keep.id, type, prompt: keep.prompt || '', points: keep.points || points[type] || 1 };
     if (keep.image) { q.image = keep.image; if (keep.imageAlt) q.imageAlt = keep.imageAlt; }
+    if (keep.shared) q.shared = keep.shared;
     if (type === 'single') Object.assign(q, { choices: ['', '', '', ''], answer: null });
     if (type === 'multi') Object.assign(q, { choices: ['', '', '', ''], answer: [] });
     if (type === 'text') q.answer = [''];
@@ -435,6 +436,14 @@
   // quiz.json from the editor. Call it once every question is free of problems.
   function collect(quiz) {
     const out = Object.assign({}, quiz, { questions: [] });
+    // Shared material that no question uses is left out.
+    const used = new Set(quiz.questions.map((q) => q.shared).filter(Boolean));
+    out.shared = (quiz.shared || []).filter((m) => used.has(m.id)).map((m) => {
+      const o = { id: m.id, title: (m.title || '').trim(), text: m.text || '' };
+      if (m.image) { o.image = m.image; if (m.imageAlt) o.imageAlt = m.imageAlt; }
+      return o;
+    });
+    if (!out.shared.length) delete out.shared;
     for (const q of quiz.questions) {
       const o = Object.assign({}, q);
       delete o._ui;
@@ -648,6 +657,11 @@
       if (!q.prompt.trim()) out.push('Write the prompt.');
       if (!(Number(q.points) > 0)) out.push('Points must be more than 0.');
       if (q.image && imageMissing(q.image)) out.push(`Add the image file for ${q.image}.`);
+      if (q.shared) {
+        const m = (quiz.shared || []).find((x) => x.id === q.shared);
+        if (!m || (!(m.text || '').trim() && !m.image)) out.push('Write the shared material, or pick None.');
+        else if (m.image && imageMissing(m.image)) out.push(`Add the image file for ${m.image}.`);
+      }
       if (q.type === 'single' || q.type === 'multi') {
         const marked = q.type === 'single' ? (q.answer == null ? [] : [q.answer]) : q.answer;
         if (q.choices.filter((c) => c.trim()).length < 2) out.push('Write at least 2 choices.');
@@ -833,6 +847,13 @@
     function studentView(q) {
       const md = window.BQ && window.BQ.md;
       const out = [];
+      const sm = q.shared && (quiz.shared || []).find((x) => x.id === q.shared);
+      if (sm && ((sm.text || '').trim() || sm.title || sm.image)) {
+        const body = h('div', { class: 'prompt' });
+        if (md) body.append(md.render(sm.text || '', { lang: quiz.language })); else body.textContent = sm.text || '';
+        out.push(h('section', { class: 'shared' }, sm.title ? h('p', { class: 'shared-title', text: sm.title }) : null, body,
+          sm.image && imageSrc(sm) ? h('img', { class: 'qimg', src: imageSrc(sm), alt: sm.imageAlt || '' }) : null));
+      }
       const prompt = h('div', { class: 'prompt' });
       if (md) prompt.append(md.render(q.prompt, { lang: quiz.language })); else prompt.textContent = q.prompt;
       out.push(prompt);
@@ -1136,7 +1157,7 @@
         h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(i) }));
       const probs = h('ul', { class: 't-error qe-problems', role: 'alert' });
       const view = h('div', { class: 'qe-view' });
-      const fields = h('div', { class: 'qe-stack' }, promptEditor(q));
+      const fields = h('div', { class: 'qe-stack' }, sharedEditor(q, i), promptEditor(q));
       if (q.type === 'single' || q.type === 'multi') fields.append(choicesEditor(q));
       if (q.type === 'text') {
         fields.append(field('Accepted answers, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2 })),
@@ -1163,6 +1184,46 @@
       return [head, probs,
         h('div', { class: 'qe-cols' }, fields, h('div', { class: 'qe-viewcol' }, h('span', { class: 'field-label', text: 'Students see' }), view)),
         code && code.node];
+    }
+
+    // ---------- shared material: a case or passage written once, used by several questions ----------
+    function sharedEditor(q, i) {
+      quiz.shared = quiz.shared || [];
+      const pick = h('select', { class: 'input qe-narrow', id: 'qe-shared', 'aria-label': 'Shared material' },
+        h('option', { value: '', text: 'None', selected: !q.shared }),
+        quiz.shared.map((m, k) => h('option', { value: m.id, text: m.title.trim() || `Shared material ${k + 1}`, selected: q.shared === m.id })),
+        h('option', { value: '+', text: 'New shared material' }));
+      pick.addEventListener('change', () => {
+        if (pick.value === '+') {
+          let n = quiz.shared.length + 1;
+          while (quiz.shared.some((m) => m.id === `s${n}`)) n++;
+          quiz.shared.push({ id: `s${n}`, title: '', text: '' });
+          q.shared = `s${n}`;
+        } else if (pick.value) q.shared = pick.value;
+        else delete q.shared;
+        touch(q);
+        renderPane();
+        if (pick.value === '+') { const t = pane.querySelector('.qe-shared input[type=text]'); if (t) t.focus(); }
+      });
+      const m = quiz.shared.find((x) => x.id === q.shared);
+      const others = m ? quiz.questions.map((x, k) => (x.shared === m.id && k !== i ? k + 1 : null)).filter(Boolean) : [];
+      // Images work like a question's: the button, or paste or drop one into the text.
+      const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp' });
+      file.addEventListener('change', () => addImage(m, file.files[0]));
+      const text = m ? area(q, m.text, (v) => { m.text = v; }, { rows: 6, placeholder: 'The case, passage or code every question in the set uses. Markdown works.', 'aria-label': 'Shared material' }) : null;
+      const takeImage = (files, e) => { const f = [...(files || [])].find((x) => /^image\//.test(x.type)); if (f) { e.preventDefault(); addImage(m, f); } };
+      if (text) {
+        text.addEventListener('paste', (e) => takeImage(e.clipboardData && e.clipboardData.files, e));
+        text.addEventListener('drop', (e) => takeImage(e.dataTransfer && e.dataTransfer.files, e));
+      }
+      return h('div', { class: 'qe-shared' + (m ? ' on' : '') },
+        h('div', { class: 'qe-line' }, h('label', { class: 'field-label', for: 'qe-shared', text: 'Shared material' }), pick,
+          others.length ? h('span', { class: 't-small t-muted', text: `Also on question${others.length > 1 ? 's' : ''} ${others.join(', ')}` }) : null),
+        m ? [
+          input(q, m.title, (v) => { m.title = v; }, { type: 'text', placeholder: 'Title, like Case A', 'aria-label': 'Shared material title', maxlength: '120' }),
+          text, file,
+          m.image ? imageEditor(m, file) : h('div', {}, h('button', { class: 'btn small', type: 'button', text: 'Add image', onclick: () => file.click() })),
+        ] : null);
     }
 
     function settingsPane() {
@@ -1325,7 +1386,7 @@
       setStatus('Checking…');
       const at = edits;
       try {
-        const used = new Set(out.questions.map((q) => q.image).filter(Boolean));
+        const used = new Set([...out.questions, ...(out.shared || [])].map((q) => q.image).filter(Boolean));
         const assets = Object.fromEntries(Object.entries(newAssets).filter(([p2]) => used.has(p2)));
         const r = await post('/api/t/quizzes/json', { quiz: out, replaces: currentId, assets });
         currentId = r.id;

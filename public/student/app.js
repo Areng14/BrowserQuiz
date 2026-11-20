@@ -663,7 +663,10 @@
     S.el.next.textContent = S.dirOpen ? 'Continue' : last ? 'Review and submit' : 'Next';
     S.el.next.className = 'btn' + (last && !S.dirOpen ? ' primary' : '');
     const views = { code: codeView, output: outputView, trace: traceView, fill: fillView, essay: essayView };
-    const view = S.dirOpen ? directionsView(partOf(S.idx)) : (views[q.type] || basicView)(q);
+    let view = S.dirOpen ? directionsView(partOf(S.idx)) : (views[q.type] || basicView)(q);
+    // Shared material sits beside the question (above it on narrow screens). Code questions put it in
+    // their left column themselves.
+    if (!S.dirOpen && q.shared && !view.classList.contains('wide')) view = h('div', { class: 'shared-split' }, sharedBlock(q), view);
     S.el.main.replaceChildren(view);
     colorize(view);
     renderSheet();
@@ -732,6 +735,16 @@
     return h('div', { class: 'meta-row' },
       h('span', {}, kind, ' ', h('button', { class: 'link-btn', type: 'button', text: 'Directions', onclick: openDirections })),
       h('span', { class: 'meta-right' }, markButton(q), h('span', { text: plural(q.points, 'point') })));
+  }
+
+  // A passage, case or listing that several questions use, written once in the quiz.
+  function sharedBlock(q) {
+    const m = q.shared && S.quiz.shared ? S.quiz.shared[q.shared] : null;
+    if (!m) return null;
+    return h('section', { class: 'shared', 'aria-label': m.title || 'Shared material' },
+      m.title ? h('p', { class: 'shared-title', text: m.title }) : null,
+      m.text ? h('div', { class: 'prompt' }, BQ.md.render(m.text, { lang: S.quiz.language })) : null,
+      m.image ? h('img', { class: 'qimg', src: api.assetUrl(m.image), alt: m.imageAlt || '' }) : null);
   }
 
   function prompt(q) {
@@ -943,7 +956,7 @@
     const view = h('div', { class: 'qview wide' },
       h('div', { class: 'code-q' },
         h('section', { class: 'code-left' },
-          metaRow(q, KIND[q.mode] || KIND.method), prompt(q),
+          metaRow(q, KIND[q.mode] || KIND.method), sharedBlock(q), prompt(q),
           h('h2', { class: 'sub', text: 'Examples' }), samples),
         h('section', { class: 'code-right', 'aria-label': 'Code editor' },
           h('div', { class: 'editor-bar' }, langCtl, h('span', { class: 'spacer' }), runBtn),

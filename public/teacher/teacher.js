@@ -458,9 +458,10 @@
       const canvas = h('canvas', { class: 't-trail', width: 640, height: 360, 'aria-label': 'Mouse trail' });
       // Each question as it looked in the quiz, with this student's answer and the correct one,
       // plus what only the teacher sees: grading state, hidden test results, and the grading controls.
+      const sharedSeen = new Set();
       const answers = h('div', { class: 't-answers r-view' }, d.report.questions.map((rq, i) => {
         const x = d.answers[i];
-        const sec = window.BQReport.question(d.quiz, rq, i, { teacher: true });
+        const sec = window.BQReport.question(d.quiz, rq, i, { teacher: true, sharedSeen });
         const notes = [];
         if (x.state === 'pending') notes.push('Grading…');
         if (x.state === 'failed') notes.push(`Grading failed (${(x.code && x.code.message) || 'runner offline'})`);

@@ -121,8 +121,10 @@ function quizSource(quiz) {
   const out = { format: 1, title: quiz.title, timeLimitMin: quiz.timeLimitMin, language: quiz.language,
     shuffleQuestions: quiz.shuffleQuestions, shuffleChoices: quiz.shuffleChoices, integrity: quiz.integrity };
   if (Object.keys(quiz.directions || {}).length) out.directions = quiz.directions;
+  if (quiz.shared && quiz.shared.length) out.shared = quiz.shared;
   out.questions = quiz.questions.map((qq) => {
     const o = { id: qq.id, type: qq.type, prompt: qq.prompt, points: qq.points };
+    if (qq.shared) o.shared = qq.shared;
     if (qq.image) { o.image = qq.image; if (qq.imageAlt) o.imageAlt = qq.imageAlt; }
     if (qq.type === 'text') { o.answer = qq.answer; if (qq.caseSensitive) o.caseSensitive = true; }
     if (qq.type === 'single' || qq.type === 'multi') { o.choices = qq.choices; o.answer = qq.answer; if (qq.shuffleChoices === false) o.shuffleChoices = false; }
@@ -182,7 +184,7 @@ function quizPrompt() {
 function parseQuizJson(buf) {
   try { return JSON.parse(buf.toString('utf8').replace(/^\uFEFF/, '')); } catch (e) { throw new QuizError('quiz.json is not valid JSON: ' + e.message); }
 }
-const imagePaths = (raw) => new Set((Array.isArray(raw && raw.questions) ? raw.questions : [])
+const imagePaths = (raw) => new Set([...(Array.isArray(raw && raw.questions) ? raw.questions : []), ...(Array.isArray(raw && raw.shared) ? raw.shared : [])]
   .map((qq) => (qq && qq.image != null ? String(qq.image).replace(/^\.?\//, '') : null)).filter(Boolean));
 
 // ---------- rosters ----------

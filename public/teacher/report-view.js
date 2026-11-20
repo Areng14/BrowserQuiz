@@ -199,12 +199,22 @@
     const kind = q.type === 'code' ? KIND[q.mode] || KIND.method : KIND[q.type];
     const [st, words] = status(q);
     const pts = q.points == null ? `– / ${fmtPts(q.max)}` : `${fmtPts(q.points)} / ${fmtPts(q.max)}`;
+    const img = (p) => (o.assetUrl ? o.assetUrl(p) : `/api/t/quizzes/${encodeURIComponent(quiz.id)}/asset?path=${encodeURIComponent(p)}`);
+    // Shared material shows once, on the first question of its set (opts.sharedSeen tracks that).
+    const m = q.shared && quiz.shared ? quiz.shared[q.shared] : null;
+    const first = m && (!o.sharedSeen || !o.sharedSeen.has(q.shared));
+    if (first && o.sharedSeen) o.sharedSeen.add(q.shared);
+    const sharedEl = !m ? null : first
+      ? h('div', { class: 'r-shared' }, m.title ? h('p', { class: 'r-shared-title', text: m.title }) : null,
+        m.text ? md(m.text, quiz.language) : null, m.image ? h('img', { class: 'r-img', src: img(m.image), alt: m.imageAlt || '' }) : null)
+      : h('p', { class: 'r-also', text: m.title ? `Uses ${m.title}` : 'Uses the shared material above' });
     return h('section', { class: `r-q st-${st}` + (q.type === 'code' || q.type === 'fill' ? ' code' : ''), id: o.anchor || null },
       h('div', { class: 'r-qhead' },
         h('span', { class: 'n', text: String(i + 1) }), h('span', { class: 'kind', text: kind }),
         h('span', { class: 'r-status', role: 'img', 'aria-label': words, title: words, text: ICON[st] }),
         q.review || st === 'pending' ? h('span', { class: 'r-waiting', text: words }) : null,
         h('span', { class: 'pts', text: pts })),
+      sharedEl,
       md(q.prompt, quiz.language),
       q.image ? h('img', { class: 'r-img', src: o.assetUrl ? o.assetUrl(q.image) : `/api/t/quizzes/${encodeURIComponent(quiz.id)}/asset?path=${encodeURIComponent(q.image)}`, alt: q.imageAlt || '' }) : null,
       body(quiz, q, o));
@@ -214,6 +224,7 @@
     const o = opts || {};
     const key = o.key || 's0';
     const done = s.score != null;
+    const sharedSeen = new Set();
     const scoreBox = h('div', { class: 'r-score' },
       h('div', { class: 'r-score-big' }, done ? fmtPts(s.score) : '–', h('span', { text: ` / ${fmtPts(s.max)}` })),
       h('div', { class: 'r-score-pct', text: done ? `${pct(s.score, s.max)}%${s.unfinished ? ' so far' : ''}` : 'Not graded' }));
@@ -228,7 +239,7 @@
         const [st, words] = status(q);
         return h('a', { class: `r-chip st-${st}`, href: `#${key}-q${i + 1}`, title: `Question ${i + 1}: ${words}`, text: String(i + 1) });
       })),
-      s.questions.map((q, i) => question(quiz, q, i, Object.assign({}, o, { anchor: `${key}-q${i + 1}` }))));
+      s.questions.map((q, i) => question(quiz, q, i, Object.assign({}, o, { anchor: `${key}-q${i + 1}`, sharedSeen }))));
   }
 
   // First page of a class report: how everyone did, and how each question went.

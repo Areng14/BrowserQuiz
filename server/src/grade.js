@@ -226,7 +226,7 @@ function studentReport(quiz, a, name, opts = {}) {
       const ans = a.answers ? a.answers[qq.id] : undefined;
       const sc = a.result ? questionScore(qq, res, a.answers) : null;
       const row = {
-        id: qq.id, type: qq.type, mode: qq.mode || null, prompt: qq.prompt, image: qq.image || null, imageAlt: qq.imageAlt || '',
+        id: qq.id, type: qq.type, mode: qq.mode || null, prompt: qq.prompt, image: qq.image || null, imageAlt: qq.imageAlt || '', shared: qq.shared || null,
         points: sc && sc.state === 'done' ? sc.points : null, max: qq.points, review: !!(sc && sc.review),
       };
       if (qq.type === 'single' || qq.type === 'multi') {
@@ -282,6 +282,9 @@ function studentReport(quiz, a, name, opts = {}) {
     }),
   };
 }
-const reportQuiz = (quiz, quizId) => ({ id: quizId, title: quiz.title, language: quiz.language || null });
+const reportQuiz = (quiz, quizId) => ({
+  id: quizId, title: quiz.title, language: quiz.language || null,
+  shared: Object.fromEntries((quiz.shared || []).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
+});
 
 module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, codeAnswered, answerReport, studentReport, reportQuiz, grading: running, isRun };

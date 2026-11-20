@@ -49,7 +49,9 @@ use the defaults for the rest and start writing.
 2. Order the questions by type: single, multi, text, output, trace, fill, code, essay. For AP-style
    "what is printed" questions use `output`, and for tracing loops use `trace`.
 3. Prompts say exactly what's asked, including edge cases ("return 0 for an empty array").
-   No hints and nothing that gives the answer away.
+   No hints and nothing that gives the answer away. When several questions use the same case,
+   passage or code, put it in `shared` once and point each question at it, instead of
+   repeating it in every prompt.
 4. Multiple choice:
    - Exactly one clearly correct answer.
    - Wrong choices come from real mistakes: integer division, off-by-one, `==` vs `.equals`,
