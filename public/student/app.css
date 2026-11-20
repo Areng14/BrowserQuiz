@@ -128,6 +128,28 @@
 .qbar { border-bottom-width: 1px; }
 .qnav { gap: 12px; padding-block: 10px; border-top-width: 1px; }
 .qbar-name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* scratchpad: a column on the right, between the top bar and the question bar */
+.quiz.with-scratch { grid-template-columns: minmax(0, 1fr) min(420px, 42vw); }
+.quiz.with-scratch > .qbar, .quiz.with-scratch > .conn-banner, .quiz.with-scratch > .qnav { grid-column: 1 / -1; }
+.quiz > .scratch { grid-row: 3; grid-column: 2; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--soft); border-left: 1px solid var(--line); }
+.quiz > .scratch[hidden] { display: none; }
+.qbar .btn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.scratch-head { display: flex; align-items: center; gap: 8px; }
+.scratch-group { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+.scratch-tool { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; color: var(--ink-2); background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.scratch-tool:hover { color: var(--ink); background: var(--soft); }
+.scratch-tool[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); }
+.scratch-tool:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.scratch-close { margin-left: 2px; }
+.scratch-q { flex: 1; font-size: 13px; color: var(--ink-2); text-align: right; white-space: nowrap; }
+.scratch-board { position: relative; flex: 1; min-height: 0; overflow: hidden; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; touch-action: none; cursor: crosshair; }
+.scratch-board[data-tool="text"] { cursor: text; }
+.scratch-board[data-tool="eraser"] { cursor: cell; }
+.scratch-canvas { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--ink); }
+.scratch-notes { position: absolute; inset: 0; pointer-events: none; }
+.scratch-note { position: absolute; margin: 0; padding: 2px 6px; font: 14px/1.45 var(--mono); color: var(--ink); background: transparent; border: 1px dashed transparent; border-radius: 4px; resize: none; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.scratch-board[data-tool="text"] .scratch-note { pointer-events: auto; }
+.scratch-note:focus { outline: none; border-color: var(--accent); background: color-mix(in srgb, var(--bg) 85%, transparent); }
 .qbar-progress { font-size: 14px; color: var(--ink-2); }
 .timer { font: 600 16px var(--mono); font-variant-numeric: tabular-nums; }
 .timer.warn { color: var(--warn); }

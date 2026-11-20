@@ -483,6 +483,7 @@
     S.skew = r.now ? r.now - Date.now() : 0;
     S.answers = restoreAnswers(r.saved || {});
     loadMarks();
+    loadScratch();
     S.monitor = new BQ.Monitor(api, {
       integrity: !practice,
       fullscreen: fsOk,
@@ -621,13 +622,17 @@
       if (S.idx === S.quiz.questions.length - 1) return openSubmit();
       go(S.idx + 1);
     });
+    const scratchBtn = h('button', { class: 'btn small ghost', type: 'button', text: 'Scratchpad', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() });
+    const scratch = h('aside', { class: 'scratch', id: 'scratch', 'aria-label': 'Scratchpad' });
+    scratch.hidden = true;
     const wrap = h('div', { class: 'quiz' },
-      h('header', { class: 'qbar' }, h('span', { class: 'qbar-name', text: S.quiz.title }), save, timer, themeButton(),
+      h('header', { class: 'qbar' }, h('span', { class: 'qbar-name', text: S.quiz.title }), save, timer, scratchBtn, themeButton(),
         cfg.preview ? null : h('button', { class: 'btn small ghost', type: 'button', text: 'Exit', onclick: () => openExit() })),
       conn,
       main,
+      scratch,
       h('footer', { class: 'qnav' }, prev, sheet, next));
-    S.el = { wrap, main, timer, sheet, prev, next, save, conn, fsOverlay: null };
+    S.el = { wrap, main, timer, sheet, prev, next, save, conn, scratch, scratchBtn, fsOverlay: null };
     if (!keysBound) { document.addEventListener('keydown', quizKeys); keysBound = true; }
     S.saveState = 'saved';
     mount(wrap);
@@ -677,6 +682,222 @@
     S.el.main.replaceChildren(view);
     colorize(view);
     renderSheet();
+    renderScratch();
+  }
+
+  // ---------- scratchpad ----------
+  // The student's own working space: one board a question, where they draw and drop typed notes
+  // anywhere. It stays in this browser (per run and student), isn't graded, and is cleared when the
+  // quiz is turned in.
+  const scratchKey = () => 'bq-scratch:' + [S.run && (S.run.id || S.run.code || S.run.title), S.me && S.me.name].join(':');
+  function loadScratch() {
+    S.scratch = { tool: 'pen', pages: {} };
+    try {
+      const v = JSON.parse(localStorage.getItem(scratchKey()) || 'null');
+      if (v && v.pages && typeof v.pages === 'object') Object.assign(S.scratch, v);
+    } catch (e) { /* nothing saved */ }
+  }
+  let scratchTimer = 0;
+  function saveScratch() {
+    clearTimeout(scratchTimer);
+    scratchTimer = setTimeout(() => { try { localStorage.setItem(scratchKey(), JSON.stringify(S.scratch)); } catch (e) { /* kept for this page */ } }, 400);
+  }
+  function clearScratch() {
+    clearTimeout(scratchTimer);
+    try { localStorage.removeItem(scratchKey()); } catch (e) { /* nothing to clear */ }
+  }
+  function toggleScratch(force) {
+    if (!S.el || !S.el.scratch) return;
+    const open = force != null ? force : S.el.scratch.hidden;
+    S.el.scratch.hidden = !open;
+    S.el.wrap.classList.toggle('with-scratch', open);
+    S.el.scratchBtn.setAttribute('aria-pressed', String(open));
+    if (open) renderScratch();
+    if (S.editor) S.editor.layout();
+  }
+  const PAD_ICONS = {
+    pen: ['M21.17 6.81a1 1 0 0 0-3.98-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z', 'm15 5 4 4'],
+    text: ['M4 7V4h16v3', 'M9 20h6', 'M12 4v16'],
+    eraser: ['m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21', 'M22 21H7', 'm5 11 9 9'],
+    undo: ['M9 14 4 9l5-5', 'M4 9h10.5a5.5 5.5 0 0 1 0 11H11'],
+    clear: ['M3 6h18', 'M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6', 'M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'],
+    close: ['M18 6 6 18', 'm6 6 12 12'],
+  };
+  function padIcon(name) {
+    const s = svgEl('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    for (const d of PAD_ICONS[name]) s.append(svgEl('path', { d }));
+    return s;
+  }
+  function renderScratch() {
+    const el = S.el && S.el.scratch;
+    if (!el || el.hidden || !S.quiz || !S.scratch) return;
+    el.replaceChildren(...scratchBoard(S.quiz.questions[S.idx]));
+  }
+  // Items on a page, oldest first: strokes { p: [x, y, ...], e: true for the eraser } and notes
+  // { x, y, s }. Positions are scaled to the board's width, so a page redraws after a resize. Strokes
+  // and notes take the page's text color, so they follow the theme.
+  function scratchBoard(q) {
+    const pages = S.scratch.pages;
+    const items = pages[q.id] || [];
+    let tool = ['pen', 'text', 'eraser'].includes(S.scratch.tool) ? S.scratch.tool : 'pen';
+    let ctx = null;
+    let w = 0;
+    let cur = null;
+    let cleared = null; // what Clear took away, until something new goes on the page
+    const canvas = h('canvas', { class: 'scratch-canvas', 'aria-hidden': 'true' });
+    const notes = h('div', { class: 'scratch-notes' });
+    const board = h('div', { class: 'scratch-board', role: 'application', 'aria-label': `Scratchpad for question ${S.idx + 1}` }, canvas, notes);
+    const save = () => { if (items.length) pages[q.id] = items; else delete pages[q.id]; saveScratch(); };
+    const btn = (name, label, on) => {
+      const b = h('button', { class: 'scratch-tool', type: 'button', title: label, 'aria-label': label, onclick: on });
+      b.append(padIcon(name));
+      return b;
+    };
+    const tools = { pen: btn('pen', 'Pen', () => pick('pen')), text: btn('text', 'Text', () => pick('text')), eraser: btn('eraser', 'Eraser', () => pick('eraser')) };
+    function pick(t) {
+      tool = t;
+      S.scratch.tool = t;
+      for (const [k, b] of Object.entries(tools)) b.setAttribute('aria-pressed', String(k === t));
+      board.dataset.tool = t;
+      saveScratch();
+    }
+    pick(tool);
+    const undo = btn('undo', 'Undo', () => {
+      if (!items.length && cleared) { items.push(...cleared); cleared = null; }
+      else {
+        const it = items.pop();
+        if (it && it.rm) for (const [i, n] of it.rm.slice().reverse()) items.splice(i, 0, n);
+      }
+      paint();
+      save();
+    });
+    const clear = btn('clear', 'Clear page', () => {
+      if (!items.length) return;
+      cleared = items.splice(0);
+      paint();
+      save();
+    });
+    const add = (it) => { items.push(it); cleared = null; };
+
+    function size() {
+      const r = canvas.getBoundingClientRect();
+      if (!r.width) return false;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(r.width * dpr);
+      canvas.height = Math.round(r.height * dpr);
+      ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      w = r.width;
+      return true;
+    }
+    function style(st) {
+      ctx.globalCompositeOperation = st.e ? 'destination-out' : 'source-over';
+      ctx.lineWidth = st.e ? 22 : 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = getComputedStyle(canvas).color;
+    }
+    function path(p, from) {
+      ctx.beginPath();
+      ctx.moveTo(p[from] * w, p[from + 1] * w);
+      if (p.length - from === 2) ctx.lineTo(p[from] * w + 0.01, p[from + 1] * w); // a dot
+      for (let i = from + 2; i < p.length; i += 2) ctx.lineTo(p[i] * w, p[i + 1] * w);
+      ctx.stroke();
+    }
+    function paint() {
+      if (!ctx && !size()) return;
+      ctx.clearRect(0, 0, w, canvas.height);
+      for (const it of items) if (it.p) { style(it); path(it.p, 0); }
+      notes.replaceChildren(...items.filter((it) => it.s != null).map(noteEl));
+    }
+    // A note is a borderless text box that grows with what's typed, up to the board's right edge.
+    let measure = null;
+    function fit(ta, n) {
+      measure = measure || document.createElement('canvas').getContext('2d');
+      measure.font = getComputedStyle(ta).font;
+      const widest = Math.max(0, ...ta.value.split('\n').map((l) => measure.measureText(l).width));
+      ta.style.width = Math.max(28, Math.min(widest + 14, w - n.x * w - 4)) + 'px';
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+    }
+    function noteEl(n) {
+      const ta = h('textarea', { class: 'scratch-note', rows: '1', spellcheck: 'false', 'aria-label': 'Note' });
+      ta.value = n.s;
+      ta.style.left = n.x * w + 'px';
+      ta.style.top = n.y * w + 'px';
+      ta.addEventListener('input', () => { n.s = ta.value; fit(ta, n); save(); });
+      ta.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); ta.blur(); } });
+      ta.addEventListener('blur', () => {
+        if (n.s.trim() || !ta.isConnected) return;
+        const i = items.indexOf(n);
+        if (i >= 0) items.splice(i, 1);
+        ta.remove();
+        save();
+      });
+      requestAnimationFrame(() => fit(ta, n));
+      ta._note = n;
+      return ta;
+    }
+    const at = (e) => { const r = canvas.getBoundingClientRect(); return [+((e.clientX - r.left) / w).toFixed(4), +((e.clientY - r.top) / w).toFixed(4)]; };
+    // The eraser takes out any note it passes over; Undo puts it back.
+    function eraseNotes(x, y) {
+      for (const ta of notes.querySelectorAll('.scratch-note')) {
+        const l = ta.offsetLeft - 11; const t = ta.offsetTop - 11;
+        if (x * w < l || y * w < t || x * w > l + ta.offsetWidth + 22 || y * w > t + ta.offsetHeight + 22) continue;
+        const i = items.indexOf(ta._note);
+        if (i < 0) continue;
+        (cur.rm = cur.rm || []).push([i, ta._note]);
+        items.splice(i, 1);
+        ta.remove();
+      }
+    }
+    board.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.scratch-note') || (!ctx && !size())) return;
+      e.preventDefault();
+      if (tool === 'text') {
+        const [x, y] = at(e);
+        const n = { x: Math.min(x, +((w - 80) / w).toFixed(4)), y: Math.max(0, +(y - 11 / w).toFixed(4)), s: '' };
+        add(n);
+        const ta = noteEl(n);
+        notes.append(ta);
+        ta.focus();
+        return;
+      }
+      if (document.activeElement && document.activeElement.closest && document.activeElement.closest('.scratch-note')) document.activeElement.blur();
+      canvas.setPointerCapture(e.pointerId);
+      cur = { p: at(e) };
+      if (tool === 'eraser' || e.button === 5) cur.e = true; // button 5: a pen's eraser end
+      add(cur);
+      style(cur);
+      path(cur.p, 0);
+      if (cur.e) eraseNotes(cur.p[0], cur.p[1]);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!cur) return;
+      const from = cur.p.length - 2;
+      for (const ev of (e.getCoalescedEvents ? e.getCoalescedEvents() : [e])) {
+        const [x, y] = at(ev);
+        const lx = cur.p[cur.p.length - 2];
+        const ly = cur.p[cur.p.length - 1];
+        if (Math.hypot(x - lx, y - ly) * w >= 1.5) { cur.p.push(x, y); if (cur.e) eraseNotes(x, y); } // skip points closer than 1.5px
+      }
+      if (cur.p.length - 2 > from) { style(cur); path(cur.p, from); }
+    });
+    const end = () => { if (cur) { cur = null; save(); } };
+    canvas.addEventListener('pointerup', end);
+    canvas.addEventListener('pointercancel', end);
+    requestAnimationFrame(() => { size(); paint(); });
+    const onResize = () => { if (!canvas.isConnected) { window.removeEventListener('resize', onResize); return; } size(); paint(); };
+    window.addEventListener('resize', onResize);
+
+    const close = btn('close', 'Close scratchpad', () => toggleScratch(false));
+    close.classList.add('scratch-close');
+    const head = h('div', { class: 'scratch-head' },
+      h('div', { class: 'scratch-group', role: 'group', 'aria-label': 'Tool' }, tools.pen, tools.text, tools.eraser),
+      h('div', { class: 'scratch-group' }, undo, clear),
+      h('span', { class: 'scratch-q', text: `Question ${S.idx + 1}` }),
+      close);
+    return [head, board];
   }
 
   function directionsView(part) {
@@ -1335,6 +1556,7 @@
   function finishQuiz(kind) {
     S.done = true;
     clearMarks();
+    clearScratch();
     clearInterval(S.timer);
     hideFsOverlay();
     disposeEditor();
@@ -1493,6 +1715,7 @@
     S.deadline = 0;
     S.answers = {};
     loadMarks();
+    loadScratch();
     S.monitor = null;
     if (S.run.hasCode) loadMonaco().catch(() => {});
     screenQuiz();
