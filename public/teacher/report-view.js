@@ -127,9 +127,51 @@
   }
 
   // ---------- code answer vs the reference ----------
-  // Same code (ignoring indentation and blank lines): shown once. Close: "Show differences" swaps the two
-  // blocks for one diff. Written another way entirely: a diff would be all red and green, so no button.
+  // Same code (ignoring indentation and blank lines): shown once. Otherwise "Show differences" swaps the
+  // two blocks for one diff, with the changed words marked inside lines that were edited.
   const norm = (line) => line.trim();
+  // Word-level changes between an edited line and its counterpart: [start, end] ranges in each line.
+  // Lines that share too little get no marks, since everything would light up.
+  function wordRanges(a, b) {
+    const tok = (s) => { const out = []; const re = /\w+|\s+|[^\w\s]/g; let m; while ((m = re.exec(s))) out.push([m[0], m.index]); return out; };
+    const A = tok(a);
+    const B = tok(b);
+    if (A.length * B.length > 40000) return null;
+    const L = Array.from({ length: A.length + 1 }, () => new Uint16Array(B.length + 1));
+    for (let i = A.length - 1; i >= 0; i--) for (let j = B.length - 1; j >= 0; j--) L[i][j] = A[i][0] === B[j][0] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    const keepA = new Set();
+    const keepB = new Set();
+    for (let i = 0, j = 0; i < A.length && j < B.length;) {
+      if (A[i][0] === B[j][0]) { keepA.add(i++); keepB.add(j++); } else if (L[i + 1][j] >= L[i][j + 1]) i++; else j++;
+    }
+    const words = (T) => T.filter((t) => /\S/.test(t[0])).length || 1;
+    const sharedWords = [...keepA].filter((i) => /\S/.test(A[i][0])).length;
+    if (sharedWords / Math.max(words(A), words(B)) < 0.3) return null;
+    const ranges = (T, keep) => T.map((t, i) => (keep.has(i) || !/\S/.test(t[0]) ? null : [t[1], t[1] + t[0].length])).filter(Boolean);
+    return [ranges(A, keepA), ranges(B, keepB)];
+  }
+  // Wraps character ranges of el's text in <mark>, across the spans syntax highlighting made.
+  function markRanges(el, ranges) {
+    if (!ranges || !ranges.length) return;
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) nodes.push(n);
+    let at = 0;
+    for (const node of nodes) {
+      const start = at;
+      const end = at + node.data.length;
+      at = end;
+      const cuts = ranges.map(([a, b]) => [Math.max(a, start), Math.min(b, end)]).filter(([a, b]) => a < b);
+      for (const [a, b] of cuts.reverse()) { // from the right, so earlier offsets stay valid
+        const mid = node.splitText(a - start);
+        mid.splitText(b - a);
+        const mark = document.createElement('mark');
+        mark.className = 'd-word';
+        mid.replaceWith(mark);
+        mark.append(mid);
+      }
+    }
+  }
   function diffLines(a, b) {
     const A = a.map(norm);
     const B = b.map(norm);
@@ -164,13 +206,21 @@
         codeBox(q.answer, q.language), h('p', { class: 'r-also', text: 'Same as the correct answer.' }));
     }
     const both = compare(o, codeBox(q.answer, q.language), null, codeBox(q.reference, q.referenceLanguage), refLabel, true);
-    // How close they are, leaving out what every answer shares: braces and class/method headers.
-    const boiler = (l) => /^[{}()[\];,]*$/.test(l) || /^(\w+\s+)*class\s+\w+/.test(l) || /^def\s+\w+.*:$/.test(l)
-      || /^(\w+\s+)*[\w<>[\], ]+\s+\w+\s*\([^)]*\)\s*(throws\s[\w., ]+)?\{?$/.test(l);
-    const real = (lines) => lines.map(norm).filter((l) => !boiler(l)).length;
-    const shared = d ? d.lines.filter(([kind, l]) => kind === 'same' && !boiler(norm(l))).length : 0;
-    const size = real(mine) + real(ref);
-    if (!d || !size || (2 * shared) / size < 0.5) return both;
+    if (!d) return both; // different languages, or too long to compare
+    // Edited lines: a run of removed lines right before a run of added ones pairs up, line by line.
+    const marks = new Map();
+    for (let k = 0; k < d.lines.length;) {
+      if (d.lines[k][0] !== 'del') { k++; continue; }
+      let e = k;
+      while (e < d.lines.length && d.lines[e][0] === 'del') e++;
+      let f = e;
+      while (f < d.lines.length && d.lines[f][0] === 'add') f++;
+      for (let x = 0; x < Math.min(e - k, f - e); x++) {
+        const r = wordRanges(d.lines[k + x][1], d.lines[e + x][1]);
+        if (r) { marks.set(k + x, r[0]); marks.set(e + x, r[1]); }
+      }
+      k = f;
+    }
     const wrap = h('div', {}, both);
     let diffView = null;
     const btn = h('button', { class: 'r-diff-btn', type: 'button', text: 'Show differences' });
@@ -178,11 +228,14 @@
       if (!diffView) {
         diffView = h('div', { class: 'r-side' },
           h('p', { class: 'r-label', text: 'Differences' }),
-          h('pre', { class: 'r-code r-diff' }, d.lines.map(([kind, line]) => h('span', { class: `d-line d-${kind}` },
+          h('pre', { class: 'r-code r-diff' }, d.lines.map(([kind, line], k) => h('span', { class: `d-line d-${kind}`, 'data-k': k },
             h('span', { class: 'd-sign', 'aria-hidden': 'true', text: kind === 'add' ? '+' : kind === 'del' ? '−' : ' ' }),
             h('code', { 'data-lang': q.language, text: line || ' ' })))),
           h('p', { class: 'r-also', text: `Red: only in ${o.teacher ? 'their' : 'your'} answer. Green: only in the correct answer.` }));
-        highlight(diffView);
+        // colors first, then the changed words on top of them
+        highlight(diffView).then(() => {
+          diffView.querySelectorAll('.d-line').forEach((el) => markRanges(el.querySelector('code'), marks.get(Number(el.dataset.k))));
+        });
       }
       const showing = wrap.firstChild === diffView;
       wrap.replaceChildren(showing ? both : diffView);

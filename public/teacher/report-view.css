@@ -107,6 +107,9 @@
 .r-view .d-del { background: var(--tint-bad); }
 .r-view .d-add { background: var(--tint-good); }
 .r-view .d-del .d-sign { color: var(--bad); font-weight: 700; }
+.r-view mark.d-word { color: inherit; border-radius: 3px; }
+.r-view .d-del mark.d-word { background: color-mix(in srgb, var(--bad) 32%, transparent); }
+.r-view .d-add mark.d-word { background: color-mix(in srgb, var(--good) 32%, transparent); }
 .r-view .d-add .d-sign { color: var(--good); font-weight: 700; }
 @media print { .r-view .r-diff-row { display: none; } }
 .r-view .r-side { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; }

@@ -442,7 +442,8 @@
           h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), text: score }),
           actions);
       }));
-      if (focusKey) { const again = tbody.querySelector(`[data-key="${CSS.escape(focusKey)}"]`); if (again) again.focus(); }
+      // Keep keyboard focus on the same button after the redraw, without scrolling the page back to it.
+      if (focusKey) { const again = tbody.querySelector(`[data-key="${CSS.escape(focusKey)}"]`); if (again) again.focus({ preventScroll: true }); }
       if (selected) showDetail(selected, true);
     }
 
