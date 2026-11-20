@@ -97,10 +97,10 @@ input[type="file"].input { padding: 6px 10px; }
 .qe-part:first-child { margin-top: 0; }
 .qe-row-btn, .qe-settings {
   display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; font: 14px/1.4 var(--font);
-  color: var(--ink); text-align: left; background: none; border: 0; border-radius: 6px; cursor: pointer;
+  color: var(--ink); text-align: left; background: none; border: 0; border-radius: 0; cursor: pointer;
 }
 .qe-row-btn:hover, .qe-settings:hover { background: var(--soft); }
-.qe-row.sel .qe-row-btn, .qe-settings.sel { background: var(--soft); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent); }
+.qe-row.sel .qe-row-btn, .qe-settings.sel { background: var(--soft); font-weight: 600; }
 .qe-row-n { flex: none; width: 1.5em; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .qe-row-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qe-row-pts { flex: none; min-width: 1.2em; text-align: right; font-size: 13px; font-weight: 400; color: var(--ink-2); font-variant-numeric: tabular-nums; }
