@@ -1,4 +1,4 @@
-# Quiz Lockdown
+# BrowserQuiz
 
 A hosted quiz and CS exam app. Teachers upload a `.quiz` file and a class
 roster. Students take the quiz in a locked-down fullscreen page, the server
