@@ -29,7 +29,7 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `format` | `1` | Format version. Optional |
 | `title` | `"Untitled quiz"` | Shown to students and on reports |
 | `timeLimitMin` | `0` (no limit) | Minutes, up to 600. The quiz turns itself in at 0:00 |
-| `language` | `"java"` | `"java"` or `"python"`: how `inline code` and unlabeled code blocks are highlighted |
+| `language` | `"java"` | `"java"`, `"python"` or `"none"`: how `inline code` and unlabeled code blocks are highlighted. `"none"` leaves them plain, for quizzes that aren't about code (networking, math); blocks labeled ```` ```java ```` still get colors. Output, trace and fill questions then default to Java |
 | `shuffleQuestions` | `true` | Shuffle order per student, within each part (see below) |
 | `shuffleChoices` | `true` | Shuffle multiple choice options per student |
 | `integrity.graceStrikes` | `0` | Times a student can leave the window before the attempt is invalidated (0–10) |

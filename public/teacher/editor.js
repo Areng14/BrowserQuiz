@@ -812,7 +812,7 @@
       const ta = area(q, q.prompt, (v) => { q.prompt = v; }, { id: 'qe-prompt', rows: 4, spellcheck: 'true' });
       const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp' });
       file.addEventListener('change', () => addImage(q, file.files[0]));
-      const fence = () => { const s = ta.value.slice(0, ta.selectionStart); wrap(ta, `${s && !s.endsWith('\n') ? '\n' : ''}\`\`\`${quiz.language}\n`, '\n```\n'); };
+      const fence = () => { const s = ta.value.slice(0, ta.selectionStart); wrap(ta, `${s && !s.endsWith('\n') ? '\n' : ''}\`\`\`${quiz.language === 'none' ? '' : quiz.language}\n`, '\n```\n'); };
       const tool = (text, title, fn, cls) => h('button', { class: `qe-tool ${cls || ''}`, type: 'button', text, title, tabindex: '-1', onclick: fn });
       ta.addEventListener('keydown', (e) => {
         const mod = e.ctrlKey || e.metaKey;
@@ -947,7 +947,7 @@
     // ---------- the code students read: output, trace and fill questions ----------
     const codeAttrs = (rows, more) => Object.assign({ rows, class: 'input qe-area qe-mono qe-code', autocomplete: 'off' }, more || {});
     function langSelect(q, onChange) {
-      const sel = h('select', { class: 'input qe-narrow', 'aria-label': 'Language' }, Object.entries(LANGS).map(([v, t]) => h('option', { value: v, text: t, selected: (q.language || quiz.language) === v })));
+      const sel = h('select', { class: 'input qe-narrow', 'aria-label': 'Language' }, Object.entries(LANGS).map(([v, t]) => h('option', { value: v, text: t, selected: (q.language || (quiz.language === 'none' ? 'java' : quiz.language)) === v })));
       sel.addEventListener('change', () => { q.language = sel.value; if (onChange) onChange(); touch(q); });
       return sel;
     }
@@ -1239,7 +1239,7 @@
           showQuizEditor(currentId, { quiz: r.quiz, missing: r.missingImages });
         } catch (e) { pasteMsg.textContent = e.message; }
       });
-      const langSel = h('select', { class: 'input' }, Object.entries(LANGS).map(([v, t]) => h('option', { value: v, text: t, selected: quiz.language === v })));
+      const langSel = h('select', { class: 'input' }, Object.entries(Object.assign({}, LANGS, { none: 'None' })).map(([v, t]) => h('option', { value: v, text: t, selected: quiz.language === v })));
       langSel.addEventListener('change', () => { quiz.language = langSel.value; touch(); });
       paneTick = null;
       return [h('div', { class: 'qe-head' }, h('h1', { class: 'qe-n', text: 'Settings' })),

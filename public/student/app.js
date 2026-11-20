@@ -814,7 +814,7 @@
   }
 
   // ---------- predict the output, trace tables, fill in the blanks, written answers ----------
-  const codeBlock = (code, lang) => h('pre', { class: 'md-code' }, h('code', { 'data-lang': lang || S.quiz.language, text: code }));
+  const codeBlock = (code, lang) => h('pre', { class: 'md-code' }, h('code', { 'data-lang': lang || (S.quiz.language !== 'none' ? S.quiz.language : null), text: code }));
   // A textarea that grows with what's typed; Tab indents when it holds code.
   function growArea(attrs, value, onChange, codeLike) {
     const ta = h('textarea', Object.assign({ class: 'input long-answer' + (codeLike ? ' mono' : ''), spellcheck: codeLike ? 'false' : 'true', autocomplete: 'off' }, attrs));

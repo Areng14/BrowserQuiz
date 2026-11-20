@@ -36,8 +36,11 @@
     if (last < text.length) parent.append(text.slice(last));
   }
 
+  // "none": inline code and unlabeled blocks stay plain. Blocks labeled ```java still get colors.
+  const codeLang = (opts) => (opts && opts.lang && opts.lang !== 'none' ? opts.lang : null);
+
   function render(src, opts) {
-    const lang = opts && opts.lang;
+    const lang = codeLang(opts);
     const frag = document.createDocumentFragment();
     const lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n');
     let i = 0;
@@ -86,7 +89,7 @@
 
   function renderInline(src, opts) {
     const span = document.createElement('span');
-    inline(String(src == null ? '' : src), span, opts && opts.lang);
+    inline(String(src == null ? '' : src), span, codeLang(opts));
     return span;
   }
 

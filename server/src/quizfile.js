@@ -120,7 +120,8 @@ function normalizeQuiz(raw, assetNames) {
     timeLimitMin: Number(raw.timeLimitMin) > 0 ? Math.min(600, Math.round(Number(raw.timeLimitMin))) : 0,
     shuffleQuestions: raw.shuffleQuestions !== false,
     shuffleChoices: raw.shuffleChoices !== false,
-    language: LANGS.includes(raw.language) ? raw.language : 'java',
+    // How inline code is highlighted; "none" leaves it plain (say, networking or math quizzes).
+    language: LANGS.includes(raw.language) || raw.language === 'none' ? raw.language : 'java',
     integrity: { graceStrikes: Math.max(0, Math.min(10, Math.floor(Number(g.graceStrikes) || 0))) },
     directions: {},
     questions: [],
@@ -203,7 +204,7 @@ function normalizeQuiz(raw, assetNames) {
 // output (predict what it prints), trace (trace table), fill (fill in the blanks), essay (teacher-graded).
 function normalizeNewType(where, type, q, quizLang, points) {
   const out = {};
-  const lang = LANGS.includes(q.language) ? q.language : quizLang;
+  const lang = LANGS.includes(q.language) ? q.language : LANGS.includes(quizLang) ? quizLang : 'java';
   const code = (need) => {
     if (typeof q.code !== 'string' || !q.code.trim()) {
       if (need) fail(`${where}: needs "code".`);
