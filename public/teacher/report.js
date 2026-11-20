@@ -32,7 +32,7 @@
       body.push(h('ul', { class: 'r-choices' }, q.choices.map((c, ci) => {
         const picked = q.picked.includes(ci);
         const correct = q.correct.includes(ci);
-        const tag = picked && correct ? 'Your answer · Correct' : picked ? 'Your answer' : correct ? 'Correct answer' : '';
+        const tag = picked && correct ? 'Your answer (correct)' : picked ? 'Your answer' : correct ? 'Correct answer' : '';
         return h('li', { class: correct ? 'correct' : picked ? 'wrong' : null },
           h('span', { class: 'r-mark', text: correct ? '✓' : picked ? '✗' : '' }),
           inline(c, quiz.language),

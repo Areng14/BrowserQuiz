@@ -43,9 +43,12 @@ If students can't reach it, open port 8080 in the server's firewall.
   has **Preview**, which shows exactly what students see, lets you run code, and gives you the score.
 - **Classes:** use **New class** and paste one student per line (`name, student ID`, or straight
   from a spreadsheet), or upload a CSV.
-- **With an AI:** this repo includes instructions for AI assistants (`AGENTS.md`, plus a Claude
-  Code skill). Ask one to "make a quiz on …" in this folder. It writes the quiz, checks it, and
-  packs a `.quiz` to upload.
+- **With an AI chat (ChatGPT, Claude, …):** click **AI prompt** next to New quiz, fill in the blanks
+  at the top, and paste it into the chat. AIs that can make files hand back a `.quiz` (images
+  included) to upload. Others give a `quiz.json`: upload it, or paste it under New quiz and add
+  any images there.
+- **With an AI coding assistant in this repo:** it follows `AGENTS.md` and the Claude Code skill.
+  It writes the quiz, runs the reference solutions, and packs a `.quiz`.
 
 The format is in `docs/quiz-format.md`. A `.quiz` file is a zip of a folder holding `quiz.json`
 and an optional `assets/` folder. To try the example, zip `examples/ap-csa-unit4` and upload it

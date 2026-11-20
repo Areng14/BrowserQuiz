@@ -3,7 +3,9 @@
 const crypto = require('node:crypto');
 const { q, tx } = require('./db');
 const store = require('./store');
-const { loadQuizFile, normalizeQuiz, QuizError } = require('./quizfile');
+const fs = require('node:fs');
+const path = require('node:path');
+const { loadQuizFile, normalizeQuiz, QuizError, ASSET_TYPES } = require('./quizfile');
 const { writeZip } = require('./zip');
 const { checkReferences, runnerConfigured, runnerHealthy, runSamples, gradeCode } = require('./coderun');
 const { totals, questionScore, codeAnswered, gradeAttempt, answerReport, cleanAnswers, gradeAuto } = require('./grade');
@@ -179,6 +181,26 @@ function quizSource(quiz) {
   return out;
 }
 
+// The prompt teachers paste into an AI chat to get a quiz: the template, the format spec and an example.
+function quizPrompt() {
+  const root = path.join(__dirname, '..', '..');
+  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
+  const format = read('docs/quiz-format.md')
+    .replace(/<!-- not-in-prompt -->[\s\S]*?<!-- \/not-in-prompt -->\n?/g, '')
+    .replace(/^# .*\n+/, '')
+    .replace(/^### /gm, '#### ')
+    .replace(/^## /gm, '### ')
+    .trim();
+  const example = read('examples/ap-csa-unit4/quiz.json').trim();
+  return read('server/prompt/quiz-prompt.md').replace('{{FORMAT}}', () => format).replace('{{EXAMPLE}}', () => example);
+}
+// A pasted or uploaded quiz.json (no zip). Images it names must come from somewhere else.
+function parseQuizJson(buf) {
+  try { return JSON.parse(buf.toString('utf8').replace(/^\uFEFF/, '')); } catch (e) { throw new QuizError('quiz.json is not valid JSON: ' + e.message); }
+}
+const imagePaths = (raw) => new Set((Array.isArray(raw && raw.questions) ? raw.questions : [])
+  .map((qq) => (qq && qq.image != null ? String(qq.image).replace(/^\.?\//, '') : null)).filter(Boolean));
+
 // ---------- rosters ----------
 // One student per line: "Name, ID" or a spreadsheet paste (tab between). The last comma splits, so
 // "Martinez, Ava, 204511" works. A header line like "name, student_id" is skipped.
@@ -262,7 +284,8 @@ module.exports = function teacherRoutes(r) {
     const buf = await readBody(req, 26 * 1024 * 1024);
     let parsed;
     try {
-      parsed = loadQuizFile(buf);
+      const head = buf.toString('utf8', 0, Math.min(buf.length, 64)).replace(/^\uFEFF/, '').trimStart();
+      parsed = head.startsWith('{') ? { quiz: normalizeQuiz(parseQuizJson(buf), new Set()), assets: new Map() } : loadQuizFile(buf);
       await checkQuiz(parsed.quiz);
     } catch (e) { return quizError(res, e); }
     const id = saveQuiz(parsed.quiz, [...parsed.assets].map(([path, a]) => ({ path, mime: a.mime, bytes: a.bytes })), null);
@@ -274,17 +297,48 @@ module.exports = function teacherRoutes(r) {
   // (images carry over), so runs that used the old version keep grading the same way.
   r.post('/api/t/quizzes/json', async (req, res) => {
     requireTeacher(req);
-    const body = await readJson(req, 4 * 1024 * 1024);
+    const body = await readJson(req, 32 * 1024 * 1024);
     const old = body.replaces ? getQuizRow(body.replaces) : null;
     const assets = old ? q('SELECT path, mime, bytes FROM assets WHERE quiz_id = ?').all(old.id) : [];
     let quiz;
     try {
+      // Images added in the quiz maker arrive as base64, keyed by their assets/ path.
+      for (const [p2, b64] of Object.entries(body.assets && typeof body.assets === 'object' ? body.assets : {})) {
+        const ext = (p2.match(/\.[A-Za-z0-9]+$/) || [''])[0].toLowerCase();
+        if (!/^assets\/[A-Za-z0-9 _.-]{1,100}$/.test(p2) || p2.includes('..') || !ASSET_TYPES[ext]) throw new QuizError(`${p2}: images must be png, jpg, gif or webp.`);
+        const bytes = Buffer.from(String(b64), 'base64');
+        if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new QuizError(`${p2}: images can be up to 5 MB.`);
+        const i = assets.findIndex((a) => a.path === p2);
+        if (i >= 0) assets.splice(i, 1);
+        assets.push({ path: p2, mime: ASSET_TYPES[ext], bytes });
+      }
       quiz = normalizeQuiz(body.quiz, new Set(assets.map((a) => a.path)));
       await checkQuiz(quiz);
     } catch (e) { return quizError(res, e); }
     const id = saveQuiz(quiz, assets, old && old.id);
     audit(old ? 'edit-quiz' : 'create-quiz', null, quiz.title);
     json(res, 200, { id, title: quiz.title });
+  });
+
+  // Pasted quiz.json -> the quiz maker. Validates without checking references or saving; images it
+  // names come back as missing so they can be added in the editor.
+  r.post('/api/t/quizzes/normalize', async (req, res) => {
+    requireTeacher(req);
+    const body = await readJson(req, 4 * 1024 * 1024);
+    try {
+      const raw = typeof body.json === 'string' ? parseQuizJson(Buffer.from(body.json)) : body.quiz;
+      const images = imagePaths(raw);
+      const quiz = normalizeQuiz(raw, images);
+      json(res, 200, { quiz: quizSource(quiz), missingImages: [...images] });
+    } catch (e) { return quizError(res, e); }
+  });
+
+  r.get('/api/t/quiz-prompt', (req, res) => {
+    requireTeacher(req);
+    send(res, 200, quizPrompt(), {
+      'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store',
+      'Content-Disposition': 'attachment; filename="BrowserQuiz quiz prompt.txt"',
+    });
   });
 
   r.get('/api/t/quizzes/:id/source', (req, res, p) => {

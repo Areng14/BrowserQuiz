@@ -16,6 +16,9 @@ ENV NODE_ENV=production DATA_DIR=/data PORT=8080
 WORKDIR /app
 COPY server ./server
 COPY public ./public
+# The quiz format and an example go into the AI prompt teachers can download.
+COPY docs/quiz-format.md ./docs/quiz-format.md
+COPY examples/ap-csa-unit4/quiz.json ./examples/ap-csa-unit4/quiz.json
 COPY --from=editor /src/public/vendor ./public/vendor
 RUN mkdir -p /data && chown node:node /data
 USER node

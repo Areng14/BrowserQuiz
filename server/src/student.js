@@ -220,7 +220,7 @@ module.exports = function studentRoutes(r) {
         for (const e of body.late.slice(0, 50)) {
           if (!Array.isArray(e) || !store.CLIENT_EVENTS[e[0]]) continue;
           const ago = Math.max(0, Math.round(Number(e[2]) / 1000) || 0);
-          store.record(a, e[0], [e[1] ? String(e[1]).slice(0, 120) : null, `sent ${ago}s late`].filter(Boolean).join(' · '), quiz);
+          store.record(a, e[0], [e[1] ? String(e[1]).slice(0, 120) : null, `sent ${ago}s late`].filter(Boolean).join(', '), quiz);
         }
       }
       if (a.beatLost) store.logEvent(a, 'reconnect', 'info', Math.round((now - a.lastBeat) / 1000) + 's offline');
@@ -254,7 +254,7 @@ module.exports = function studentRoutes(r) {
     if (!runLimit(a.id)) throw new HttpError(429, 'too_many');
     const qq = quiz.questions.find((x) => x.id === body.questionId && x.type === 'code');
     if (!qq || !qq.languages.includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
-    store.logEvent(a, 'run', 'info', `${qq.id} · ${body.language}`);
+    store.logEvent(a, 'run', 'info', `${qq.id} (${body.language === 'python' ? 'Python' : 'Java'})`);
     try {
       json(res, 200, await runSamples(qq, body.language, body.code.slice(0, 50000)));
     } catch (e) {

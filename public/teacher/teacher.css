@@ -92,3 +92,8 @@ input[type="file"].input { padding: 6px 10px; }
 .t-problems { margin: 0; white-space: pre-wrap; font: inherit; }
 .t-problems:empty { display: none; }
 .t-list .t-actions { width: 1%; text-align: right; }
+.qe-paste summary { cursor: pointer; color: var(--accent); width: max-content; }
+.qe-paste[open] { display: grid; gap: 8px; }
+.qe-image { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.qe-thumb { max-width: 240px; max-height: 160px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.qe-image-side { flex: 1 1 280px; display: grid; gap: 8px; }

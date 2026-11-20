@@ -297,7 +297,7 @@
       await delay(650 + Math.random() * 500);
       const q = QUIZ.questions.find((x) => x.id === questionId);
       if (!q) throw fail('network');
-      if (st.attempt) { st.attempt.runs++; log('run', `${questionId} · ${language}`, 'info'); emit(); }
+      if (st.attempt) { st.attempt.runs++; log('run', `${questionId} (${language === 'python' ? 'Python' : 'Java'})`, 'info'); emit(); }
       return simulateRun(q, language, String(code || ''));
     },
     async submit(answers) {

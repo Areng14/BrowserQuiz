@@ -216,17 +216,29 @@
   }
 
   // ---------- the editor ----------
-  async function showQuizEditor(id) {
+  const IMAGE_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
+  const extOf = (p) => (String(p).match(/\.[A-Za-z0-9]+$/) || [''])[0].toLowerCase();
+
+  // preset: { quiz, missing } from a pasted quiz.json, loaded into this editor unsaved.
+  async function showQuizEditor(id, preset) {
     const { h, api, post, mount, bar, showHome } = window.BQT;
     let quiz;
     let currentId = id;
+    let existingAssets = new Set(); // images already stored with the quiz being edited
+    let assetQuizId = id;
+    let newAssets = {}; // assets/<name> -> base64, added here and sent on save
+    let missing = new Set(preset ? preset.missing : []);
     if (id) {
-      try { quiz = (await api(`/api/t/quizzes/${encodeURIComponent(id)}/source`)).quiz; } catch (e) { return; }
-      quiz.questions.forEach(withUi);
-    } else {
-      quiz = { format: 1, title: '', timeLimitMin: 20, language: 'java', shuffleQuestions: true, shuffleChoices: true, integrity: { graceStrikes: 0 }, questions: [] };
+      let src;
+      try { src = await api(`/api/t/quizzes/${encodeURIComponent(id)}/source`); } catch (e) { return; }
+      quiz = src.quiz;
+      existingAssets = new Set(src.assets);
     }
-    let dirty = false;
+    if (preset) quiz = preset.quiz;
+    if (!quiz) quiz = { format: 1, title: '', timeLimitMin: 20, language: 'java', shuffleQuestions: true, shuffleChoices: true, integrity: { graceStrikes: 0 }, questions: [] };
+    quiz.questions.forEach(withUi);
+    for (const p of [...missing]) if (existingAssets.has(p)) missing.delete(p);
+    let dirty = !!preset;
     const touch = () => { dirty = true; status.textContent = ''; };
     const msg = h('pre', { class: 't-error t-problems', role: 'alert' });
     const status = h('span', { class: 't-muted t-small', role: 'status' });
@@ -341,6 +353,37 @@
       return parts;
     }
 
+    function imageEditor(q) {
+      const file = h('input', { type: 'file', class: 'input', accept: 'image/png,image/jpeg,image/gif,image/webp' });
+      file.addEventListener('change', () => {
+        const f = file.files[0];
+        if (!f) return;
+        if (!IMAGE_MIME[extOf(f.name)]) { alert('Images must be png, jpg, gif or webp.'); return; }
+        if (f.size > 5 * 1024 * 1024) { alert('Images can be up to 5 MB.'); return; }
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base = f.name.replace(/[^A-Za-z0-9 _.-]/g, '_').slice(-80);
+          let p2 = q.image && missing.has(q.image) && extOf(q.image) === extOf(base) ? q.image : `assets/${base}`;
+          for (let n = 2; p2 !== q.image && (existingAssets.has(p2) || newAssets[p2]); n++) p2 = `assets/${base.replace(/(\.[^.]+)$/, `-${n}$1`)}`;
+          newAssets[p2] = String(reader.result).split(',')[1];
+          missing.delete(p2);
+          q.image = p2;
+          touch();
+          render();
+        };
+        reader.readAsDataURL(f);
+      });
+      if (!q.image) return field('Image (optional)', file);
+      const src = newAssets[q.image] ? `data:${IMAGE_MIME[extOf(q.image)]};base64,${newAssets[q.image]}`
+        : existingAssets.has(q.image) && assetQuizId ? `/api/t/quizzes/${encodeURIComponent(assetQuizId)}/asset?path=${encodeURIComponent(q.image)}` : null;
+      return h('div', { class: 'qe-image' },
+        src ? h('img', { class: 'qe-thumb', src, alt: q.imageAlt || '' }) : h('p', { class: 't-error t-small', text: `${q.image} is missing. Add the image file.` }),
+        h('div', { class: 'qe-image-side' },
+          field('Image description', input(q.imageAlt, (v) => { q.imageAlt = v; })),
+          h('div', { class: 't-row qe-inline' }, field(src ? 'Replace image' : 'Add the image', file),
+            h('button', { class: 'btn small', type: 'button', text: 'Remove image', onclick: () => { delete q.image; delete q.imageAlt; touch(); render(); } }))));
+    }
+
     function questionCard(q, i) {
       const type = h('select', { class: 'input qe-narrow', 'aria-label': 'Type' }, Object.entries(TYPES).map(([v, t]) => h('option', { value: v, text: t, selected: q.type === v })));
       type.addEventListener('change', () => { quiz.questions[i] = blank(type.value, q); touch(); render(); });
@@ -353,7 +396,7 @@
         h('button', { class: 'btn small', type: 'button', text: '↓', 'aria-label': 'Move down', disabled: i === quiz.questions.length - 1, onclick: () => move(1) }),
         h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => { quiz.questions.splice(i, 1); touch(); render(); } }));
       const body = [field('Prompt', area(q.prompt, (v) => { q.prompt = v; }, { rows: 3, placeholder: 'Use `code`, **bold**, and ```java blocks for longer code' }))];
-      if (q.image) body.push(h('p', { class: 't-muted t-small', text: `Image: ${q.image}` }));
+      body.push(imageEditor(q));
       if (q.type === 'single' || q.type === 'multi') body.push(...choicesEditor(q));
       if (q.type === 'text') {
         body.push(field('Accepted answers, one per line', area(q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 3 })),
@@ -375,9 +418,15 @@
       saveBtn.disabled = true;
       status.textContent = 'Checking…';
       try {
-        const r = await post('/api/t/quizzes/json', { quiz: out, replaces: currentId });
+        const used = new Set(out.questions.map((q) => q.image).filter(Boolean));
+        const assets = Object.fromEntries(Object.entries(newAssets).filter(([p2]) => used.has(p2)));
+        const r = await post('/api/t/quizzes/json', { quiz: out, replaces: currentId, assets });
         currentId = r.id;
+        assetQuizId = r.id;
+        for (const p2 of Object.keys(assets)) existingAssets.add(p2);
+        newAssets = {};
         dirty = false;
+        render();
         status.textContent = 'Saved';
         return r.id;
       } catch (e) {
@@ -400,12 +449,26 @@
       class: 'btn small', type: 'button', text: `Add ${name.toLowerCase()}`,
       onclick: () => { quiz.questions.push(blank(t, { id: nextId() })); touch(); render(); list.lastElementChild.scrollIntoView({ block: 'center' }); },
     })));
+    const pasteArea = h('textarea', { class: 'input t-textarea', rows: 8, spellcheck: 'false', id: 'paste-json', placeholder: '{ "title": "...", "questions": [ ... ] }' });
+    const pasteMsg = h('p', { class: 't-error', role: 'alert' });
+    const pasteBtn = h('button', { class: 'btn small', type: 'button', text: 'Load' });
+    pasteBtn.addEventListener('click', async () => {
+      pasteMsg.textContent = '';
+      if (dirty && quiz.questions.length && !confirm('Replace what\'s here with the pasted quiz?')) return;
+      try {
+        const r = await post('/api/t/quizzes/normalize', { json: pasteArea.value });
+        showQuizEditor(currentId, { quiz: r.quiz, missing: r.missingImages });
+      } catch (e) { pasteMsg.textContent = e.message; }
+    });
+    const paste = h('details', { class: 'qe-paste' }, h('summary', { text: 'Paste a quiz.json (from an AI)' }),
+      h('label', { class: 'field', for: 'paste-json' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteArea),
+      h('div', {}, pasteBtn), pasteMsg);
     const langSel = h('select', { class: 'input' }, Object.entries(LANGS).map(([v, t]) => h('option', { value: v, text: t, selected: quiz.language === v })));
     langSel.addEventListener('change', () => { quiz.language = langSel.value; touch(); });
     const settings = h('div', { class: 't-row' },
       field('Title', input(quiz.title, (v) => { quiz.title = v; }, { placeholder: 'Unit 4 check' })),
       field('Time limit (minutes, 0 = none)', input(quiz.timeLimitMin, (v) => { quiz.timeLimitMin = Number(v) || 0; }, { type: 'number', min: '0', max: '600' })),
-      field('Code in prompts is', langSel),
+      field('Code highlighting', langSel),
       field('Window exits allowed before invalidating', input((quiz.integrity || {}).graceStrikes || 0, (v) => { quiz.integrity = { graceStrikes: Number(v) || 0 }; }, { type: 'number', min: '0', max: '10' })));
     const toggles = h('div', { class: 't-row qe-inline' },
       check(quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { quiz.shuffleQuestions = v; }),
@@ -413,7 +476,7 @@
 
     mount(bar(h('button', { class: 't-link', type: 'button', text: '← All quizzes', onclick: leave })),
       h('main', { class: 't-main' },
-        h('section', { class: 't-section' }, h('h1', { text: id ? 'Edit quiz' : 'New quiz' }), settings, toggles),
+        h('section', { class: 't-section' }, h('h1', { text: id ? 'Edit quiz' : 'New quiz' }), paste, settings, toggles),
         list,
         addRow,
         h('div', { class: 'qe-save' }, saveBtn, previewBtn, status),

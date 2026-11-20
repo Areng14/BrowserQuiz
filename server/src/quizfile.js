@@ -260,4 +260,4 @@ function normalizeCode(where, q) {
   return out;
 }
 
-module.exports = { loadQuizFile, normalizeQuiz, checkValue, elementType, QuizError, VALUE_TYPES, LIMITS };
+module.exports = { loadQuizFile, normalizeQuiz, checkValue, elementType, QuizError, VALUE_TYPES, LIMITS, ASSET_TYPES };

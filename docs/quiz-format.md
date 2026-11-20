@@ -1,9 +1,10 @@
 # The .quiz format
 
-A `.quiz` file is a zip with `quiz.json` at the root (or inside one top-level folder) and an
-optional `assets/` folder of images (png, jpg, gif or webp). Limits: 25 MB, 500 files,
-300 questions.
+A quiz is a `quiz.json` file. Upload it as is, or as a `.quiz` file: a zip with `quiz.json`
+at the root (or inside one top-level folder) and an optional `assets/` folder of images
+(png, jpg, gif or webp). Limits: 25 MB, 500 files, 300 questions.
 
+<!-- not-in-prompt -->
 Check a quiz before uploading. `--run` also runs the reference solutions, which needs
 `python3`, plus a JDK for Java:
 
@@ -19,6 +20,7 @@ node scripts/pack-quiz.mjs path/to/folder out.quiz
 
 `examples/ap-csa-unit4/quiz.json` uses most features. Teachers can also build quizzes in the
 dashboard (New quiz) and check how one looks with Preview. Both save this same format.
+<!-- /not-in-prompt -->
 
 ## Top level
 

@@ -95,7 +95,7 @@
     try { [data, me] = await Promise.all([api('/api/t/overview'), api('/api/t/me').catch(() => null)]); } catch (e) { if (e.message !== 'login') mount(h('p', { class: 't-error', text: e.message })); return; }
     const runner = !me || !me.runner || me.runnerOk ? null
       : h('p', { class: 't-error t-small' }, h('span', { class: 'dot bad' }), 'Code runner offline. Code questions get graded once it is back.');
-    const quizSel = h('select', { class: 'input', id: 'run-quiz' }, data.quizzes.map((x) => h('option', { value: x.id, text: `${x.title} (${plural(x.questions, 'question')}) · added ${date(x.createdAt)}` })));
+    const quizSel = h('select', { class: 'input', id: 'run-quiz' }, data.quizzes.map((x) => h('option', { value: x.id, text: `${x.title} (${plural(x.questions, 'question')}, added ${date(x.createdAt)})` })));
     const rosterSel = h('select', { class: 'input', id: 'run-roster' }, data.rosters.map((x) => h('option', { value: x.id, text: `${x.name} (${x.students})` })));
     const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', checked: true });
     const startMsg = h('p', { class: 't-error', role: 'alert' });
@@ -105,7 +105,7 @@
       try { const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked }); showRun(r.id); } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
     });
 
-    const quizFile = h('input', { class: 'input', type: 'file', id: 'quiz-file', accept: '.quiz,.zip' });
+    const quizFile = h('input', { class: 'input', type: 'file', id: 'quiz-file', accept: '.quiz,.zip,.json' });
     const quizMsg = h('p', { class: 't-error', role: 'alert' });
     const quizBtn = h('button', { class: 'btn', type: 'button', text: 'Upload .quiz' });
     quizBtn.addEventListener('click', async () => {
@@ -126,7 +126,7 @@
       try { await post('/api/t/rosters', { name: rosterName.value, csv: await f.text() }); showHome(); } catch (e) { rosterMsg.textContent = e.message; rosterBtn.disabled = false; }
     });
 
-    mount(bar('BrowserQuiz · Teacher'), h('main', { class: 't-main' },
+    mount(bar('BrowserQuiz (Teacher Panel)'), h('main', { class: 't-main' },
       h('section', { class: 't-section' },
         h('h1', { text: 'Start a quiz' }),
         !data.quizzes.length || !data.rosters.length ? h('p', { class: 't-muted', text: 'Upload a quiz and a roster below first.' }) : null,
@@ -146,17 +146,20 @@
             h('td', { class: 'num', text: String(r.joined) }), h('td', { text: date(r.createdAt) })))))) : h('p', { class: 't-muted', text: 'None yet.' })),
       h('section', { class: 't-section' },
         h('div', { class: 't-head' }, h('h2', { text: 'Quizzes' }),
+          linkBtn('AI prompt', '/api/t/quiz-prompt'),
           h('button', { class: 'btn small primary', type: 'button', text: 'New quiz', onclick: () => window.BQT.showQuizEditor(null) })),
         data.quizzes.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
           h('tbody', {}, data.quizzes.map((x) => h('tr', {},
             h('td', { text: x.title }),
-            h('td', { class: 't-muted', text: `${plural(x.questions, 'question')}${x.timeLimitMin ? ` · ${x.timeLimitMin} min` : ''} · ${date(x.createdAt)}` }),
+            h('td', { class: 't-muted', text: plural(x.questions, 'question') }),
+            h('td', { class: 't-muted', text: x.timeLimitMin ? `${x.timeLimitMin} min` : 'No time limit' }),
+            h('td', { class: 't-muted', text: date(x.createdAt) }),
             h('td', { class: 't-actions' },
               linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true),
               h('button', { class: 'btn small', type: 'button', text: 'Edit', onclick: () => window.BQT.showQuizEditor(x.id) }),
               linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
               h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}? Past results stay.`) }))))))) : null,
-        h('div', { class: 't-row' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz file' }), quizFile), quizBtn),
+        h('div', { class: 't-row' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizBtn),
         quizMsg),
       h('section', { class: 't-section' },
         h('div', { class: 't-head' }, h('h2', { text: 'Classes' }),
@@ -278,7 +281,7 @@
       const run = data.run;
       code.textContent = run.code;
       title.textContent = run.title;
-      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? ` · ${plural(run.timeLimitMin, 'minute')}` : ''} · ${run.status === 'open' ? 'Open' : 'Closed'}${run.ipLock ? ' · only your network' : ''}`;
+      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.ipLock ? ', only your network' : ''}.`;
       howTo.textContent = `Join at ${location.origin}`;
       toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
       toggle.onclick = () => {
@@ -342,11 +345,11 @@
         const parts = [h('p', {}, h('b', { text: `${i + 1}. ` }), x.prompt.replace(/```\w*/g, ' ').replace(/`/g, '').replace(/\s+/g, ' ').trim().slice(0, 140))];
         const pts = x.points != null ? `${x.points} / ${x.max}${x.override ? ' (set by you)' : ''}`
           : x.state === 'pending' ? 'grading…' : x.state === 'failed' ? `grading failed (${(x.code && x.code.message) || 'runner offline'})` : `– / ${x.max}`;
-        parts.push(h('p', { class: 't-muted t-small', text: `Points: ${pts}${x.review ? ' · needs review' : ''}` }));
+        parts.push(h('p', { class: 't-muted t-small', text: `Points: ${pts}${x.review ? ' (needs review)' : ''}` }));
         if (x.type === 'code') {
           parts.push(h('pre', { text: x.answer || '(no answer)' }));
           if (x.code && x.code.compileError) parts.push(h('pre', { class: 't-error', text: x.code.compileError }));
-          if (x.code && x.code.tests) parts.push(h('p', { class: 't-small', text: `Hidden tests passed: ${x.code.tests.filter((t) => t.pass).length} of ${x.code.tests.length}${x.language ? ` · ${x.language}` : ''}` }));
+          if (x.code && x.code.tests) parts.push(h('p', { class: 't-small', text: `Hidden tests passed: ${x.code.tests.filter((t) => t.pass).length} of ${x.code.tests.length}${x.language ? ` (${x.language === 'python' ? 'Python' : 'Java'})` : ''}` }));
         } else {
           parts.push(h('p', { class: 't-small' }, 'Answer: ', h('b', { text: x.answer == null ? '(blank)' : String(x.answer) })));
           parts.push(h('p', { class: 't-small t-muted', text: `Correct: ${x.correctAnswer}` }));
@@ -366,10 +369,11 @@
         d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}` }) : null,
         h('div', { class: 't-detail-grid' },
           h('div', { class: 't-section' }, h('h3', { text: 'Activity' }),
-            h('ul', { class: 't-events' }, d.events.map((e) => h('li', { class: e.severity }, h('time', { text: clock(e.t) }), h('span', {}, h('b', { text: LABEL[e.type] || e.type }), e.detail ? ` · ${e.detail}` : ''))))),
+            h('ul', { class: 't-events' }, d.events.map((e) => h('li', { class: e.severity }, h('time', { text: clock(e.t) }), h('span', {}, h('b', { text: LABEL[e.type] || e.type }), e.detail ? h('span', { class: 't-muted', text: ` ${e.detail}` }) : null))))),
           h('div', { class: 't-section' }, h('h3', { text: 'Mouse trail' }), canvas,
-            h('p', { class: 't-muted t-small', text: `${d.mouse.length} samples · ${d.userAgent || ''}` }))),
-        h('div', { class: 't-section' }, h('h3', { text: d.totals ? `Answers · ${d.totals.score} / ${d.totals.max}${d.totals.pending ? ' (code still grading)' : d.totals.failed ? ' (grading failed)' : d.totals.review ? ' (needs review)' : ''}` : 'Answers' }), answers)));
+            h('p', { class: 't-muted t-small', text: `${d.mouse.length} mouse samples` }),
+            d.userAgent ? h('p', { class: 't-muted t-small', text: d.userAgent }) : null)),
+        h('div', { class: 't-section' }, h('h3', { text: d.totals ? `Answers (${d.totals.score} / ${d.totals.max}${d.totals.pending ? ', code still grading' : d.totals.failed ? ', grading failed' : d.totals.review ? ', needs review' : ''})` : 'Answers' }), answers)));
       drawTrail(canvas, d.mouse);
       if (!quiet) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
