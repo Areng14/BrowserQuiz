@@ -80,6 +80,7 @@
         if (this.awaySince) {
           this.report('return', ((Date.now() - this.awaySince) / 1000).toFixed(1) + 's away');
           this.awaySince = 0;
+          if (this.opts.onReturn) this.opts.onReturn();
         }
       });
       this.on(document, 'visibilitychange', () => {

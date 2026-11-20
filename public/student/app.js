@@ -436,15 +436,16 @@
       h('div', { class: 'heading' },
         h('h1', { text: 'Before you start' }),
         h('p', { text: mins ? `${plural(n, 'question')} in ${plural(mins, 'minute')}.` : `${plural(n, 'question')}.` })),
+      h('div', { class: 'cheat-rule', role: 'note' },
+        h('p', { class: 'cheat-title', text: 'Leaving the quiz counts as cheating.' }),
+        h('p', { text: 'That means switching to another window, tab or app, leaving fullscreen, reloading or closing this page, or using Exit when your teacher didn\'t say to. Your teacher sees each time it happens.' })),
       h('ul', { class: 'rules' },
         h('li', { text: 'The quiz runs in fullscreen.' }),
-        h('li', { text: 'Leaving the quiz window, switching tabs or apps, or leaving fullscreen is recorded and reported to your teacher.' }),
-        h('li', { text: 'Reloading or closing this page counts as leaving it.' }),
         h('li', { text: 'Mouse and keyboard activity is recorded.' }),
         h('li', { text: 'Pasting from outside the quiz is blocked.' }),
         mins ? h('li', { text: 'The quiz turns itself in when time runs out.' }) : null),
       checkList,
-      h('label', { class: 'agree', for: 'agree' }, agree, h('span', { text: 'I read the rules' })),
+      h('label', { class: 'agree', for: 'agree' }, agree, h('span', { text: 'I understand that leaving the quiz counts as cheating' })),
       btn, msg,
       cfg.demo && prechecks().some((c) => !c.ok) ? demoHint('Demo: checks are shown but not enforced here.') : null);
 
@@ -485,6 +486,7 @@
       getAnswers: serializeAnswers,
       onFullscreenLost: showFsOverlay,
       onFullscreenBack: hideFsOverlay,
+      onReturn: showLeftWarning,
       onPasteBlocked: () => toast('Pasting from outside the quiz is blocked.'),
       onSave: () => toast('Saved'),
       onReloadBlocked: () => toast('Reloading is off during the quiz.'),
@@ -500,6 +502,7 @@
     if (!S.el) return;
     if (res && res.now) S.skew = res.now - Date.now();
     if (res && res.deadline && res.deadline !== S.deadline) S.deadline = res.deadline; // teacher gave extra time
+    if (res && res.done && !S.submitting) return endQuiz('mine'); // the teacher ended this student's quiz
     setOnline(true);
     if (info && info.answers && S.saveState === 'saving') setSave('saved');
   }
@@ -1149,11 +1152,27 @@
     const btn = h('button', { class: 'btn primary', type: 'button', text: 'Return to fullscreen', onclick: () => enterFullscreen() });
     const ov = h('div', { class: 'fs-overlay' },
       h('div', { class: 'fs-card', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'fs-title' },
-        h('h2', { id: 'fs-title', text: 'The quiz runs in fullscreen' }),
+        h('h2', { id: 'fs-title', text: 'You left fullscreen' }),
+        h('p', { text: 'Leaving fullscreen counts as cheating, and your teacher can see that you left. Go back to keep working.' }),
         h('div', { class: 'row-actions' }, btn, h('button', { class: 'btn', type: 'button', text: 'Exit', onclick: () => openExit() }))));
     S.el.fsOverlay = ov;
     S.el.wrap.append(ov);
     btn.focus();
+  }
+  // Every time a student comes back to the window. It reads the same no matter how many times they left
+  // or whether that cost them anything, so it gives nothing away.
+  function showLeftWarning() {
+    if (S.done || !S.el || S.el.fsOverlay || S.el.wrap.querySelector('.modal-backdrop')) return;
+    let backdrop;
+    const back = h('button', { class: 'btn primary', type: 'button', text: 'Back to the quiz', onclick: () => { backdrop.remove(); S.el.main.focus({ preventScroll: true }); } });
+    backdrop = h('div', { class: 'modal-backdrop' },
+      h('div', { class: 'modal warn-modal', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'left-title', 'aria-describedby': 'left-text' },
+        h('h2', { id: 'left-title', text: 'You left the quiz' }),
+        h('p', { id: 'left-text', text: 'Leaving the quiz window counts as cheating, and your teacher can see that you left.' }),
+        h('div', { class: 'modal-actions' }, back)));
+    backdrop.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); back.click(); } });
+    S.el.wrap.append(backdrop);
+    back.focus();
   }
   function hideFsOverlay() {
     if (S.el && S.el.fsOverlay) { S.el.fsOverlay.remove(); S.el.fsOverlay = null; }
@@ -1170,7 +1189,7 @@
     backdrop = h('div', { class: 'modal-backdrop' },
       h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'exit-title' },
         h('h2', { id: 'exit-title', text: 'Exit the quiz?' }),
-        h('p', { class: 'muted', text: 'Your answers are saved.' }),
+        h('p', { text: "Exiting counts as leaving the quiz unless your teacher told you to. Your answers are saved." }),
         h('div', { class: 'modal-actions' }, keep, turnIn, exit)));
     const buttons = [keep, turnIn, exit];
     backdrop.addEventListener('keydown', (e) => {
@@ -1419,6 +1438,7 @@
     submitted: ['Submitted', 'You can close this page.'],
     time: ["Time's up", 'Your answers were turned in.'],
     ended: ['Quiz ended', 'Your teacher ended the quiz. Your answers were turned in.'],
+    mine: ['Quiz ended', 'Your teacher ended your quiz. Your answers were turned in.'],
     already: ['Already turned in', null],
   };
   function screenDone(kind) {

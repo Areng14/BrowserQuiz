@@ -499,6 +499,12 @@
       refresh();
     }
     function alertBox(msg) { detail.prepend(h('p', { class: 't-error', text: msg })); }
+    // Ends one student's quiz: their answers are turned in and they see "Your teacher ended your quiz".
+    function endQuiz(id, name) {
+      if (!confirm(`End ${name}'s quiz now? Their answers are turned in and they can't continue.`)) return;
+      lastDetail = '';
+      act(`/api/t/attempts/${id}/end`);
+    }
 
     async function refresh() {
       let data;
@@ -528,6 +534,9 @@
         const btn = (text, key, onclick, extra) => h('button', Object.assign({ class: 'btn small', type: 'button', text, onclick, 'data-key': `${a.id}:${key}` }, extra || {}));
         if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => act(`/api/t/attempts/${a.id}/admit`), { class: 'btn small primary' }));
         if (a && a.integrity === 'invalidated') actions.append(btn('Restore', 'restore', () => { if (confirm(`Restore ${s.name}?`)) act(`/api/t/attempts/${a.id}/restore`); }));
+        // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
+        // popup doesn't end anyone's quiz without the teacher looking).
+        if (a && a.integrity === 'invalidated' && a.status === 'active') actions.append(btn('End quiz', 'end', () => endQuiz(a.id, s.name)));
         if (a && (a.status === 'active' || a.status === 'admitted')) {
           actions.append(a.letIn
             ? h('span', { class: 't-muted t-small', text: 'Can sign in again' })
@@ -588,6 +597,7 @@
       detail.replaceChildren(h('section', { class: 't-detail' },
         h('div', { class: 't-row' },
           h('h2', { style: 'flex:1', text: d.name }),
+          d.status === 'active' ? h('button', { class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }) : null,
           d.integrity !== 'invalidated' ? h('button', { class: 'btn small', type: 'button', text: 'Invalidate', onclick: () => { const note = prompt('Reason (optional)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } }) : null,
           d.status === 'active' && d.deadline ? h('span', { class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }) : null,
           d.status === 'active' && d.deadline ? h('button', { class: 'btn small', type: 'button', text: '+5 min', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } }) : null,

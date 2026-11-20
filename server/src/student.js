@@ -281,7 +281,8 @@ module.exports = function studentRoutes(r) {
       if (body.answers && !pastDeadline(a, now)) a.answers = cleanAnswers(quiz, a.layout, body.answers);
       store.save(a);
     }
-    json(res, 200, { ok: true, now, deadline: a.deadline || null });
+    // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
+    json(res, 200, { ok: true, now, deadline: a.deadline || null, done: a.status === 'submitted' });
   });
 
   r.post('/api/run', async (req, res) => {

@@ -106,6 +106,12 @@
 .hint { font-size: 14px; color: var(--ink-2); }
 
 .rules { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+/* the one rule that matters most, before the rest */
+.cheat-rule { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--bad); border-left-width: 4px; border-radius: 6px; background: color-mix(in srgb, var(--bad) 8%, transparent); }
+.cheat-rule p { margin: 0; }
+.cheat-title { font-weight: 700; color: var(--bad); }
+.modal.warn-modal { border-color: var(--bad); border-top: 4px solid var(--bad); }
+.fs-card p { margin: 0; }
 .checks { list-style: none; margin: 0; padding: 12px 0 0; border-top: 1px solid var(--line); display: grid; gap: 4px; font-size: 14px; }
 .check-mark { display: inline-block; width: 36px; font-weight: 600; }
 .check-note { display: block; padding-left: 36px; color: var(--ink-2); }

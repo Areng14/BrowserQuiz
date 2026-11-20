@@ -812,6 +812,9 @@ module.exports = function teacherRoutes(r) {
       if (a.integrity === 'invalidated') { a.integrity = 'restored'; store.logEvent(a, 'restore', 'info', note || null); store.save(a); }
     } else if (p.action === 'invalidate') {
       if (a.integrity !== 'invalidated') { a.integrity = 'invalidated'; a.reason = 'teacher'; a.invalidatedAt = Date.now(); store.logEvent(a, 'invalidate', 'info', note || null); store.save(a); }
+    } else if (p.action === 'end') {
+      // One student's quiz ends now and their answers are turned in, like Close quiz does for everyone.
+      if (a.status === 'active') submit(a, quiz, null, 'ended by teacher');
     } else if (p.action === 'let-in') {
       // A crashed PC or a seat change: the next sign-in with this name and ID picks up the same attempt.
       if (a.status === 'active' || a.status === 'admitted') { a.letIn = Date.now(); store.logEvent(a, 'let-in', 'info', null); }
