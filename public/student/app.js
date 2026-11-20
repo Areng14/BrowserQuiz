@@ -47,6 +47,7 @@
       run: null, me: null, quiz: null, idx: 0, answers: {}, deadline: 0, skew: 0,
       monitor: null, models: {}, editor: null, editorSubs: [], parts: [], partsSeen: new Set(), dirOpen: false,
       timer: 0, poll: 0, done: false, runBusy: false, results: {}, el: null, warned: {}, saveState: 'saved',
+      marks: null,
     };
   }
 
@@ -476,6 +477,7 @@
     S.deadline = r.deadline || 0;
     S.skew = r.now ? r.now - Date.now() : 0;
     S.answers = restoreAnswers(r.saved || {});
+    loadMarks();
     S.monitor = new BQ.Monitor(api, {
       integrity: !practice,
       fullscreen: fsOk,
@@ -677,10 +679,59 @@
       h('div', {}, h('button', { class: 'btn primary', type: 'button', text: seen ? 'Back to the question' : 'Start this part', onclick: closeDirections })));
   }
 
+  // ---------- mark for review, crossed-out choices ----------
+  // Study aids only: they never change an answer, so they stay in this browser (per run and student)
+  // and are cleared once the quiz is turned in.
+  const marksKey = () => 'bq-marks:' + [S.run && (S.run.id || S.run.code || S.run.title), S.me && S.me.name].join(':');
+  function loadMarks() {
+    S.marks = { review: [], out: {} };
+    try {
+      const m = JSON.parse(localStorage.getItem(marksKey()) || 'null');
+      if (m && Array.isArray(m.review) && m.out && typeof m.out === 'object') S.marks = m;
+    } catch (e) { /* nothing saved */ }
+  }
+  function saveMarks() {
+    try { localStorage.setItem(marksKey(), JSON.stringify(S.marks)); } catch (e) { /* kept for this page only */ }
+  }
+  function clearMarks() {
+    try { localStorage.removeItem(marksKey()); } catch (e) { /* nothing to clear */ }
+  }
+  const isMarked = (q) => !!S.marks && S.marks.review.includes(q.id);
+  const isCrossed = (q, i) => !!S.marks && (S.marks.out[q.id] || []).includes(i);
+  function setCrossed(q, i, on) {
+    if (!S.marks) S.marks = { review: [], out: {} };
+    const list = (S.marks.out[q.id] || []).filter((x) => x !== i);
+    if (on) list.push(i);
+    if (list.length) S.marks.out[q.id] = list; else delete S.marks.out[q.id];
+    saveMarks();
+  }
+  function bookmarkIcon() {
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(ns, 'svg');
+    svg.setAttribute('viewBox', '0 0 16 16');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('class', 'mark-icon');
+    const p = document.createElementNS(ns, 'path');
+    p.setAttribute('d', 'M4 1.75h8v12.5l-4-3.25-4 3.25z');
+    svg.append(p);
+    return svg;
+  }
+  function markButton(q) {
+    const b = h('button', { class: 'mark-btn', type: 'button', 'aria-pressed': String(isMarked(q)) }, bookmarkIcon(), h('span', { text: 'Mark for review' }));
+    b.addEventListener('click', () => {
+      if (!S.marks) S.marks = { review: [], out: {} };
+      S.marks.review = isMarked(q) ? S.marks.review.filter((x) => x !== q.id) : [...S.marks.review, q.id];
+      saveMarks();
+      b.setAttribute('aria-pressed', String(isMarked(q)));
+      renderSheet();
+    });
+    return b;
+  }
+
   function metaRow(q, kind) {
     return h('div', { class: 'meta-row' },
       h('span', {}, kind, ' ', h('button', { class: 'link-btn', type: 'button', text: 'Directions', onclick: openDirections })),
-      h('span', { text: plural(q.points, 'point') }));
+      h('span', { class: 'meta-right' }, markButton(q), h('span', { text: plural(q.points, 'point') })));
   }
 
   function prompt(q) {
@@ -696,20 +747,49 @@
       const multi = q.type === 'multi';
       const cur = S.answers[q.id];
       const list = h('div', { class: 'choices', role: multi ? 'group' : 'radiogroup', 'aria-label': 'Answer choices' });
-      q.choices.forEach((c, i) => {
+      const picked = (i) => (multi ? Array.isArray(S.answers[q.id]) && S.answers[q.id].includes(i) : S.answers[q.id] === i);
+      const rows = q.choices.map((c, i) => {
         const id = `${q.id}-c${i}`;
         const input = h('input', {
           type: multi ? 'checkbox' : 'radio', name: q.id, id, value: i,
           checked: multi ? Array.isArray(cur) && cur.includes(i) : cur === i,
         });
+        // Crossing out: picking a crossed-out choice brings it back, and crossing out the picked one unpicks it.
+        const x = h('button', { class: 'choice-x', type: 'button' });
+        const row = h('div', { class: 'choice-row' },
+          h('label', { class: 'choice', for: id }, input, h('span', { class: 'choice-text' }, BQ.md.renderInline(c, { lang: S.quiz.language }))), x);
         input.addEventListener('change', () => {
-          if (!multi) return setAnswer(q.id, i);
-          const set = new Set(Array.isArray(S.answers[q.id]) ? S.answers[q.id] : []);
-          if (input.checked) set.add(i); else set.delete(i);
-          setAnswer(q.id, set.size ? [...set].sort((a, b) => a - b) : undefined);
+          if (input.checked && isCrossed(q, i)) setCrossed(q, i, false);
+          if (!multi) setAnswer(q.id, i);
+          else {
+            const set = new Set(Array.isArray(S.answers[q.id]) ? S.answers[q.id] : []);
+            if (input.checked) set.add(i); else set.delete(i);
+            setAnswer(q.id, set.size ? [...set].sort((a, b) => a - b) : undefined);
+          }
+          paint();
         });
-        list.append(h('label', { class: 'choice', for: id }, input, h('span', { class: 'choice-text' }, BQ.md.renderInline(c, { lang: S.quiz.language }))));
+        x.addEventListener('click', () => {
+          const on = !isCrossed(q, i);
+          setCrossed(q, i, on);
+          if (on && picked(i)) {
+            const rest = multi ? S.answers[q.id].filter((v) => v !== i) : [];
+            setAnswer(q.id, rest.length ? rest : undefined);
+          }
+          paint();
+        });
+        list.append(row);
+        return { row, input, x, i };
       });
+      const paint = () => rows.forEach(({ row, input, x, i }) => {
+        const out = isCrossed(q, i);
+        row.classList.toggle('crossed', out);
+        input.checked = picked(i);
+        x.setAttribute('aria-pressed', String(out));
+        x.setAttribute('aria-label', `${out ? 'Undo cross out' : 'Cross out'} choice ${i + 1}`);
+        x.title = out ? '' : i < 9 ? `Cross out (Shift+${i + 1})` : 'Cross out';
+        x.replaceChildren(out ? 'Undo' : h('span', { class: 'x-icon', text: 'abc' }));
+      });
+      paint();
       view.append(list);
     } else if (q.type === 'text') {
       const input = h('input', { class: 'input text-answer', id: q.id + '-text', autocomplete: 'off', spellcheck: 'false', maxlength: '500' });
@@ -1017,9 +1097,10 @@
     if (!S.el || !S.quiz) return;
     S.el.sheet.replaceChildren(...S.quiz.questions.map((q, i) => {
       const done = isAnswered(q);
+      const marked = isMarked(q);
       return h('button', {
-        type: 'button', class: 'sheet-dot' + (done ? ' answered' : '') + (i === S.idx ? ' current' : ''),
-        'aria-label': `Question ${i + 1}${done ? ', answered' : ''}`, 'aria-current': i === S.idx ? 'step' : null,
+        type: 'button', class: 'sheet-dot' + (done ? ' answered' : '') + (i === S.idx ? ' current' : '') + (marked ? ' marked' : ''),
+        'aria-label': `Question ${i + 1}${done ? ', answered' : ''}${marked ? ', marked for review' : ''}`, 'aria-current': i === S.idx ? 'step' : null,
         text: String(i + 1), onclick: () => go(i),
       });
     }));
@@ -1123,6 +1204,11 @@
       if (e.key === 'Enter' && !(t && t.closest && t.closest('button'))) { e.preventDefault(); closeDirections(); }
       return;
     }
+    if (!typing && e.shiftKey && /^Digit[1-9]$/.test(e.code) && (q.type === 'single' || q.type === 'multi')) {
+      const x = S.el.main.querySelectorAll('.choice-x')[Number(e.code.slice(5)) - 1];
+      if (x) { e.preventDefault(); x.click(); }
+      return;
+    }
     if (!typing && /^[1-9]$/.test(e.key) && (q.type === 'single' || q.type === 'multi')) {
       const input = S.el.main.querySelectorAll('.choice input')[Number(e.key) - 1];
       if (!input) return;
@@ -1140,6 +1226,7 @@
 
   function openSubmit() {
     const missing = S.quiz.questions.map((q, i) => (isAnswered(q) ? null : i + 1)).filter(Boolean);
+    const marked = S.quiz.questions.map((q, i) => (isMarked(q) ? i + 1 : null)).filter(Boolean);
     let backdrop;
     const close = () => { backdrop.remove(); S.el.next.focus(); };
     const keep = h('button', { class: 'btn', type: 'button', text: 'Keep working', onclick: close });
@@ -1148,6 +1235,7 @@
       h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'submit-title' },
         h('h2', { id: 'submit-title', text: 'Submit your quiz?' }),
         missing.length ? h('p', { text: `Unanswered: ${missing.length > 1 ? 'questions' : 'question'} ${missing.join(', ')}.` }) : null,
+        marked.length ? h('p', { text: `Marked for review: ${marked.length > 1 ? 'questions' : 'question'} ${marked.join(', ')}.` }) : null,
         h('p', { class: 'muted', text: "You can't change answers after this." }),
         h('div', { class: 'modal-actions' }, keep, submit)));
     backdrop.addEventListener('keydown', (e) => {
@@ -1210,6 +1298,7 @@
 
   function finishQuiz(kind) {
     S.done = true;
+    clearMarks();
     clearInterval(S.timer);
     hideFsOverlay();
     disposeEditor();
@@ -1366,6 +1455,7 @@
     S.run = { title: r.quiz.title, timeLimitMin: r.quiz.timeLimitMin, questionCount: r.quiz.questions.length, hasCode: r.quiz.questions.some((q) => q.type === 'code') };
     S.deadline = 0;
     S.answers = {};
+    loadMarks();
     S.monitor = null;
     if (S.run.hasCode) loadMonaco().catch(() => {});
     screenQuiz();
