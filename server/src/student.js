@@ -258,7 +258,7 @@ module.exports = function studentRoutes(r) {
     try {
       json(res, 200, await runSamples(qq, body.language, body.code.slice(0, 50000)));
     } catch (e) {
-      json(res, 200, { status: 'error', message: 'The code runner is offline right now. Tell your teacher.' });
+      json(res, 200, { status: 'error', message: 'Code runner offline. Tell your teacher.' });
     }
   });
 

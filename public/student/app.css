@@ -160,7 +160,7 @@
 .code-fallback { width: 100%; height: 100%; resize: none; border: 0; padding: 12px; font: 14px/22px var(--mono); color: var(--ink); background: var(--editor); tab-size: 4; }
 .code-fallback:focus { outline: none; }
 .results { border-top: 1px solid var(--line); padding: 10px 12px; display: grid; gap: 6px; font-size: 14px; max-height: 280px; overflow: auto; }
-.results-empty { color: var(--ink-2); }
+.results:empty { display: none; }
 .res-head { font-weight: 600; }
 .res-head.good { color: var(--good); }
 .res-head.bad { color: var(--bad); }

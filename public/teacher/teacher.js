@@ -93,9 +93,8 @@
     let data;
     let me = null;
     try { [data, me] = await Promise.all([api('/api/t/overview'), api('/api/t/me').catch(() => null)]); } catch (e) { if (e.message !== 'login') mount(h('p', { class: 't-error', text: e.message })); return; }
-    const runner = !me || !me.runner ? null
-      : me.runnerOk ? h('p', { class: 't-muted t-small' }, h('span', { class: 'dot ok' }), 'Code runner online')
-        : h('p', { class: 't-error t-small' }, h('span', { class: 'dot bad' }), "Code runner offline. Code questions can't run or be graded until it's back (graded automatically once it is).");
+    const runner = !me || !me.runner || me.runnerOk ? null
+      : h('p', { class: 't-error t-small' }, h('span', { class: 'dot bad' }), 'Code runner offline. Code questions get graded once it is back.');
     const quizSel = h('select', { class: 'input', id: 'run-quiz' }, data.quizzes.map((x) => h('option', { value: x.id, text: `${x.title} (${plural(x.questions, 'question')}) · added ${date(x.createdAt)}` })));
     const rosterSel = h('select', { class: 'input', id: 'run-roster' }, data.rosters.map((x) => h('option', { value: x.id, text: `${x.name} (${x.students})` })));
     const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', checked: true });
@@ -134,7 +133,7 @@
         h('div', { class: 't-row' },
           h('label', { class: 'field', for: 'run-quiz' }, h('span', { class: 'field-label', text: 'Quiz' }), quizSel),
           h('label', { class: 'field', for: 'run-roster' }, h('span', { class: 'field-label', text: 'Class' }), rosterSel)),
-        h('label', { class: 't-check', for: 'ip-lock' }, ipLock, h('span', { text: "Only allow students on the network I'm on right now (you can change this later)" })),
+        h('label', { class: 't-check', for: 'ip-lock' }, ipLock, h('span', { text: 'Only allow students on my current network' })),
         h('div', {}, startBtn), startMsg, runner),
       h('section', { class: 't-section' },
         h('h2', { text: 'Recent quizzes' }),
@@ -153,7 +152,7 @@
       h('section', { class: 't-section' },
         h('h2', { text: 'Classes' }),
         data.rosters.length ? h('ul', {}, data.rosters.map((x) => h('li', { text: `${x.name} · ${x.students} students` }))) : null,
-        h('p', { class: 't-muted t-small', text: 'CSV with a header row: name, student_id. Student IDs are stored hashed, never as typed.' }),
+        h('p', { class: 't-muted t-small', text: 'CSV columns: name, student_id' }),
         h('div', { class: 't-row' },
           h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
           h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Roster CSV' }), rosterFile),
@@ -211,17 +210,17 @@
       code.textContent = run.code;
       title.textContent = run.title;
       meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? ` · ${plural(run.timeLimitMin, 'minute')}` : ''} · ${run.status === 'open' ? 'Open' : 'Closed'}${run.ipLock ? ' · only your network' : ''}`;
-      howTo.textContent = `Students go to ${location.origin} and type the code.`;
+      howTo.textContent = `Join at ${location.origin}`;
       toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
       toggle.onclick = () => {
-        if (run.status === 'open' && !confirm('Close the quiz? Anyone still working gets their saved answers turned in now.')) return;
+        if (run.status === 'open' && !confirm('Close the quiz? Anyone still working gets turned in.')) return;
         act(`/api/t/runs/${runId}/${run.status === 'open' ? 'close' : 'open'}`);
       };
       lockBtn.textContent = run.ipLock ? 'Network lock: on' : 'Network lock: off';
-      lockBtn.title = run.ipLock ? 'Only students on your network can join. Click to allow any network.' : "Click to only allow students on the network you're on right now.";
+      lockBtn.title = run.ipLock ? 'Only your network can join' : 'Any network can join';
       lockBtn.onclick = () => act(`/api/t/runs/${runId}/${run.ipLock ? 'unlock' : 'lock'}`);
       const failed = data.students.filter((x) => x.attempt && x.attempt.failed).length;
-      failedBox.replaceChildren(failed ? h('p', { class: 't-error' }, `Code grading failed for ${plural(failed, 'student')} (the code runner was offline). It retries every minute. `,
+      failedBox.replaceChildren(failed ? h('p', { class: 't-error' }, `Code grading failed for ${plural(failed, 'student')}. `,
         h('button', { class: 'btn small', type: 'button', text: 'Retry now', onclick: () => act(`/api/t/runs/${runId}/regrade-failed`) })) : '');
       const order = (s) => (s.attempt ? (s.attempt.integrity === 'invalidated' ? 0 : s.attempt.status === 'waiting' ? 1 : 2) : 3);
       const rows = data.students.slice().sort((x, y) => order(x) - order(y) || x.name.localeCompare(y.name));
@@ -231,13 +230,13 @@
         const actions = h('td', { class: 't-actions' });
         const btn = (text, key, onclick, extra) => h('button', Object.assign({ class: 'btn small', type: 'button', text, onclick, 'data-key': `${a.id}:${key}` }, extra || {}));
         if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => act(`/api/t/attempts/${a.id}/admit`), { class: 'btn small primary' }));
-        if (a && a.integrity === 'invalidated') actions.append(btn('Restore', 'restore', () => { if (confirm(`Restore ${s.name}? Their score counts again.`)) act(`/api/t/attempts/${a.id}/restore`); }));
+        if (a && a.integrity === 'invalidated') actions.append(btn('Restore', 'restore', () => { if (confirm(`Restore ${s.name}?`)) act(`/api/t/attempts/${a.id}/restore`); }));
         if (a && (a.status === 'active' || a.status === 'admitted')) {
           actions.append(a.letIn
             ? h('span', { class: 't-muted t-small', text: 'Can sign in again' })
             : btn('Let back in', 'letin', () => act(`/api/t/attempts/${a.id}/let-in`), { title: 'Crashed computer or new seat: they sign in again and keep their answers and time' }));
         }
-        if (a) actions.append(btn('Reset', 'reset', () => { if (confirm(`Reset ${s.name}? Their answers are thrown out and they start over. (For a crashed computer, use Let back in instead.)`)) act(`/api/t/attempts/${a.id}/reset`); }, { title: 'Throw out this attempt and let them start over' }));
+        if (a) actions.append(btn('Reset', 'reset', () => { if (confirm(`Reset ${s.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) act(`/api/t/attempts/${a.id}/reset`); }, { title: 'Throw out this attempt and let them start over' }));
         const beat = a && a.lastBeatAgo != null ? Math.round(a.lastBeatAgo / 1000) : null;
         let score = '';
         if (a && a.score != null) {
@@ -289,13 +288,13 @@
       detail.replaceChildren(h('section', { class: 't-detail' },
         h('div', { class: 't-row' },
           h('h2', { style: 'flex:1', text: d.name }),
-          d.integrity !== 'invalidated' ? h('button', { class: 'btn small', type: 'button', text: 'Invalidate', onclick: () => { const note = prompt('Why? (kept in the log)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } }) : null,
+          d.integrity !== 'invalidated' ? h('button', { class: 'btn small', type: 'button', text: 'Invalidate', onclick: () => { const note = prompt('Reason (optional)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } }) : null,
           d.status === 'active' && d.deadline ? h('span', { class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }) : null,
           d.status === 'active' && d.deadline ? h('button', { class: 'btn small', type: 'button', text: '+5 min', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } }) : null,
           d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
           d.status === 'submitted' ? h('button', { class: 'btn small', type: 'button', text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) }) : null,
           h('button', { class: 'btn small', type: 'button', text: 'Close', onclick: () => { selected = null; detail.replaceChildren(); refresh(); } })),
-        d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}. The student wasn't told.` }) : null,
+        d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}` }) : null,
         h('div', { class: 't-detail-grid' },
           h('div', { class: 't-section' }, h('h3', { text: 'Activity' }),
             h('ul', { class: 't-events' }, d.events.map((e) => h('li', { class: e.severity }, h('time', { text: clock(e.t) }), h('span', {}, h('b', { text: LABEL[e.type] || e.type }), e.detail ? ` · ${e.detail}` : ''))))),
@@ -312,7 +311,7 @@
         const cb = h('input', { type: 'checkbox', id: `rb-${x.id}-${r.id}`, checked: r.checked });
         return { r, cb, el: h('label', { class: 't-check', for: cb.id }, cb, h('span', { text: `${r.text} (${plural(r.points, 'point')})` })) };
       });
-      const over = h('input', { class: 'input t-points', type: 'number', min: '0', max: String(x.max), step: '0.5', id: `ov-${x.id}`, value: x.overridePoints != null ? String(x.overridePoints) : '' });
+      const over = h('input', { class: 'input t-points', type: 'number', min: '0', max: String(x.max), step: '0.5', id: `ov-${x.id}`, placeholder: 'auto', value: x.overridePoints != null ? String(x.overridePoints) : '' });
       const msg = h('span', { class: 't-small t-muted', role: 'status' });
       const save = h('button', { class: 'btn small', type: 'button', text: 'Save' });
       save.addEventListener('click', async () => {
@@ -327,7 +326,7 @@
         } catch (e) { msg.textContent = e.message; save.disabled = false; }
       });
       const pointsRow = h('div', { class: 't-row' },
-        h('label', { class: 't-small', for: over.id, text: `Set points (0–${x.max}, blank = automatic)` }), over, save, msg);
+        h('label', { class: 't-small', for: over.id, text: `Points (0–${x.max})` }), over, save, msg);
       if (!boxes.length) {
         // Most answers never need this: keep it folded away unless it's in use.
         return h('details', { class: 't-adjust', open: x.overridePoints != null }, h('summary', { class: 't-small', text: 'Adjust points' }), pointsRow);

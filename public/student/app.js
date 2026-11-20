@@ -11,21 +11,21 @@
   const KIND = { single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', method: 'Write a method', class: 'Write a class' };
   // Default directions per part, AP style. A quiz can override any of them with quiz.directions[type].
   const PARTS = {
-    single: { title: 'Multiple choice', text: 'Each question has exactly one correct answer. Pick the best one. A blank answer earns no credit, so answer every question.' },
-    multi: { title: 'Select all that apply', text: 'Each question has one or more correct answers. Select every correct answer. You earn credit only when you select all of the correct answers and none of the wrong ones.' },
-    text: { title: 'Short answer', text: "Type a short answer in the box. Spelling counts. Capital letters and extra spaces don't." },
-    code: { title: 'Free response', text: "Write your answer in the code editor. When a question allows more than one language, pick the one you know best. Use Run examples to check your code before you move on. Assume any imports you need are already there and that inputs follow the question's description. You can earn partial credit." },
+    single: { title: 'Multiple choice', text: 'Pick the one best answer. Blank answers earn no credit.' },
+    multi: { title: 'Select all that apply', text: 'Credit only if you select every correct answer and no wrong ones.' },
+    text: { title: 'Short answer', text: "Spelling counts. Capital letters and extra spaces don't." },
+    code: { title: 'Free response', text: "Assume needed imports are there and inputs match the question. Partial credit is possible." },
   };
   const ERRORS = {
-    bad_code: "That code doesn't match an open quiz. Check the board and try again.",
+    bad_code: 'No open quiz with that code.',
     run_closed: 'This quiz is closed.',
     wrong_network: 'This quiz only opens from the school network.',
-    too_many: 'Too many wrong codes. Wait a minute, then try again.',
-    bad_id: "That student ID doesn't match the name you picked. Try again.",
-    name_locked: 'Too many wrong tries for this name. Wait 30 seconds, then try again.',
-    already_started: 'This name already started on another computer. Ask your teacher.',
-    network: "Can't reach the quiz server. Check your connection and try again.",
-    no_attempt: "You've been signed out of the quiz. Sign in again.",
+    too_many: 'Too many tries. Wait a minute.',
+    bad_id: 'Wrong student ID for that name.',
+    name_locked: 'Too many wrong IDs. Wait 30 seconds.',
+    already_started: 'Already started on another computer. Ask your teacher.',
+    network: "Can't reach the server.",
+    no_attempt: 'Signed out. Sign in again.',
     not_admitted: 'Your teacher has to let you in first.',
   };
 
@@ -219,7 +219,7 @@
     const btn = h('button', { class: 'btn primary', type: 'submit', text: 'Join' });
     const form = h('form', { class: 'panel', novalidate: true },
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
-      h('div', { class: 'heading' }, h('h1', { text: 'Join your quiz' }), h('p', { text: 'Type the code your teacher put on the board.' })),
+      h('div', { class: 'heading' }, h('h1', { text: 'Join your quiz' })),
       h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'join-code', text: 'Join code' }), input),
       btn, msg,
       demoHint('Demo code: ', h('b', { text: 'K7QX4M' })));
@@ -270,7 +270,7 @@
         if (mine !== seq) return;
         list.hidden = true;
         hint.hidden = false;
-        hint.textContent = e.code === 'too_many' ? 'Lots of people are signing in. Wait a moment, then keep typing.' : errorText(e);
+        hint.textContent = e.code === 'too_many' ? 'Busy. Keep typing in a moment.' : errorText(e);
         return;
       }
       if (mine !== seq || picked) return;
@@ -278,7 +278,7 @@
       if (!matches.length) {
         list.hidden = true;
         hint.hidden = false;
-        hint.textContent = 'No names match. Check the spelling.';
+        hint.textContent = 'No match.';
         return;
       }
       hint.hidden = true;
@@ -305,14 +305,14 @@
 
     const form = h('form', { class: 'panel', novalidate: true },
       h('p', { class: 'eyebrow', text: run.title }),
-      h('div', { class: 'heading' }, h('h1', { text: 'Who are you?' }), h('p', { text: 'Start typing your name, then pick it.' })),
+      h('div', { class: 'heading' }, h('h1', { text: 'Who are you?' })),
       h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'student-name', text: 'Your name' }), name, list, hint),
       h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'student-id', text: 'Student ID' }), sid),
       btn, msg,
       demoHint('Demo: type ', h('b', { text: 'Av' }), ', pick Ava Martinez, ID ', h('b', { text: '204511' })));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!picked) { msg.textContent = 'Start typing your name, then pick it from the list.'; name.focus(); return; }
+      if (!picked) { msg.textContent = 'Pick your name from the list.'; name.focus(); return; }
       if (!sid.value.trim()) { msg.textContent = 'Type your student ID.'; sid.focus(); return; }
       btn.disabled = true; btn.textContent = 'Checking…'; msg.textContent = '';
       try {
@@ -334,8 +334,7 @@
       h('p', { class: 'eyebrow', text: S.run.title }),
       h('div', { class: 'heading' },
         h('h1', { text: 'Waiting for your teacher' }),
-        h('p', { text: `You're signed in as ${S.me.name}. Your teacher will let you in. Keep this page open.` })),
-      h('p', { class: 'hint', text: 'Checking every few seconds…' }),
+        h('p', { text: `Signed in as ${S.me.name}.` })),
       demoHint('Demo: click ', h('b', { text: 'Admit' }), ' in the teacher view.'))));
     clearInterval(S.poll);
     const check = async () => {
@@ -374,7 +373,8 @@
     function renderChecks() {
       const checks = prechecks();
       blocked = !cfg.demo && checks.some((c) => !c.ok);
-      checkList.replaceChildren(...checks.map((c) => h('li', {},
+      checkList.hidden = !checks.some((c) => !c.ok);
+      checkList.replaceChildren(...checks.filter((c) => !c.ok).map((c) => h('li', {},
         h('span', { class: 'check-mark ' + (c.ok ? 'ok' : 'bad'), text: c.ok ? 'OK' : 'Fix' }),
         c.label,
         c.note ? h('span', { class: 'check-note', text: c.note }) : null)));
@@ -396,9 +396,8 @@
         h('li', { text: 'Leaving the quiz window, switching tabs or apps, or leaving fullscreen is recorded and reported to your teacher.' }),
         h('li', { text: 'Reloading or closing this page counts as leaving it.' }),
         h('li', { text: 'Mouse and keyboard activity is recorded.' }),
-        h('li', { text: 'Pasting from outside the quiz is blocked. Copying and pasting inside your own answers works.' }),
-        mins ? h('li', { text: 'Your answers save as you go, and the quiz turns itself in when time runs out.' }) : h('li', { text: 'Your answers save as you go.' }),
-        S.run.hasCode ? h('li', { text: 'Code questions have a Run button that checks your code against the examples.' }) : null),
+        h('li', { text: 'Pasting from outside the quiz is blocked.' }),
+        mins ? h('li', { text: 'The quiz turns itself in when time runs out.' }) : null),
       checkList,
       h('label', { class: 'agree', for: 'agree' }, agree, h('span', { text: 'I read the rules' })),
       btn, msg,
@@ -414,7 +413,7 @@
     btn.disabled = true; btn.textContent = 'Starting…'; msg.textContent = '';
     const fsOk = await enterFullscreen();
     if (!fsOk && !cfg.demo) {
-      msg.textContent = 'Your browser blocked fullscreen. Click the button again.';
+      msg.textContent = 'Fullscreen was blocked. Click again.';
       btn.disabled = false; btn.textContent = label;
       return;
     }
@@ -439,8 +438,8 @@
       onFullscreenLost: showFsOverlay,
       onFullscreenBack: hideFsOverlay,
       onPasteBlocked: () => toast('Pasting from outside the quiz is blocked.'),
-      onSave: () => toast('Your answers save automatically.'),
-      onReloadBlocked: () => toast('Reloading is turned off during the quiz.'),
+      onSave: () => toast('Saved'),
+      onReloadBlocked: () => toast('Reloading is off during the quiz.'),
       onBeat: onBeat,
       onBeatError: onBeatError,
     });
@@ -471,7 +470,7 @@
   function setSave(state) {
     S.saveState = state;
     if (!S.el || !S.el.save) return;
-    S.el.save.textContent = state === 'saved' ? 'All answers saved' : state === 'saving' ? 'Saving…' : 'Not saved yet';
+    S.el.save.textContent = state === 'saved' ? 'Saved' : state === 'saving' ? 'Saving…' : 'Not saved yet';
     S.el.save.classList.toggle('bad', state === 'offline');
   }
 
@@ -551,11 +550,10 @@
     S.parts = buildParts(S.quiz.questions);
     S.idx = 0;
     S.dirOpen = true;
-    const progress = h('span', { class: 'qbar-progress' });
     const timer = h('span', { class: 'timer', role: 'timer', 'aria-label': 'Time left' });
-    const save = h('span', { class: 'save-state', role: 'status', text: 'All answers saved' });
+    const save = h('span', { class: 'save-state', role: 'status' });
     const conn = h('div', { class: 'conn-banner', role: 'alert', hidden: true },
-      "Reconnecting… Keep working. Your answers will save when you're back online.");
+      'Offline. Keep working, answers save when you reconnect.');
     const main = h('main', { class: 'qmain', tabindex: '-1' });
     const sheet = h('nav', { class: 'sheet', 'aria-label': 'Questions' });
     const prev = h('button', { class: 'btn ghost', type: 'button', text: 'Back', onclick: () => go(S.idx - 1) });
@@ -566,11 +564,11 @@
       go(S.idx + 1);
     });
     const wrap = h('div', { class: 'quiz' },
-      h('header', { class: 'qbar' }, h('span', { class: 'qbar-name', text: S.quiz.title }), save, progress, timer, themeButton()),
+      h('header', { class: 'qbar' }, h('span', { class: 'qbar-name', text: S.quiz.title }), save, timer, themeButton()),
       conn,
       main,
       h('footer', { class: 'qnav' }, prev, sheet, next));
-    S.el = { wrap, main, progress, timer, sheet, prev, next, save, conn, fsOverlay: null };
+    S.el = { wrap, main, timer, sheet, prev, next, save, conn, fsOverlay: null };
     S.saveState = 'saved';
     mount(wrap);
     renderQuestion();
@@ -607,7 +605,6 @@
     disposeEditor();
     const q = S.quiz.questions[S.idx];
     const total = S.quiz.questions.length;
-    S.el.progress.textContent = `Question ${S.idx + 1} of ${total}`;
     S.el.prev.disabled = S.idx === 0;
     const last = S.idx === total - 1;
     S.el.next.textContent = S.dirOpen ? 'Continue' : last ? 'Review and submit' : 'Next';
@@ -767,11 +764,11 @@
     S.runBusy = true;
     btn.disabled = true;
     btn.textContent = 'Running…';
-    results.replaceChildren(h('p', { class: 'results-empty', text: 'Running your code against the examples…' }));
+    results.replaceChildren();
     try {
       S.results[key] = await api.run({ questionId: q.id, language: ans.language, code: ans.code[ans.language] });
     } catch (ex) {
-      S.results[key] = { status: 'error', message: ex && ex.code === 'too_many' ? 'Slow down a bit. Try again in a few seconds.' : errorText(ex) };
+      S.results[key] = { status: 'error', message: ex && ex.code === 'too_many' ? 'Wait a few seconds.' : errorText(ex) };
     }
     S.runBusy = false;
     S.runReadyAt = Date.now() + 5000;
@@ -797,15 +794,15 @@
     const lang = ans.language;
     const r = S.results[q.id + ':' + lang];
     if (!r) {
-      el.replaceChildren(h('p', { class: 'results-empty', text: 'Run your code against the examples.' }));
+      el.replaceChildren();
       return;
     }
     const parts = [];
-    if (r.simulated) parts.push(h('p', { class: 'demo-note', text: 'Demo: simulated result. In the real app your code compiles and runs in the sandboxed runner.' }));
+    if (r.simulated) parts.push(h('p', { class: 'demo-note', text: 'Demo: simulated result.' }));
     if (r.status === 'compile_error') {
       parts.push(h('p', { class: 'res-head bad', text: "Didn't compile" }), h('pre', { class: 'res-pre', text: r.message || '' }));
     } else if (r.status === 'runtime_error') {
-      parts.push(h('p', { class: 'res-head bad', text: 'Crashed while running' }), h('pre', { class: 'res-pre', text: r.message || '' }));
+      parts.push(h('p', { class: 'res-head bad', text: 'Crashed' }), h('pre', { class: 'res-pre', text: r.message || '' }));
     } else if (r.status === 'error') {
       parts.push(h('p', { class: 'res-head bad', text: 'Run failed' }), h('p', { text: r.message || '' }));
     } else {
@@ -817,7 +814,7 @@
         h('code', { class: 'res-call', 'data-lang': lang, text: t.call }),
         t.pass ? null : h('span', { class: 'res-detail' }, 'Expected ', h('code', { 'data-lang': lang, text: t.expected }), ', got ', h('code', { 'data-lang': lang, text: t.got }))))));
     }
-    if (r.stdout) parts.push(h('p', { class: 'res-sub', text: 'Printed output' }), h('pre', { class: 'res-pre', text: r.stdout }));
+    if (r.stdout) parts.push(h('p', { class: 'res-sub', text: 'Output' }), h('pre', { class: 'res-pre', text: r.stdout }));
     el.replaceChildren(...parts);
     colorize(el);
   }
@@ -864,7 +861,6 @@
     const ov = h('div', { class: 'fs-overlay' },
       h('div', { class: 'fs-card', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'fs-title' },
         h('h2', { id: 'fs-title', text: 'The quiz runs in fullscreen' }),
-        h('p', { class: 'muted', text: 'Go back to fullscreen to keep working. Your answers are saved.' }),
         h('div', {}, btn)));
     S.el.fsOverlay = ov;
     S.el.wrap.append(ov);
@@ -883,8 +879,8 @@
     backdrop = h('div', { class: 'modal-backdrop' },
       h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'submit-title' },
         h('h2', { id: 'submit-title', text: 'Submit your quiz?' }),
-        h('p', { text: missing.length ? `You haven't answered question${missing.length > 1 ? 's' : ''} ${missing.join(', ')}.` : 'You answered every question.' }),
-        h('p', { class: 'muted', text: "You can't change answers after you submit." }),
+        missing.length ? h('p', { text: `Unanswered: ${missing.length > 1 ? 'questions' : 'question'} ${missing.join(', ')}.` }) : null,
+        h('p', { class: 'muted', text: "You can't change answers after this." }),
         h('div', { class: 'modal-actions' }, keep, submit)));
     backdrop.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') close();
@@ -926,7 +922,7 @@
 
   function submittingOverlay() {
     const title = h('h2', { id: 'turnin-title', text: 'Turning in your quiz…' });
-    const text = h('p', { class: 'muted', text: 'This takes a second.' });
+    const text = h('p', { class: 'muted' });
     const retry = h('button', { class: 'btn primary', type: 'button', text: 'Try again', hidden: true });
     const backdrop = h('div', { class: 'modal-backdrop' },
       h('div', { class: 'modal', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'turnin-title' },
@@ -936,7 +932,7 @@
       retry,
       failed() {
         title.textContent = "Couldn't reach the quiz server";
-        text.textContent = "Your answers are still here. Check the connection. We'll keep trying, or press Try again.";
+        text.textContent = 'Your answers are still here. Retrying automatically.';
         retry.hidden = false;
         retry.focus();
       },
@@ -969,8 +965,7 @@
     mount(entry(h('div', { class: 'panel', role: 'status' },
       h('p', { class: 'eyebrow', text: S.run ? S.run.title : 'BrowserQuiz' }),
       h('div', { class: 'heading' },
-        h('h1', { text: 'This quiz is closed' }),
-        h('p', { text: 'Ask your teacher if you think this is a mistake.' })),
+        h('h1', { text: 'This quiz is closed' })),
       h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Back to start', onclick: () => { S = freshState(); screenJoin(); } })))));
   }
   // Page reloaded mid-quiz: one button back in instead of the whole sign-in again.
@@ -983,7 +978,7 @@
       h('p', { class: 'eyebrow', text: S.run.title }),
       h('div', { class: 'heading' },
         h('h1', { text: 'Your quiz is still open' }),
-        h('p', { text: `You're signed in as ${S.me.name}. The clock is still running, and your saved answers come back when you continue.` })),
+        h('p', { text: `Signed in as ${S.me.name}. The timer is still running.` })),
       btn, msg)));
     btn.focus();
   }
@@ -1012,17 +1007,17 @@
   }
 
   const DONE = {
-    submitted: ['Submitted', "You're done. You can close this page."],
-    time: ["Time's up", 'Your answers were turned in. You can close this page.'],
-    ended: ['Quiz ended', 'Your teacher ended the quiz and your answers were turned in. You can close this page.'],
-    already: ['Already turned in', "You've already turned in this quiz. You can close this page."],
+    submitted: ['Submitted', 'You can close this page.'],
+    time: ["Time's up", 'Your answers were turned in.'],
+    ended: ['Quiz ended', 'Your teacher ended the quiz. Your answers were turned in.'],
+    already: ['Already turned in', null],
   };
   function screenDone(kind) {
     S.el = null;
     const [title, text] = DONE[kind] || DONE.submitted;
     const screen = entry(h('div', { class: 'panel done-panel' },
       h('p', { class: 'eyebrow', text: S.quiz ? S.quiz.title : S.run ? S.run.title : '' }),
-      h('div', { class: 'heading' }, h('h1', { text: title }), h('p', { text })),
+      h('div', { class: 'heading' }, h('h1', { text: title }), text ? h('p', { text }) : null),
       cfg.demo ? h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Start the demo over', onclick: () => BQ.app.restart() })) : null));
     if (kind !== 'already') screen.prepend(confetti());
     mount(screen);
