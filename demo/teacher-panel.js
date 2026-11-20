@@ -10,7 +10,7 @@
     blur: 'Left the quiz window', hidden: 'Tab hidden', 'fullscreen-exit': 'Left fullscreen', return: 'Came back',
     'mouse-left': 'Cursor left the page', copy: 'Copy blocked', paste: 'Outside paste blocked', contextmenu: 'Right-click',
     'blocked-key': 'Blocked key', 'print-screen': 'Print Screen pressed', resize: 'Window resized',
-    'unfocused-beat': 'Heartbeat: not focused', 'heartbeat-lost': 'Heartbeat lost', 'extended-display': 'Second display',
+    'unfocused-beat': 'Heartbeat: not focused', 'heartbeat-lost': 'Connection lost', 'extended-display': 'Second display',
     'bulk-insert': 'Large insert in editor', 'inhuman-typing': 'Typing faster than a person',
   };
   const STATUS = {

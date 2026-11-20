@@ -11,7 +11,7 @@ const { HttpError, clientIp, sameNetwork, cookies, setCookie, json, readJson, li
 
 const PEPPER = process.env.ID_PEPPER || '';
 const joinFails = limiter(20, 60000);
-const nameLookups = limiter(300, 60000);
+const nameLookups = limiter(2000, 60000); // per run and IP: a whole class can share one school IP
 const runLimit = limiter(1, 3000);
 const ATT = 'att';
 
@@ -72,6 +72,13 @@ function publicQuiz(quiz, layout) {
   };
 }
 
+function runInfo(run, quiz) {
+  return {
+    runId: run.id, title: quiz.title, timeLimitMin: quiz.timeLimitMin,
+    questionCount: quiz.questions.length, hasCode: quiz.questions.some((qq) => qq.type === 'code'),
+  };
+}
+
 function submit(a, quiz, answers, why) {
   if (a.status !== 'active') return;
   if (answers) a.answers = cleanAnswers(quiz, a.layout, answers);
@@ -95,18 +102,24 @@ module.exports = function studentRoutes(r) {
       throw new HttpError(404, 'bad_code');
     }
     if (run.ip_lock && !sameNetwork(ip, run.ip_lock)) throw new HttpError(403, 'wrong_network');
-    const quiz = store.getQuiz(run.quiz_id);
-    json(res, 200, {
-      runId: run.id, title: quiz.title, timeLimitMin: quiz.timeLimitMin,
-      questionCount: quiz.questions.length, hasCode: quiz.questions.some((qq) => qq.type === 'code'),
-    });
+    json(res, 200, runInfo(run, store.getQuiz(run.quiz_id)));
+  });
+
+  // Page load: is this browser already signed in? Lets a reloaded page skip the join screens.
+  r.post('/api/resume', async (req, res) => {
+    let ctx;
+    try { ctx = current(req, { mustBeOpen: false }); } catch (e) { return json(res, 200, { status: null }); }
+    const { a, run, quiz } = ctx;
+    if (run.status !== 'open' && a.status !== 'active' && a.status !== 'submitted') return json(res, 200, { status: null });
+    const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
+    json(res, 200, { status: a.status, run: runInfo(run, quiz), name: student ? student.name : '' });
   });
 
   // Typeahead: only names matching what was typed come back, never the whole roster.
   r.post('/api/names', async (req, res) => {
     const body = await readJson(req, 4096);
     const run = openRun(body.runId, req);
-    if (!nameLookups(clientIp(req))) throw new HttpError(429, 'too_many');
+    if (!nameLookups(run.id + ' ' + clientIp(req))) throw new HttpError(429, 'too_many');
     const term = String(body.q || '').trim().slice(0, 60);
     if (term.length < 2) return json(res, 200, { matches: [] });
     const like = '%' + term.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
@@ -136,8 +149,11 @@ module.exports = function studentRoutes(r) {
     const token = newToken();
     if (existing) {
       if (mine && mine.id === existing.id) return json(res, 200, { ok: true });
-      // A student who lost their cookie before starting can sign in again; after that, only the teacher can reset.
-      if (existing.status !== 'waiting' && existing.status !== 'admitted') throw new HttpError(409, 'already_started');
+      // A student who lost their cookie before starting can sign in again. After that, only if the teacher
+      // pressed "Let back in" (crashed PC, new seat): they pick up the same attempt, answers and clock.
+      const letIn = existing.letIn && now - existing.letIn < 10 * 60000;
+      if (existing.status !== 'waiting' && existing.status !== 'admitted' && !letIn) throw new HttpError(409, 'already_started');
+      if (letIn) { existing.letIn = 0; existing.resumeOk = true; }
       existing.tokenHash = sha256(token);
       q('UPDATE attempts SET token_hash = ?, ip = ?, user_agent = ? WHERE id = ?').run(existing.tokenHash, clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), existing.id);
       existing.userAgent = String(req.headers['user-agent'] || '').slice(0, 300);
@@ -170,9 +186,15 @@ module.exports = function studentRoutes(r) {
       a.lastBeat = now;
       store.logEvent(a, 'start', 'info', null);
       store.save(a);
+    } else if (a.resumeOk) {
+      a.resumeOk = false;
+      store.logEvent(a, 'resume', 'info', 'let back in by teacher');
+      a.lastBeat = now;
+      a.beatLost = false;
     } else {
       store.record(a, 'reload', 'reopened the quiz', quiz);
       a.lastBeat = now;
+      a.beatLost = false;
     }
     void run;
     // Saved answers go back in the student's own positional order.
@@ -193,6 +215,15 @@ module.exports = function studentRoutes(r) {
     const { a, quiz } = current(req);
     const now = Date.now();
     if (a.status === 'active') {
+      // Events the client couldn't send while offline arrive here, oldest first.
+      if (Array.isArray(body.late)) {
+        for (const e of body.late.slice(0, 50)) {
+          if (!Array.isArray(e) || !store.CLIENT_EVENTS[e[0]]) continue;
+          const ago = Math.max(0, Math.round(Number(e[2]) / 1000) || 0);
+          store.record(a, e[0], [e[1] ? String(e[1]).slice(0, 120) : null, `sent ${ago}s late`].filter(Boolean).join(' · '), quiz);
+        }
+      }
+      if (a.beatLost) store.logEvent(a, 'reconnect', 'info', Math.round((now - a.lastBeat) / 1000) + 's offline');
       a.lastBeat = now;
       a.beatLost = false;
       if (body.focused === false || body.visible === false) {
@@ -213,7 +244,7 @@ module.exports = function studentRoutes(r) {
       if (body.answers) a.answers = cleanAnswers(quiz, a.layout, body.answers);
       store.save(a);
     }
-    json(res, 200, { ok: true, now });
+    json(res, 200, { ok: true, now, deadline: a.deadline || null });
   });
 
   r.post('/api/run', async (req, res) => {

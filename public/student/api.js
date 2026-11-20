@@ -39,7 +39,9 @@
     event: (type, detail) => post('/api/event', { type, detail }, true),
     beat: (payload) => post('/api/beat', payload),
     run: (body) => post('/api/run', body),
-    submit: (answers) => post('/api/submit', { answers }, true),
+    // keepalive lets a submit survive the page closing, but browsers cap keepalive bodies at 64 KB.
+    submit: (answers) => post('/api/submit', { answers }, JSON.stringify(answers || {}).length < 60000),
+    resume: () => post('/api/resume'),
     assetUrl: (p) => '/asset/' + String(p).split('/').map(encodeURIComponent).join('/'),
   };
 })();

@@ -9,7 +9,8 @@
     restore: 'Restored by teacher', invalidate: 'Invalidated by teacher', blur: 'Left the quiz window', hidden: 'Tab hidden',
     'fullscreen-exit': 'Left fullscreen', return: 'Came back', 'mouse-left': 'Cursor left the page', copy: 'Copy blocked',
     paste: 'Outside paste blocked', contextmenu: 'Right-click', 'blocked-key': 'Blocked key', 'print-screen': 'Print Screen',
-    resize: 'Window resized', 'unfocused-beat': 'Heartbeat: not focused', 'heartbeat-lost': 'Heartbeat lost',
+    resize: 'Window resized', 'unfocused-beat': 'Heartbeat: not focused', 'heartbeat-lost': 'Connection lost', reconnect: 'Reconnected',
+    resume: 'Continued on a new computer', 'let-in': 'Let back in by teacher', extend: 'Extra time', grade: 'Graded by teacher',
     'extended-display': 'Second display', 'bulk-insert': 'Large insert in editor', 'inhuman-typing': 'Typing faster than a person',
     'late-submit': 'Submitted late', 'other-network': 'Request from another network', 'other-device': 'Request from another browser',
   };
@@ -33,6 +34,8 @@
   }
   const clock = (t) => (t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '');
   const date = (t) => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const mmss = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 
   async function api(path, opts) {
     const res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
@@ -88,8 +91,12 @@
   // ---------- home ----------
   async function showHome() {
     let data;
-    try { data = await api('/api/t/overview'); } catch (e) { if (e.message !== 'login') mount(h('p', { class: 't-error', text: e.message })); return; }
-    const quizSel = h('select', { class: 'input', id: 'run-quiz' }, data.quizzes.map((x) => h('option', { value: x.id, text: `${x.title} (${x.questions} questions)` })));
+    let me = null;
+    try { [data, me] = await Promise.all([api('/api/t/overview'), api('/api/t/me').catch(() => null)]); } catch (e) { if (e.message !== 'login') mount(h('p', { class: 't-error', text: e.message })); return; }
+    const runner = !me || !me.runner ? null
+      : me.runnerOk ? h('p', { class: 't-muted t-small' }, h('span', { class: 'dot ok' }), 'Code runner online')
+        : h('p', { class: 't-error t-small' }, h('span', { class: 'dot bad' }), "Code runner offline. Code questions can't run or be graded until it's back (graded automatically once it is).");
+    const quizSel = h('select', { class: 'input', id: 'run-quiz' }, data.quizzes.map((x) => h('option', { value: x.id, text: `${x.title} (${plural(x.questions, 'question')}) · added ${date(x.createdAt)}` })));
     const rosterSel = h('select', { class: 'input', id: 'run-roster' }, data.rosters.map((x) => h('option', { value: x.id, text: `${x.name} (${x.students})` })));
     const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', checked: true });
     const startMsg = h('p', { class: 't-error', role: 'alert' });
@@ -127,8 +134,8 @@
         h('div', { class: 't-row' },
           h('label', { class: 'field', for: 'run-quiz' }, h('span', { class: 'field-label', text: 'Quiz' }), quizSel),
           h('label', { class: 'field', for: 'run-roster' }, h('span', { class: 'field-label', text: 'Class' }), rosterSel)),
-        h('label', { class: 't-check', for: 'ip-lock' }, ipLock, h('span', { text: 'Only allow students on this network (recommended)' })),
-        h('div', {}, startBtn), startMsg),
+        h('label', { class: 't-check', for: 'ip-lock' }, ipLock, h('span', { text: "Only allow students on the network I'm on right now (you can change this later)" })),
+        h('div', {}, startBtn), startMsg, runner),
       h('section', { class: 't-section' },
         h('h2', { text: 'Recent quizzes' }),
         data.runs.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
@@ -140,7 +147,7 @@
             h('td', { class: 'num', text: String(r.joined) }), h('td', { text: date(r.createdAt) })))))) : h('p', { class: 't-muted', text: 'None yet.' })),
       h('section', { class: 't-section' },
         h('h2', { text: 'Quizzes' }),
-        data.quizzes.length ? h('ul', {}, data.quizzes.map((x) => h('li', { text: `${x.title} · ${x.questions} questions${x.timeLimitMin ? ` · ${x.timeLimitMin} min` : ''}` }))) : null,
+        data.quizzes.length ? h('ul', {}, data.quizzes.map((x) => h('li', { text: `${x.title} · ${plural(x.questions, 'question')}${x.timeLimitMin ? ` · ${x.timeLimitMin} min` : ''} · added ${date(x.createdAt)}` }))) : null,
         h('div', { class: 't-row' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: '.quiz file' }), quizFile), quizBtn),
         quizMsg),
       h('section', { class: 't-section' },
@@ -178,6 +185,10 @@
     const tbody = h('tbody');
     const detail = h('div');
     const toggle = h('button', { class: 'btn', type: 'button' });
+    const lockBtn = h('button', { class: 'btn', type: 'button' });
+    const howTo = h('p', { class: 't-muted t-small' });
+    const failedBox = h('div');
+    let lastDetail = '';
     const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => act(`/api/t/runs/${runId}/admit-all`) });
     const exportLink = h('a', { class: 'btn', href: `/api/t/runs/${runId}/export.csv`, download: true, text: 'Export CSV' });
     exportLink.style.display = 'inline-flex';
@@ -196,27 +207,53 @@
       const run = data.run;
       code.textContent = run.code;
       title.textContent = run.title;
-      meta.textContent = `${run.questions} questions${run.timeLimitMin ? ` · ${run.timeLimitMin} minutes` : ''} · ${run.status === 'open' ? 'Open' : 'Closed'}${run.ipLock ? ' · locked to this network' : ''}`;
+      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? ` · ${plural(run.timeLimitMin, 'minute')}` : ''} · ${run.status === 'open' ? 'Open' : 'Closed'}${run.ipLock ? ' · only your network' : ''}`;
+      howTo.textContent = `Students go to ${location.origin} and type the code.`;
       toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
-      toggle.onclick = () => act(`/api/t/runs/${runId}/${run.status === 'open' ? 'close' : 'open'}`);
+      toggle.onclick = () => {
+        if (run.status === 'open' && !confirm('Close the quiz? Anyone still working gets their saved answers turned in now.')) return;
+        act(`/api/t/runs/${runId}/${run.status === 'open' ? 'close' : 'open'}`);
+      };
+      lockBtn.textContent = run.ipLock ? 'Network lock: on' : 'Network lock: off';
+      lockBtn.title = run.ipLock ? 'Only students on your network can join. Click to allow any network.' : "Click to only allow students on the network you're on right now.";
+      lockBtn.onclick = () => act(`/api/t/runs/${runId}/${run.ipLock ? 'unlock' : 'lock'}`);
+      const failed = data.students.filter((x) => x.attempt && x.attempt.failed).length;
+      failedBox.replaceChildren(failed ? h('p', { class: 't-error' }, `Code grading failed for ${plural(failed, 'student')} (the code runner was offline). It retries every minute. `,
+        h('button', { class: 'btn small', type: 'button', text: 'Retry now', onclick: () => act(`/api/t/runs/${runId}/regrade-failed`) })) : '');
       const order = (s) => (s.attempt ? (s.attempt.integrity === 'invalidated' ? 0 : s.attempt.status === 'waiting' ? 1 : 2) : 3);
       const rows = data.students.slice().sort((x, y) => order(x) - order(y) || x.name.localeCompare(y.name));
+      const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
       tbody.replaceChildren(...rows.map((s) => {
         const a = s.attempt;
         const actions = h('td', { class: 't-actions' });
-        if (a && a.status === 'waiting') actions.append(h('button', { class: 'btn small primary', type: 'button', text: 'Admit', onclick: () => act(`/api/t/attempts/${a.id}/admit`) }));
-        if (a && a.integrity === 'invalidated') actions.append(h('button', { class: 'btn small', type: 'button', text: 'Restore', onclick: () => act(`/api/t/attempts/${a.id}/restore`) }));
-        if (a) actions.append(h('button', { class: 'btn small', type: 'button', text: 'Reset', title: 'Let this student start over', onclick: () => { if (confirm(`Reset ${s.name}? Their attempt is archived and they can start over.`)) act(`/api/t/attempts/${a.id}/reset`); } }));
+        const btn = (text, key, onclick, extra) => h('button', Object.assign({ class: 'btn small', type: 'button', text, onclick, 'data-key': `${a.id}:${key}` }, extra || {}));
+        if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => act(`/api/t/attempts/${a.id}/admit`), { class: 'btn small primary' }));
+        if (a && a.integrity === 'invalidated') actions.append(btn('Restore', 'restore', () => { if (confirm(`Restore ${s.name}? Their score counts again.`)) act(`/api/t/attempts/${a.id}/restore`); }));
+        if (a && (a.status === 'active' || a.status === 'admitted')) {
+          actions.append(a.letIn
+            ? h('span', { class: 't-muted t-small', text: 'Can sign in again' })
+            : btn('Let back in', 'letin', () => act(`/api/t/attempts/${a.id}/let-in`), { title: 'Crashed computer or new seat: they sign in again and keep their answers and time' }));
+        }
+        if (a) actions.append(btn('Reset', 'reset', () => { if (confirm(`Reset ${s.name}? Their answers are thrown out and they start over. (For a crashed computer, use Let back in instead.)`)) act(`/api/t/attempts/${a.id}/reset`); }, { title: 'Throw out this attempt and let them start over' }));
         const beat = a && a.lastBeatAgo != null ? Math.round(a.lastBeatAgo / 1000) : null;
+        let score = '';
+        if (a && a.score != null) {
+          score = `${a.score} / ${a.max}`;
+          if (a.pending) score += ' (grading)';
+          else if (a.failed) score += ' (grading failed)';
+          else if (a.review) score += ' (needs review)';
+        }
         return h('tr', { class: selected === (a && a.id) ? 'sel' : null },
-          h('td', {}, a ? h('button', { class: 't-link', type: 'button', text: s.name, onclick: () => { selected = a.id; showDetail(a.id); refresh(); } }) : s.name),
+          h('td', {}, a ? h('button', { class: 't-link', type: 'button', text: s.name, 'data-key': `${a.id}:name`, onclick: () => { selected = a.id; lastDetail = ''; showDetail(a.id); refresh(); } }) : s.name),
           statusCell(s), integrityCell(a),
           h('td', { class: 'num', text: a ? String(a.strikes) : '' }), h('td', { class: 'num', text: a ? String(a.warnings) : '' }),
           h('td', { class: 'num', text: a && a.status !== 'waiting' ? `${a.answered}/${a.total}` : '' }),
           h('td', { class: 'num' + (beat != null && beat > 6 ? ' t-late' : ''), text: beat != null ? `${beat}s ago` : '' }),
-          h('td', { class: 'num', text: a && a.score != null ? `${a.score} / ${a.max}${a.pending ? ' (grading)' : ''}` : '' }),
+          h('td', { class: 'num', text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }),
+          h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), text: score }),
           actions);
       }));
+      if (focusKey) { const again = tbody.querySelector(`[data-key="${CSS.escape(focusKey)}"]`); if (again) again.focus(); }
       if (selected) showDetail(selected, true);
     }
 
@@ -224,11 +261,17 @@
       let d;
       try { d = await api(`/api/t/attempts/${id}`); } catch (e) { return; }
       if (selected !== id) return;
+      // The poll re-renders every 2s: don't wipe what the teacher is typing, selecting or reading.
+      const snapshot = JSON.stringify(Object.assign({}, d, { timeLeft: null }));
+      const typing = detail.contains(document.activeElement) && document.activeElement.matches('input, textarea, select');
+      if (quiet && (snapshot === lastDetail || typing || String(window.getSelection() || '') !== '')) return;
+      lastDetail = snapshot;
       const canvas = h('canvas', { class: 't-trail', width: 640, height: 360, 'aria-label': 'Mouse trail' });
       const answers = h('div', { class: 't-answers' }, d.answers.map((x, i) => {
         const parts = [h('p', {}, h('b', { text: `${i + 1}. ` }), x.prompt.replace(/```\w*/g, ' ').replace(/`/g, '').replace(/\s+/g, ' ').trim().slice(0, 140))];
-        const pts = x.points != null ? `${x.points} / ${x.max}` : x.code && x.code.status === 'pending' ? 'grading…' : `– / ${x.max}`;
-        parts.push(h('p', { class: 't-muted t-small', text: `Points: ${pts}` }));
+        const pts = x.points != null ? `${x.points} / ${x.max}${x.override ? ' (set by you)' : ''}`
+          : x.state === 'pending' ? 'grading…' : x.state === 'failed' ? `grading failed (${(x.code && x.code.message) || 'runner offline'})` : `– / ${x.max}`;
+        parts.push(h('p', { class: 't-muted t-small', text: `Points: ${pts}${x.review ? ' · needs review' : ''}` }));
         if (x.type === 'code') {
           parts.push(h('pre', { text: x.answer || '(no answer)' }));
           if (x.code && x.code.compileError) parts.push(h('pre', { class: 't-error', text: x.code.compileError }));
@@ -237,12 +280,15 @@
           parts.push(h('p', { class: 't-small' }, 'Answer: ', h('b', { text: x.answer == null ? '(blank)' : String(x.answer) })));
           parts.push(h('p', { class: 't-small t-muted', text: `Correct: ${x.correctAnswer}` }));
         }
+        if (d.status === 'submitted') parts.push(gradeControls(id, x));
         return h('div', { class: 't-answer' }, parts);
       }));
       detail.replaceChildren(h('section', { class: 't-detail' },
         h('div', { class: 't-row' },
           h('h2', { style: 'flex:1', text: d.name }),
           d.integrity !== 'invalidated' ? h('button', { class: 'btn small', type: 'button', text: 'Invalidate', onclick: () => { const note = prompt('Why? (kept in the log)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } }) : null,
+          d.status === 'active' && d.deadline ? h('span', { class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }) : null,
+          d.status === 'active' && d.deadline ? h('button', { class: 'btn small', type: 'button', text: '+5 min', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } }) : null,
           d.status === 'submitted' ? h('button', { class: 'btn small', type: 'button', text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) }) : null,
           h('button', { class: 'btn small', type: 'button', text: 'Close', onclick: () => { selected = null; detail.replaceChildren(); refresh(); } })),
         d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}. The student wasn't told.` }) : null,
@@ -251,18 +297,51 @@
             h('ul', { class: 't-events' }, d.events.map((e) => h('li', { class: e.severity }, h('time', { text: clock(e.t) }), h('span', {}, h('b', { text: LABEL[e.type] || e.type }), e.detail ? ` · ${e.detail}` : ''))))),
           h('div', { class: 't-section' }, h('h3', { text: 'Mouse trail' }), canvas,
             h('p', { class: 't-muted t-small', text: `${d.mouse.length} samples · ${d.userAgent || ''}` }))),
-        h('div', { class: 't-section' }, h('h3', { text: d.totals ? `Answers · ${d.totals.score} / ${d.totals.max}${d.totals.pending ? ' (code still grading)' : ''}` : 'Answers' }), answers)));
+        h('div', { class: 't-section' }, h('h3', { text: d.totals ? `Answers · ${d.totals.score} / ${d.totals.max}${d.totals.pending ? ' (code still grading)' : d.totals.failed ? ' (grading failed)' : d.totals.review ? ' (needs review)' : ''}` : 'Answers' }), answers)));
       drawTrail(canvas, d.mouse);
       if (!quiet) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Rubric checkboxes and a points override for one answer.
+    function gradeControls(id, x) {
+      const boxes = x.rubric.map((r) => {
+        const cb = h('input', { type: 'checkbox', id: `rb-${x.id}-${r.id}`, checked: r.checked });
+        return { r, cb, el: h('label', { class: 't-check', for: cb.id }, cb, h('span', { text: `${r.text} (${plural(r.points, 'point')})` })) };
+      });
+      const over = h('input', { class: 'input t-points', type: 'number', min: '0', max: String(x.max), step: '0.5', id: `ov-${x.id}`, value: x.overridePoints != null ? String(x.overridePoints) : '' });
+      const msg = h('span', { class: 't-small t-muted', role: 'status' });
+      const save = h('button', { class: 'btn small', type: 'button', text: 'Save' });
+      save.addEventListener('click', async () => {
+        save.disabled = true; msg.textContent = '';
+        const rubric = Object.fromEntries(boxes.map((b) => [b.r.id, b.cb.checked]));
+        try {
+          await post(`/api/t/attempts/${id}/grade`, { questionId: x.id, rubric, override: over.value === '' ? null : Number(over.value) });
+          msg.textContent = 'Saved';
+          lastDetail = '';
+          save.blur();
+          refresh();
+        } catch (e) { msg.textContent = e.message; save.disabled = false; }
+      });
+      const pointsRow = h('div', { class: 't-row' },
+        h('label', { class: 't-small', for: over.id, text: `Set points (0–${x.max}, blank = automatic)` }), over, save, msg);
+      if (!boxes.length) {
+        // Most answers never need this: keep it folded away unless it's in use.
+        return h('details', { class: 't-adjust', open: x.overridePoints != null }, h('summary', { class: 't-small', text: 'Adjust points' }), pointsRow);
+      }
+      return h('div', { class: 't-grade' },
+        h('div', { class: 't-rubric' }, h('p', { class: 't-small', text: 'Rubric' }), boxes.map((b) => b.el)),
+        pointsRow);
     }
 
     mount(bar(h('button', { class: 't-link', type: 'button', text: '← All quizzes', onclick: () => showHome() })),
       h('main', { class: 't-main' },
         h('section', { class: 't-section' },
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
-          h('div', { class: 't-row' }, admitAll, toggle, exportLink)),
+          howTo,
+          h('div', { class: 't-row' }, admitAll, toggle, lockBtn, exportLink),
+          failedBox),
         h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
-          h('thead', {}, h('tr', {}, ['Student', 'Status', 'Integrity', 'Strikes', 'Warnings', 'Answered', 'Heartbeat', 'Score', ''].map((x) => h('th', { text: x })))),
+          h('thead', {}, h('tr', {}, ['Student', 'Status', 'Integrity', 'Strikes', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score', ''].map((x) => h('th', { text: x })))),
           tbody)),
         detail));
     await refresh();

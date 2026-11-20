@@ -4,14 +4,15 @@ const crypto = require('node:crypto');
 const { q, tx } = require('./db');
 const store = require('./store');
 const { loadQuizFile, QuizError } = require('./quizfile');
-const { checkReferences, runnerConfigured } = require('./coderun');
-const { totals, gradeAttempt, answerReport } = require('./grade');
+const { checkReferences, runnerConfigured, runnerHealthy } = require('./coderun');
+const { totals, questionScore, gradeAttempt, answerReport } = require('./grade');
 const { submit, hashSid } = require('./student');
 const { HttpError, clientIp, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
 
 const TCH = 'tch';
 const SESSION_MS = 12 * 3600 * 1000;
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const LET_IN_MS = 10 * 60000; // how long "Let back in" stays open
 
 function requireTeacher(req) {
   const t = cookies(req)[TCH];
@@ -56,7 +57,7 @@ function parseCsv(text) {
 
 function liveRow(student, a, quiz) {
   if (!a) return { rosterId: student.id, name: student.name, attempt: null };
-  const t = totals(a.result);
+  const t = totals(a.result, quiz, a.answers);
   const answered = a.answers ? Object.keys(a.answers).length : 0;
   return {
     rosterId: student.id,
@@ -65,7 +66,10 @@ function liveRow(student, a, quiz) {
       id: a.id, status: a.status, integrity: a.integrity, strikes: a.strikes, warnings: a.warnings,
       reason: a.reason, invalidatedAt: a.invalidatedAt, lastBeatAgo: a.status === 'active' && a.lastBeat ? Date.now() - a.lastBeat : null,
       answered, total: quiz.questions.length, deadline: a.deadline,
-      score: t ? (a.integrity === 'invalidated' ? 0 : t.score) : null, rawScore: t ? t.score : null, max: t ? t.max : null, pending: t ? t.pending : 0,
+      timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
+      letIn: !!(a.letIn && Date.now() - a.letIn < LET_IN_MS),
+      score: t ? (a.integrity === 'invalidated' ? 0 : t.score) : null, rawScore: t ? t.score : null, max: t ? t.max : null,
+      pending: t ? t.pending : 0, failed: t ? t.failed : 0, review: t ? t.review : 0,
     },
   };
 }
@@ -94,7 +98,10 @@ module.exports = function teacherRoutes(r) {
     json(res, 200, { ok: true });
   });
 
-  r.get('/api/t/me', (req, res) => { requireTeacher(req); json(res, 200, { ok: true, runner: runnerConfigured() }); });
+  r.get('/api/t/me', async (req, res) => {
+    requireTeacher(req);
+    json(res, 200, { ok: true, runner: runnerConfigured(), runnerOk: runnerConfigured() ? await runnerHealthy() : false });
+  });
 
   r.get('/api/t/overview', (req, res) => {
     requireTeacher(req);
@@ -197,8 +204,16 @@ module.exports = function teacherRoutes(r) {
         store.logEvent(a, 'admit', 'info', null);
         store.save(a);
       }
-    } else if (p.action === 'release') {
-      q('UPDATE runs SET released = 1 WHERE id = ?').run(run.id);
+    } else if (p.action === 'lock') {
+      q('UPDATE runs SET ip_lock = ? WHERE id = ?').run(clientIp(req), run.id);
+    } else if (p.action === 'unlock') {
+      q('UPDATE runs SET ip_lock = NULL WHERE id = ?').run(run.id);
+    } else if (p.action === 'regrade-failed') {
+      for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'submitted'").all(run.id)) {
+        const a = store.getAttempt(row.id);
+        const t = totals(a.result, quiz, a.answers);
+        if (!a.result || (t && t.failed)) gradeAttempt(a, quiz).catch(() => {});
+      }
     } else throw new HttpError(404, 'not_found');
     audit(p.action + '-run', null, run.code);
     json(res, 200, { ok: true });
@@ -223,14 +238,22 @@ module.exports = function teacherRoutes(r) {
     if (!run) throw new HttpError(404, 'not_found');
     const quiz = store.getQuiz(run.quiz_id);
     const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const lines = [['name', 'status', 'integrity', 'reason', 'strikes', 'warnings', 'raw_score', 'final_score', 'max', 'grading_pending', 'submitted_at'].join(',')];
+    const iso = (t) => (t ? new Date(t).toISOString() : '');
+    const head = ['name', 'status', 'integrity', 'reason', 'strikes', 'warnings', 'raw_score', 'final_score', 'max',
+      'grading_pending', 'grading_failed', 'needs_review', 'started_at', 'submitted_at', ...quiz.questions.map((qq, i) => `q${i + 1}_${qq.id}`)];
+    const lines = [head.join(',')];
     for (const s of q('SELECT id, name FROM roster_students WHERE roster_id = ? ORDER BY name').all(run.roster_id)) {
       const row = q('SELECT id FROM attempts WHERE run_id = ? AND student_id = ? AND archived = 0').get(run.id, s.id);
       const a = row ? store.getAttempt(row.id) : null;
-      const t = a ? totals(a.result) : null;
+      const t = a ? totals(a.result, quiz, a.answers) : null;
+      const perQ = quiz.questions.map((qq) => {
+        if (!a || !a.result) return '';
+        const sc = questionScore(qq, a.result, a.answers);
+        return sc.state === 'done' ? sc.points : sc.state;
+      });
       lines.push([s.name, a ? a.status : 'not started', a ? a.integrity : '', a ? a.reason : '', a ? a.strikes : '', a ? a.warnings : '',
-        t ? t.score : '', t ? (a.integrity === 'invalidated' ? 0 : t.score) : '', t ? t.max : '', t ? t.pending : '',
-        a && a.submittedAt ? new Date(a.submittedAt).toISOString() : ''].map(esc).join(','));
+        t ? t.score : '', t ? (a.integrity === 'invalidated' ? 0 : t.score) : '', t ? t.max : '', t ? t.pending : '', t ? t.failed : '', t ? t.review : '',
+        a ? iso(a.startedAt) : '', a ? iso(a.submittedAt) : '', ...perQ].map(esc).join(','));
     }
     send(res, 200, lines.join('\n') + '\n', {
       'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store',
@@ -251,7 +274,8 @@ module.exports = function teacherRoutes(r) {
     json(res, 200, {
       id: a.id, name: student ? student.name : '?', status: a.status, integrity: a.integrity, reason: a.reason,
       invalidatedAt: a.invalidatedAt, strikes: a.strikes, warnings: a.warnings, startedAt: a.startedAt, submittedAt: a.submittedAt,
-      totals: totals(a.result), answers: answerReport(quiz, a), events, mouse: mouse.slice(-3000), ip: a.ip, userAgent: a.userAgent,
+      deadline: a.deadline, timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
+      totals: totals(a.result, quiz, a.answers), answers: answerReport(quiz, a), events, mouse: mouse.slice(-3000), ip: a.ip, userAgent: a.userAgent,
     });
   });
 
@@ -269,12 +293,43 @@ module.exports = function teacherRoutes(r) {
       if (a.integrity === 'invalidated') { a.integrity = 'restored'; store.logEvent(a, 'restore', 'info', note || null); store.save(a); }
     } else if (p.action === 'invalidate') {
       if (a.integrity !== 'invalidated') { a.integrity = 'invalidated'; a.reason = 'teacher'; a.invalidatedAt = Date.now(); store.logEvent(a, 'invalidate', 'info', note || null); store.save(a); }
+    } else if (p.action === 'let-in') {
+      // A crashed PC or a seat change: the next sign-in with this name and ID picks up the same attempt.
+      if (a.status === 'active' || a.status === 'admitted') { a.letIn = Date.now(); store.logEvent(a, 'let-in', 'info', null); }
+    } else if (p.action === 'extend') {
+      const mins = Math.round(Number(body.minutes));
+      if (!(mins >= 1 && mins <= 120)) throw new HttpError(400, 'bad_request');
+      if (a.status === 'active' && a.deadline) {
+        a.deadline = Math.max(a.deadline, Date.now()) + mins * 60000;
+        store.logEvent(a, 'extend', 'info', `+${mins} min`);
+        store.save(a);
+      }
     } else if (p.action === 'reset') {
       a.archived = true;
       store.save(a);
       store.forget(a.id);
     } else if (p.action === 'regrade') {
-      if (a.status === 'submitted') { a.result = null; store.save(a); gradeAttempt(a, quiz).catch(() => {}); }
+      if (a.status === 'submitted') {
+        const manual = a.result && a.result.manual;
+        a.result = manual ? { manual } : null; // keep the teacher's rubric marks and overrides
+        store.save(a);
+        gradeAttempt(a, quiz).catch(() => {});
+      }
+    } else if (p.action === 'grade') {
+      // Rubric checkboxes and a points override for one question.
+      const qq = quiz.questions.find((x) => x.id === body.questionId);
+      if (!qq || a.status !== 'submitted' || !a.result) throw new HttpError(400, 'bad_request');
+      const rubric = {};
+      for (const r of qq.rubric || []) if (body.rubric && body.rubric[r.id] === true) rubric[r.id] = true;
+      let override = null;
+      if (body.override !== null && body.override !== undefined && body.override !== '') {
+        override = Number(body.override);
+        if (!Number.isFinite(override) || override < 0 || override > qq.points) throw new HttpError(400, 'bad_points', `Points must be between 0 and ${qq.points}.`);
+        override = Math.round(override * 100) / 100;
+      }
+      a.result.manual = Object.assign({}, a.result.manual, { [qq.id]: { rubric, override, reviewed: true } });
+      store.logEvent(a, 'grade', 'info', `${qq.id}: ${override != null ? override + ' pts (override)' : Object.keys(rubric).length + ' rubric item(s)'}`);
+      store.save(a);
     } else throw new HttpError(404, 'not_found');
     audit(p.action, a.id, note);
     json(res, 200, { ok: true });

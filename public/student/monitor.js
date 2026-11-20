@@ -20,7 +20,8 @@
   class Monitor {
     /**
      * @param {object} api   BQ.api (event, beat)
-     * @param {object} opts  { fullscreen, getAnswers, onFullscreenLost, onFullscreenBack, onPasteBlocked, onSave, onBeat }
+     * @param {object} opts  { fullscreen, getAnswers, onFullscreenLost, onFullscreenBack, onPasteBlocked, onSave,
+     *                         onReloadBlocked, onBeat(res, info), onBeatError(err, failures) }
      */
     constructor(api, opts) {
       this.api = api;
@@ -41,6 +42,8 @@
       this.selectionProvider = null; // (target) => selected text, set by the code editor
       this.beatTimer = 0;
       this.bound = [];
+      this.failures = 0;
+      this.late = []; // events that couldn't be sent (offline), delivered with the next good heartbeat
     }
 
     report(type, detail) {
@@ -48,7 +51,10 @@
       const now = Date.now();
       if (now - (this.lastSent[type] || 0) < 500) return; // same event twice in 500ms is one report
       this.lastSent[type] = now;
-      Promise.resolve(this.api.event(type, detail == null ? undefined : String(detail))).catch(() => {});
+      const d = detail == null ? undefined : String(detail);
+      Promise.resolve(this.api.event(type, d)).catch(() => {
+        if (this.late.length < 100) this.late.push([type, d || null, now]);
+      });
     }
 
     on(target, type, fn, options) {
@@ -124,6 +130,10 @@
           e.preventDefault(); // muscle memory; answers autosave anyway
           if (o.onSave) o.onSave();
         }
+        if (e.key === 'F5' || (mod && k === 'r')) {
+          e.preventDefault(); // an accidental reload mid-quiz is costly
+          if (o.onReloadBlocked) o.onReloadBlocked();
+        }
       }, true);
       this.on(window, 'keyup', (e) => {
         if (e.key === 'PrintScreen') this.report('print-screen');
@@ -177,6 +187,9 @@
         });
       }
 
+      // Reload button or closing the tab: ask first.
+      this.on(window, 'beforeunload', (e) => { e.preventDefault(); e.returnValue = ''; });
+
       this.beatTimer = setInterval(() => this.beat(), BEAT_MS);
       this.beat();
     }
@@ -196,9 +209,22 @@
         payload.answers = this.opts.getAnswers();
         this.answersDirty = false;
       }
+      const sentAt = Date.now();
+      const late = this.late.splice(0);
+      if (late.length) payload.late = late.map(([type, detail, t]) => [type, detail, sentAt - t]);
       Promise.resolve(this.api.beat(payload))
-        .then((r) => { if (this.opts.onBeat) this.opts.onBeat(r); })
-        .catch(() => { this.answersDirty = true; });
+        .then((r) => {
+          this.failures = 0;
+          if (this.opts.onBeat) this.opts.onBeat(r, { answers: !!payload.answers });
+        })
+        .catch((err) => {
+          this.failures++;
+          if (payload.answers) this.answersDirty = true;
+          // Keep the typing replay and anything we couldn't report; the mouse trail can go.
+          if (payload.edits.length && this.edits.length < 5000) this.edits.unshift(...payload.edits);
+          if (late.length) this.late.unshift(...late.slice(0, 100 - this.late.length));
+          if (this.opts.onBeatError) this.opts.onBeatError(err, this.failures);
+        });
     }
 
     // Code editor telemetry: every edit delta (for typing replay), bulk inserts, inhuman typing speed.

@@ -25,6 +25,8 @@
     name_locked: 'Too many wrong tries for this name. Wait 30 seconds, then try again.',
     already_started: 'This name already started on another computer. Ask your teacher.',
     network: "Can't reach the quiz server. Check your connection and try again.",
+    no_attempt: "You've been signed out of the quiz. Sign in again.",
+    not_admitted: 'Your teacher has to let you in first.',
   };
 
   let api;
@@ -35,7 +37,7 @@
     return {
       run: null, me: null, quiz: null, idx: 0, answers: {}, deadline: 0, skew: 0,
       monitor: null, models: {}, editor: null, editorSubs: [], parts: [], partsSeen: new Set(), dirOpen: false,
-      timer: 0, poll: 0, done: false, runBusy: false, results: {}, el: null,
+      timer: 0, poll: 0, done: false, runBusy: false, results: {}, el: null, warned: {}, saveState: 'saved',
     };
   }
 
@@ -63,7 +65,7 @@
   const demoHint = (...kids) => (cfg.demo ? h('p', { class: 'demo-hint' }, ...kids) : null);
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-  function toast(msg) {
+  function toast(msg, ms) {
     const host = (S.el && S.el.wrap) || root;
     let t = host.querySelector('.toast');
     if (!t) {
@@ -72,7 +74,7 @@
     }
     t.textContent = msg;
     clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => t.remove(), 2600);
+    toast.timer = setTimeout(() => t.remove(), ms || 2600);
   }
 
   async function enterFullscreen() {
@@ -264,7 +266,13 @@
       if (q.length < 2) { close(); return; }
       const mine = ++seq;
       let res;
-      try { res = await api.findNames({ runId: run.runId, q }); } catch (e) { return; }
+      try { res = await api.findNames({ runId: run.runId, q }); } catch (e) {
+        if (mine !== seq) return;
+        list.hidden = true;
+        hint.hidden = false;
+        hint.textContent = e.code === 'too_many' ? 'Lots of people are signing in. Wait a moment, then keep typing.' : errorText(e);
+        return;
+      }
       if (mine !== seq || picked) return;
       const matches = (res && res.matches) || [];
       if (!matches.length) {
@@ -285,6 +293,7 @@
     });
     name.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown' && !list.hidden) { e.preventDefault(); list.firstChild.focus(); }
+      if (e.key === 'Enter' && !picked && !list.hidden && list.firstChild) { e.preventDefault(); list.firstChild.click(); }
     });
     list.addEventListener('keydown', (e) => {
       const opts = [...list.children];
@@ -333,7 +342,11 @@
       try {
         const r = await api.admitStatus();
         if (r && r.admitted) { clearInterval(S.poll); screenRules(); }
-      } catch (e) { /* keep polling */ }
+      } catch (e) {
+        if (e.code === 'run_closed') { clearInterval(S.poll); screenClosed(); }
+        else if (e.code === 'no_attempt') { clearInterval(S.poll); signedOut(); }
+        // anything else: keep polling
+      }
     };
     S.poll = setInterval(check, cfg.demo ? 700 : 2000);
   }
@@ -344,19 +357,33 @@
     return [
       { label: 'One display', ok: ext !== true, note: ext === true ? 'Unplug the second monitor, then reload this page.' : null },
       { label: 'Fullscreen works', ok: !!document.fullscreenEnabled, note: document.fullscreenEnabled ? null : 'Open this page in Edge or Chrome.' },
-      { label: 'Desktop computer', ok: desktop, note: desktop ? null : 'Take the quiz on a lab computer with a mouse.' },
+      { label: 'Desktop computer', ok: desktop, note: desktop ? null : window.matchMedia('(pointer: fine)').matches ? 'Maximize this window.' : 'Take the quiz on a lab computer with a mouse.' },
     ];
   }
 
   function screenRules(err) {
     if (S.run.hasCode) loadMonaco().catch(() => {});
-    const checks = prechecks();
-    const blocked = !cfg.demo && checks.some((c) => !c.ok);
     const n = S.run.questionCount;
     const mins = S.run.timeLimitMin;
     const agree = h('input', { type: 'checkbox', id: 'agree' });
     const btn = h('button', { class: 'btn primary', type: 'button', text: 'Start quiz', disabled: true });
     const msg = h('p', { class: 'error', role: 'alert', text: err || '' });
+    const checkList = h('ul', { class: 'checks', 'aria-label': 'Computer checks' });
+    let blocked = false;
+    // Re-check when the window changes size or a display is plugged in or out.
+    function renderChecks() {
+      const checks = prechecks();
+      blocked = !cfg.demo && checks.some((c) => !c.ok);
+      checkList.replaceChildren(...checks.map((c) => h('li', {},
+        h('span', { class: 'check-mark ' + (c.ok ? 'ok' : 'bad'), text: c.ok ? 'OK' : 'Fix' }),
+        c.label,
+        c.note ? h('span', { class: 'check-note', text: c.note }) : null)));
+      if (btn.textContent === 'Start quiz') btn.disabled = !agree.checked || blocked;
+    }
+    renderChecks();
+    const onChange = () => { if (!checkList.isConnected) { window.removeEventListener('resize', onChange); return; } renderChecks(); };
+    window.addEventListener('resize', onChange);
+    if (window.screen && window.screen.addEventListener) window.screen.addEventListener('change', onChange);
     agree.addEventListener('change', () => { btn.disabled = !agree.checked || blocked; });
 
     const panel = h('div', { class: 'panel wide' },
@@ -367,54 +394,85 @@
       h('ul', { class: 'rules' },
         h('li', { text: 'The quiz runs in fullscreen.' }),
         h('li', { text: 'Leaving the quiz window, switching tabs or apps, or leaving fullscreen is recorded and reported to your teacher.' }),
+        h('li', { text: 'Reloading or closing this page counts as leaving it.' }),
         h('li', { text: 'Mouse and keyboard activity is recorded.' }),
         h('li', { text: 'Pasting from outside the quiz is blocked. Copying and pasting inside your own answers works.' }),
+        mins ? h('li', { text: 'Your answers save as you go, and the quiz turns itself in when time runs out.' }) : h('li', { text: 'Your answers save as you go.' }),
         S.run.hasCode ? h('li', { text: 'Code questions have a Run button that checks your code against the examples.' }) : null),
-      h('ul', { class: 'checks', 'aria-label': 'Computer checks' },
-        checks.map((c) => h('li', {},
-          h('span', { class: 'check-mark ' + (c.ok ? 'ok' : 'bad'), text: c.ok ? 'OK' : 'Fix' }),
-          c.label,
-          c.note ? h('span', { class: 'check-note', text: c.note }) : null))),
+      checkList,
       h('label', { class: 'agree', for: 'agree' }, agree, h('span', { text: 'I read the rules' })),
       btn, msg,
-      cfg.demo && checks.some((c) => !c.ok) ? demoHint('Demo: checks are shown but not enforced here.') : null);
+      cfg.demo && prechecks().some((c) => !c.ok) ? demoHint('Demo: checks are shown but not enforced here.') : null);
 
-    btn.addEventListener('click', async () => {
-      btn.disabled = true; btn.textContent = 'Starting…'; msg.textContent = '';
-      const fsOk = await enterFullscreen(); // has to run inside the click
-      if (!fsOk && !cfg.demo) {
-        msg.textContent = 'Your browser blocked fullscreen. Click Start again.';
-        btn.disabled = false; btn.textContent = 'Start quiz';
-        return;
-      }
-      let r;
-      try {
-        r = await api.start();
-      } catch (ex) {
-        exitFullscreen();
-        msg.textContent = errorText(ex);
-        btn.disabled = false; btn.textContent = 'Start quiz';
-        return;
-      }
-      S.quiz = r.quiz;
-      S.deadline = r.deadline || 0;
-      S.skew = r.now ? r.now - Date.now() : 0;
-      S.answers = restoreAnswers(r.saved || {});
-      S.monitor = new BQ.Monitor(api, {
-        fullscreen: fsOk,
-        getAnswers: serializeAnswers,
-        onFullscreenLost: showFsOverlay,
-        onFullscreenBack: hideFsOverlay,
-        onPasteBlocked: () => toast('Pasting from outside the quiz is blocked.'),
-        onSave: () => toast('Saved. Your answers save automatically.'),
-        onBeat: (res) => { if (res && res.now) S.skew = res.now - Date.now(); },
-      });
-      screenQuiz();
-      S.monitor.arm();
-    });
-
+    btn.addEventListener('click', () => beginQuiz(btn, msg, 'Start quiz'));
     mount(entry(panel));
     agree.focus();
+  }
+
+  // Shared by Start and Continue. Fullscreen has to be requested inside the click.
+  async function beginQuiz(btn, msg, label) {
+    btn.disabled = true; btn.textContent = 'Starting…'; msg.textContent = '';
+    const fsOk = await enterFullscreen();
+    if (!fsOk && !cfg.demo) {
+      msg.textContent = 'Your browser blocked fullscreen. Click the button again.';
+      btn.disabled = false; btn.textContent = label;
+      return;
+    }
+    let r;
+    try {
+      r = await api.start();
+    } catch (ex) {
+      exitFullscreen();
+      if (ex.code === 'no_attempt') return signedOut();
+      if (ex.code === 'run_closed') return screenClosed();
+      msg.textContent = errorText(ex);
+      btn.disabled = false; btn.textContent = label;
+      return;
+    }
+    S.quiz = r.quiz;
+    S.deadline = r.deadline || 0;
+    S.skew = r.now ? r.now - Date.now() : 0;
+    S.answers = restoreAnswers(r.saved || {});
+    S.monitor = new BQ.Monitor(api, {
+      fullscreen: fsOk,
+      getAnswers: serializeAnswers,
+      onFullscreenLost: showFsOverlay,
+      onFullscreenBack: hideFsOverlay,
+      onPasteBlocked: () => toast('Pasting from outside the quiz is blocked.'),
+      onSave: () => toast('Your answers save automatically.'),
+      onReloadBlocked: () => toast('Reloading is turned off during the quiz.'),
+      onBeat: onBeat,
+      onBeatError: onBeatError,
+    });
+    screenQuiz();
+    S.monitor.arm();
+  }
+
+  // ---------- connection + save state ----------
+  function onBeat(res, info) {
+    if (!S.el) return;
+    if (res && res.now) S.skew = res.now - Date.now();
+    if (res && res.deadline && res.deadline !== S.deadline) S.deadline = res.deadline; // teacher gave extra time
+    setOnline(true);
+    if (info && info.answers && S.saveState === 'saving') setSave('saved');
+  }
+  function onBeatError(err, failures) {
+    if (S.done || !S.el) return;
+    if (err && err.code === 'run_closed') return endQuiz('ended');
+    if (err && err.code === 'no_attempt') return leaveQuiz(signedOut);
+    if (failures >= 2) setOnline(false);
+  }
+  function setOnline(ok) {
+    if (!S.el || !S.el.conn) return;
+    S.el.conn.hidden = ok;
+    if (!ok) setSave('offline');
+    else if (S.saveState === 'offline') setSave(S.monitor && S.monitor.answersDirty ? 'saving' : 'saved');
+  }
+  function setSave(state) {
+    S.saveState = state;
+    if (!S.el || !S.el.save) return;
+    S.el.save.textContent = state === 'saved' ? 'All answers saved' : state === 'saving' ? 'Saving…' : 'Not saved yet';
+    S.el.save.classList.toggle('bad', state === 'offline');
   }
 
   // ---------- answers ----------
@@ -464,6 +522,7 @@
     if (value === undefined) delete S.answers[qid];
     else S.answers[qid] = value;
     if (S.monitor) S.monitor.markAnswersDirty();
+    if (S.saveState !== 'offline') setSave('saving');
     renderSheet();
   }
 
@@ -494,6 +553,9 @@
     S.dirOpen = true;
     const progress = h('span', { class: 'qbar-progress' });
     const timer = h('span', { class: 'timer', role: 'timer', 'aria-label': 'Time left' });
+    const save = h('span', { class: 'save-state', role: 'status', text: 'All answers saved' });
+    const conn = h('div', { class: 'conn-banner', role: 'alert', hidden: true },
+      "Reconnecting… Keep working. Your answers will save when you're back online.");
     const main = h('main', { class: 'qmain', tabindex: '-1' });
     const sheet = h('nav', { class: 'sheet', 'aria-label': 'Questions' });
     const prev = h('button', { class: 'btn ghost', type: 'button', text: 'Back', onclick: () => go(S.idx - 1) });
@@ -504,10 +566,12 @@
       go(S.idx + 1);
     });
     const wrap = h('div', { class: 'quiz' },
-      h('header', { class: 'qbar' }, h('span', { class: 'qbar-name', text: S.quiz.title }), progress, timer, themeButton()),
+      h('header', { class: 'qbar' }, h('span', { class: 'qbar-name', text: S.quiz.title }), save, progress, timer, themeButton()),
+      conn,
       main,
       h('footer', { class: 'qnav' }, prev, sheet, next));
-    S.el = { wrap, main, progress, timer, sheet, prev, next, fsOverlay: null };
+    S.el = { wrap, main, progress, timer, sheet, prev, next, save, conn, fsOverlay: null };
+    S.saveState = 'saved';
     mount(wrap);
     renderQuestion();
     startTimer();
@@ -640,7 +704,7 @@
           metaRow(q, KIND[q.mode] || KIND.method), prompt(q),
           h('h2', { class: 'sub', text: 'Examples' }), samples),
         h('section', { class: 'code-right', 'aria-label': 'Code editor' },
-          h('div', { class: 'editor-bar' }, langCtl, h('span', { class: 'spacer' }), h('span', { class: 'save-state', text: 'Autosaved' }), runBtn),
+          h('div', { class: 'editor-bar' }, langCtl, h('span', { class: 'spacer' }), runBtn),
           host, results)));
     renderResults(q, results);
     mountEditor(q, host, ans);
@@ -780,7 +844,14 @@
       S.el.timer.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
       S.el.timer.classList.toggle('warn', left < 5 * 60000 && left >= 60000);
       S.el.timer.classList.toggle('crit', left < 60000);
-      if (left <= 0) submitNow();
+      for (const mins of [5, 1]) {
+        if (left > mins * 60000 + 1000) S.warned[mins] = false; // re-arm after extra time
+        else if (!S.warned[mins] && left > 0) {
+          S.warned[mins] = true;
+          if (left > (mins - 1) * 60000 + 30000) toast(`${plural(mins, 'minute')} left.`, 6000);
+        }
+      }
+      if (left <= 0) submitNow('time');
     };
     tick();
     S.timer = setInterval(tick, 250);
@@ -815,23 +886,106 @@
         h('p', { text: missing.length ? `You haven't answered question${missing.length > 1 ? 's' : ''} ${missing.join(', ')}.` : 'You answered every question.' }),
         h('p', { class: 'muted', text: "You can't change answers after you submit." }),
         h('div', { class: 'modal-actions' }, keep, submit)));
-    backdrop.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    backdrop.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') close();
+      if (e.key === 'Tab') { // keep focus inside the dialog
+        e.preventDefault();
+        (document.activeElement === keep ? submit : keep).focus();
+      }
+    });
     S.el.wrap.append(backdrop);
     keep.focus();
   }
 
-  async function submitNow() {
-    if (S.done) return;
-    S.done = true;
+  // The monitor stays armed until the server confirms: a dropped connection at Submit keeps retrying.
+  async function submitNow(reason) {
+    if (S.done || S.submitting) return;
+    S.submitting = true;
     clearInterval(S.timer);
     hideFsOverlay();
     const answers = serializeAnswers();
+    const ov = submittingOverlay();
+    for (let tries = 0; ; tries++) {
+      try {
+        await api.submit(answers);
+        break;
+      } catch (e) {
+        if (S.done) return;
+        if (e.code === 'no_attempt') return leaveQuiz(signedOut);
+        if (e.code === 'run_closed') return finishQuiz('ended');
+        if (tries === 1) ov.failed();
+        const delay = Math.min(2000 * 2 ** tries, 15000);
+        await new Promise((resolve) => {
+          const t = setTimeout(resolve, delay);
+          ov.retry.onclick = () => { clearTimeout(t); ov.trying(); resolve(); };
+        });
+      }
+    }
+    finishQuiz(reason === 'time' ? 'time' : 'submitted');
+  }
+
+  function submittingOverlay() {
+    const title = h('h2', { id: 'turnin-title', text: 'Turning in your quiz…' });
+    const text = h('p', { class: 'muted', text: 'This takes a second.' });
+    const retry = h('button', { class: 'btn primary', type: 'button', text: 'Try again', hidden: true });
+    const backdrop = h('div', { class: 'modal-backdrop' },
+      h('div', { class: 'modal', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'turnin-title' },
+        title, text, h('div', { class: 'modal-actions' }, retry)));
+    S.el.wrap.append(backdrop);
+    return {
+      retry,
+      failed() {
+        title.textContent = "Couldn't reach the quiz server";
+        text.textContent = "Your answers are still here. Check the connection. We'll keep trying, or press Try again.";
+        retry.hidden = false;
+        retry.focus();
+      },
+      trying() { title.textContent = 'Turning in your quiz…'; },
+    };
+  }
+
+  function finishQuiz(kind) {
+    S.done = true;
+    clearInterval(S.timer);
+    hideFsOverlay();
     disposeEditor();
     if (S.monitor) S.monitor.disarm();
-    let ok = true;
-    try { await api.submit(answers); } catch (e) { ok = false; }
     exitFullscreen();
-    screenDone(ok);
+    screenDone(kind);
+  }
+  function endQuiz(kind) { finishQuiz(kind); }
+
+  // Out of the quiz without turning anything in (the teacher reset or moved this attempt).
+  function leaveQuiz(next) {
+    teardown();
+    S = freshState();
+    next();
+  }
+  function signedOut() {
+    S = freshState();
+    screenJoin(ERRORS.no_attempt);
+  }
+  function screenClosed() {
+    mount(entry(h('div', { class: 'panel', role: 'status' },
+      h('p', { class: 'eyebrow', text: S.run ? S.run.title : 'BrowserQuiz' }),
+      h('div', { class: 'heading' },
+        h('h1', { text: 'This quiz is closed' }),
+        h('p', { text: 'Ask your teacher if you think this is a mistake.' })),
+      h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Back to start', onclick: () => { S = freshState(); screenJoin(); } })))));
+  }
+  // Page reloaded mid-quiz: one button back in instead of the whole sign-in again.
+  function screenContinue() {
+    if (S.run.hasCode) loadMonaco().catch(() => {});
+    const btn = h('button', { class: 'btn primary', type: 'button', text: 'Continue quiz' });
+    const msg = h('p', { class: 'error', role: 'alert' });
+    btn.addEventListener('click', () => beginQuiz(btn, msg, 'Continue quiz'));
+    mount(entry(h('div', { class: 'panel' },
+      h('p', { class: 'eyebrow', text: S.run.title }),
+      h('div', { class: 'heading' },
+        h('h1', { text: 'Your quiz is still open' }),
+        h('p', { text: `You're signed in as ${S.me.name}. The clock is still running, and your saved answers come back when you continue.` })),
+      btn, msg)));
+    btn.focus();
   }
 
   // Same screen for everyone, invalidated or not: confetti and all.
@@ -857,15 +1011,20 @@
     return layer;
   }
 
-  function screenDone(ok) {
+  const DONE = {
+    submitted: ['Submitted', "You're done. You can close this page."],
+    time: ["Time's up", 'Your answers were turned in. You can close this page.'],
+    ended: ['Quiz ended', 'Your teacher ended the quiz and your answers were turned in. You can close this page.'],
+    already: ['Already turned in', "You've already turned in this quiz. You can close this page."],
+  };
+  function screenDone(kind) {
     S.el = null;
+    const [title, text] = DONE[kind] || DONE.submitted;
     const screen = entry(h('div', { class: 'panel done-panel' },
-      h('p', { class: 'eyebrow', text: S.quiz ? S.quiz.title : '' }),
-      h('div', { class: 'heading' },
-        h('h1', { text: ok ? 'Submitted' : 'Saved, not confirmed' }),
-        h('p', { text: ok ? 'Your teacher will release scores. You can close this page.' : "We couldn't confirm your submission, but your answers were autosaved. Tell your teacher." })),
+      h('p', { class: 'eyebrow', text: S.quiz ? S.quiz.title : S.run ? S.run.title : '' }),
+      h('div', { class: 'heading' }, h('h1', { text: title }), h('p', { text })),
       cfg.demo ? h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Start the demo over', onclick: () => BQ.app.restart() })) : null));
-    if (ok) screen.prepend(confetti());
+    if (kind !== 'already') screen.prepend(confetti());
     mount(screen);
   }
 
@@ -885,7 +1044,18 @@
       root = el;
       api = apiImpl || BQ.api;
       S = freshState();
-      screenJoin();
+      if (!api.resume) { screenJoin(); return; }
+      // Already signed in on this browser (say, after a reload)? Pick up where they were.
+      api.resume().then((r) => {
+        if (!r || !r.status) return screenJoin();
+        S.run = r.run;
+        S.me = { name: r.name };
+        if (r.status === 'waiting') return screenWait();
+        if (r.status === 'admitted') return screenRules();
+        if (r.status === 'active') return screenContinue();
+        if (r.status === 'submitted') return screenDone('already');
+        return screenJoin();
+      }).catch(() => screenJoin());
     },
     restart() {
       teardown();

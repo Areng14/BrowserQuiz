@@ -57,3 +57,15 @@ input[type="file"].input { padding: 6px 10px; }
 .t-answer pre { margin: 0; padding: 8px 10px; font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); border-radius: 6px; max-height: 260px; overflow: auto; }
 
 @media (max-width: 860px) { .t-detail-grid { grid-template-columns: minmax(0, 1fr); } .t-joincode { font-size: 34px; } }
+
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; }
+.dot.ok { background: var(--good); }
+.dot.bad { background: var(--bad); }
+.t-grade { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--soft); }
+.t-grade .t-row { align-items: center; gap: 8px; }
+.t-rubric { margin-bottom: 8px; }
+.t-rubric p { margin: 0 0 4px; font-weight: 600; }
+.t-points { width: 90px; }
+.t-adjust { margin-top: 6px; }
+.t-adjust summary { cursor: pointer; color: var(--accent); width: max-content; }
+.t-adjust .t-row { margin-top: 8px; align-items: center; gap: 8px; }

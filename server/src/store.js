@@ -24,11 +24,13 @@ const CLIENT_EVENTS = {
   'return': 'info',
 };
 // Events only the server records.
+// A lost heartbeat is only a warning: school wifi drops, and actually leaving the window is caught by
+// blur/hidden, which the client queues while offline and delivers when it reconnects.
 const SERVER_EVENTS = {
-  'reload': 'violation', 'unfocused-beat': 'violation', 'heartbeat-lost': 'violation',
-  'late-submit': 'warning', 'other-network': 'warning', 'other-device': 'warning',
-  'join': 'info', 'admit': 'info', 'start': 'info', 'submit': 'info', 'run': 'info',
-  'restore': 'info', 'invalidate': 'info',
+  'reload': 'violation', 'unfocused-beat': 'violation',
+  'heartbeat-lost': 'warning', 'late-submit': 'warning', 'other-network': 'warning', 'other-device': 'warning',
+  'join': 'info', 'admit': 'info', 'start': 'info', 'submit': 'info', 'run': 'info', 'reconnect': 'info', 'resume': 'info',
+  'restore': 'info', 'invalidate': 'info', 'let-in': 'info', 'extend': 'info', 'grade': 'info',
 };
 const MERGE_MS = 2000;
 const MAX_EVENTS = 3000;

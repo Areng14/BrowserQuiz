@@ -29,13 +29,17 @@ Open `http://<server-ip>:8080/teacher`, sign in with `ADMIN_PASSWORD`, upload a 
 and a roster, and press Start. Students go to `http://<server-ip>:8080` and type the
 join code.
 
-To try it with the example quiz:
+If students can't reach it, open port 8080 in the server's firewall.
+
+A `.quiz` file is just a zip of a folder holding `quiz.json` (and an optional `assets/`
+folder). Zip it any way you like and upload it, renamed or not. To try the example quiz,
+zip `examples/ap-csa-unit4`, or with Node:
 
 ```bash
 node scripts/pack-quiz.mjs examples/ap-csa-unit4 unit4.quiz
 ```
 
-Upload `unit4.quiz` and `examples/roster-demo.csv` (Ava Martinez, ID 204511).
+Upload it with `examples/roster-demo.csv` (Ava Martinez, ID 204511).
 
 ## Do I just need the IP?
 

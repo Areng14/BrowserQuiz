@@ -78,7 +78,7 @@
   // Server-side scoring of client reports. The client never sees any of this.
   const SEVERITY = {
     'blur': 'violation', 'hidden': 'violation', 'fullscreen-exit': 'violation', 'extended-display': 'violation',
-    'reload': 'violation', 'unfocused-beat': 'violation', 'heartbeat-lost': 'violation',
+    'reload': 'violation', 'unfocused-beat': 'violation', 'heartbeat-lost': 'warning',
     'mouse-left': 'warning', 'copy': 'warning', 'paste': 'warning', 'contextmenu': 'warning', 'blocked-key': 'warning',
     'print-screen': 'warning', 'resize': 'warning', 'bulk-insert': 'warning', 'inhuman-typing': 'warning',
     'return': 'info',
@@ -206,7 +206,7 @@
     return { status: 'ok', simulated: true, tests: calls.map((c) => ({ ...c, got: c.expected, pass: true })), stdout: '' };
   }
 
-  // Heartbeat watchdog: a client that goes quiet for 10s gets a strike.
+  // Heartbeat watchdog: a client that goes quiet for 10s gets flagged (a warning, not a strike: wifi drops).
   setInterval(() => {
     const a = st && st.attempt;
     if (!a || a.status !== 'active') return;

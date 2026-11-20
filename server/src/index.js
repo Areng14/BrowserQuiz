@@ -4,7 +4,7 @@ const http = require('node:http');
 const path = require('node:path');
 const { q } = require('./db');
 const store = require('./store');
-const { gradeAttempt } = require('./grade');
+const { gradeAttempt, totals } = require('./grade');
 const { HttpError, router, json, serveStatic, send, SECURITY } = require('./http');
 const studentRoutes = require('./student');
 const teacherRoutes = require('./teacher');
@@ -17,6 +17,10 @@ for (const k of ['ADMIN_PASSWORD', 'ID_PEPPER']) {
     console.error(`Set ${k} to a long random value (12+ characters). See .env.example.`);
     process.exit(1);
   }
+}
+if (process.env.RUNNER_URL && (process.env.RUNNER_TOKEN || '').length < 16) {
+  console.error('Set RUNNER_TOKEN to a long random value (16+ characters, the runner refuses shorter ones). See .env.example.');
+  process.exit(1);
 }
 
 const api = router();
@@ -72,9 +76,20 @@ const server = http.createServer((req, res) => {
 server.headersTimeout = 20000;
 server.requestTimeout = 60000;
 
-// Sweeper: lost heartbeats count as a strike; time-up attempts get submitted with their autosaved answers.
+// Sweeper: flag lost heartbeats, submit time-up attempts with their autosaved answers, and every
+// minute retry grading that failed (usually the runner was down).
+let sweeps = 0;
 setInterval(() => {
   const now = Date.now();
+  if (++sweeps % 30 === 0) {
+    for (const a of store.attempts.values()) {
+      if (a.status !== 'submitted' || a.archived || !a.result) continue;
+      const run = q('SELECT quiz_id FROM runs WHERE id = ?').get(a.runId);
+      const quiz = run && store.getQuiz(run.quiz_id);
+      const t = quiz && totals(a.result, quiz, a.answers);
+      if (t && t.failed) gradeAttempt(a, quiz).catch(() => {});
+    }
+  }
   for (const a of store.attempts.values()) {
     if (a.status !== 'active' || a.archived) continue;
     const run = q('SELECT quiz_id FROM runs WHERE id = ?').get(a.runId);
@@ -93,7 +108,7 @@ for (const row of q("SELECT id FROM attempts WHERE archived = 0 AND status = 'ac
   const a = store.getAttempt(row.id);
   a.lastBeat = Date.now(); // give clients a moment to reconnect before calling their heartbeat lost
 }
-for (const row of q("SELECT id, run_id FROM attempts WHERE archived = 0 AND status = 'submitted' AND (result IS NULL OR result LIKE '%\"pending\"%')").all()) {
+for (const row of q("SELECT id, run_id FROM attempts WHERE archived = 0 AND status = 'submitted' AND (result IS NULL OR result LIKE '%\"pending\"%' OR result LIKE '%\"error\"%')").all()) {
   const a = store.getAttempt(row.id);
   const run = q('SELECT quiz_id FROM runs WHERE id = ?').get(row.run_id);
   if (run) gradeAttempt(a, store.getQuiz(run.quiz_id)).catch((e) => console.error('regrade failed', a.id, e.message));

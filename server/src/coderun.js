@@ -22,6 +22,17 @@ async function withSlot(fn) {
 
 function runnerConfigured() { return !!process.env.RUNNER_URL; }
 
+async function runnerHealthy() {
+  const url = (process.env.RUNNER_URL || '').replace(/\/$/, '');
+  if (!url) return false;
+  try {
+    const res = await fetch(url + '/health', { signal: AbortSignal.timeout(1500) });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
 async function callRunner(job, timeMs, memoryMb) {
   const url = (process.env.RUNNER_URL || '').replace(/\/$/, '');
   if (!url) { const e = new Error('The code runner is not set up.'); e.code = 'runner_offline'; throw e; }
@@ -142,4 +153,4 @@ async function checkReferences(quiz) {
   if (problems.length) throw new QuizError('The reference solution check failed:\n- ' + problems.slice(0, 20).join('\n- '));
 }
 
-module.exports = { runSamples, gradeCode, checkReferences, runnerConfigured };
+module.exports = { runSamples, gradeCode, checkReferences, runnerConfigured, runnerHealthy };

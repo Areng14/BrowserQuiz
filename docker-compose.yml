@@ -16,6 +16,7 @@ services:
       ID_PEPPER: ${ID_PEPPER:?set ID_PEPPER in .env}
       RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}
       RUNNER_URL: http://runner:8080
+      RUNNER_CONCURRENCY: ${RUNNER_SLOTS:-4}
       TRUST_PROXY: ${TRUST_PROXY:-0}
     ports:
       - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"

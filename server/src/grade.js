@@ -46,17 +46,52 @@ function gradeAuto(quiz, layout, answers) {
   return { score, max, detail };
 }
 
-function totals(result) {
-  if (!result) return null;
-  let score = result.auto.score;
-  let max = result.auto.max;
-  let pending = 0;
-  for (const c of Object.values(result.code || {})) {
-    max += c.max;
-    if (c.status === 'done') score += c.score;
-    else pending++;
+const rubricMax = (qq) => (qq.rubric || []).reduce((sum, r) => sum + r.points, 0);
+
+// One question's points: auto or runner score, plus rubric items the teacher ticked, unless the
+// teacher typed an override. state: done | pending | failed.
+// A code answer that's blank or untouched starter code has nothing for the teacher to review.
+function codeAnswered(qq, ans) {
+  if (!ans || typeof ans.code !== 'string' || !ans.code.trim()) return false;
+  return ans.code.trim() !== String(H.starterCode(qq, ans.language) || '').trim();
+}
+
+function questionScore(qq, result, answers) {
+  const m = (result.manual || {})[qq.id] || {};
+  let points = 0;
+  let state = 'done';
+  if (qq.type === 'code') {
+    const c = (result.code || {})[qq.id];
+    if (!c || c.status === 'pending') state = 'pending';
+    else if (c.status === 'error') state = 'failed';
+    else points = c.score;
+  } else {
+    const d = result.auto && result.auto.detail[qq.id];
+    points = d ? d.points : 0;
   }
-  return { score: Math.round(score * 100) / 100, max, pending };
+  for (const r of qq.rubric || []) if (m.rubric && m.rubric[r.id]) points += r.points;
+  const answered = qq.type === 'code' ? codeAnswered(qq, answers && answers[qq.id]) : answers ? answers[qq.id] != null : true;
+  const review = rubricMax(qq) > 0 && answered && !m.reviewed && m.override == null;
+  if (m.override != null) { points = m.override; state = 'done'; }
+  return { points: Math.round(points * 100) / 100, max: qq.points, state, review, override: m.override != null };
+}
+
+function totals(result, quiz, answers) {
+  if (!result) return null;
+  let score = 0;
+  let max = 0;
+  let pending = 0;
+  let failed = 0;
+  let review = 0;
+  for (const qq of quiz.questions) {
+    const s = questionScore(qq, result, answers);
+    score += s.points;
+    max += s.max;
+    if (s.state === 'pending') pending++;
+    if (s.state === 'failed') failed++;
+    if (s.review) review++;
+  }
+  return { score: Math.round(score * 100) / 100, max, pending, failed, review };
 }
 
 const running = new Set();
@@ -66,10 +101,10 @@ async function gradeAttempt(a, quiz) {
   try {
     const auto = gradeAuto(quiz, a.layout, a.answers);
     const prev = a.result && a.result.code ? a.result.code : {};
-    a.result = { auto, code: {} };
+    a.result = { auto, code: {}, manual: (a.result && a.result.manual) || {} };
     const codeQs = quiz.questions.filter((qq) => qq.type === 'code');
     for (const qq of codeQs) {
-      a.result.code[qq.id] = prev[qq.id] && prev[qq.id].status === 'done' ? prev[qq.id] : { status: 'pending', max: qq.points - qq.rubric.reduce((s, r) => s + r.points, 0) };
+      a.result.code[qq.id] = prev[qq.id] && prev[qq.id].status === 'done' ? prev[qq.id] : { status: 'pending', max: qq.points - rubricMax(qq) };
     }
     store.save(a);
     for (const qq of codeQs) {
@@ -107,10 +142,19 @@ function answerReport(quiz, a) {
       row.samples = qq.tests.hidden.length;
       row.starter = ans ? H.starterCode(qq, ans.language) : null;
     }
-    if (res.auto && res.auto.detail[qq.id]) Object.assign(row, res.auto.detail[qq.id]);
-    if (row.code && row.code.status === 'done') { row.points = row.code.score; row.max = row.code.max; }
+    if (res.auto && res.auto.detail[qq.id]) row.correct = res.auto.detail[qq.id].correct;
+    if (a.result) {
+      const sc = questionScore(qq, res, a.answers);
+      row.points = sc.state === 'done' ? sc.points : null;
+      row.state = sc.state;
+      row.override = sc.override;
+      row.review = sc.review;
+    }
+    const m = (res.manual || {})[qq.id] || {};
+    row.rubric = (qq.rubric || []).map((r) => ({ id: r.id, text: r.text, points: r.points, checked: !!(m.rubric && m.rubric[r.id]) }));
+    row.overridePoints = m.override != null ? m.override : null;
     return row;
   });
 }
 
-module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, answerReport };
+module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, answerReport };
