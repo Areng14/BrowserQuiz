@@ -33,6 +33,7 @@
     if (q.type === 'fill') return q.blanks.some((b) => b.value);
     return q.answer != null;
   }
+  const ICON = { full: '✓', partial: '✓', zero: '✗', pending: '–' };
   // full | partial | zero | pending, and the words for it. A rubric still to grade keeps the color the
   // auto-graded part earned; written answers have nothing until the teacher grades them.
   function status(q) {
@@ -118,13 +119,76 @@
       ];
     }
     // code
-    const lang = q.language;
     return [
-      compare(o, q.answer == null ? none() : codeBox(q.answer, lang), q.answer == null ? false : null,
-        q.reference ? codeBox(q.reference, q.referenceLanguage) : null, `Correct answer (${LANG[q.referenceLanguage] || q.referenceLanguage})`, true),
+      codeCompare(q, o),
       q.compileError ? [h('p', { class: 'r-label', text: "Didn't compile" }), h('pre', { class: 'r-err', text: q.compileError })] : null,
       q.rubric.length && !o.teacher ? rubricList(q) : null,
     ];
+  }
+
+  // ---------- code answer vs the reference ----------
+  // Same code (ignoring indentation and blank lines): shown once. Close: "Show differences" swaps the two
+  // blocks for one diff. Written another way entirely: a diff would be all red and green, so no button.
+  const norm = (line) => line.trim();
+  function diffLines(a, b) {
+    const A = a.map(norm);
+    const B = b.map(norm);
+    const n = A.length;
+    const m = B.length;
+    if (n * m > 4e6) return null;
+    const lcs = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) lcs[i][j] = A[i] === B[j] ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+    const out = [];
+    let i = 0;
+    let j = 0;
+    while (i < n || j < m) {
+      if (i < n && j < m && A[i] === B[j]) { out.push(['same', a[i]]); i++; j++; }
+      else if (i < n && (j >= m || lcs[i + 1][j] >= lcs[i][j + 1])) { out.push(['del', a[i]]); i++; }
+      else { out.push(['add', b[j]]); j++; }
+    }
+    return { lines: out, common: lcs[0][0] };
+  }
+  function codeCompare(q, o) {
+    const refLabel = `Correct answer (${LANG[q.referenceLanguage] || q.referenceLanguage})`;
+    if (q.answer == null || !q.reference) {
+      return compare(o, q.answer == null ? none() : codeBox(q.answer, q.language), q.answer == null ? false : null,
+        q.reference ? codeBox(q.reference, q.referenceLanguage) : null, refLabel, true);
+    }
+    const strip = (s) => s.split('\n').filter((l) => l.trim());
+    const mine = strip(q.answer);
+    const ref = strip(q.reference);
+    const sameLang = q.language === q.referenceLanguage;
+    const d = sameLang ? diffLines(mine, ref) : null;
+    if (d && d.common === mine.length && d.common === ref.length) {
+      return h('div', { class: 'r-side' }, h('p', { class: 'r-label', text: o.teacher ? 'Their answer' : 'Your answer' }),
+        codeBox(q.answer, q.language), h('p', { class: 'r-also', text: 'Same as the correct answer.' }));
+    }
+    const both = compare(o, codeBox(q.answer, q.language), null, codeBox(q.reference, q.referenceLanguage), refLabel, true);
+    // How close they are, leaving out what every answer shares: braces and class/method headers.
+    const boiler = (l) => /^[{}()[\];,]*$/.test(l) || /^(\w+\s+)*class\s+\w+/.test(l) || /^def\s+\w+.*:$/.test(l)
+      || /^(\w+\s+)*[\w<>[\], ]+\s+\w+\s*\([^)]*\)\s*(throws\s[\w., ]+)?\{?$/.test(l);
+    const real = (lines) => lines.map(norm).filter((l) => !boiler(l)).length;
+    const shared = d ? d.lines.filter(([kind, l]) => kind === 'same' && !boiler(norm(l))).length : 0;
+    const size = real(mine) + real(ref);
+    if (!d || !size || (2 * shared) / size < 0.5) return both;
+    const wrap = h('div', {}, both);
+    let diffView = null;
+    const btn = h('button', { class: 'r-diff-btn', type: 'button', text: 'Show differences' });
+    btn.addEventListener('click', () => {
+      if (!diffView) {
+        diffView = h('div', { class: 'r-side' },
+          h('p', { class: 'r-label', text: 'Differences' }),
+          h('pre', { class: 'r-code r-diff' }, d.lines.map(([kind, line]) => h('span', { class: `d-line d-${kind}` },
+            h('span', { class: 'd-sign', 'aria-hidden': 'true', text: kind === 'add' ? '+' : kind === 'del' ? '−' : ' ' }),
+            h('code', { 'data-lang': q.language, text: line || ' ' })))),
+          h('p', { class: 'r-also', text: `Red: only in ${o.teacher ? 'their' : 'your'} answer. Green: only in the correct answer.` }));
+        highlight(diffView);
+      }
+      const showing = wrap.firstChild === diffView;
+      wrap.replaceChildren(showing ? both : diffView);
+      btn.textContent = showing ? 'Show differences' : 'Show both';
+    });
+    return [wrap, h('div', { class: 'r-diff-row' }, btn)];
   }
 
   // opts.teacher: the dashboard's student panel (no rubric list: it shows editable checkboxes instead).
@@ -138,7 +202,9 @@
     return h('section', { class: `r-q st-${st}` + (q.type === 'code' || q.type === 'fill' ? ' code' : ''), id: o.anchor || null },
       h('div', { class: 'r-qhead' },
         h('span', { class: 'n', text: String(i + 1) }), h('span', { class: 'kind', text: kind }),
-        h('span', { class: 'r-pill', text: words }), h('span', { class: 'pts', text: pts })),
+        h('span', { class: 'r-status', role: 'img', 'aria-label': words, title: words, text: ICON[st] }),
+        q.review || st === 'pending' ? h('span', { class: 'r-waiting', text: words }) : null,
+        h('span', { class: 'pts', text: pts })),
       md(q.prompt, quiz.language),
       q.image ? h('img', { class: 'r-img', src: o.assetUrl ? o.assetUrl(q.image) : `/api/t/quizzes/${encodeURIComponent(quiz.id)}/asset?path=${encodeURIComponent(q.image)}`, alt: q.imageAlt || '' }) : null,
       body(quiz, q, o));

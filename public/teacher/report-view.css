@@ -53,11 +53,15 @@
 .r-view .r-q.st-zero { border-left-color: var(--st-zero); }
 .r-view .r-qhead { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 6px; font-size: 13px; color: var(--ink-2); }
 .r-view .r-qhead .n { font-weight: 700; font-size: 15px; color: var(--ink); }
-.r-view .r-pill { padding: 1px 8px; font-size: 12px; font-weight: 600; border-radius: 999px; border: 1px solid currentColor; }
-.r-view .st-full .r-pill { color: var(--st-full); }
-.r-view .st-partial .r-pill { color: var(--st-partial); }
-.r-view .st-zero .r-pill { color: var(--st-zero); }
-.r-view .st-pending .r-pill { color: var(--st-pending); border-style: dashed; }
+.r-view .r-status {
+  width: 22px; height: 22px; flex: none; display: inline-grid; place-items: center; border-radius: 50%;
+  font: 700 13px/1 system-ui, sans-serif; color: var(--bg, #fff); background: var(--st-pending);
+}
+.r-view .st-full .r-status { background: var(--st-full); }
+.r-view .st-partial .r-status { background: var(--st-partial); }
+.r-view .st-zero .r-status { background: var(--st-zero); }
+.r-view .st-pending .r-status { background: transparent; color: var(--ink-2); border: 1.5px dashed var(--ink-2); }
+.r-view .r-waiting { font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .r-view .r-qhead .pts { margin-left: auto; font-size: 14px; font-weight: 700; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .r-view .r-prompt p { margin: 4px 0; }
 .r-view .r-prompt ul, .r-view .r-prompt ol { margin: 4px 0; padding-left: 22px; }
@@ -79,6 +83,18 @@
 /* your answer | correct answer */
 .r-view .r-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 10px; }
 .r-view .r-compare.stacked { grid-template-columns: minmax(0, 1fr); }
+/* differences between a code answer and the reference */
+.r-view .r-diff-row { margin-top: 8px; }
+.r-view .r-diff-btn { padding: 4px 10px; font: 600 13px system-ui, sans-serif; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.r-view .r-diff-btn:hover { background: var(--soft); }
+.r-view pre.r-diff { padding: 6px 0; }
+.r-view .d-line { display: block; padding: 0 12px 0 0; }
+.r-view .d-sign { display: inline-block; width: 24px; text-align: center; color: var(--ink-2); user-select: none; }
+.r-view .d-del { background: var(--tint-bad); }
+.r-view .d-add { background: var(--tint-good); }
+.r-view .d-del .d-sign { color: var(--bad); font-weight: 700; }
+.r-view .d-add .d-sign { color: var(--good); font-weight: 700; }
+@media print { .r-view .r-diff-row { display: none; } }
 .r-view .r-side { min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; }
 .r-view .r-side.good { background: var(--tint-good); border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
 .r-view .r-side.bad { background: var(--tint-bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
