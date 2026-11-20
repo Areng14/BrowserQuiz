@@ -82,24 +82,26 @@ server.headersTimeout = 20000;
 server.requestTimeout = 60000;
 
 // Sweeper: flag lost heartbeats, submit time-up attempts with their autosaved answers, and every
-// minute retry grading that failed (usually the runner was down).
+// minute retry grading that failed (usually the runner was down) or never started (the quiz was locked
+// until its teacher signed in after a restart). Locked quizzes are skipped until then.
+const quizOf = (run) => { try { return run && store.getQuiz(run.quiz_id); } catch (e) { return null; } };
 let sweeps = 0;
 setInterval(() => {
   const now = Date.now();
   if (++sweeps % 30 === 0) {
     for (const a of store.attempts.values()) {
-      if (a.status !== 'submitted' || a.archived || !a.result) continue;
-      const run = q('SELECT quiz_id FROM runs WHERE id = ?').get(a.runId);
-      const quiz = run && store.getQuiz(run.quiz_id);
-      const t = quiz && totals(a.result, quiz, a.answers);
-      if (t && t.failed) gradeAttempt(a, quiz).catch(() => {});
+      if (a.status !== 'submitted' || a.archived) continue;
+      const quiz = quizOf(q('SELECT quiz_id FROM runs WHERE id = ?').get(a.runId));
+      const t = quiz && a.result && totals(a.result, quiz, a.answers);
+      if (quiz && (!a.result || t.failed || t.pending)) gradeAttempt(a, quiz).catch(() => {});
     }
   }
   for (const a of store.attempts.values()) {
     if (a.status !== 'active' || a.archived) continue;
     const run = q('SELECT quiz_id, mode FROM runs WHERE id = ?').get(a.runId);
     if (!run) continue;
-    const quiz = store.getQuiz(run.quiz_id);
+    const quiz = quizOf(run);
+    if (!quiz) continue;
     a.practice = run.mode === 'practice';
     if (a.lastBeat && now - a.lastBeat > 10000 && !a.beatLost && !a.practice) {
       a.beatLost = true;
@@ -109,6 +111,11 @@ setInterval(() => {
   }
 }, 2000).unref();
 
+// Results stored before quiz encryption kept the hidden tests' inputs and expected values: drop them.
+for (const row of q(`SELECT id, result FROM attempts WHERE result LIKE '%"expected"%'`).all()) {
+  try { q('UPDATE attempts SET result = ? WHERE id = ?').run(JSON.stringify(store.storedResult(JSON.parse(row.result))), row.id); } catch (e) { /* leave it */ }
+}
+
 // After a restart: load active attempts back into memory and finish any grading that was cut off.
 for (const row of q("SELECT id FROM attempts WHERE archived = 0 AND status = 'active'").all()) {
   const a = store.getAttempt(row.id);
@@ -117,7 +124,8 @@ for (const row of q("SELECT id FROM attempts WHERE archived = 0 AND status = 'ac
 for (const row of q("SELECT id, run_id FROM attempts WHERE archived = 0 AND status = 'submitted' AND (result IS NULL OR result LIKE '%\"pending\"%' OR result LIKE '%\"error\"%')").all()) {
   const a = store.getAttempt(row.id);
   const run = q('SELECT quiz_id FROM runs WHERE id = ?').get(row.run_id);
-  if (run) gradeAttempt(a, store.getQuiz(run.quiz_id)).catch((e) => console.error('regrade failed', a.id, e.message));
+  const quiz = quizOf(run); // a locked quiz is graded by the sweeper once its teacher signs in
+  if (quiz) gradeAttempt(a, quiz).catch((e) => console.error('regrade failed', a.id, e.message));
 }
 
 // The admin account follows ADMIN_PASSWORD; start taking requests once it's in place.

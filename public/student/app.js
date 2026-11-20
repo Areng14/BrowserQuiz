@@ -35,6 +35,7 @@
     no_attempt: 'Signed out. Sign in again.',
     not_admitted: 'Your teacher has to let you in first.',
     teacher_login: 'Sign in on the teacher page first.',
+    locked: 'Your teacher needs to sign in to BrowserQuiz first. Try again in a minute.',
   };
 
   let api;

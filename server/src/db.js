@@ -11,6 +11,7 @@ const db = new DatabaseSync(path.join(DATA_DIR, 'browserquiz.db'));
 db.exec(`
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
+PRAGMA secure_delete = ON;
 PRAGMA busy_timeout = 5000;
 
 CREATE TABLE IF NOT EXISTS quizzes (
@@ -82,6 +83,12 @@ addColumn('quizzes', 'owner_id', 'TEXT');
 addColumn('rosters', 'owner_id', 'TEXT');
 addColumn('runs', 'owner_id', 'TEXT');
 addColumn('audit', 'teacher_id', 'TEXT');
+// Quiz encryption (vault.js): each teacher's key, wrapped by their password and by their recovery code.
+// enc = 1 marks a quiz's json or an asset's bytes as sealed with the owner's key.
+addColumn('teachers', 'key_wrap', 'TEXT');
+addColumn('teachers', 'rec_wrap', 'TEXT');
+addColumn('quizzes', 'enc', 'INTEGER NOT NULL DEFAULT 0');
+addColumn('assets', 'enc', 'INTEGER NOT NULL DEFAULT 0');
 db.exec(`CREATE INDEX IF NOT EXISTS quizzes_owner ON quizzes(owner_id);
 CREATE INDEX IF NOT EXISTS rosters_owner ON rosters(owner_id);
 CREATE INDEX IF NOT EXISTS runs_owner ON runs(owner_id);`);

@@ -88,14 +88,20 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       btn.disabled = true; msg.textContent = '';
-      try { await post('/api/t/login', { username: user.value.trim(), password: pw.value }); showHome(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
+      try { const r = await post('/api/t/login', { username: user.value.trim(), password: pw.value }); if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else showHome(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
     });
     mount(form);
     user.focus();
   }
 
   // A teacher on a temporary password picks their own before anything else (first), or changes it later.
-  function showSetPassword(first) {
+  async function showSetPassword(first) {
+    // After an admin reset, with the quiz key not in memory: the recovery code keeps their quizzes.
+    let recover = false;
+    if (first) { try { const me = await api('/api/t/me'); recover = !!(me.teacher && me.teacher.needsRecovery); } catch (e) { return; } }
+    const code = h('input', { class: 'input t-mono', id: 'pw-code', autocomplete: 'off', spellcheck: 'false', placeholder: 'XXXX-XXXX-XXXX-XXXX-XXXX' });
+    const fresh = h('input', { type: 'checkbox', id: 'pw-fresh' });
+    fresh.addEventListener('change', () => { code.disabled = fresh.checked; });
     const cur = h('input', { class: 'input', type: 'password', id: 'pw-cur', autocomplete: 'current-password' });
     const next = h('input', { class: 'input', type: 'password', id: 'pw-new', autocomplete: 'new-password', minlength: '10' });
     const again = h('input', { class: 'input', type: 'password', id: 'pw-again', autocomplete: 'new-password' });
@@ -107,16 +113,37 @@
       h('label', { class: 'field', for: 'pw-cur' }, h('span', { class: 'field-label', text: first ? 'Temporary password' : 'Current password' }), cur),
       h('label', { class: 'field', for: 'pw-new' }, h('span', { class: 'field-label', text: 'New password (10+ characters)' }), next),
       h('label', { class: 'field', for: 'pw-again' }, h('span', { class: 'field-label', text: 'New password again' }), again),
+      recover ? [
+        h('label', { class: 'field', for: 'pw-code' }, h('span', { class: 'field-label', text: 'Recovery code (keeps your quizzes)' }), code),
+        h('label', { class: 't-check', for: 'pw-fresh' }, fresh, h('span', { text: "I don't have it: start over without my quizzes and results" })),
+      ] : null,
       h('div', { class: 't-row' }, btn, first ? null : h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => showHome() })), msg);
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       msg.textContent = '';
       if (next.value !== again.value) { msg.textContent = "The new passwords don't match."; return; }
       btn.disabled = true;
-      try { await post('/api/t/me/password', { current: cur.value, next: next.value }); showHome(); } catch (ex) { msg.textContent = ex.message; btn.disabled = false; }
+      if (recover && fresh.checked && !confirm('Start over? Your quizzes, and the results from them, are deleted for good.')) { btn.disabled = false; return; }
+      try {
+        const r = await post('/api/t/me/password', { current: cur.value, next: next.value, recoveryCode: recover && !fresh.checked ? code.value : undefined, startOver: recover && fresh.checked });
+        if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else showHome();
+      } catch (ex) { msg.textContent = ex.message; btn.disabled = false; }
     });
     mount(form);
     cur.focus();
+  }
+
+  // Shown once, when a teacher's quiz key is made: the only way back to their quizzes without the password.
+  function showRecoveryCode(codeText) {
+    const copy = h('button', { class: 'btn small', type: 'button', text: 'Copy' });
+    copy.addEventListener('click', async () => { if (await copyText(codeText)) copy.textContent = 'Copied'; });
+    mount(h('div', { class: 't-login t-recovery' },
+      h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
+      h('h1', { text: 'Save your recovery code' }),
+      h('p', { text: 'Your quizzes are encrypted with your password, so only you can open them, not whoever runs this server. If you forget your password, this code is the only way to get them back.' }),
+      h('div', { class: 't-row' }, h('code', { class: 't-code-big', text: codeText }), copy),
+      h('p', { class: 't-small t-muted', text: "It isn't shown again. Keep it somewhere other than this computer." }),
+      h('div', {}, h('button', { class: 'btn primary', type: 'button', text: 'I saved it', onclick: () => showHome() }))));
   }
 
   // ---------- teacher accounts (admin) ----------

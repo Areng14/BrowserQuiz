@@ -3,16 +3,40 @@
 // The strike rules live here too, so every path (events, heartbeats, the sweeper) scores the same way.
 const crypto = require('node:crypto');
 const { q } = require('./db');
+const V = require('./vault');
 
 // ---------- quizzes ----------
+// Quizzes and their images are sealed with their teacher's key (vault.js). Reading one needs that key:
+// without it this throws "locked" (503), and the teacher signing in unlocks it.
 const quizCache = new Map();
 function getQuiz(id) {
   if (quizCache.has(id)) return quizCache.get(id);
-  const row = q('SELECT json FROM quizzes WHERE id = ?').get(id);
+  const row = q('SELECT json, enc, owner_id FROM quizzes WHERE id = ?').get(id);
   if (!row) return null;
-  const quiz = JSON.parse(row.json);
+  const quiz = JSON.parse(row.enc ? V.openText(V.needKey(row.owner_id), row.json, V.quizAad(id)) : row.json);
   quizCache.set(id, quiz);
   return quiz;
+}
+function plainAsset(quizId, row, ownerId) {
+  return { path: row.path, mime: row.mime, bytes: row.enc ? V.open(V.needKey(ownerId), row.bytes, V.assetAad(quizId, row.path)) : Buffer.from(row.bytes) };
+}
+function getAsset(quizId, path) {
+  const row = q('SELECT a.path, a.mime, a.bytes, a.enc, z.owner_id FROM assets a JOIN quizzes z ON z.id = a.quiz_id WHERE a.quiz_id = ? AND a.path = ?').get(quizId, path);
+  return row ? plainAsset(quizId, row, row.owner_id) : null;
+}
+function listAssets(quizId) {
+  return q('SELECT a.path, a.mime, a.bytes, a.enc, z.owner_id FROM assets a JOIN quizzes z ON z.id = a.quiz_id WHERE a.quiz_id = ?').all(quizId)
+    .map((row) => plainAsset(quizId, row, row.owner_id));
+}
+// Stored results keep pass/fail and what the student's code returned, not the hidden tests' inputs and
+// expected values: those are part of the quiz, which is encrypted.
+function storedResult(result) {
+  if (!result || !result.code) return result;
+  const code = {};
+  for (const [id, c] of Object.entries(result.code)) {
+    code[id] = Array.isArray(c.tests) ? Object.assign({}, c, { tests: c.tests.map((t) => ({ pass: t.pass, got: t.got, error: t.error })) }) : c;
+  }
+  return Object.assign({}, result, { code });
 }
 
 // ---------- integrity ----------
@@ -69,7 +93,7 @@ function save(a) {
   q(`UPDATE attempts SET status = ?, integrity = ?, strikes = ?, warnings = ?, reason = ?, invalidated_at = ?, started_at = ?,
      deadline = ?, submitted_at = ?, last_beat = ?, layout = ?, answers = ?, result = ?, edits = ?, archived = ? WHERE id = ?`).run(
     a.status, a.integrity, a.strikes, a.warnings, a.reason, a.invalidatedAt, a.startedAt, a.deadline, a.submittedAt,
-    a.lastBeat, a.layout ? JSON.stringify(a.layout) : null, JSON.stringify(a.answers || {}), a.result ? JSON.stringify(a.result) : null,
+    a.lastBeat, a.layout ? JSON.stringify(a.layout) : null, JSON.stringify(a.answers || {}), a.result ? JSON.stringify(storedResult(a.result)) : null,
     a.edits || 0, a.archived ? 1 : 0, a.id,
   );
 }
@@ -162,6 +186,6 @@ function makeLayout(quiz) {
 }
 
 module.exports = {
-  getQuiz, getAttempt, attemptByToken, save, forget, record, logEvent, makeLayout, attempts,
+  getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, logEvent, makeLayout, attempts,
   CLIENT_EVENTS, SERVER_EVENTS, quizCache,
 };

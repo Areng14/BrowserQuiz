@@ -49,6 +49,23 @@ time they sign in. Each teacher sees only their own quizzes, classes and results
 - The admin password lives in `.env`. To change it, edit `.env` and run `docker compose up -d`
   again. That's also the way back in if you forget it.
 
+### Quizzes are encrypted
+
+Each teacher's quizzes and quiz images are encrypted with a key that only their password (or their
+recovery code) unlocks, so whoever hosts BrowserQuiz can't read them from the database or a backup.
+
+- Teachers see a **recovery code** once, when they first set their password. If they forget the
+  password, an admin reset plus that code gets their quizzes back. Without either, the quizzes
+  can't be opened by anyone, so they start over.
+- The key stays in the server's memory from sign-in until the server restarts. After a restart, a
+  teacher's quizzes are locked until they sign in again: students see "your teacher needs to sign
+  in", and their app keeps answers and retries.
+- What isn't covered: quiz titles, class lists, and results (scores and which answers were right)
+  stay readable. The server has to read a quiz to grade it, so a host who changes the server's
+  code can get at a quiz while it's unlocked. Admin's quizzes are keyed off `.env`, which the host
+  has anyway, so teachers who want privacy use their own accounts. Backups made before this
+  version still hold plain copies.
+
 ## Making quizzes and classes
 
 - **Quizzes:** build them on the dashboard with **New quiz**, or upload a `.quiz` file. Every quiz

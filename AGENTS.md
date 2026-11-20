@@ -26,3 +26,7 @@ Put quizzes in `quizzes/`, which is gitignored because quiz files contain answer
 - Teachers only reach their own quizzes, classes, runs and attempts. Every `/api/t/` route gets the
   teacher from `requireTeacher` and looks things up through them (`getQuizRow`, `getRoster`,
   `getRun`, `getAttemptRun`, or `owner_id = ?`), so another teacher's id is simply not found.
+- Quizzes and quiz images are encrypted with their teacher's key (`server/src/vault.js`). Read them
+  only through `store.getQuiz`, `store.getAsset` and `store.listAssets`, write them only through
+  `saveQuiz`, and never `SELECT json` or `bytes` directly. Stored results never hold hidden tests'
+  inputs or expected values (`store.storedResult`).

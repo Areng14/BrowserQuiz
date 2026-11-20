@@ -234,7 +234,9 @@ module.exports = function studentRoutes(r) {
   r.post('/api/event', async (req, res) => {
     const body = await readJson(req, 8192);
     let ctx;
-    try { ctx = current(req); } catch (e) { return json(res, 200, { ok: true }); }
+    // A locked quiz (its teacher hasn't signed in since a restart) answers 503, so the app queues the
+    // event and sends it once the quiz unlocks, instead of it being dropped.
+    try { ctx = current(req); } catch (e) { if (e.code === 'locked') throw e; return json(res, 200, { ok: true }); }
     const { a, quiz } = ctx;
     if (a.status === 'active' && store.CLIENT_EVENTS[body.type]) store.record(a, body.type, body.detail, quiz);
     json(res, 200, { ok: true });
@@ -340,7 +342,7 @@ module.exports.current = current;
 module.exports.hashSid = hashSid;
 module.exports.serveAsset = function serveAsset(req, res, rel) {
   const { run } = current(req, { mustBeOpen: false });
-  const row = q('SELECT mime, bytes FROM assets WHERE quiz_id = ? AND path = ?').get(run.quiz_id, rel);
+  const row = store.getAsset(run.quiz_id, rel);
   if (!row) throw new HttpError(404, 'not_found');
   send(res, 200, Buffer.from(row.bytes), {
     'Content-Type': row.mime, 'Cache-Control': 'private, max-age=3600',

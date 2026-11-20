@@ -13,6 +13,7 @@ const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
 const { HttpError, clientIp, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
 const A = require('./accounts');
+const V = require('./vault');
 
 const TCH = 'tch';
 const SESSION_MS = 12 * 3600 * 1000;
@@ -27,6 +28,8 @@ function requireTeacher(req, opts = {}) {
     JOIN teachers t ON t.id = s.teacher_id WHERE s.token_hash = ?`).get(sha256(tok));
   if (!row || row.disabled || Date.now() - row.created_at > SESSION_MS) throw new HttpError(401, 'login');
   if (row.must_change && !opts.setup) throw new HttpError(403, 'must_change');
+  // Signed in before the server restarted: their quiz key is gone from memory, so sign in again to unlock.
+  if (!row.must_change && !V.keyFor(row.id)) throw new HttpError(401, 'login');
   return row;
 }
 function requireAdmin(req) {
@@ -37,6 +40,18 @@ function requireAdmin(req) {
 
 function audit(me, action, attemptId, note) {
   q('INSERT INTO audit (t, action, attempt_id, note, teacher_id) VALUES (?, ?, ?, ?, ?)').run(Date.now(), action, attemptId || null, note ? String(note).slice(0, 300) : null, me ? me.id : null);
+}
+
+// A teacher who lost both their password and recovery code starts over: their quizzes can't be opened
+// by anyone, so they go, with the runs and results that used them.
+function dropQuizzes(me) {
+  for (const x of q('SELECT a.id FROM attempts a JOIN runs r ON r.id = a.run_id WHERE r.owner_id = ?').all(me.id)) store.forget(x.id);
+  tx(() => {
+    q('DELETE FROM failed_ids WHERE run_id IN (SELECT id FROM runs WHERE owner_id = ?)').run(me.id);
+    q('DELETE FROM runs WHERE owner_id = ?').run(me.id);
+    q('DELETE FROM quizzes WHERE owner_id = ?').run(me.id);
+  });
+  store.quizCache.clear();
 }
 
 // Everything below is looked up through its owner: another teacher's id is simply not found.
@@ -130,11 +145,13 @@ function retireQuiz(id) {
   else q('DELETE FROM quizzes WHERE id = ?').run(id);
   store.quizCache.delete(id);
 }
+// Sealed with the teacher's key (vault.js). The title stays readable: it's on the join screen and in lists.
 function saveQuiz(me, quiz, assets, replaces) {
   const id = crypto.randomUUID();
+  const key = V.needKey(me.id);
   tx(() => {
-    q('INSERT INTO quizzes (id, title, json, created_at, owner_id) VALUES (?, ?, ?, ?, ?)').run(id, quiz.title, JSON.stringify(quiz), Date.now(), me.id);
-    for (const a of assets) q('INSERT INTO assets (quiz_id, path, mime, bytes) VALUES (?, ?, ?, ?)').run(id, a.path, a.mime, a.bytes);
+    q('INSERT INTO quizzes (id, title, json, created_at, owner_id, enc) VALUES (?, ?, ?, ?, ?, 1)').run(id, quiz.title, V.sealText(key, JSON.stringify(quiz), V.quizAad(id)), Date.now(), me.id);
+    for (const a of assets) q('INSERT INTO assets (quiz_id, path, mime, bytes, enc) VALUES (?, ?, ?, ?, 1)').run(id, a.path, a.mime, V.seal(key, Buffer.from(a.bytes), V.assetAad(id, a.path)));
     if (replaces) retireQuiz(replaces);
   });
   return id;
@@ -296,11 +313,20 @@ module.exports = function teacherRoutes(r) {
     }
     mine.n = Math.min(mine.cap, mine.n + 1);
     all.n = Math.min(all.cap, all.n + 1);
+    // Unlock their quiz key. A teacher from before encryption gets one now, with a recovery code to keep.
+    let recoveryCode = null;
+    if (teacher.role !== 'admin' && !teacher.must_change) {
+      if (teacher.key_wrap) {
+        const key = await V.unwrapKey(teacher.key_wrap, body.password);
+        if (key) V.keyring.set(teacher.id, key);
+        else q('UPDATE teachers SET must_change = 1 WHERE id = ?').run(teacher.id); // can't unlock: recovery code needed
+      } else recoveryCode = await A.createKey(teacher.id, String(body.password));
+    }
     const token = newToken();
     q('INSERT INTO sessions (token_hash, created_at, teacher_id) VALUES (?, ?, ?)').run(sha256(token), Date.now(), teacher.id);
     q('DELETE FROM sessions WHERE created_at < ?').run(Date.now() - SESSION_MS);
     setCookie(req, res, TCH, token, SESSION_MS / 1000);
-    json(res, 200, { ok: true });
+    json(res, 200, { ok: true, recoveryCode });
   });
 
   r.post('/api/t/logout', async (req, res) => {
@@ -314,7 +340,11 @@ module.exports = function teacherRoutes(r) {
     const me = requireTeacher(req, { setup: true });
     json(res, 200, {
       ok: true, runner: runnerConfigured(), runnerOk: runnerConfigured() ? await runnerHealthy() : false,
-      teacher: { username: me.username, name: me.name, role: me.role, mustChange: !!me.must_change },
+      teacher: {
+        username: me.username, name: me.name, role: me.role, mustChange: !!me.must_change,
+        // After a reset, with the key not in memory: their recovery code keeps their quizzes.
+        needsRecovery: !!me.must_change && !!A.byId(me.id).key_wrap && !V.keyFor(me.id),
+      },
     });
   });
 
@@ -325,12 +355,27 @@ module.exports = function teacherRoutes(r) {
     if (me.role === 'admin') throw new HttpError(400, 'admin_env', 'The admin password is ADMIN_PASSWORD in .env. Change it there and restart.');
     const next = String(body.next || '');
     if (next.length < A.MIN_PASSWORD) throw new HttpError(400, 'weak', `Use at least ${A.MIN_PASSWORD} characters.`);
-    if (!(await A.checkPassword(String(body.current || ''), A.byId(me.id).pw_hash))) throw new HttpError(400, 'bad_password', 'The current password is wrong.');
+    const t = A.byId(me.id);
+    if (!(await A.checkPassword(String(body.current || ''), t.pw_hash))) throw new HttpError(400, 'bad_password', 'The current password is wrong.');
+    // The quiz key moves to the new password. It's in memory, or the old password or the recovery code
+    // opens it; "start over" drops quizzes nobody can open any more.
+    let key = V.keyFor(me.id);
+    if (!key && t.key_wrap) key = await V.unwrapKey(t.key_wrap, String(body.current || ''));
+    if (!key && t.key_wrap && body.recoveryCode) key = await V.unwrapKey(t.rec_wrap, V.normCode(body.recoveryCode));
+    if (!key && t.key_wrap && !body.startOver) {
+      throw new HttpError(400, 'needs_recovery', body.recoveryCode ? "That recovery code doesn't match." : 'Enter your recovery code to keep your quizzes.');
+    }
+    if (!key && t.key_wrap) dropQuizzes(me);
     q('UPDATE teachers SET pw_hash = ?, must_change = 0 WHERE id = ?').run(await A.hashPassword(next), me.id);
+    let recoveryCode = null;
+    if (key) {
+      q('UPDATE teachers SET key_wrap = ? WHERE id = ?').run(await V.wrapKey(key, next), me.id);
+      V.keyring.set(me.id, key);
+    } else recoveryCode = await A.createKey(me.id, next);
     // Signed out everywhere else.
     q('DELETE FROM sessions WHERE teacher_id = ? AND token_hash != ?').run(me.id, sha256(cookies(req)[TCH]));
     audit(me, 'change-password', null, null);
-    json(res, 200, { ok: true });
+    json(res, 200, { ok: true, recoveryCode });
   });
 
   // ---------- teacher accounts (admin) ----------
@@ -382,8 +427,8 @@ module.exports = function teacherRoutes(r) {
 
   r.get('/api/t/overview', (req, res) => {
     const me = requireTeacher(req);
-    const quizzes = q('SELECT id, title, json, created_at FROM quizzes WHERE archived = 0 AND owner_id = ? ORDER BY created_at DESC').all(me.id).map((x) => {
-      const quiz = JSON.parse(x.json);
+    const quizzes = q('SELECT id, title, created_at FROM quizzes WHERE archived = 0 AND owner_id = ? ORDER BY created_at DESC').all(me.id).map((x) => {
+      const quiz = store.getQuiz(x.id);
       return { id: x.id, title: x.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin, createdAt: x.created_at };
     });
     const rosters = q('SELECT r.id, r.name, r.created_at, COUNT(s.id) AS n FROM rosters r LEFT JOIN roster_students s ON s.roster_id = r.id AND s.removed = 0 WHERE r.archived = 0 AND r.owner_id = ? GROUP BY r.id ORDER BY r.created_at DESC').all(me.id)
@@ -415,7 +460,7 @@ module.exports = function teacherRoutes(r) {
     const me = requireTeacher(req);
     const body = await readJson(req, 32 * 1024 * 1024);
     const old = body.replaces ? getQuizRow(me, body.replaces) : null;
-    const assets = old ? q('SELECT path, mime, bytes FROM assets WHERE quiz_id = ?').all(old.id) : [];
+    const assets = old ? store.listAssets(old.id) : [];
     let quiz;
     try {
       // Images added in the quiz maker arrive as base64, keyed by their assets/ path.
@@ -468,7 +513,7 @@ module.exports = function teacherRoutes(r) {
     const me = requireTeacher(req);
     const row = getQuizRow(me, p.id);
     const entries = [{ name: 'quiz.json', data: Buffer.from(JSON.stringify(quizSource(store.getQuiz(row.id)), null, 2)) }];
-    for (const a of q('SELECT path, bytes FROM assets WHERE quiz_id = ?').all(row.id)) entries.push({ name: a.path, data: Buffer.from(a.bytes) });
+    for (const a of store.listAssets(row.id)) entries.push({ name: a.path, data: a.bytes });
     send(res, 200, writeZip(entries), {
       'Content-Type': 'application/zip', 'Cache-Control': 'no-store',
       'Content-Disposition': `attachment; filename="${row.title.replace(/[^\w -]/g, '').slice(0, 60) || 'quiz'}.quiz"`,
@@ -750,7 +795,7 @@ module.exports = function teacherRoutes(r) {
     const me = requireTeacher(req);
     const rel = new URL(req.url, 'http://x').searchParams.get('path') || '';
     const quizId = q('SELECT id FROM quizzes WHERE id = ? AND owner_id = ?').get(String(p.id || ''), me.id);
-    const row = quizId && q('SELECT mime, bytes FROM assets WHERE quiz_id = ? AND path = ?').get(quizId.id, rel);
+    const row = quizId && store.getAsset(quizId.id, rel);
     if (!row) throw new HttpError(404, 'not_found');
     send(res, 200, Buffer.from(row.bytes), { 'Content-Type': row.mime, 'Cache-Control': 'private, max-age=3600', 'Content-Security-Policy': "default-src 'none'; sandbox" });
   });
