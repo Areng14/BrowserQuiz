@@ -16,6 +16,32 @@ const nameLookups = limiter(2000, 60000); // per run and IP: a whole class can s
 const runLimit = limiter(1, 3000);
 const ATT = 'att';
 
+// Wrong student IDs lock a name for 30s after 5 tries, to slow down guessing. The lock only holds back
+// browsers that typed a wrong ID for that name (or have no device cookie), so a classmate can't lock
+// someone out of their own sign-in. A new browser gets one try past a lock, and new device cookies are
+// rationed per address, which keeps guessing about as slow as before.
+const DEV = 'dev';
+const devIssues = limiter(60, 10 * 60000); // per address: a class behind one school IP, plus some retries
+const devBad = new Map(); // "run student device" -> { n, t }: wrong IDs this browser typed for this name
+function deviceOf(req) {
+  const d = cookies(req)[DEV];
+  return d && /^[A-Za-z0-9_-]{43}$/.test(d) ? d : null;
+}
+function issueDevice(req, res) {
+  if (deviceOf(req) || !devIssues(clientIp(req))) return;
+  setCookie(req, res, DEV, newToken(), 12 * 3600);
+}
+function badTries(key) {
+  const e = key && devBad.get(key);
+  return e && Date.now() - e.t < 30 * 60000 ? e.n : 0;
+}
+function noteBadTry(key) {
+  if (!key) return;
+  const now = Date.now();
+  devBad.set(key, { n: badTries(key) + 1, t: now });
+  if (devBad.size > 20000) for (const [k, v] of devBad) if (now - v.t > 30 * 60000) devBad.delete(k);
+}
+
 const hashSid = (sid) => crypto.createHmac('sha256', PEPPER).update(String(sid).trim()).digest('hex');
 const safeEqual = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
@@ -145,6 +171,7 @@ module.exports = function studentRoutes(r) {
     }
     if (run.ip_lock && !sameNetwork(ip, run.ip_lock)) throw new HttpError(403, 'wrong_network');
     requireSeb(req, run);
+    issueDevice(req, res);
     json(res, 200, runInfo(run, store.getQuiz(run.quiz_id)));
   });
 
@@ -192,14 +219,19 @@ module.exports = function studentRoutes(r) {
     if (!student) throw new HttpError(400, 'bad_id');
     const now = Date.now();
     const ft = q('SELECT * FROM failed_ids WHERE run_id = ? AND student_id = ?').get(run.id, student.id);
-    if (ft && ft.until > now) throw new HttpError(429, 'name_locked');
+    const dev = deviceOf(req);
+    const devKey = dev && `${run.id} ${student.id} ${dev}`;
+    if (ft && ft.until > now && (!dev || badTries(devKey) > 0)) throw new HttpError(429, 'name_locked');
     if (!safeEqual(hashSid(body.studentId), student.sid_hash)) {
+      noteBadTry(devKey);
       const n = (ft ? ft.n : 0) + 1;
+      const until = n >= 5 ? now + 30000 : ft && ft.until > now ? ft.until : 0; // a wrong try never shortens a lock
       q('INSERT INTO failed_ids (run_id, student_id, n, until) VALUES (?, ?, ?, ?) ON CONFLICT(run_id, student_id) DO UPDATE SET n = excluded.n, until = excluded.until')
-        .run(run.id, student.id, n >= 5 ? 0 : n, n >= 5 ? now + 30000 : 0);
+        .run(run.id, student.id, n >= 5 ? 0 : n, until);
       throw new HttpError(400, 'bad_id');
     }
-    q('DELETE FROM failed_ids WHERE run_id = ? AND student_id = ?').run(run.id, student.id);
+    if (!(ft && ft.until > now)) q('DELETE FROM failed_ids WHERE run_id = ? AND student_id = ?').run(run.id, student.id);
+    if (devKey) devBad.delete(devKey);
 
     const mine = store.attemptByToken(cookies(req)[ATT]);
     const existingRow = q('SELECT id FROM attempts WHERE run_id = ? AND student_id = ? AND archived = 0').get(run.id, student.id);
