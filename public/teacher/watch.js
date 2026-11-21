@@ -33,7 +33,7 @@
   function fit() {
     if (!size) return;
     const pad = 16;
-    const k = Math.min((stage.clientWidth - pad * 2) / size.w, (stage.clientHeight - pad * 2) / size.h, 1);
+    const k = Math.min((stage.clientWidth - pad * 2) / size.w, (stage.clientHeight - pad * 2) / size.h, 1.5); // up to 1.5x on big screens
     screen.style.width = size.w + 'px';
     screen.style.height = size.h + 'px';
     const left = Math.max(pad, (stage.clientWidth - size.w * k) / 2);

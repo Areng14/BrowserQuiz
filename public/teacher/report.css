@@ -13,6 +13,10 @@ html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5
 .r-jump { font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
 #r-status { color: var(--ink-2); font-size: 14px; }
 main { max-width: 920px; margin: 0 auto; padding: 28px 16px 64px; }
+/* Big screens: bigger, like the student app; the bar's ends line up with the page */
+@media screen and (min-width: 1700px) { :root { --z: 1.15; } main { zoom: 1.15; } }
+@media screen and (min-width: 2300px) { :root { --z: 1.3; } main { zoom: 1.3; } }
+@media screen and (min-width: 1100px) { .r-bar { padding-inline: calc((100vw - 920px * var(--z, 1)) / 2 + 16px * var(--z, 1)); } }
 @media print {
   .r-bar { display: none; }
   main { max-width: none; padding: 0; }

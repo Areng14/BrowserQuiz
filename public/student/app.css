@@ -99,7 +99,7 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .demo-hint b { color: var(--ink); font-family: var(--mono); font-weight: 600; }
 
 /* ---------- entry screens ---------- */
-.screen { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 96px var(--gut-r) 48px var(--gut-l); }
+.screen { position: relative; flex: 1; min-height: 0; overflow: auto; padding: max(96px, 16vh) var(--gut-r) 48px var(--gut-l); }
 .screen.center { display: flex; justify-content: center; align-items: flex-start; }
 .corner { position: absolute; top: 16px; right: var(--gut-r); }
 .panel { width: min(100%, 420px); display: grid; gap: 16px; }
@@ -448,12 +448,15 @@ h1[tabindex="-1"]:focus { outline: none; }
 /* Big screens: scale the text up. Not the code editor itself: CSS zoom throws off where its cursor lands,
    so its font size grows through its own setting instead (see editorFontSize in app.js). */
 @media (min-width: 1700px) {
-  .qbar, .qnav, .qview:not(.wide), .code-left, .results, .screen > .panel, .shared-split > .shared, .shared-split > .shared-stack { zoom: 1.15; }
+  .qbar, .qnav, .qview:not(.wide), .code-left, .results, .editor-bar, .scratch-head, .screen > .panel, .shared-split > .shared, .shared-split > .shared-stack { zoom: 1.15; }
   :root { --quiz-chrome: 220px; }
 }
 @media (min-width: 2300px) {
-  .qbar, .qnav, .qview:not(.wide), .code-left, .results, .screen > .panel, .shared-split > .shared, .shared-split > .shared-stack { zoom: 1.3; }
+  .qbar, .qnav, .qview:not(.wide), .code-left, .results, .editor-bar, .scratch-head, .screen > .panel, .shared-split > .shared, .shared-split > .shared-stack { zoom: 1.3; }
   :root { --quiz-chrome: 245px; }
+  /* the bars' ends come in toward the page instead of the screen's edges; a wider scratchpad */
+  .qbar, .qnav { padding-inline: max(var(--gut-l), calc(50vw / 1.3 - 780px)); }
+  .quiz.with-scratch { grid-template-columns: minmax(0, 1fr) clamp(420px, 24vw, 760px); }
 }
 
 /* Custom radio buttons and checkboxes: the browser's own are bright white in dark mode. */

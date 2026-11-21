@@ -15,7 +15,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-main { max-width: clamp(1200px, 85vw, 1800px); margin: 0 auto; padding: 24px var(--gut-r) 64px var(--gut-l); display: grid; gap: 28px; }
 /* The frame: tabs down the left, the page on the right. */
 .t-shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: 100vh; }
-.t-shell > .t-main { width: 100%; max-width: 1480px; margin: 0; padding: 28px max(36px, env(safe-area-inset-right, 0px)) 64px 36px; align-content: start; }
+.t-shell > .t-main { width: 100%; max-width: 1480px; margin: 0 auto; padding: 28px max(36px, env(safe-area-inset-right, 0px)) 64px 36px; align-content: start; }
 .t-shell > .t-main > * { min-width: 0; }
 .t-side { position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px 14px max(12px, env(safe-area-inset-left, 0px)); background: var(--soft); border-right: 1px solid var(--line); }
 .t-brand { padding: 0 10px 14px; font-size: 21px; line-height: 27.5px; font-weight: 800; letter-spacing: -0.015em; }
@@ -32,7 +32,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-side .t-who { overflow: hidden; text-overflow: ellipsis; }
 
 /* Give a quiz: pick the quiz and class, then a mode */
-.t-start-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; max-width: 980px; padding: 20px; border: 1px solid var(--line); border-radius: 10px; }
+.t-start-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 20px; border: 1px solid var(--line); border-radius: 10px; }
 .t-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .t-modes legend { padding: 0; margin-bottom: 6px; }
 .t-mode { position: relative; display: grid; align-content: start; gap: 3px; padding: 12px 14px 13px 40px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
@@ -451,7 +451,8 @@ input[type="file"].input { padding: 6px 10px; }
 
 .qe-viewcol { position: sticky; top: 76px; display: grid; gap: 6px; min-width: 0; }
 .qe-viewcol .field-label { color: var(--ink-2); }
-.qe-view { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; pointer-events: none; overflow: hidden; }
+.qe-view { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+.qe-view :is(input, textarea, select, button, label, a) { pointer-events: none; } /* to look at, not to use; long lines scroll */
 .qe-view .prompt { font-size: 16px; overflow-wrap: anywhere; }
 .qe-view code { padding: 0 4px; background: var(--soft); border-radius: 3px; }
 .qe-view .md-code code, .qe-view .choice-text code { padding: 0; background: none; }
@@ -494,13 +495,40 @@ th .qe-gridcell { font: 600 13px var(--font); }
 }
 
 /* Grading mode, on wide screens: with a student open, the class sits on the left and their answers on
-   the right, scrolling on their own. The list keeps who, their status, integrity, progress and score. */
+   the right, scrolling on their own. The list keeps who, their status, integrity, progress and score;
+   every action is in the student's pane. Very wide screens keep the whole table. */
 @media (min-width: 1600px) {
-  .t-shell > .t-main:has(.t-grading) { max-width: none; }
-  .t-livegrid.t-grading { display: grid; grid-template-columns: minmax(380px, 34%) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .t-shell > .t-main:has(.t-livegrid.t-grading) { max-width: none; } /* beats the live run's cap below */
+  .t-livegrid.t-grading { display: grid; grid-template-columns: fit-content(50%) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .t-grading > .t-table-wrap { min-width: 380px; }
   .t-grading .t-detail-host { position: sticky; top: 16px; max-height: calc(100vh / var(--zoom, 1) - 32px); overflow-y: auto; overscroll-behavior: contain; border-radius: 6px; }
   .t-grading .t-detail > .t-row:first-child { position: sticky; top: 0; z-index: 1; margin: -16px -16px 0; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line); border-radius: 6px 6px 0 0; }
-  .t-grading .t-run :is(th, td):is(:nth-child(4), :nth-child(5), :nth-child(6), :nth-child(8), :nth-child(9)) { display: none; }
   .t-grading .t-detail.t-done > .t-detail-grid { order: 1; } /* turned in: answers first, activity after */
+  .t-grading .t-answers { max-width: 1100px; }
   .t-grading .t-run tr.sel td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+}
+@media (min-width: 3000px) {
+  .t-livegrid.t-grading { grid-template-columns: max-content minmax(560px, 1fr); } /* the whole table fits beside the student */
+}
+@media (min-width: 1600px) and (max-width: 2999px) {
+  .t-grading .t-run :is(th, td):is(:nth-child(4), :nth-child(5), :nth-child(6), :nth-child(8), :nth-child(9)),
+  .t-grading .t-run td.t-actions, .t-grading .t-run thead th:last-child { display: none; }
+}
+
+/* Wide screens (see docs: one rule for every page). Pages are centred right of the sidebar, at most
+   1480px; the live run is wider, since its table needs about 1600px; tables give spare width to their
+   first column and keep buttons at the right end; fields in a row don't stretch. */
+@media (min-width: 821px) {
+  .t-shell > .t-main:has(.t-run) { max-width: 1840px; }
+  .t-table td.t-actions { width: 1%; text-align: right; }
+  .t-section > .t-row > .field { max-width: 440px; }
+  .t-start-form > .t-row:first-child { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+  /* the live run's buttons stay in view when the table scrolls sideways */
+  .t-run td.t-actions, .t-run thead th:last-child { position: sticky; right: 0; z-index: 1; box-shadow: -10px 0 10px -10px rgba(0, 0, 0, 0.3); }
+  .t-run td.t-actions { background: var(--bg); }
+}
+/* The quiz maker on wide screens: the preview at about the width students get */
+@media (min-width: 1800px) {
+  .qe { max-width: 1760px; }
+  .qe-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 760px); }
 }
