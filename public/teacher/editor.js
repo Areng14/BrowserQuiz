@@ -1276,10 +1276,11 @@
           ? `A blank line starts the next test. -> ? takes the value from ${from}. A line with *2 makes the test count double.`
           : `One test per line. Leave out -> to take the value from ${from}. *2 at the end counts double.` })];
       const unordered = check(q, q.compare === 'unordered', 'Array/list results can be in any order', (v) => { if (v) q.compare = 'unordered'; else delete q.compare; });
+      const noRun = check(q, !!q.noRun, "Students can't run their code (like on paper)", (v) => { if (v) q.noRun = true; else delete q.noRun; });
       const stack = (...kids) => h('div', { class: 'qe-stack' }, ...kids);
       // A fill question has no reference field: what students are to write, then the tests.
-      if (fill) return { node: h('div', { class: 'qe-codegrid' }, stack(shape, unordered), stack(testFields)), tick };
-      return { tick, node: h('div', { class: 'qe-codegrid' }, stack(shape, testFields), stack(refs, bans, rubric.node, h('div', { class: 'qe-line' }, unordered,
+      if (fill) return { node: h('div', { class: 'qe-codegrid' }, stack(shape, unordered, noRun), stack(testFields)), tick };
+      return { tick, node: h('div', { class: 'qe-codegrid' }, stack(shape, testFields), stack(refs, bans, rubric.node, h('div', { class: 'qe-line' }, unordered, noRun,
         isClass ? check(q, q.starter === 'empty', 'Start with an empty class', (v) => { if (v) q.starter = 'empty'; else delete q.starter; }) : null))) };
     }
 

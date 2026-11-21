@@ -47,10 +47,14 @@
 .r-view .r-chip.st-pending { background: transparent; color: var(--ink-2); border: 1.5px dashed var(--ink-2); }
 
 /* ---------- a question ---------- */
-.r-view .r-q { margin: 0 0 14px; padding: 14px 16px; border: 1px solid var(--line); border-left: 4px solid var(--st-pending); border-radius: 8px; scroll-margin-top: 64px; }
-.r-view .r-q.st-full { border-left-color: var(--st-full); }
-.r-view .r-q.st-partial { border-left-color: var(--st-partial); }
-.r-view .r-q.st-zero { border-left-color: var(--st-zero); }
+/* A question's card, with its result as a straight line down the left inside it (clear of the corners). */
+.r-view .r-q { --st: var(--st-pending); position: relative; margin: 0 0 14px; padding: 14px 16px 14px 22px; border: 1px solid var(--line); border-radius: 8px; scroll-margin-top: 64px; }
+.r-view .r-q::before { content: ''; position: absolute; left: 8px; top: 12px; bottom: 12px; width: 4px; border-radius: 2px; background: var(--st); }
+.r-view .r-q::before { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+@media (forced-colors: active) { .r-view .r-q::before { background: CanvasText; } }
+.r-view .r-q.st-full { --st: var(--st-full); }
+.r-view .r-q.st-partial { --st: var(--st-partial); }
+.r-view .r-q.st-zero { --st: var(--st-zero); }
 .r-view .r-qhead { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 6px; font-size: 13px; color: var(--ink-2); }
 .r-view .r-qhead .n { font-weight: 700; font-size: 15px; color: var(--ink); }
 .r-view .r-status {

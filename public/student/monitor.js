@@ -146,7 +146,9 @@
       if (this.armed) return;
       this.armed = true;
       const o = this.opts;
-      if (o.integrity === false) { // practice: heartbeats only, to autosave answers
+      if (o.integrity === false) { // practice: heartbeats to autosave answers, and the mouse for Watch
+        this.trackMouse();
+        this.beatMs = BEAT_MS;
         this.beatTimer = setInterval(() => this.beat(), BEAT_MS);
         this.beat();
         return;
@@ -185,20 +187,7 @@
         // On a one-monitor lab PC in fullscreen the cursor can't leave the page.
         if (document.fullscreenElement) this.report('mouse-left');
       });
-      this.on(document, 'mousemove', (e) => {
-        const now = Date.now();
-        this.lastActivityAt = now;
-        if (now - this.lastMouseAt < MOUSE_SAMPLE_MS) return;
-        const dt = this.lastMouseAt ? now - this.lastMouseAt : 0;
-        this.lastMouseAt = now;
-        if (this.mouse.length < 400) {
-          this.mouse.push([
-            Math.round((e.clientX / Math.max(1, window.innerWidth)) * 1000),
-            Math.round((e.clientY / Math.max(1, window.innerHeight)) * 1000),
-            dt,
-          ]);
-        }
-      }, { passive: true });
+      this.trackMouse();
 
       this.on(window, 'keydown', (e) => {
         this.lastActivityAt = Date.now();
@@ -393,8 +382,46 @@
       // Reload button or closing the tab: ask first.
       this.on(window, 'beforeunload', (e) => { e.preventDefault(); e.returnValue = ''; });
 
+      this.beatMs = BEAT_MS;
       this.beatTimer = setInterval(() => this.beat(), BEAT_MS);
       this.beat();
+    }
+
+    // The mouse path (10 samples a second, clicks marked): the trail on the teacher's page, and the cursor
+    // when they watch live.
+    trackMouse() {
+      // A click goes in the trail right away, marked, so a teacher watching sees it.
+      this.on(document, 'mousedown', (e) => {
+        const now = Date.now();
+        const dt = this.lastMouseAt ? now - this.lastMouseAt : 0;
+        this.lastMouseAt = now;
+        if (this.mouse.length < 400) {
+          this.mouse.push([Math.round((e.clientX / Math.max(1, window.innerWidth)) * 1000), Math.round((e.clientY / Math.max(1, window.innerHeight)) * 1000), dt, 1]);
+        }
+      }, { passive: true, capture: true });
+      this.on(document, 'mousemove', (e) => {
+        const now = Date.now();
+        this.lastActivityAt = now;
+        if (now - this.lastMouseAt < MOUSE_SAMPLE_MS) return;
+        const dt = this.lastMouseAt ? now - this.lastMouseAt : 0;
+        this.lastMouseAt = now;
+        if (this.mouse.length < 400) {
+          this.mouse.push([
+            Math.round((e.clientX / Math.max(1, window.innerWidth)) * 1000),
+            Math.round((e.clientY / Math.max(1, window.innerHeight)) * 1000),
+            dt,
+          ]);
+        }
+      }, { passive: true });
+    }
+
+    // The server can ask for heartbeats more often (every student in a run alike, while a teacher watches).
+    setBeat(ms) {
+      ms = Math.max(1000, Math.min(BEAT_MS, Number(ms) || BEAT_MS));
+      if (!this.armed || ms === this.beatMs) return;
+      this.beatMs = ms;
+      clearInterval(this.beatTimer);
+      this.beatTimer = setInterval(() => this.beat(), ms);
     }
 
     beat() {
@@ -408,6 +435,9 @@
         mouse: this.mouse.splice(0),
         edits: this.edits.splice(0, 300),
       };
+      // How long ago the last mouse sample was, so the trail can be placed in time; and what's on screen.
+      if (payload.mouse.length) payload.mouseEnd = Date.now() - this.lastMouseAt;
+      if (this.opts.getView) payload.view = this.opts.getView();
       if (this.answersDirty && this.opts.getAnswers) {
         payload.answers = this.opts.getAnswers();
         this.answersDirty = false;
@@ -418,6 +448,7 @@
       Promise.resolve(this.api.beat(payload))
         .then((r) => {
           this.failures = 0;
+          this.setBeat(r && r.beatMs);
           if (this.opts.onBeat) this.opts.onBeat(r, { answers: !!payload.answers });
         })
         .catch((err) => {

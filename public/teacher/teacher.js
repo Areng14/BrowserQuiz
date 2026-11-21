@@ -17,6 +17,7 @@
     'scripted-input': 'Typed by a script', viewport: 'Side panel or DevTools open', setup: 'Computer',
   };
   let pollTimer = 0;
+  let tickTimer = 0;
   let selected = null;
 
   try { const t = localStorage.getItem(THEME_KEY); if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; } catch (e) { /* ignore */ }
@@ -79,6 +80,7 @@
   // A new page: the tab title names it, and reading starts at its heading unless the page focused a field.
   function mount(...nodes) {
     clearInterval(pollTimer);
+    clearInterval(tickTimer);
     leaveGuard = null;
     root.replaceChildren(...nodes);
     const head = root.querySelector('main h1, h1');
@@ -725,6 +727,13 @@
         const actions = h('td', { class: 't-actions' });
         const btn = (text, key, onclick, extra) => h('button', Object.assign({ class: 'btn small', type: 'button', text, onclick, 'data-key': `${a.id}:${key}`, 'aria-label': `${text} ${s.name}` }, extra || {}));
         if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => act(`/api/t/attempts/${a.id}/admit`), { class: 'btn small primary' }));
+        // Their screen, live, in a new tab (watch.html).
+        if (a && a.status === 'active') {
+          const watch = linkBtn('Watch', `/teacher/watch.html?attempt=${encodeURIComponent(a.id)}`, true);
+          watch.setAttribute('aria-label', `Watch ${s.name}`);
+          watch.dataset.key = `${a.id}:watch`;
+          actions.append(watch);
+        }
         if (a && a.integrity === 'invalidated') actions.append(btn('Restore', 'restore', () => { if (confirm(`Restore ${s.name}?`)) act(`/api/t/attempts/${a.id}/restore`); }));
         // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
         // popup doesn't end anyone's quiz without the teacher looking).
@@ -747,11 +756,11 @@
           h('td', { role: 'rowheader', class: 't-rowhead' }, a ? h('button', { class: 't-link', type: 'button', text: s.name, 'data-key': `${a.id}:name`, 'aria-expanded': String(selected === a.id), onclick: () => { selected = a.id; lastDetail = ''; showDetail(a.id); refresh(); } }) : s.name),
           statusCell(s), integrityCell(a),
           h('td', { class: 'num', 'data-label': 'Strikes', text: a ? String(a.strikes) : '' }),
-          h('td', { class: 'num' + (a && a.awayNow ? ' st-bad' : ''), 'data-label': 'Away', text: a && a.awayMs ? (a.awayNow ? 'Now, ' : '') + mmss(a.awayMs) : '' }),
+          h('td', Object.assign({ class: 'num' + (a && a.awayNow ? ' st-bad' : ''), 'data-label': 'Away', text: a && a.awayMs ? (a.awayNow ? 'Now, ' : '') + mmss(a.awayMs) : '' }, a && a.awayNow ? ticks('away', -a.awayMs) : {})),
           h('td', { class: 'num quiet', 'data-label': 'Warnings', text: a ? String(a.warnings) : '' }),
           h('td', { class: 'num', 'data-label': 'Answered', text: a && a.status !== 'waiting' ? `${a.answered}/${a.total}` : '' }),
-          h('td', { class: 'num' + (beat != null && beat > 6 ? ' t-late' : ' quiet'), 'data-label': 'Heartbeat', text: beat != null ? `${beat}s ago` : '' }),
-          h('td', { class: 'num', 'data-label': 'Time left', text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }),
+          h('td', Object.assign({ class: 'num' + (beat != null && beat > 6 ? ' t-late' : ' quiet'), 'data-label': 'Heartbeat', text: beat != null ? `${beat}s ago` : '' }, beat != null && a.status === 'active' ? ticks('beat', -a.lastBeatAgo) : {})),
+          h('td', Object.assign({ class: 'num', 'data-label': 'Time left', text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }, a && a.timeLeft != null && a.status === 'active' ? ticks('left', a.timeLeft) : {})),
           h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), 'data-label': 'Score', text: score }),
           actions);
       }));
@@ -802,7 +811,7 @@
           h('h2', { style: 'flex:1', tabindex: '-1', class: 't-detail-name', text: d.name }),
           d.status === 'active' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }, dk('end'))) : null,
           d.integrity !== 'invalidated' ? h('button', Object.assign(dk('invalidate'), { class: 'btn small', type: 'button', text: 'Invalidate', onclick: () => { const note = prompt('Reason (optional)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } })) : null,
-          d.status === 'active' && d.deadline ? h('span', { class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }) : null,
+          d.status === 'active' && d.deadline ? h('span', Object.assign({ class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }, ticks('left-label', d.timeLeft || 0))) : null,
           d.status === 'active' && d.deadline ? h('button', Object.assign({ class: 'btn small', type: 'button', text: '+5 min', 'aria-label': 'Add 5 minutes', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } }, dk('extend'))) : null,
           d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
           d.status === 'submitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) }, dk('regrade'))) : null,
@@ -870,6 +879,26 @@
         detail));
     await refresh();
     pollTimer = setInterval(refresh, 2000);
+    tickTimer = setInterval(tick, 1000);
+  }
+
+  // Clocks between polls: the server's numbers come every 2s, and these count every second in between.
+  // ticks(kind, ms) marks a cell with when its clock reads 0 (counting down) or started (counting up).
+  const ticks = (kind, ms) => ({ 'data-tick': kind, 'data-at': String(Date.now() + ms) });
+  function tick() {
+    const now = Date.now();
+    for (const el of root.querySelectorAll('[data-tick]')) {
+      const at = Number(el.dataset.at);
+      if (el.dataset.tick === 'left') el.textContent = mmss(Math.max(0, at - now));
+      else if (el.dataset.tick === 'left-label') el.textContent = `${mmss(Math.max(0, at - now))} left`;
+      else if (el.dataset.tick === 'away') el.textContent = 'Now, ' + mmss(now - at);
+      else if (el.dataset.tick === 'beat') {
+        const s = Math.round((now - at) / 1000);
+        el.textContent = `${s}s ago`;
+        el.classList.toggle('t-late', s > 6);
+        el.classList.toggle('quiet', s <= 6);
+      }
+    }
   }
 
   function drawTrail(canvas, pts) {

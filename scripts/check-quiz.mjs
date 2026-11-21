@@ -44,7 +44,7 @@ const buf = load(target);
 const TOP = ['format', 'title', 'timeLimitMin', 'shuffleQuestions', 'shuffleChoices', 'language', 'integrity', 'directions', 'shared', 'sections', 'questions'];
 const QKEYS = ['id', 'type', 'name', 'prompt', 'points', 'image', 'imageAlt', 'shared', 'explanation', 'answer', 'caseSensitive', 'choices', 'shuffleChoices', 'partialCredit', 'mode', 'languages',
   'language', 'code', 'columns', 'rows', 'given',
-  'signature', 'class', 'types', 'tests', 'reference', 'compare', 'limits', 'rubric', 'ban', 'starter', 'support'];
+  'signature', 'class', 'types', 'tests', 'reference', 'compare', 'noRun', 'limits', 'rubric', 'ban', 'starter', 'support'];
 function near(word, list) {
   const d = (a, b) => {
     const m = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);

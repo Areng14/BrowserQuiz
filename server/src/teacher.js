@@ -11,6 +11,7 @@ const { checkReferences, checkOutputs, runnerConfigured, runnerHealthy, runSampl
 const { totals, questionScore, gradeAttempt, answerReport, cleanAnswers, gradeAuto, studentReport, reportQuiz, isRun } = require('./grade');
 const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
+const W = require('./watch');
 const { HttpError, clientIp, isHttps, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
 const { makeConfig: makeSebConfig } = require('./seb');
 const A = require('./accounts');
@@ -191,6 +192,7 @@ function quizSource(quiz) {
         if (qq.mode === 'method') o.signature = qq.signature; else o.class = qq.class;
         o.tests = qq.tests;
         if (qq.compare === 'unordered') o.compare = 'unordered';
+        if (qq.noRun) o.noRun = true;
         if (qq.rubric && qq.rubric.length) o.rubric = qq.rubric;
       }
     }
@@ -207,6 +209,7 @@ function quizSource(quiz) {
       if (qq.ban) o.ban = qq.ban;
       if (Object.keys(qq.reference || {}).length) o.reference = qq.reference;
       if (qq.compare === 'unordered') o.compare = 'unordered';
+      if (qq.noRun) o.noRun = true;
       if (qq.limits && (qq.limits.timeMs !== 2000 || qq.limits.memoryMb !== 256)) o.limits = qq.limits;
       if (qq.rubric && qq.rubric.length) o.rubric = qq.rubric;
       const custom = Object.fromEntries(Object.entries(qq.starter || {}).filter(([, v]) => typeof v === 'string'));
@@ -795,6 +798,32 @@ module.exports = function teacherRoutes(r) {
       deadline: a.deadline, timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
       totals: totals(a.result, quiz, a.answers), answers: answerReport(quiz, a), events,
       quiz: reportQuiz(quiz, run.quiz_id), report: studentReport(quiz, a, student ? student.name : ''), mouse: mouse.slice(-3000), ip: a.ip, userAgent: a.userAgent,
+    });
+  });
+
+  // Watch a student live (watch.js): their quiz as they see it, then their screen, answers and mouse.
+  r.get('/api/t/attempts/:id/watch-start', (req, res, p) => {
+    const me = requireTeacher(req);
+    const { a, run } = getAttemptRun(me, p.id);
+    if (!a.layout) throw new HttpError(409, 'not_started');
+    const quiz = store.getQuiz(run.quiz_id);
+    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {} });
+  });
+  r.get('/api/t/attempts/:id/watch', (req, res, p) => {
+    const me = requireTeacher(req);
+    const { a } = getAttemptRun(me, p.id);
+    const url = new URL(req.url, 'http://x');
+    const now = Date.now();
+    const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
+    // The answers only when they've changed since the version the page has.
+    const text = JSON.stringify(a.answers || {});
+    const ver = crypto.createHash('sha1').update(text).digest('hex').slice(0, 16);
+    json(res, 200, {
+      name: student ? student.name : '?', status: a.status, now, ver,
+      timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - now) : null,
+      away: !!store.awayNow(a, now) || !!a.away,
+      answers: url.searchParams.get('ver') === ver ? undefined : (a.answers || {}),
+      ...W.look(a, url.searchParams.get('since'), now),
     });
   });
 

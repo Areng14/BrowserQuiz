@@ -458,6 +458,8 @@ function normalizeCode(where, q) {
   }
   out.reference = reference;
   out.compare = q.compare === 'unordered' ? 'unordered' : 'ordered';
+  // Written without running, like on paper: no Run examples. Grading still runs the hidden tests.
+  if (q.noRun === true) out.noRun = true;
   const lim = q.limits || {};
   out.limits = {
     timeMs: Math.max(200, Math.min(5000, Number(lim.timeMs) || 2000)),

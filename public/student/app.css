@@ -120,7 +120,7 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 
 .rules { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 /* the one rule that matters most, before the rest */
-.cheat-rule { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid var(--bad); border-left-width: 4px; border-radius: 6px; background: color-mix(in srgb, var(--bad) 8%, transparent); }
+.cheat-rule { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--bad) 8%, transparent); }
 .cheat-rule p { margin: 0; }
 .cheat-title { font-weight: 700; color: var(--bad); }
 .modal.warn-modal { border-color: var(--bad); border-top: 4px solid var(--bad); }
@@ -322,9 +322,10 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .res-head { font-weight: 600; }
 .res-head.good { color: var(--good); }
 .res-head.bad { color: var(--bad); }
-.res-tests { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-.res-tests li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid var(--good); border-radius: 6px; }
-.res-tests li.bad { border-left-color: var(--bad); }
+/* One row per example, split by thin lines; the check or cross carries the color. */
+.res-tests { margin: 0; padding: 0; list-style: none; display: grid; }
+.res-tests li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 2px; border-top: 1px solid var(--line); }
+.res-tests li:first-child { border-top: 0; padding-top: 2px; }
 .res-mark { flex: none; display: inline-flex; align-items: center; height: 1.5em; color: var(--good); }
 .res-tests li.bad .res-mark { color: var(--bad); }
 .res-body { min-width: 0; display: grid; gap: 4px; }

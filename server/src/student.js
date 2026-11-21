@@ -6,6 +6,7 @@ const { q } = require('./db');
 const store = require('./store');
 const H = require('./harness');
 const T = require('../../public/teacher/types.js');
+const W = require('./watch');
 const { runSamples } = require('./coderun');
 const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } = require('./grade');
 const { fillTemplate } = require('./quizfile');
@@ -134,7 +135,7 @@ function publicQuiz(quiz, layout) {
         });
       }
       if (qq.type === 'fill') {
-        Object.assign(pub, { code: qq.code, codeLang: qq.language, blanks: qq.answer.length, run: !!qq.run });
+        Object.assign(pub, { code: qq.code, codeLang: qq.language, blanks: qq.answer.length, run: !!qq.run && !qq.noRun });
         if (qq.run) {
           pub.samples = qq.tests.sample.map((t) => ({ call: { [qq.language]: H.callText(qq, t, qq.language) }, expected: { [qq.language]: H.expectedText(qq, t, qq.language) } }));
         }
@@ -144,6 +145,7 @@ function publicQuiz(quiz, layout) {
         pub.mode = qq.mode;
         pub.languages = qq.languages;
         if (qq.ban) pub.ban = qq.ban; // a rule, so students see it
+        if (qq.noRun) pub.noRun = true;
         // The question's own classes, written out in each language: theirs to use, not to write.
         if (qq.types) pub.given = Object.fromEntries(qq.languages.map((l) => [l, T.classSource(qq.types, l, true)]));
         pub.starter = Object.fromEntries(qq.languages.map((l) => [l, H.starterCode(qq, l)]));
@@ -348,6 +350,7 @@ module.exports = function studentRoutes(r) {
     const body = await readJson(req, 1024 * 1024);
     const { a, quiz } = current(req);
     const now = Date.now();
+    let live = {};
     if (a.status === 'active') {
       // Events the client couldn't send while offline arrive here, oldest first.
       // Each keeps the time it happened (after the last good heartbeat, in order), so leaving five times
@@ -370,11 +373,11 @@ module.exports = function studentRoutes(r) {
       } else {
         store.back(a, now);
       }
-      if (Array.isArray(body.mouse) && body.mouse.length) {
-        const pts = body.mouse.slice(0, 400).filter((p) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite))
-          .map((p) => [Math.max(0, Math.min(1000, p[0] | 0)), Math.max(0, Math.min(1000, p[1] | 0)), Math.max(0, p[2] | 0)]);
-        if (pts.length) q('INSERT INTO mouse (attempt_id, t, points) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(pts));
-      }
+      // Mouse samples: [x, y, ms since the last one], and a 4th 1 for a click.
+      const pts = (Array.isArray(body.mouse) ? body.mouse.slice(0, 400) : []).filter((p) => Array.isArray(p) && (p.length === 3 || p.length === 4) && p.every(Number.isFinite))
+        .map((p) => [Math.max(0, Math.min(1000, p[0] | 0)), Math.max(0, Math.min(1000, p[1] | 0)), Math.max(0, Math.min(60000, p[2] | 0)), p[3] ? 1 : 0]);
+      if (pts.length) q('INSERT INTO mouse (attempt_id, t, points) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(pts.map((p) => p.slice(0, 3))));
+      live = W.beat(a, body, pts, now); // for a teacher watching live (watch.js)
       if (Array.isArray(body.edits) && body.edits.length && a.edits < 20000) {
         const edits = body.edits.slice(0, 300);
         q('INSERT INTO code_edits (attempt_id, t, deltas) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(edits).slice(0, 400000));
@@ -384,7 +387,7 @@ module.exports = function studentRoutes(r) {
       store.save(a);
     }
     // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
-    json(res, 200, { ok: true, now, deadline: a.deadline || null, done: a.status === 'submitted' });
+    json(res, 200, { ok: true, now, deadline: a.deadline || null, done: a.status === 'submitted', ...live });
   });
 
   r.post('/api/run', async (req, res) => {
@@ -396,6 +399,7 @@ module.exports = function studentRoutes(r) {
     // Fill-in-the-blank: the server fills its own template; students only send the blanks.
     if (qq && qq.type === 'fill') body.code = Array.isArray(body.blanks) ? fillTemplate(qq.code, body.blanks.map((b) => String(b || '').slice(0, 500))) : null;
     if (!qq || !qq.languages.includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
+    if (qq.noRun) throw new HttpError(403, 'run_off'); // this question is written without running
     store.logEvent(a, 'run', 'info', `${qq.id} (${body.language === 'python' ? 'Python' : 'Java'})`);
     try {
       json(res, 200, await runSamples(qq, body.language, body.code.slice(0, 50000)));

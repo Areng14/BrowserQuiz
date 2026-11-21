@@ -201,6 +201,7 @@ Grading uses the hidden tests, which students never see.
 | `reference` | none | `{ "java": "...", "python": "..." }` correct solutions. Strongly recommended |
 | `rubric` | none | `[{ "id", "text", "points", "require", "forbid" }]` points for things tests can't see. See [Rubric checks](#rubric-checks) |
 | `ban` | none | Methods students may not use: `["Arrays.sort", "Collections.sort", "stream"]`, or `{ "java": [...], "python": [...] }`. Code that uses one scores 0 on the question. See [Banned methods](#banned-methods) |
+| `noRun` | `false` | `true`: written without running, like on paper. No **Run examples**; grading still runs the tests |
 | `compare` | `"ordered"` | `"unordered"`: array/list results can come back in any order |
 | `starter` | `"stubs"` | `"stubs"` (generated signatures), `"empty"` (class mode: bare class), or `{ "java": "...", "python": "..." }` |
 | `types` | none | Classes for parameters and results: `{ "Point": { "x": "int", "y": "int" } }`. See [Classes](#classes) |

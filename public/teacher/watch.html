@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Watch</title>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/teacher/teacher.css">
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body.t-app { display: flex; flex-direction: column; min-height: 0; background: var(--soft); color: var(--ink); }
+    .w-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); font-size: 14px; }
+    .w-bar h1 { margin: 0; font-size: 15px; font-weight: 600; }
+    .w-live { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+    .w-live::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--bad, #c62828); animation: w-pulse 1.6s ease-in-out infinite; }
+    .w-live.off::before { background: var(--ink-2); animation: none; }
+    @keyframes w-pulse { 50% { opacity: 0.3; } }
+    @media (prefers-reduced-motion: reduce) { .w-live::before { animation: none; } }
+    .w-where { color: var(--ink-2); }
+    .w-away { padding: 2px 8px; border-radius: 999px; font-weight: 600; color: #fff; background: var(--bad, #c62828); }
+    .w-grow { flex: 1; }
+    .w-stage { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+    .w-screen { position: absolute; top: 0; left: 0; transform-origin: 0 0; background: var(--bg); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18); border-radius: 4px; overflow: hidden; }
+    .w-screen iframe { display: block; width: 100%; height: 100%; border: 0; pointer-events: none; }
+    .w-cursor { position: absolute; top: 0; left: 0; width: 22px; height: 22px; margin: -2px 0 0 -3px; pointer-events: none; will-change: transform; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); }
+    .w-click { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 50%; border: 3px solid #2563eb; pointer-events: none; animation: w-ring 0.6s ease-out forwards; }
+    @keyframes w-ring { from { transform: scale(0.3); opacity: 1; } to { transform: scale(1.4); opacity: 0; } }
+    .w-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--ink-2); font-size: 15px; }
+    .w-msg[hidden] { display: none; }
+  </style>
+</head>
+<body class="t-app">
+  <header class="w-bar">
+    <h1 id="w-name">Watching</h1>
+    <span class="w-live" id="w-live">Live, a few seconds behind</span>
+    <span class="w-where" id="w-where"></span>
+    <span class="w-away" id="w-away" hidden>Away from the quiz</span>
+    <span class="w-grow"></span>
+    <span class="t-small t-muted" id="w-left"></span>
+    <button class="btn small" type="button" id="w-close">Close</button>
+  </header>
+  <div class="w-stage" id="w-stage">
+    <div class="w-screen" id="w-screen" hidden>
+      <iframe id="w-frame" title="The student's screen" tabindex="-1"></iframe>
+      <svg class="w-cursor" id="w-cursor" viewBox="0 0 22 22" aria-hidden="true" hidden><path d="M3 2 L3 18 L7.5 13.8 L10.5 20.5 L13.4 19.2 L10.4 12.6 L16.5 12.4 Z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    </div>
+    <p class="w-msg" id="w-msg">Loading…</p>
+  </div>
+  <script src="/teacher/watch.js"></script>
+</body>
+</html>

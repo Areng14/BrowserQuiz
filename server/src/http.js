@@ -165,6 +165,11 @@ function serveStatic(res, rootDir, rel, longCache) {
   if (!type) return false;
   const headers = { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': longCache ? 'public, max-age=604800' : 'no-cache' };
   if (ext === '.html') headers['Content-Security-Policy'] = PAGE_CSP;
+  // The one page that goes in a frame: the student's screen inside the teacher's Watch page, same origin only.
+  if (file.endsWith(path.join(path.sep, 'teacher', 'watch-frame.html'))) {
+    headers['Content-Security-Policy'] = PAGE_CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'");
+    headers['X-Frame-Options'] = 'SAMEORIGIN';
+  }
   res.writeHead(200, Object.assign({}, SECURITY, headers));
   fs.createReadStream(file).pipe(res);
   return true;

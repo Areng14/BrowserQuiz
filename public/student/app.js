@@ -541,7 +541,7 @@
       h('div', { class: 'heading' },
         h('h1', { text: 'Practice' }),
         h('p', { text: summaryLine(S.run) }),
-        h('p', { text: 'You see the answers when you finish.' })),
+        h('p', { text: 'You see the answers when you finish. Your teacher can watch the quiz page live.' })),
       btn, msg)));
     btn.focus();
   }
@@ -582,7 +582,7 @@
         h('p', { text: 'That means switching to another window, tab or app, leaving fullscreen, reloading or closing this page, or using Exit when your teacher didn\'t say to. Your teacher sees each time it happens.' })),
       h('ul', { class: 'rules' },
         h('li', { text: 'The quiz runs in fullscreen.' }),
-        h('li', { text: 'Mouse and keyboard activity is recorded.' }),
+        h('li', { text: 'Mouse and keyboard activity is recorded, and your teacher can watch the quiz page live.' }),
         h('li', { text: 'Pasting from outside the quiz is blocked.' }),
         mins ? h('li', { text: 'The quiz turns itself in when time runs out.' }) : null),
       checkList,
@@ -629,6 +629,7 @@
       fullscreen: fsOk,
       keysHeld: () => keysHeld && !!document.fullscreenElement,
       getAnswers: serializeAnswers,
+      getView: currentView,
       onFullscreenLost: showFsOverlay,
       onFullscreenBack: hideFsOverlay,
       onReturn: showLeftWarning,
@@ -640,6 +641,20 @@
     });
     screenQuiz();
     S.monitor.arm();
+  }
+
+  // What's on screen, for a teacher watching live: the page, the scroll, and the window's size.
+  function currentView() {
+    if (!S || !S.el || !S.quiz) return null;
+    const q = S.quiz.questions[S.idx];
+    const a = q && q.type === 'code' ? S.answers[q.id] : null;
+    return {
+      q: q ? q.id : null, review: !!S.reviewOpen, dir: !!S.dirOpen && !S.reviewOpen, intro: !!S.introOpen,
+      scroll: Math.round(S.el.main.scrollTop), wscroll: Math.round(S.el.wrap.scrollTop),
+      w: window.innerWidth, h: window.innerHeight, lang: a ? a.language : null,
+      nav: !!S.el.wrap.querySelector('.nav-pop'), modal: !!S.el.wrap.querySelector('.modal-backdrop'),
+      marks: S.marks || null, // marked for review, crossed-out choices: only ever in their browser otherwise
+    };
   }
 
   // ---------- connection + save state ----------
@@ -1614,8 +1629,13 @@
     const runBtn = h('button', { class: 'btn small primary', type: 'button', text: 'Run examples' });
     const results = h('div', { class: 'results', 'aria-live': 'polite' });
     const host = h('div', { class: 'editor-host', 'data-answer-field': true });
+    // Back to the starter code, for when the class or method around their code got broken.
+    const resetBtn = h('button', { class: 'btn small', type: 'button', text: 'Reset', title: 'Start over from the starter code',
+      onclick: () => confirmReset(q, ans, host, resetBtn) });
     runBtn.addEventListener('click', () => runCode(q, runBtn, results));
     runCooldown(runBtn);
+    // Written without running, like on paper.
+    const runCtl = q.noRun ? h('span', { class: 'kbd-hint', text: 'No running on this one' }) : runBtn;
 
     const view = h('div', { class: 'qview wide' },
       h('div', { class: 'code-q' },
@@ -1624,7 +1644,7 @@
           banNote, given,
           h('h2', { class: 'sub', text: 'Examples' }), samples),
         h('section', { class: 'code-right', 'aria-label': 'Code editor' },
-          h('div', { class: 'editor-bar' }, langCtl, h('span', { class: 'spacer' }), h('span', { class: 'kbd-hint', text: leaveHint() }), runBtn),
+          h('div', { class: 'editor-bar' }, langCtl, h('span', { class: 'spacer' }), h('span', { class: 'kbd-hint', text: leaveHint() }), resetBtn, runCtl),
           host, results)));
     renderResults(q, results);
     mountEditor(q, host, ans);
@@ -1643,7 +1663,7 @@
       const key = q.id + ':' + lang;
       if (!S.models[key] || S.models[key].isDisposed()) S.models[key] = m.editor.createModel(ans.code[lang], lang);
       const editor = m.editor.create(host, {
-        model: S.models[key], theme: editorTheme(), automaticLayout: true, ariaLabel: `Code answer. Tab indents. ${leaveHint()}.`,
+        model: S.models[key], theme: editorTheme(), automaticLayout: true, readOnly: !!cfg.watch, ariaLabel: `Code answer. Tab indents. ${leaveHint()}.`,
         fontFamily: "ui-monospace, 'Cascadia Mono', Consolas, monospace", fontSize: editorFontSize(), lineHeight: Math.round(editorFontSize() * 1.6),
         tabSize: 4, insertSpaces: true, minimap: { enabled: false }, scrollBeyondLastLine: false,
         padding: { top: 12, bottom: 12 }, renderLineHighlight: 'line',
@@ -1672,6 +1692,46 @@
         setAnswer(q.id, ans);
       }));
     }).catch(() => { if (host.isConnected) plainEditor(host, ans, lang, q); });
+  }
+  // The app's own dialog, not confirm(): a browser dialog can count as leaving the quiz.
+  function confirmReset(q, ans, host, opener) {
+    if (!S.el || S.el.wrap.querySelector('.modal-backdrop')) return;
+    const lang = ans.language;
+    const starter = (q.starter && q.starter[lang]) || '';
+    let backdrop;
+    let release = null;
+    const close = () => { backdrop.remove(); release(false); opener.focus(); };
+    const keep = h('button', { class: 'btn', type: 'button', text: 'Keep my code', onclick: close });
+    const reset = h('button', { class: 'btn primary', type: 'button', text: 'Reset', onclick: () => {
+      close();
+      const ed = S.editor && host.contains(S.editor.getDomNode()) ? S.editor : null;
+      if (ed) { // an edit, so Ctrl+Z brings their code back
+        ed.pushUndoStop();
+        ed.executeEdits('reset', [{ range: ed.getModel().getFullModelRange(), text: starter }]);
+        ed.pushUndoStop();
+        ed.setPosition({ lineNumber: 1, column: 1 });
+        ed.focus();
+      } else {
+        const ta = host.querySelector('textarea');
+        if (ta) { ta.focus(); ta.select(); insertText(ta, starter); }
+      }
+      ans.code[lang] = starter;
+      setAnswer(q.id, ans);
+    } });
+    backdrop = h('div', { class: 'modal-backdrop' },
+      h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'reset-title' },
+        h('h2', { id: 'reset-title', text: 'Start over?' }),
+        h('p', { text: 'Your code for this question goes back to the starter code. Ctrl+Z undoes it.' }),
+        h('div', { class: 'modal-actions' }, keep, reset)));
+    S.el.wrap.append(backdrop);
+    release = holdFocus(backdrop, close);
+    keep.focus();
+  }
+  // Typed through the browser where it can be, so undo works.
+  function insertText(ta, text) {
+    if (document.execCommand && document.execCommand('insertText', false, text)) return;
+    ta.setRangeText(text, 0, ta.value.length, 'end');
+    ta.dispatchEvent(new Event('input', { bubbles: true }));
   }
   // A phone held either way: Monaco there takes over swipes, so the page can't scroll past it.
   const phoneSized = () => matchMedia('(pointer: coarse) and (max-width: 600px), (pointer: coarse) and (max-height: 480px)').matches;
@@ -2254,6 +2314,77 @@
     screenQuiz();
   }
 
+  // Teacher watching a student live (teacher/watch.js): the student's quiz, in their order, read-only. The
+  // watch page sends what the student has on screen and their answers; this follows along.
+  async function startWatch() {
+    let r;
+    try {
+      r = await api.start();
+    } catch (e) {
+      mount(entry(h('div', { class: 'panel' }, h('p', { class: 'error', role: 'alert', text: errorText(e) }))));
+      return;
+    }
+    S.quiz = r.quiz;
+    S.run = { title: r.quiz.title, timeLimitMin: 0, questionCount: r.quiz.questions.length, outline: r.quiz.questions.map((q, i) => ({ type: q.type, points: q.points, name: q.name, n: i + 1 })), quizDirections: (r.quiz.directions && r.quiz.directions.quiz) || '', sections: r.quiz.sections || [], hasCode: r.quiz.questions.some((q) => q.type === 'code') };
+    S.deadline = 0;
+    S.answers = restoreAnswers(r.answers || {});
+    S.watchAnswers = JSON.stringify(r.answers || {});
+    S.marks = { review: [], out: {} };
+    S.scratch = { tool: 'pen', pages: {} };
+    S.monitor = null;
+    if (S.run.hasCode) loadMonaco().catch(() => {});
+    screenQuiz();
+  }
+  function watchView(v, answers) {
+    if (!S || !S.el || !S.quiz) return false;
+    let redraw = false;
+    const q = S.quiz.questions[S.idx];
+    if (answers) {
+      const text = JSON.stringify(answers);
+      if (text !== S.watchAnswers) {
+        const before = S.answers;
+        S.watchAnswers = text;
+        S.answers = restoreAnswers(answers);
+        // Code goes into the editor's model as it is; anything else is redrawn.
+        for (const x of S.quiz.questions) {
+          if (x.type !== 'code') { if (x === q && JSON.stringify(before[x.id]) !== JSON.stringify(S.answers[x.id])) redraw = true; continue; }
+          const a = S.answers[x.id];
+          if (!a) continue;
+          for (const l of x.languages) {
+            const m = S.models[x.id + ':' + l];
+            if (m && !m.isDisposed() && m.getValue() !== a.code[l]) m.setValue(a.code[l]);
+          }
+        }
+        if (q && q.type === 'code' && !S.editor) redraw = true; // the plain box
+      }
+    }
+    if (v && v.marks && JSON.stringify(v.marks) !== JSON.stringify(S.marks)) { S.marks = v.marks; redraw = true; }
+    if (v) {
+      const i = v.q ? S.quiz.questions.findIndex((x) => x.id === v.q) : -1;
+      if (v.review) {
+        if (!S.reviewOpen) { S.reviewOpen = true; S.dirOpen = false; redraw = true; }
+      } else if (i >= 0 && (S.reviewOpen || S.idx !== i || S.dirOpen !== v.dir || S.introOpen !== v.intro)) {
+        Object.assign(S, { reviewOpen: false, idx: i, dirOpen: v.dir, introOpen: v.intro });
+        redraw = true;
+      }
+      const cq = S.quiz.questions[S.idx];
+      if (v.lang && cq && cq.type === 'code' && S.answers[cq.id] && S.answers[cq.id].language !== v.lang && cq.languages.includes(v.lang)) {
+        S.answers[cq.id].language = v.lang;
+        redraw = true;
+      }
+    }
+    if (redraw) renderQuestion();
+    if (v) {
+      S.el.main.scrollTop = v.scroll || 0;
+      S.el.wrap.scrollTop = v.wscroll || 0;
+      const open = S.el.wrap.querySelector('.nav-pop');
+      if (v.nav && !open) openNavigator();
+      else if (!v.nav && open) open.remove();
+    }
+    const total = S.quiz.questions.length;
+    return { where: S.reviewOpen ? 'Check your work' : S.dirOpen ? (S.introOpen ? 'Directions' : partOf(S.idx).title) : `Question ${S.idx + 1} of ${total}` };
+  }
+
   // ---------- lifecycle ----------
   function teardown() {
     if (!S) return;
@@ -2270,6 +2401,7 @@
       root = el;
       api = apiImpl || BQ.api;
       S = freshState();
+      if (cfg.watch) { startWatch(); return; }
       if (cfg.preview) { startPreview(); return; }
       if (!api.resume) { screenJoin(); return; }
       let code = null;
@@ -2295,5 +2427,7 @@
       S = freshState();
       screenJoin();
     },
+    // Teacher watch page: follow the student's screen and answers. False until the quiz is on screen.
+    watch: (view, answers) => watchView(view, answers),
   };
 })();
