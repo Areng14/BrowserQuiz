@@ -1124,6 +1124,13 @@
         return h('div', { class: 'qe-ref' }, field(`Reference solution (${LANGS[l]})`, ta), h('div', {}, btn));
       });
       const rubric = fill ? null : rubricEditor(q, 'Uses private instance variables', q.languages);
+      // Methods students may not use: comma separated. Using one scores 0 (server/src/bans.js).
+      const banList = Array.isArray(q.ban) ? q.ban : q.ban ? [...new Set(Object.values(q.ban).flat())] : [];
+      const bans = fill ? null : field('Not allowed (methods students may not use)', input(q, banList.join(', '), (v) => {
+        const list = v.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
+        if (list.length) q.ban = list; else delete q.ban;
+      }, { class: 'input qe-mono', placeholder: 'Arrays.sort, Collections.sort, sorted, stream', spellcheck: 'false' }),
+        h('span', { class: 't-small t-muted', text: 'Code that uses one gets 0 on this question. Students see the list.' }));
 
       const tick = () => {
         const r = readCode(q);
@@ -1160,7 +1167,7 @@
       const stack = (...kids) => h('div', { class: 'qe-stack' }, ...kids);
       // A fill question has no reference field: what students are to write, then the tests.
       if (fill) return { node: h('div', { class: 'qe-codegrid' }, stack(shape, unordered), stack(testFields)), tick };
-      return { tick, node: h('div', { class: 'qe-codegrid' }, stack(shape, testFields), stack(refs, rubric.node, h('div', { class: 'qe-line' }, unordered,
+      return { tick, node: h('div', { class: 'qe-codegrid' }, stack(shape, testFields), stack(refs, bans, rubric.node, h('div', { class: 'qe-line' }, unordered,
         isClass ? check(q, q.starter === 'empty', 'Start with an empty class', (v) => { if (v) q.starter = 'empty'; else delete q.starter; }) : null))) };
     }
 

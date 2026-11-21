@@ -203,6 +203,7 @@ function quizSource(quiz) {
       o.languages = qq.languages;
       if (qq.mode === 'method') o.signature = qq.signature; else o.class = qq.class;
       o.tests = qq.tests;
+      if (qq.ban) o.ban = qq.ban;
       if (Object.keys(qq.reference || {}).length) o.reference = qq.reference;
       if (qq.compare === 'unordered') o.compare = 'unordered';
       if (qq.limits && (qq.limits.timeMs !== 2000 || qq.limits.memoryMb !== 256)) o.limits = qq.limits;

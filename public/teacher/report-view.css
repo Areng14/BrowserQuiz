@@ -92,6 +92,8 @@
   font: 13px/1.5 var(--mono, ui-monospace, 'Cascadia Mono', Consolas, monospace); white-space: pre-wrap; overflow-wrap: anywhere; }
 .r-view pre code { background: none; padding: 0; font-size: inherit; }
 .r-view pre.r-err { color: var(--bad); }
+.r-view .r-err-line { margin: 0; color: var(--bad); }
+.r-view .r-err-line code { color: var(--ink); }
 .r-view pre.r-out { margin: 0; }
 
 /* your answer | correct answer */

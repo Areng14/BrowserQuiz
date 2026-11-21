@@ -3,6 +3,7 @@
 // Everything that reaches the database has passed through here.
 const { readZip } = require('./zip');
 const R = require('./rubric');
+const B = require('./bans');
 const T = require('../../public/teacher/types.js');
 
 const LIMITS = { uploadBytes: 25 * 1024 * 1024, files: 500, questions: 300, arrayLen: 1000 };
@@ -430,6 +431,13 @@ function normalizeCode(where, q) {
       if (!r.ok) fail(`${where}, rubric item ${i + 1}: the ${name} reference solution ${r.why === 'require' ? "doesn't match \"require\"" : 'matches "forbid"'}.`);
     }
   });
+  // Methods the student may not use (bans.js). The reference solutions have to keep to them too.
+  try { const ban = B.normalizeBans(q.ban, languages); if (ban) out.ban = ban; } catch (e) { fail(`${where}: ${e.message}`); }
+  for (const lang of languages) {
+    if (!out.ban || !reference[lang]) continue;
+    const used = B.bannedUse(out.ban, lang, reference[lang]);
+    if (used.length) fail(`${where}: the ${lang === 'python' ? 'Python' : 'Java'} reference solution uses ${used.join(', ')}, which "ban" doesn't allow.`);
+  }
   const rubricPoints = out.rubric.reduce((s, r) => s + r.points, 0);
   if (rubricPoints >= Number(q.points || 1)) fail(`${where}: rubric points must be less than the question's points, so the tests are worth something.`);
   // starter: "empty" | "stubs" (default) | { java: "...custom...", python: "..." }

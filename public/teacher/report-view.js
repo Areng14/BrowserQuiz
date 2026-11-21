@@ -121,6 +121,7 @@
     // code
     return [
       codeCompare(q, o),
+      q.banned ? [h('p', { class: 'r-label', text: 'Not allowed' }), h('p', { class: 'r-err-line' }, 'Uses ', q.banned.map((b, i) => [i ? ', ' : '', h('code', { text: b })]), ', so it scores 0.')] : null,
       q.compileError ? [h('p', { class: 'r-label', text: "Didn't compile" }), h('pre', { class: 'r-err', text: q.compileError })] : null,
       q.rubric.length && !o.teacher ? rubricList(q) : null,
     ];

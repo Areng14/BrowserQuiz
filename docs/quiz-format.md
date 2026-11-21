@@ -192,6 +192,7 @@ Grading uses the hidden tests, which students never see.
 | `tests` | — | `{ "sample": [...], "hidden": [...] }`: up to 10 sample, 1 to 100 hidden |
 | `reference` | none | `{ "java": "...", "python": "..." }` correct solutions. Strongly recommended |
 | `rubric` | none | `[{ "id", "text", "points", "require", "forbid" }]` points for things tests can't see. See [Rubric checks](#rubric-checks) |
+| `ban` | none | Methods students may not use: `["Arrays.sort", "Collections.sort", "stream"]`, or `{ "java": [...], "python": [...] }`. Code that uses one scores 0 on the question. See [Banned methods](#banned-methods) |
 | `compare` | `"ordered"` | `"unordered"`: array/list results can come back in any order |
 | `starter` | `"stubs"` | `"stubs"` (generated signatures), `"empty"` (class mode: bare class), or `{ "java": "...", "python": "..." }` |
 | `support` | none | `{ "java": "...", "python": "..." }` extra code compiled with the student's (helper classes) |
@@ -288,6 +289,23 @@ slow solution can't finish in time. Method mode only.
 The code part is worth `points` minus the rubric points. Students earn the share of hidden
 test weight they pass. Rubric items with a check (below) grade themselves; the teacher ticks
 the rest in the dashboard. Rubric points must total less than `points`.
+
+### Banned methods
+
+`"ban"` lists what a code question doesn't allow. Students see the list on the question, **Run
+examples** tells them if their code uses one, and code that does scores 0 on the question (the
+teacher can still adjust points).
+
+- `"Class.method"`: that method of that class, like `"Arrays.sort"`, `"Math.max"` or `"math.sqrt"`
+- `"method"`: a method or function of that name on anything, like `"sort"`, `"stream"`, `"sorted"`
+- `"Name"` (Java, capitalized): a class, anywhere, like `"HashMap"`
+
+Comments and strings don't count. Full names (`java.util.Arrays.sort`), static imports, method
+references (`Arrays::sort`) and Python aliases (`s = sorted`) do. A question with any ban also bans
+the ways around one: reflection in Java, and `eval`, `exec`, `getattr`, `__import__` and `importlib`
+in Python. The reference solutions must keep to the bans, or the upload is refused.
+
+For a point off instead of a zero, use a rubric item with `"forbid"` (below).
 
 ### Rubric checks
 

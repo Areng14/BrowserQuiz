@@ -498,7 +498,7 @@
   const round2 = (x) => Math.round(x * 100) / 100;
   function summaryLine(run) {
     const n = run.questionCount;
-    const pts = run.outline ? round2(run.outline.reduce((t, q) => t + q.points, 0)) : 0;
+    const pts = run.points != null ? run.points : run.outline ? round2(run.outline.reduce((t, q) => t + q.points, 0)) : 0;
     const mins = run.timeLimitMin;
     return `${plural(n, 'question')}${pts ? ` (${plural(pts, 'point')})` : ''}${mins ? ` in ${plural(mins, 'minute')}` : ''}.`;
   }
@@ -1577,6 +1577,11 @@
         h('pre', { class: 'sample-call' }, h('code', { 'data-lang': lang, text: s.call[lang] })),
         h('div', { class: 'sample-exp' }, 'Returns ', h('code', { 'data-lang': lang, text: s.expected[lang] })))));
 
+    // What this question doesn't allow, for the language in use: it's part of the rules.
+    const bans = !q.ban ? [] : Array.isArray(q.ban) ? q.ban : q.ban[lang] || [];
+    const banNote = bans.length ? h('p', { class: 'ban-note' }, h('strong', { text: 'Not allowed: ' }),
+      bans.map((b, i) => [i ? ', ' : '', h('code', { text: b })])) : null;
+
     let langCtl;
     if (q.languages.length > 1) {
       langCtl = h('select', { class: 'select', 'aria-label': 'Language' },
@@ -1600,6 +1605,7 @@
       h('div', { class: 'code-q' },
         h('section', { class: 'code-left' },
           metaRow(q, KIND[q.mode] || KIND.method), sharedBlock(q), prompt(q),
+          banNote,
           h('h2', { class: 'sub', text: 'Examples' }), samples),
         h('section', { class: 'code-right', 'aria-label': 'Code editor' },
           h('div', { class: 'editor-bar' }, langCtl, h('span', { class: 'spacer' }), h('span', { class: 'kbd-hint', text: leaveHint() }), runBtn),
@@ -1734,6 +1740,8 @@
     if (r.simulated) parts.push(h('p', { class: 'demo-note', text: 'Demo: simulated result.' }));
     if (r.status === 'compile_error') {
       parts.push(h('p', { class: 'res-head bad', text: "Didn't compile" }), h('pre', { class: 'res-pre', text: r.message || '' }));
+    } else if (r.status === 'banned') {
+      parts.push(h('p', { class: 'res-head bad', text: 'Not allowed' }), h('p', { text: r.message || '' }));
     } else if (r.status === 'runtime_error') {
       parts.push(h('p', { class: 'res-head bad', text: 'Crashed' }), h('pre', { class: 'res-pre', text: r.message || '' }));
     } else if (r.status === 'error') {
@@ -1762,7 +1770,8 @@
     const here = i === S.idx && !S.reviewOpen; // the review page isn't on any one question
     return h('button', {
       type: 'button', class: 'sheet-dot' + (done ? ' answered' : '') + (here ? ' current' : '') + (marked ? ' marked' : ''),
-      'aria-label': `Question ${i + 1}${done ? ', answered' : ''}${marked ? ', marked for review' : ''}`, 'aria-current': here ? 'step' : null,
+      'aria-label': `Question ${i + 1}${q.name ? `, ${q.name}` : ''}${done ? ', answered' : ''}${marked ? ', marked for review' : ''}`, 'aria-current': here ? 'step' : null,
+      title: q.name ? `${i + 1}. ${q.name}` : null,
       text: String(i + 1), onclick: () => onPick(i),
     });
   }

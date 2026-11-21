@@ -4,6 +4,7 @@
 const H = require('./harness');
 const { checkValue, QuizError, normOutput } = require('./quizfile');
 const { autoRubric } = require('./rubric');
+const { bannedUse } = require('./bans');
 
 const MAX_CONCURRENT = Math.max(1, Number(process.env.RUNNER_CONCURRENCY) || 4);
 let active = 0;
@@ -73,6 +74,8 @@ async function runTests(q, lang, code, tests, opts) {
 }
 
 async function runSamples(q, lang, code) {
+  const used = bannedUse(q.ban, lang, code);
+  if (used.length) return { status: 'banned', banned: used, message: `Uses ${used.join(', ')}.` };
   if (!q.tests.sample.length) return { status: 'ok', tests: [], stdout: '' };
   const r = await runTests(q, lang, code, q.tests.sample);
   return H.studentView(q, lang, q.tests.sample, r);
@@ -85,10 +88,13 @@ async function gradeCode(q, answer) {
     return { status: 'done', score: 0, max, note: 'No answer', tests: tests.map(() => ({ pass: false, error: 'No answer' })) };
   }
   const r = await runTests(q, answer.language, answer.code, tests, { perTest: true });
+  // Using a banned method scores 0, whatever the tests say (they still run, for the teacher to see).
+  const used = bannedUse(q.ban, answer.language, answer.code);
+  const banned = used.length ? { banned: used, note: `Not allowed: ${used.join(', ')}` } : null;
   if (r.status === 'compile_error') {
     return {
       status: 'done', score: 0, max, language: answer.language, compileError: r.message, tests: tests.map(() => ({ pass: false, error: "Didn't compile" })),
-      rubric: autoRubric(q, answer.language, answer.code, false),
+      rubric: autoRubric(q, answer.language, answer.code, false), ...banned,
     };
   }
   if (r.status !== 'ok') return { status: 'error', score: 0, max, message: r.message };
@@ -97,9 +103,10 @@ async function gradeCode(q, answer) {
   return {
     status: 'done',
     language: answer.language,
-    score: Math.round((max * passed / total) * 100) / 100,
+    score: banned ? 0 : Math.round((max * passed / total) * 100) / 100,
     max,
-    rubric: autoRubric(q, answer.language, answer.code, r.tests.some((t) => t.pass)),
+    rubric: autoRubric(q, answer.language, answer.code, !banned && r.tests.some((t) => t.pass)),
+    ...banned,
     tests: r.tests.map((t, i) => ({
       pass: !!t.pass,
       call: H.callText(q, tests[i], answer.language),

@@ -271,6 +271,7 @@ function studentReport(quiz, a, name, opts = {}) {
         row.language = lang;
         row.answer = codeAnswered(qq, ans) ? ans.code : null;
         row.compileError = row.answer && c && c.compileError ? c.compileError : null;
+        row.banned = row.answer && c && c.banned ? c.banned : null; // used a method the question doesn't allow: 0
         const refs = qq.reference || {};
         row.referenceLanguage = refs[lang] ? lang : Object.keys(refs)[0] || null;
         row.reference = row.referenceLanguage ? refs[row.referenceLanguage] : null;

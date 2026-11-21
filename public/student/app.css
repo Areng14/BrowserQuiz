@@ -290,6 +290,8 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .code-right { flex: 1 1 420px; min-width: 0; height: max(420px, calc(100vh - var(--quiz-chrome, 200px))); display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 @media (max-width: 780px) { .code-left { flex-basis: 100%; } } /* too narrow for side by side: prompt on top */
 .bq-app .sub { font-size: 15px; font-weight: 600; margin: 0; }
+.ban-note { margin: 0; font-size: 15px; }
+.ban-note code { font-family: var(--mono); font-size: 0.92em; }
 .samples { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; font-size: 14px; }
 .sample-call { margin: 0; padding: 8px 10px; font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); border-radius: 6px 6px 0 0; }
 .sample-call code { background: none; padding: 0; font-size: inherit; }

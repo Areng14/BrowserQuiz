@@ -114,7 +114,7 @@ function publicQuiz(quiz, layout) {
     timeLimitMin: quiz.timeLimitMin,
     language: quiz.language,
     directions: quiz.directions,
-    sections: sectionStarts(quiz, true),
+    sections: sectionStarts(quiz),
     shared: Object.fromEntries((quiz.shared || []).filter((m) => used.has(m.id)).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
     questions: layout.order.map((id) => {
       const qq = byId.get(id);
@@ -141,6 +141,7 @@ function publicQuiz(quiz, layout) {
       if (qq.type === 'code') {
         pub.mode = qq.mode;
         pub.languages = qq.languages;
+        if (qq.ban) pub.ban = qq.ban; // a rule, so students see it
         pub.starter = Object.fromEntries(qq.languages.map((l) => [l, H.starterCode(qq, l)]));
         pub.samples = qq.tests.sample.map((t) => ({
           call: Object.fromEntries(qq.languages.map((l) => [l, H.callText(qq, t, l)])),
@@ -154,21 +155,19 @@ function publicQuiz(quiz, layout) {
 
 // Where each section the teacher made starts, by position. Shuffling stays inside sections (store.makeLayout),
 // so a position is the same for every student.
-function sectionStarts(quiz, withDirections) {
+function sectionStarts(quiz) {
   const at = new Map(quiz.questions.map((qq, i) => [qq.id, i]));
   return (quiz.sections || []).filter((sec) => at.has(sec.before))
-    .map((sec) => Object.assign({ start: at.get(sec.before), title: sec.title }, withDirections ? { directions: sec.directions } : {}));
+    .map((sec) => ({ start: at.get(sec.before), title: sec.title, directions: sec.directions }));
 }
 
 function runInfo(run, quiz) {
   return {
     runId: run.id, title: quiz.title, timeLimitMin: quiz.timeLimitMin,
+    // Totals only, for the start screen. What's on the quiz (types, names, sections, directions) comes with
+    // the questions once the quiz starts.
     questionCount: quiz.questions.length,
-    quizDirections: (quiz.directions && quiz.directions.quiz) || '',
-    sections: sectionStarts(quiz, false),
-    // What's on the quiz, for the start screen: types, points and names, never prompts. Numbers only when
-    // every student gets the same order.
-    outline: quiz.questions.map((qq, i) => Object.assign({ type: qq.type, points: qq.points }, qq.name ? { name: qq.name } : {}, quiz.shuffleQuestions ? {} : { n: i + 1 })),
+    points: Math.round(quiz.questions.reduce((t, qq) => t + qq.points, 0) * 100) / 100,
     hasCode: quiz.questions.some((qq) => qq.type !== 'single' && qq.type !== 'multi' && qq.type !== 'text'),
     practice: run.mode === 'practice',
     seb: !!run.seb_key, // SEB keeps the window locked full screen itself
