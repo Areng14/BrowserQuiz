@@ -228,6 +228,8 @@ function answerReport(quiz, a) {
       row.state = sc.state;
       row.override = sc.override;
       row.review = sc.review;
+      const mm = (res.manual || {})[qq.id];
+      if (mm && mm.ai) row.ai = mm.ai; // the AI's grade and reasons (teacher only)
     }
     const m = (res.manual || {})[qq.id] || {};
     const auto = autoMarks(qq, res);
@@ -316,4 +318,4 @@ const reportQuiz = (quiz, quizId) => ({
   shared: Object.fromEntries((quiz.shared || []).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
 });
 
-module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, codeAnswered, answerReport, studentReport, reportQuiz, grading: running, isRun, textMatches };
+module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, autoMarks, codeAnswered, answerReport, studentReport, reportQuiz, grading: running, isRun, textMatches };

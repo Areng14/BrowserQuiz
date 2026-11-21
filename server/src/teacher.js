@@ -12,6 +12,11 @@ const { totals, questionScore, gradeAttempt, answerReport, cleanAnswers, gradeAu
 const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
 const W = require('./watch');
+const AI = require('./aigrade');
+const G = require('./grade');
+const { fillTemplate: fillT } = require('./quizfile');
+// AI grading in progress, per run: { total, graded, failed, errors, running }. One at a time per run.
+const aiJobs = new Map();
 const { HttpError, clientIp, isHttps, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
 const { makeConfig: makeSebConfig } = require('./seb');
 const A = require('./accounts');
@@ -715,6 +720,38 @@ module.exports = function teacherRoutes(r) {
     json(res, 200, { ok: true });
   });
 
+  // AI grading (aigrade.js): every answer that waits for the teacher in this run, or in one attempt.
+  // Runs in the background; the live page shows how far it's got.
+  function startAi(run, quiz, attempts) {
+    if (!AI.configured()) throw new HttpError(409, 'ai_off', 'AI grading needs an Anthropic API key on the server (ANTHROPIC_API_KEY). See docs/setup.md.');
+    const was = aiJobs.get(run.id);
+    if (was && was.running) throw new HttpError(409, 'ai_busy', 'AI grading is already running for this quiz.');
+    const job = { total: 0, graded: 0, failed: 0, errors: [], running: true, started: Date.now() };
+    aiJobs.set(run.id, job);
+    const sub = attempts.filter((x) => x && x.status === 'submitted' && x.result);
+    AI.gradeAttempts(quiz, sub, { questionScore: G.questionScore, autoMarks: G.autoMarks, isRun: G.isRun, fillTemplate: fillT }, store, (o) => Object.assign(job, o, { running: true }))
+      .then((o) => Object.assign(job, o, { running: false, ended: Date.now() }))
+      .catch((e) => Object.assign(job, { running: false, ended: Date.now(), errors: [String(e.message || e)] }));
+    return job;
+  }
+  r.post('/api/t/runs/:id/ai-grade', (req, res, p) => {
+    const me = requireTeacher(req);
+    const run = getRun(me, p.id);
+    const quiz = store.getQuiz(run.quiz_id);
+    const attempts = q('SELECT id FROM attempts WHERE run_id = ? AND archived = 0').all(run.id).map((x) => store.getAttempt(x.id));
+    const job = startAi(run, quiz, attempts);
+    audit(me, 'ai-grade', run.id, null);
+    json(res, 200, { ok: true, job });
+  });
+  r.post('/api/t/attempts/:id/ai-grade', (req, res, p) => {
+    const me = requireTeacher(req);
+    const { a, run } = getAttemptRun(me, p.id);
+    const quiz = store.getQuiz(run.quiz_id);
+    const job = startAi(run, quiz, [a]);
+    audit(me, 'ai-grade', a.id, null);
+    json(res, 200, { ok: true, job });
+  });
+
   r.post('/api/t/runs/:id/:action', async (req, res, p) => {
     const me = requireTeacher(req);
     const run = getRun(me, p.id);
@@ -757,8 +794,10 @@ module.exports = function teacherRoutes(r) {
     json(res, 200, {
       run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, sebQuit: run.seb_quit || null, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin },
       students: roster.map((s) => liveRow(s, byStudent.get(s.id), quiz)),
+      ai: { on: AI.configured(), job: aiJobs.get(run.id) || null },
     });
   });
+
 
   r.get('/api/t/runs/:id/export.csv', (req, res, p) => {
     const me = requireTeacher(req);
@@ -908,7 +947,10 @@ module.exports = function teacherRoutes(r) {
         if (!Number.isFinite(override) || override < 0 || override > qq.points) throw new HttpError(400, 'bad_points', `Points must be between 0 and ${qq.points}.`);
         override = Math.round(override * 100) / 100;
       }
-      a.result.manual = Object.assign({}, a.result.manual, { [qq.id]: { rubric, override, reviewed: true } });
+      // The AI's reasons stay to read, marked as changed by the teacher.
+      const prev = (a.result.manual || {})[qq.id];
+      const ai = prev && prev.ai ? Object.assign({}, prev.ai, { changed: true }) : undefined;
+      a.result.manual = Object.assign({}, a.result.manual, { [qq.id]: Object.assign({ rubric, override, reviewed: true }, ai ? { ai } : {}) });
       store.logEvent(a, 'grade', 'info', `${qq.id}: ${override != null ? override + ' pts (override)' : Object.keys(rubric).length + ' rubric item(s)'}`);
       store.save(a);
     } else throw new HttpError(404, 'not_found');

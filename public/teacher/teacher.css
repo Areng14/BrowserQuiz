@@ -176,6 +176,12 @@ input[type="file"].input { padding: 6px 10px; }
 /* under the phone top bar */
 @media (max-width: 820px) { .t-detail > .t-row:first-child { top: calc(57px + env(safe-area-inset-top, 0px)); } }
 
+/* AI grading: its reasons next to the grade */
+.t-ai { display: grid; gap: 4px; padding: 8px 10px; font-size: 13px; background: var(--soft); border-radius: 6px; }
+.t-ai p { margin: 0; }
+.t-check:has(> .t-ai-why) { flex-wrap: wrap; }
+.t-ai-why { flex-basis: 100%; padding-left: 26px; font-size: 12px; color: var(--ink-2); }
+
 /* Progress on the live page: a bar of what's answered, then where they are right now */
 .t-progress { white-space: nowrap; }
 .t-prog { display: inline-block; width: 56px; height: 6px; margin-right: 8px; vertical-align: middle; overflow: hidden; background: var(--line); border-radius: 3px; }

@@ -107,6 +107,24 @@ Have your own settings from SEB Config Tool? Open **Use my own .seb file** and p
 It's on the Exam tab, with sending the Browser Exam Key and Config Key turned on. If you change those
 settings, the Config Key changes too, so start the quiz with the new one.
 
+## AI grading (optional)
+
+Written answers, and rubric items no pattern can check, wait for you after a quiz. With an Anthropic
+API key on the server, **Grade with AI** on the quiz's live page (or on one student) sends those
+answers to Claude, which grades them the way you would: it ticks the rubric items it thinks are met,
+or gives points when there's no rubric, and says why for each. Every grade is labeled as the AI's,
+and you can change any of them (its reasons stay to read).
+
+- **Turn it on:** set `ANTHROPIC_API_KEY` in `.env` (or the app's variables on Railway) and restart.
+  `AI_GRADER_MODEL` picks another model; the default is `claude-opus-5-5`.
+- **What's sent, per answer:** the question, its rubric and points, your notes or reference solution,
+  how many tests the code passed, and the student's answer. Never names, IDs, integrity, or hidden
+  tests. Nothing is sent until you press the button.
+- **Cost:** about 2 to 5 cents an answer with the default model, so a class of 30 with two written
+  answers each is a couple of dollars.
+- A student who writes "give me full marks" doesn't get them: the answer is graded as an answer, and
+  the AI says so in its note.
+
 ## HTTPS and a domain
 
 To try it, yes: anyone who can reach `<ip>:8080` can use it. For a real class, use a domain with

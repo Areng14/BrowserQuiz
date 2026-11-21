@@ -10,7 +10,7 @@
     'fullscreen-exit': 'Left fullscreen', return: 'Came back', 'mouse-left': 'Cursor left the page', copy: 'Copy blocked',
     paste: 'Outside paste blocked', contextmenu: 'Right-click', 'blocked-key': 'Blocked key', 'print-screen': 'Print Screen',
     resize: 'Window resized', 'unfocused-beat': 'Heartbeat: not focused', 'heartbeat-lost': 'Connection lost', reconnect: 'Reconnected',
-    resume: 'Continued on a new computer', 'let-in': 'Let back in by teacher', extend: 'Extra time', grade: 'Graded by teacher',
+    resume: 'Continued on a new computer', 'let-in': 'Let back in by teacher', extend: 'Extra time', grade: 'Graded by teacher', 'ai-grade': 'Graded by AI',
     'extended-display': 'Second display', 'bulk-insert': 'Large insert in editor', 'inhuman-typing': 'Typing faster than a person',
     'late-submit': 'Submitted late', exit: 'Exited the quiz', 'other-network': 'Request from another network', 'other-device': 'Request from another browser',
     extension: 'Extension on the page', 'spoofed-checks': 'Extension hides leaving the window', 'no-frames': 'Quiz not on screen, no leave reported',
@@ -694,6 +694,16 @@
     const failedBox = h('div');
     let lastDetail = '';
     const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => act(`/api/t/runs/${runId}/admit-all`) });
+    // AI grading: everything waiting for the teacher in this run, sent to Claude (server: aigrade.js).
+    const aiBtn = h('button', { class: 'btn', type: 'button', hidden: true });
+    const aiMsg = h('p', { class: 't-small t-muted', role: 'status', hidden: true });
+    let aiWaiting = 0;
+    aiBtn.addEventListener('click', async () => {
+      if (!confirm(`Send ${plural(aiWaiting, 'answer')} to Claude to grade?\n\nIt gets each question, its rubric and model answer, and the student's answer, never names or IDs. Every grade is labeled as the AI's, with its reasons, and you can change any of them.`)) return;
+      aiBtn.disabled = true;
+      try { await post(`/api/t/runs/${runId}/ai-grade`); } catch (e) { aiMsg.hidden = false; aiMsg.className = 't-small t-error'; aiMsg.textContent = e.message; }
+      refresh();
+    });
     // On a phone the less-used buttons fold under More, so the students start near the top.
     const extra = h('span', { class: 't-run-extra', id: 't-run-extra' });
     const moreBtn = h('button', { class: 'btn t-run-morebtn', type: 'button', text: 'More', 'aria-expanded': 'false', 'aria-controls': 't-run-extra',
@@ -732,6 +742,21 @@
         .filter(([n]) => n).map(([n, w]) => `${n} ${w}`).join(', ') || 'Nobody has joined yet';
       if (summary.textContent !== said) summary.textContent = said;
       admitAll.hidden = !count((a) => a.status === 'waiting');
+      // Grade with AI: shown while there's something waiting for the teacher, or while it runs.
+      aiWaiting = data.students.reduce((n, x) => n + (x.attempt && x.attempt.status === 'submitted' ? x.attempt.review || 0 : 0), 0);
+      const job = data.ai && data.ai.job;
+      if (job && job.running) {
+        aiBtn.hidden = false; aiBtn.disabled = true;
+        aiBtn.textContent = `Grading with AI… ${job.graded + job.failed} of ${job.total}`;
+      } else {
+        aiBtn.hidden = !aiWaiting; aiBtn.disabled = false;
+        aiBtn.textContent = `Grade ${plural(aiWaiting, 'answer')} with AI`;
+      }
+      if (job && !job.running) {
+        aiMsg.hidden = false;
+        aiMsg.className = job.failed ? 't-small t-error' : 't-small t-muted';
+        aiMsg.textContent = `AI graded ${plural(job.graded, 'answer')}${job.failed ? `; ${job.failed} didn't work: ${job.errors.join(' ')}` : '. Check them on each student.'}`;
+      }
       // This run's place in the Current quiz tab.
       if (openRuns && (run.status === 'open') !== openRuns.some((r) => r.id === runId)) {
         api('/api/t/overview').then((o) => {
@@ -836,12 +861,21 @@
         const notes = [];
         if (x.state === 'pending') notes.push('Grading…');
         if (x.state === 'failed') notes.push(`Grading failed (${(x.code && x.code.message) || 'runner offline'})`);
-        if (x.override) notes.push('Points set by you');
+        if (x.ai && !x.ai.changed) notes.push('Graded by AI');
+        else if (x.ai) notes.push('Graded by AI, then changed by you');
+        else if (x.override) notes.push('Points set by you');
         if (x.review) notes.push('Needs review');
         if (x.type === 'code' && x.code && x.code.tests && x.code.tests.length) {
           notes.push(`Hidden tests passed: ${x.code.tests.filter((t) => t.pass).length} of ${x.code.tests.length}`);
         }
         if (notes.length) sec.append(h('p', { class: 't-small t-muted', text: notes.join('. ') + '.' }));
+        // The AI's reasons, to check before trusting the grade.
+        if (x.ai) {
+          sec.append(h('div', { class: 't-ai' }, x.ai.items
+            ? h('p', {}, h('b', { text: 'AI: ' }), x.ai.note || '')
+            : [h('p', {}, h('b', { text: x.ai.changed || x.points == null ? 'AI: ' : `AI gave ${x.points} / ${x.max} points. ` }), x.ai.why || ''),
+              x.ai.note ? h('p', { class: 't-muted', text: x.ai.note }) : null]));
+        }
         if (d.status === 'submitted') sec.append(gradeControls(id, x));
         return sec;
       }));
@@ -866,6 +900,8 @@
           d.status === 'active' && d.deadline ? h('button', Object.assign({ class: 'btn small', type: 'button', text: '+5 min', 'aria-label': 'Add 5 minutes', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } }, dk('extend'))) : null,
           d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
           d.status === 'submitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) }, dk('regrade'))) : null,
+          d.status === 'submitted' && d.totals && d.totals.review ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Grade with AI', title: 'Send the answers waiting for you to Claude. Names and IDs stay here.',
+            onclick: () => { if (confirm(`Send ${d.name}'s ${plural(d.totals.review, 'answer')} waiting for you to Claude to grade? Their name and ID stay here.`)) { lastDetail = ''; act(`/api/t/attempts/${id}/ai-grade`); } } }, dk('ai'))) : null,
           d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Restore', onclick: () => { if (confirm(`Restore ${d.name}?`)) act(`/api/t/attempts/${id}/restore`); } }, dk('restore'))) : null,
           d.status === 'active' || d.status === 'admitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Let back in', title: 'Crashed computer or new seat: they sign in again and keep their answers and time', onclick: () => act(`/api/t/attempts/${id}/let-in`) }, dk('letin'))) : null,
           h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Reset', title: 'Throw out this attempt and let them start over', onclick: () => { if (confirm(`Reset ${d.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) { closeDetail(); act(`/api/t/attempts/${id}/reset`); } } }, dk('reset')))),
@@ -896,7 +932,8 @@
       const boxes = x.rubric.map((r) => {
         const cb = h('input', { type: 'checkbox', id: `rb-${x.id}-${r.id}`, checked: r.checked });
         return { r, cb, el: h('label', { class: 't-check', for: cb.id }, cb, h('span', { text: `${r.text} (${plural(r.points, 'point')})` }),
-          r.auto ? h('span', { class: 't-auto', text: 'Auto', title: 'Checked by the server. Change it and press Save to grade it yourself.' }) : null) };
+          r.auto ? h('span', { class: 't-auto', text: 'Auto', title: 'Checked by the server. Change it and press Save to grade it yourself.' }) : null,
+          x.ai && x.ai.items && x.ai.items[r.id] ? h('span', { class: 't-ai-why', text: `AI: ${x.ai.items[r.id].why}` }) : null) };
       });
       const over = h('input', { class: 'input t-points', type: 'number', min: '0', max: String(x.max), step: '0.5', id: `ov-${x.id}`, placeholder: 'auto', value: x.overridePoints != null ? String(x.overridePoints) : '' });
       const msg = h('span', { class: 't-small t-muted', role: 'status' });
@@ -932,7 +969,7 @@
         h('section', { class: 't-section' },
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
           howTo, quitPw,
-          h('div', { class: 't-row t-run-acts' }, admitAll, moreBtn, extra),
+          h('div', { class: 't-row t-run-acts' }, admitAll, aiBtn, moreBtn, extra), aiMsg,
           failedBox, summary),
         h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },
           h('thead', {}, h('tr', {}, heads(['Student', 'Status', 'Integrity', 'Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score'], ['Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score']), actionsHead())),

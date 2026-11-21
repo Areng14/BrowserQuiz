@@ -19,6 +19,10 @@ services:
       RUNNER_URL: http://runner:8080
       RUNNER_CONCURRENCY: ${RUNNER_SLOTS:-4}
       TRUST_PROXY: ${TRUST_PROXY:-0}
+      # Optional: AI grading with Claude (docs/setup.md). Off without a key.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AI_GRADER_MODEL: ${AI_GRADER_MODEL:-}
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-}
     ports:
       - "${APP_BIND:-0.0.0.0}:${APP_PORT:-8080}:8080"
     volumes:
