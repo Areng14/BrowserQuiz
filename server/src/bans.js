@@ -116,9 +116,11 @@ const PY_ESCAPE_ATTRS = ['__dict__', '__getattribute__', '__getattr__', '__globa
 const PY_ESCAPE_HELPERS = ['methodcaller', 'attrgetter']; // operator's, which call a method by its name
 const topModule = (i) => i.split('.')[0];
 
-function pythonHits(entries, facts) {
+function pythonHits(entries, facts, D) {
   const names = new Set(facts.names || []);
-  const attrs = new Set(facts.attrs || []);
+  // The question's own classes' fields (node.next) are the student's to use.
+  const given = new Set(Object.values(D || {}).flat().map((f) => f.name));
+  const attrs = new Set((facts.attrs || []).filter((a) => !given.has(a)));
   const imports = facts.imports || [];
   const imported = (m) => imports.some((i) => i === m || i.startsWith(m + '.'));
   const hits = [];
@@ -143,11 +145,12 @@ function pythonHits(entries, facts) {
 
 // The banned names this code uses (or the way around a ban it uses), in the question's order. `facts` is
 // the harness's scan; without one (the code never got that far) there's nothing to hold against it.
-function bannedUse(ban, lang, facts) {
+// D is the question's declared classes, whose fields and methods count as the student's own.
+function bannedUse(ban, lang, facts, D) {
   const entries = bansFor(ban, lang);
   if (!entries.length || !facts || facts.syntax) return [];
   if (facts.fail) return ['code the check could not read'];
-  return lang === 'python' ? pythonHits(entries, facts) : javaHits(entries, facts);
+  return lang === 'python' ? pythonHits(entries, facts, D) : javaHits(entries, facts);
 }
 
 // Speed tests time the code from inside its own process, so in Python they only count when the code keeps

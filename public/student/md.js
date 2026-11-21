@@ -2,8 +2,10 @@
 // Builds DOM nodes with textContent only. Never innerHTML, so quiz text can't inject markup.
 // Blocks: paragraphs, # headings, - / 1. lists, > quotes, --- lines, | tables |, ```fenced code```, $$math$$.
 // Inline: `code`, **bold**, *italic*, ~~struck~~, $math$, [links](url) (shown as their text, so a click
-// can't take a student out of the quiz), and \ to escape a character.
+// can't take a student out of the quiz), ![images](assets/x.png), and \ to escape a character.
 // opts.lang tags code (inline and unlabeled fences) so the app can syntax-highlight it.
+// opts.assetUrl(path) gives an image's address. Only the quiz's own images (assets/...) show; anything
+// else stays text, so a quiz can't load a picture from another site.
 // Math is typeset with KaTeX, loaded the first time a page has any.
 (function () {
   'use strict';
@@ -55,7 +57,9 @@
   // ---------- inline ----------
   // escape | `code` | $$math$$ | $math$ (opening $ before non-space, closing $ after non-space and not before a
   // digit, so "$5 and $10" stays text) | **bold** | ~~struck~~ | *italic* | [text](url)
-  const INLINE = /(\\[\\`*_$|~[\]()#>!-])|(`[^`]+`)|(\$\$[^$]+\$\$)|(\$(?=\S)(?:\\\$|[^$\n])+?(?<=\S)\$(?!\d))|(\*\*(?:\*[^*\s][^*]*\*|[^*])+\*\*)|(~~[^~]+~~)|(\*[^*\s][^*]*\*)|(\[[^\]]+\]\([^)\s]*\))/g;
+  const INLINE = /(\\[\\`*_$|~[\]()#>!-])|(`[^`]+`)|(\$\$[^$]+\$\$)|(\$(?=\S)(?:\\\$|[^$\n])+?(?<=\S)\$(?!\d))|(\*\*(?:\*[^*\s][^*]*\*|[^*])+\*\*)|(~~[^~]+~~)|(\*[^*\s][^*]*\*)|(!\[[^\]]*\]\([^)\s]+\))|(\[[^\]]+\]\([^)\s]*\))/g;
+  const ASSET = /^(?:\.\/)?(assets\/[A-Za-z0-9 _.-]{1,100}\.(?:png|jpe?g|gif|webp))$/i;
+  let assetUrl = null; // set while a render runs (rendering is synchronous)
 
   function inline(text, parent, lang) {
     let last = 0;
@@ -75,7 +79,16 @@
       else if (m[5]) { el = document.createElement('strong'); inline(tok.slice(2, -2), el, lang); }
       else if (m[6]) { el = document.createElement('s'); inline(tok.slice(2, -2), el, lang); }
       else if (m[7]) { el = document.createElement('em'); inline(tok.slice(1, -1), el, lang); }
-      else { el = document.createElement('span'); inline(tok.slice(1, tok.indexOf('](')), el, lang); }
+      else if (m[8]) {
+        const alt = tok.slice(2, tok.indexOf(']('));
+        const path = tok.slice(tok.indexOf('](') + 2, -1).match(ASSET);
+        if (path && !path[1].includes('..') && assetUrl) {
+          el = document.createElement('img');
+          el.className = 'md-img';
+          el.alt = alt;
+          el.src = assetUrl(path[1]);
+        } else el = document.createTextNode(alt ? `[${alt}]` : ''); // not one of the quiz's images
+      } else { el = document.createElement('span'); inline(tok.slice(1, tok.indexOf('](')), el, lang); }
       parent.append(el);
       last = m.index + tok.length;
     }
@@ -115,6 +128,11 @@
   }
 
   function render(src, opts) {
+    const prev = assetUrl;
+    assetUrl = (opts && opts.assetUrl) || null;
+    try { return renderBlocks(src, opts); } finally { assetUrl = prev; }
+  }
+  function renderBlocks(src, opts) {
     const lang = codeLang(opts);
     const frag = document.createDocumentFragment();
     const lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n');
@@ -219,7 +237,9 @@
 
   function renderInline(src, opts) {
     const span = document.createElement('span');
-    inline(String(src == null ? '' : src), span, codeLang(opts));
+    const prev = assetUrl;
+    assetUrl = (opts && opts.assetUrl) || null;
+    try { inline(String(src == null ? '' : src), span, codeLang(opts)); } finally { assetUrl = prev; }
     return span;
   }
 

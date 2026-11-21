@@ -6,15 +6,24 @@ import json
 import math
 
 
-def _enc(v):
+TYPES = {}  # the question's classes and their fields, set by main.py
+CLASSES = {}
+
+
+def _enc(v, d=0):
     if v is None or isinstance(v, (bool, int, str)):
         return v
     if isinstance(v, float):
         return v if math.isfinite(v) else str(v)
+    if d > 400:
+        return "..."
     if isinstance(v, (list, tuple)):
-        return [_enc(x) for x in v]
+        return [_enc(x, d + 1) for x in v]
     if isinstance(v, dict):  # keys become strings, as in JSON
-        return {str(k): _enc(x) for k, x in v.items()}
+        return {str(k): _enc(x, d + 1) for k, x in v.items()}
+    for c in type(v).__mro__:  # an object of one of the question's classes: its fields
+        if c.__name__ in TYPES:
+            return {f: _enc(getattr(v, f, None), d + 1) for f in TYPES[c.__name__]}
     return str(v)
 
 
@@ -31,10 +40,17 @@ def writer(marker, stream):
 def _gen(v):
     # {"range": [start, stop, step]}: a big test argument made here instead of written out.
     # {"__map__": [[key, value], ...]}: a dict, with int keys kept as ints.
-    if isinstance(v, dict) and "__map__" in v:
-        return {k: x for k, x in v["__map__"]}
-    if isinstance(v, dict) and "range" in v:
-        return list(range(*v["range"]))
+    # {"__obj__": "Point", "f": [...]}: an object of one of the question's classes, fields in order.
+    # {"__list__": [...]}: a list that holds such objects.
+    if isinstance(v, dict):
+        if "__obj__" in v:
+            return CLASSES[v["__obj__"]](*[_gen(x) for x in v["f"]])
+        if "__list__" in v:
+            return [_gen(x) for x in v["__list__"]]
+        if "__map__" in v:
+            return {k: _gen(x) for k, x in v["__map__"]}
+        if "range" in v:
+            return list(range(*v["range"]))
     return v
 
 

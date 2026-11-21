@@ -79,7 +79,7 @@ async function runSamples(q, lang, code) {
   const banned = B.bansFor(q.ban, lang).length > 0;
   if (!q.tests.sample.length && !banned) return { status: 'ok', tests: [], stdout: '' };
   const r = await runTests(q, lang, code, q.tests.sample);
-  const used = r.status === 'ok' || r.status === 'compile_error' ? B.bannedUse(q.ban, lang, r.scan) : [];
+  const used = r.status === 'ok' || r.status === 'compile_error' ? B.bannedUse(q.ban, lang, r.scan, q.types) : [];
   if (used.length) return { status: 'banned', banned: used, message: `Uses ${used.join(', ')}.` };
   return H.studentView(q, lang, q.tests.sample, r);
 }
@@ -92,7 +92,7 @@ async function gradeCode(q, answer) {
   }
   const r = await runTests(q, answer.language, answer.code, tests, { perTest: true });
   // Using a banned method scores 0, whatever the tests say (they still run, for the teacher to see).
-  const used = B.bannedUse(q.ban, answer.language, r.scan);
+  const used = B.bannedUse(q.ban, answer.language, r.scan, q.types);
   const banned = used.length ? { banned: used, note: `Not allowed: ${used.join(', ')}` } : null;
   if (r.status === 'compile_error') {
     return {
@@ -114,7 +114,7 @@ async function gradeCode(q, answer) {
       pass: !!t.pass,
       call: H.callText(q, tests[i], answer.language),
       expected: H.expectedText(q, tests[i], answer.language),
-      got: t.error ? t.error : q.mode === 'method' ? H.show(q.signature.returns, t.got, answer.language) : undefined,
+      got: t.error ? t.error : q.mode === 'method' ? H.show(q.signature.returns, t.got, answer.language, q.types) : undefined,
     })),
   };
 }
@@ -131,7 +131,7 @@ async function checkReferences(quiz) {
         const tests = q.tests[kind];
         if (!tests.length) continue;
         const r = await runTests(q, lang, code, tests);
-        const used = r.status === 'ok' ? B.bannedUse(q.ban, lang, r.scan) : [];
+        const used = r.status === 'ok' ? B.bannedUse(q.ban, lang, r.scan, q.types) : [];
         if (used.length) { problems.push(`${q.id} (${lang}): the reference solution uses ${used.join(', ')}, which "ban" doesn't allow.`); break; }
         if (r.status !== 'ok') {
           problems.push(`${q.id} (${lang}): the reference solution ${r.status === 'compile_error' ? "doesn't compile" : "couldn't run"}: ${String(r.message || '').slice(0, 300)}`);
@@ -145,15 +145,17 @@ async function checkReferences(quiz) {
           if (t.speed) t.maxMs = Object.assign({}, t.maxMs, { [lang]: Math.max(100, Math.ceil((res.ms || 0) * 10)) });
           if (q.mode === 'method') {
             if (t.expected === undefined) {
-              if (checkValue(q.signature.returns, res.got)) t.expected = res.got;
+              const got = H.clean(q.signature.returns, res.got, q.types);
+              if (checkValue(q.signature.returns, got, q.types)) t.expected = got;
               else problems.push(`${label}: the reference solution returned something that isn't a ${q.signature.returns}.`);
             } else if (!res.pass) {
-              problems.push(`${label}: expected ${H.show(q.signature.returns, t.expected, lang)} but the reference solution returned ${H.show(q.signature.returns, res.got, lang)}.`);
+              problems.push(`${label}: expected ${H.show(q.signature.returns, t.expected, lang, q.types)} but the reference solution returned ${H.show(q.signature.returns, res.got, lang, q.types)}.`);
             }
           } else {
             t.steps.forEach((st, k) => {
               if (st.check && st.expect === undefined) {
-                st.expect = res.gotSteps[k];
+                const sm = (st.m != null && q.class.methods[st.m]) || q.class.methods.find((x) => x.name === st.call);
+                st.expect = H.clean(sm.returns, res.gotSteps[k], q.types);
                 delete st.check;
               }
             });

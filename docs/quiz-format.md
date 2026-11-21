@@ -72,7 +72,7 @@ questions together.
 | `name` | none | Up to 80 characters, like `"BankAccount class"`. Students see each question's name, type and points before they start, so it shouldn't give the answer away |
 | `image` | none | `"assets/diagram.png"`, must exist in the zip |
 | `imageAlt` | `""` | Alt text for the image |
-| `shared` | none | The `id` of a shared material this question uses |
+| `shared` | none | The `id` of a shared material this question uses, or a list of up to 3 (`["s1", "s2"]`), shown in that order |
 
 **Prompts** (and shared material) use Markdown:
 - paragraphs (blank line between)
@@ -86,12 +86,14 @@ questions together.
   lines, `$$`). A `$` only starts math when the next character isn't a space, so "costs $5 and
   $10" stays text. Write `\$` for a dollar sign
 - `\` before a character keeps it as is: `\*not italic\*`
+- images from `assets/`: `![a binary tree](assets/tree.png)`, as many as you like, in prompts,
+  choices, shared material and directions. File names can't have spaces here
 
 Links show as their text only, so nothing on the page leads out of the quiz. No HTML.
 
-**Choices** are one line each, with inline Markdown only: code, bold, italic, struck and `$math$`.
-Code that needs several lines goes in the prompt, labeled (Segment I, Segment II, …),
-and the choices refer to the labels.
+**Choices** on one line take inline Markdown: code, bold, italic, struck, `$math$` and images. A
+choice with a line break in it (`\n` in JSON) is Markdown like a prompt, so it can hold a code
+block, a table or a list.
 
 ## single and multi (multiple choice)
 
@@ -102,7 +104,9 @@ and the choices refer to the labels.
 
 - `choices`: 2 to 8 strings.
 - `answer` counts from 0: one index for `single`, a list of indexes for `multi` (`[0, 2]`).
-- `multi` is all or nothing: every correct choice and no wrong ones.
+- `multi` is all or nothing (every correct choice and no wrong ones), unless it has `"partialCredit": true`:
+  then each right pick earns `points / number of correct choices` and each wrong pick takes that back,
+  never below 0. Students see "partial credit" next to the points.
 - `"shuffleChoices": false` keeps this question's choices in order, for "I only", "I and II", … answers.
 
 ## text (short answer)
@@ -112,7 +116,11 @@ and the choices refer to the labels.
 ```
 
 - `answer`: one string or a list of accepted strings.
-- Matching ignores leading and trailing spaces, repeated spaces, and capital letters.
+- Matching ignores leading and trailing spaces, repeated spaces, a trailing period, and capital letters.
+- Numbers match by value: `"3.5"` also accepts `3.50`, `.5` style decimals and `7/2`.
+- For answers with many phrasings, write a pattern between slashes: `"/^(binary|bin\\.?) search$/"`.
+  It's a regex, checked against the trimmed answer, any case unless `caseSensitive`. It can't
+  accept a blank answer. Students never see patterns, even in the practice review.
 - To make capitals count, set `"caseSensitive": true`.
 
 ## output (predict the output)
@@ -195,6 +203,7 @@ Grading uses the hidden tests, which students never see.
 | `ban` | none | Methods students may not use: `["Arrays.sort", "Collections.sort", "stream"]`, or `{ "java": [...], "python": [...] }`. Code that uses one scores 0 on the question. See [Banned methods](#banned-methods) |
 | `compare` | `"ordered"` | `"unordered"`: array/list results can come back in any order |
 | `starter` | `"stubs"` | `"stubs"` (generated signatures), `"empty"` (class mode: bare class), or `{ "java": "...", "python": "..." }` |
+| `types` | none | Classes for parameters and results: `{ "Point": { "x": "int", "y": "int" } }`. See [Classes](#classes) |
 | `support` | none | `{ "java": "...", "python": "..." }` extra code compiled with the student's (helper classes) |
 | `limits` | 2000 ms, 256 MB | `{ "timeMs": 200–5000, "memoryMb": 64–512 }` per test |
 
@@ -215,8 +224,8 @@ Every parameter and return value uses one of these:
 
 A map's values (`V`) can be any of the first six types, `list<int>` or `list<string>`. Map keys
 are strings in JSON, so an `int` key is written `"3"`. Maps match when they have the same keys
-and values, in any order. Doubles match within a relative 1e-6. Custom classes as parameters
-or return values aren't supported: use class mode to have students write a class.
+and values, in any order. Doubles match within a relative 1e-6. For your own classes as
+parameters and results (a `Point`, a linked list's `Node`), see [Classes](#classes) below.
 
 Class methods can also return `void`. A class can have overloads (two methods with one name and
 different parameters) when the question is Java only, since Python has no overloading. A test
@@ -224,6 +233,34 @@ step calls the first one listed whose parameters fit its arguments. Names can't 
 either language.
 
 In the quiz maker, write map values like Python: `{"a": 1}` or `{3: "c"}`.
+
+### Classes
+
+`"types"` declares classes the question uses, field by field. BrowserQuiz writes them in Java and
+Python, and students see them above the examples as given code: theirs to use, not to write.
+
+```json
+"types": {
+  "Point": { "x": "int", "y": "int" },
+  "Node": { "val": "int", "next": "Node" }
+},
+"signature": { "name": "reverse", "params": [{ "name": "head", "type": "Node" }], "returns": "Node" }
+```
+
+- Use the name like any other type: `Point`, `Point[]`, `Point[][]`, `list<Point>`, in method
+  parameters and results, and in class mode's constructor and methods.
+- Fields can be any type, other declared classes and the class itself included.
+- **Java** gets public fields (`p.x`), a constructor taking every field in order, one taking
+  none, getters (`getX()`, `isActive()` for a boolean) and `toString`. **Python** gets the same
+  fields, each with a default, so `Node(3)` works.
+- In tests, an object is a JSON object of its fields: `{ "x": 1, "y": 2 }`. Fields holding objects,
+  arrays, lists or strings can be left out, and are then `null`:
+  `{ "val": 1, "next": { "val": 2 } }` is the list 1, 2.
+- Results compare field by field. A subclass with extra fields still matches.
+- In the quiz maker, write classes one per line, like `Node(val: int, next: Node)`, and objects in
+  tests like `Point(1, 2)` or `Node(1, Node(2))`.
+- Names can't clash with Java's or Python's own classes (`String`, `List`, ...), the question's
+  class, or each other. At most 10 classes of 20 fields.
 
 ### What students write
 

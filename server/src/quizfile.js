@@ -61,10 +61,10 @@ function loadQuizFile(buf) {
 // ---------- values ----------
 // Types and their values live in public/teacher/types.js, shared with the quiz maker.
 const { checkValue, elementType } = T;
-function checkType(where, t, allowVoid) {
+function checkType(where, t, allowVoid, D) {
   const c = T.canon(t);
   if (allowVoid && c === 'void') return c;
-  if (!T.isValueType(c)) fail(`${where}: "${t}" isn't a type. Use ${T.HELP}${allowVoid ? ', or void' : ''}.`);
+  if (!T.isValueType(c, D)) fail(`${where}: "${t}" isn't a type. Use ${T.HELP}${allowVoid ? ', or void' : ''}.`);
   return c;
 }
 
@@ -72,14 +72,14 @@ function checkIdent(where, name) {
   if (typeof name !== 'string' || !IDENT.test(name) || RESERVED.has(name)) fail(`${where}: "${name}" isn't a usable name.`);
   return name;
 }
-function checkParams(where, params) {
+function checkParams(where, params, D) {
   if (!Array.isArray(params)) fail(`${where}: params must be a list.`);
   const seen = new Set();
   return params.map((p, i) => {
     const name = checkIdent(`${where}.params[${i}]`, p && p.name);
     if (seen.has(name)) fail(`${where}: duplicate parameter "${name}".`);
     seen.add(name);
-    return { name, type: checkType(`${where}.params[${i}]`, p.type) };
+    return { name, type: checkType(`${where}.params[${i}]`, p.type, false, D) };
   });
 }
 // A big argument made in the sandbox instead of written out: { "range": [start, stop, step?] } is
@@ -102,11 +102,11 @@ function checkRange(where, type, v) {
   if (type !== 'long[]' && n && [start, last].some((x) => x < -2147483648 || x > 2147483647)) fail(`${where}: range goes past the int limits.`);
   return { range: [start, stop, step] };
 }
-function checkArgs(where, params, args) {
+function checkArgs(where, params, args, D) {
   if (!Array.isArray(args) || args.length !== params.length) fail(`${where}: needs ${params.length} argument(s).`);
   return args.map((a, i) => {
-    if (isRange(a) && !T.mapTypes(params[i].type)) return checkRange(`${where}: argument ${i + 1}`, params[i].type, a);
-    if (!checkValue(params[i].type, a)) fail(`${where}: argument ${i + 1} isn't a valid ${params[i].type}.`);
+    if (isRange(a) && RANGE_TYPES.includes(params[i].type)) return checkRange(`${where}: argument ${i + 1}`, params[i].type, a);
+    if (!checkValue(params[i].type, a, D)) fail(`${where}: argument ${i + 1} isn't a valid ${params[i].type}.`);
     return a;
   });
 }
@@ -175,19 +175,29 @@ function normalizeQuiz(raw, assetNames) {
     if (!PART_TYPES.includes(type)) fail(`${where}: type must be single, multi, text, code, output, trace, fill or essay.`);
     if (typeof q.prompt !== 'string' || !q.prompt.trim()) fail(`${where}: prompt is required.`);
     const out = { id, type, prompt: q.prompt.slice(0, 10000), points: Number(q.points) > 0 ? Math.min(1000, Number(q.points)) : 1 };
-    // An optional short name. Students see it, with the type and points, before they start.
+    // An optional short name. Students see it once the quiz has started.
     const name = typeof q.name === 'string' ? q.name.replace(/\s+/g, ' ').trim().slice(0, 80) : '';
     if (name) out.name = name;
+    // The shared material it uses: one id, or a list of up to 3 (shown in that order).
     if (q.shared != null && q.shared !== '') {
-      const sid = String(q.shared);
-      if (!(quiz.shared || []).some((m) => m.id === sid)) fail(`${where}: shared "${sid}" isn't one of the quiz's shared materials.`);
-      out.shared = sid;
+      const sids = [...new Set((Array.isArray(q.shared) ? q.shared : [q.shared]).map(String).filter(Boolean))];
+      if (sids.length > 3) fail(`${where}: a question can use up to 3 shared materials.`);
+      for (const sid of sids) if (!(quiz.shared || []).some((m) => m.id === sid)) fail(`${where}: shared "${sid}" isn't one of the quiz's shared materials.`);
+      if (sids.length) out.shared = sids.length === 1 ? sids[0] : sids;
     }
     imageOf(where, q, out);
     if (type === 'text') {
       const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
       if (!ans.length || ans.some((a) => typeof a !== 'string' || !a.trim())) fail(`${where}: answer must be a string or a list of strings.`);
-      out.answer = ans.map(String);
+      out.answer = ans.map((a) => String(a).slice(0, 500));
+      // /like this/ is a pattern: it has to be a working regex that doesn't accept a blank answer.
+      for (const a of out.answer) {
+        const t = a.trim();
+        if (!/^\/.+\/$/s.test(t)) continue;
+        let re;
+        try { re = new RegExp(t.slice(1, -1), 'i'); } catch (e) { fail(`${where}: the pattern ${t} isn't a valid regex: ${e.message}`); }
+        if (re.test('')) fail(`${where}: the pattern ${t} matches an empty answer. Make it need some text.`);
+      }
       out.caseSensitive = !!q.caseSensitive;
     } else if (type === 'single' || type === 'multi') {
       if (!Array.isArray(q.choices) || q.choices.length < 2 || q.choices.length > 8) fail(`${where}: needs 2 to 8 choices.`);
@@ -198,6 +208,7 @@ function normalizeQuiz(raw, assetNames) {
       }
       out.answer = type === 'single' ? q.answer : [...new Set(q.answer)].sort((a, b) => a - b);
       if (q.shuffleChoices === false) out.shuffleChoices = false; // e.g. "I only", "I and II", ... in order
+      if (type === 'multi' && q.partialCredit === true) out.partialCredit = true; // right picks earn, wrong ones take back
     } else if (type === 'code') {
       Object.assign(out, normalizeCode(where, q));
     } else {
@@ -222,7 +233,24 @@ function normalizeQuiz(raw, assetNames) {
     }).sort((a, b) => at.get(a.before) - at.get(b.before));
     if (!quiz.sections.length) delete quiz.sections;
   }
+  // Images written into the text as Markdown, ![alt](assets/name.png), have to be in assets/ too.
+  for (const img of markdownImages(quiz)) if (!assetNames.has(img)) fail(`The image "${img}" in the text isn't in the assets folder.`);
   return quiz;
+}
+
+// Every assets/ image a quiz's text shows as Markdown: prompts, choices, explanations, shared material
+// and directions. Works on a raw quiz.json too.
+const MD_IMAGE = /!\[[^\]\n]*\]\((?:\.\/)?(assets\/[A-Za-z0-9_.-]{1,100}\.(?:png|jpe?g|gif|webp))\)/gi;
+function markdownImages(quiz) {
+  const texts = [];
+  const qs = quiz && Array.isArray(quiz.questions) ? quiz.questions : [];
+  for (const q of qs) if (q && typeof q === 'object') texts.push(q.prompt, q.explanation, ...(Array.isArray(q.choices) ? q.choices : []));
+  for (const m of quiz && Array.isArray(quiz.shared) ? quiz.shared : []) if (m) texts.push(m.text);
+  if (quiz && quiz.directions && typeof quiz.directions === 'object') texts.push(...Object.values(quiz.directions));
+  for (const sec of quiz && Array.isArray(quiz.sections) ? quiz.sections : []) if (sec) texts.push(sec.directions);
+  const out = new Set();
+  for (const t of texts) if (typeof t === 'string') for (const m of t.matchAll(MD_IMAGE)) out.add(m[1]);
+  return out;
 }
 
 // output (predict what it prints), trace (trace table), fill (fill in the blanks), essay (teacher-graded).
@@ -300,14 +328,44 @@ function normalizeNewType(where, type, q, quizLang, points) {
   return out;
 }
 
+// Classes a code question declares for its parameters and results: { "Point": { "x": "int", "y": "int" } }.
+// BrowserQuiz writes them in both languages (types.js classSource) and students get them as given code.
+const TAKEN_CLASSES = new Set(('Solution BQMain BQJ Support Given String Object Integer Long Double Float Short Byte Boolean Character '
+  + 'Number Math StrictMath System Thread Runtime Class Record Enum Iterable Comparable Exception RuntimeException Error '
+  + 'List ArrayList LinkedList Map HashMap TreeMap LinkedHashMap Set HashSet TreeSet LinkedHashSet Queue Deque ArrayDeque '
+  + 'PriorityQueue Stack Vector Arrays Collections Collection Iterator Comparator Scanner Random Optional Objects '
+  + 'Function BiFunction Predicate Consumer Supplier Stream IntStream Collectors').split(' '));
+function normalizeTypes(where, raw, taken) {
+  if (raw == null) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) fail(`${where}.types should be an object, like { "Point": { "x": "int", "y": "int" } }.`);
+  const names = Object.keys(raw);
+  if (names.length > 10) fail(`${where}: at most 10 classes in types.`);
+  const D = {};
+  for (const n of names) {
+    if (!T.CLASS.test(n) || RESERVED.has(n) || TAKEN_CLASSES.has(n) || n === taken) fail(`${where}.types: "${n}" can't be a class name here. Use a name that starts with a capital letter and isn't a Java or Python class already.`);
+    const f = raw[n];
+    if (!f || typeof f !== 'object' || Array.isArray(f)) fail(`${where}.types.${n} should list its fields, like { "x": "int", "y": "int" }.`);
+    if (Object.keys(f).length > 20) fail(`${where}.types.${n}: at most 20 fields.`);
+    D[n] = Object.keys(f).map((k) => {
+      const name = checkIdent(`${where}.types.${n}`, k);
+      if (name === 'self' || name === n) fail(`${where}.types.${n}: "${name}" can't be a field name.`);
+      return { name, type: f[k] };
+    });
+  }
+  for (const n of names) for (const fl of D[n]) fl.type = checkType(`${where}.types.${n}.${fl.name}`, fl.type, false, D);
+  return names.length ? D : null;
+}
+
 function normalizeCode(where, q) {
   const mode = q.mode === 'class' ? 'class' : 'method';
   const languages = Array.isArray(q.languages) && q.languages.length ? [...new Set(q.languages)] : ['java'];
   if (languages.some((l) => !LANGS.includes(l))) fail(`${where}: languages can only be java and/or python.`);
   const out = { mode, languages };
+  const D = normalizeTypes(where, q.types, mode === 'class' && q.class ? q.class.name : null);
+  if (D) out.types = D;
   if (mode === 'method') {
     const s = q.signature || {};
-    out.signature = { name: checkIdent(`${where}.signature.name`, s.name), params: checkParams(`${where}.signature`, s.params || []), returns: checkType(`${where}.signature.returns`, s.returns) };
+    out.signature = { name: checkIdent(`${where}.signature.name`, s.name), params: checkParams(`${where}.signature`, s.params || [], D), returns: checkType(`${where}.signature.returns`, s.returns, false, D) };
   } else {
     const c = q.class || {};
     const name = checkIdent(`${where}.class.name`, c.name);
@@ -317,17 +375,17 @@ function normalizeCode(where, q) {
     const seen = new Set();
     out.class = {
       name,
-      constructor: checkParams(`${where}.class.constructor`, c.constructor || []),
+      constructor: checkParams(`${where}.class.constructor`, c.constructor || [], D),
       methods: methods.map((m, i) => {
         const mn = checkIdent(`${where}.class.methods[${i}].name`, m && m.name);
-        const params = checkParams(`${where}.class.methods[${i}]`, m.params || []);
+        const params = checkParams(`${where}.class.methods[${i}]`, m.params || [], D);
         const key = `${mn}(${params.map((p) => p.type).join(',')})`;
         if (seen.has(key)) fail(`${where}: method ${key} is listed twice.`);
         if ([...seen].some((k) => k.startsWith(mn + '(')) && languages.includes('python')) {
           fail(`${where}: there are two methods named ${mn}. Overloads only work when the question is Java only (Python has no overloading).`);
         }
         seen.add(key);
-        return { name: mn, params, returns: checkType(`${where}.class.methods[${i}].returns`, m.returns, true) };
+        return { name: mn, params, returns: checkType(`${where}.class.methods[${i}].returns`, m.returns, true, D) };
       }),
     };
   }
@@ -346,14 +404,14 @@ function normalizeCode(where, q) {
     if (!raw || typeof raw !== 'object') fail(`${w} must be an object.`);
     const weight = Number(raw.weight) > 0 ? Math.min(100, Number(raw.weight)) : 1;
     if (mode === 'method') {
-      const args = checkArgs(w, out.signature.params, raw.args);
+      const args = checkArgs(w, out.signature.params, raw.args, D);
       // Speed test: the method is called `calls` times and must finish within 10x the reference's time.
       const speed = raw.speed === true ? { speed: true, calls: Math.max(1, Math.min(100000, Math.floor(Number(raw.calls) || 1))) } : {};
       if (raw.expected === undefined) {
         if (!hasRef) fail(`${w}: needs "expected", or add a reference solution to fill it in.`);
         return { args, weight, ...speed };
       }
-      if (!checkValue(out.signature.returns, raw.expected)) fail(`${w}: expected isn't a valid ${out.signature.returns}.`);
+      if (!checkValue(out.signature.returns, raw.expected, D)) fail(`${w}: expected isn't a valid ${out.signature.returns}.`);
       return { args, expected: raw.expected, weight, ...speed };
     }
     if (raw.speed) fail(`${w}: speed tests only work on "write a method" questions.`);
@@ -364,7 +422,7 @@ function normalizeCode(where, q) {
       const sw = `${w}.steps[${k}]`;
       if (s && Array.isArray(s.new)) {
         const as = s.as == null ? 'a' : checkIdent(`${sw}.as`, s.as);
-        checkArgs(sw, out.class.constructor, s.new);
+        checkArgs(sw, out.class.constructor, s.new, D);
         objects.add(as);
         lastObj = as;
         return { new: s.new, as };
@@ -373,17 +431,17 @@ function normalizeCode(where, q) {
       const named = out.class.methods.map((x, k) => [x, k]).filter(([x]) => x.name === (s && s.call));
       if (!named.length) fail(`${sw}: call must name one of the class's methods.`);
       const fits = (x) => Array.isArray(s.args || []) && (s.args || []).length === x.params.length
-        && (s.args || []).every((a, j) => (isRange(a) && RANGE_TYPES.includes(x.params[j].type)) || checkValue(x.params[j].type, a));
+        && (s.args || []).every((a, j) => (isRange(a) && RANGE_TYPES.includes(x.params[j].type)) || checkValue(x.params[j].type, a, D));
       const [m, mi] = named.find(([x]) => fits(x)) || named[0];
       const on = s.on == null ? lastObj : String(s.on);
       if (!on || !objects.has(on)) fail(`${sw}: there's no object "${on}" to call ${m.name} on yet.`);
       if (named.length > 1 && !fits(m)) fail(`${sw}: no ${m.name} method takes these arguments.`);
-      const args = checkArgs(sw, m.params, s.args || []);
+      const args = checkArgs(sw, m.params, s.args || [], D);
       const step = { call: m.name, args, on };
       if (named.length > 1) step.m = mi;
       if (s.expect !== undefined) {
         if (m.returns === 'void') fail(`${sw}: ${m.name} returns nothing, so it can't have expect.`);
-        if (!checkValue(m.returns, s.expect)) fail(`${sw}: expect isn't a valid ${m.returns}.`);
+        if (!checkValue(m.returns, s.expect, D)) fail(`${sw}: expect isn't a valid ${m.returns}.`);
         step.expect = s.expect;
       } else if (s.check === true && m.returns !== 'void') {
         if (!hasRef) fail(`${sw}: "check": true needs a reference solution to fill in the value.`);
@@ -448,4 +506,4 @@ function normalizeCode(where, q) {
   return out;
 }
 
-module.exports = { loadQuizFile, normalizeQuiz, checkValue, elementType, isRange, rangeLength, QuizError, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };
+module.exports = { loadQuizFile, normalizeQuiz, markdownImages, checkValue, elementType, isRange, rangeLength, QuizError, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };

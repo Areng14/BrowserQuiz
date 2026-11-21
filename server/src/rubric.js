@@ -67,6 +67,19 @@ function test(pattern, text) {
   }
 }
 
+// A teacher's pattern against one short answer, with flags ('i' for any case). null if it ran too long.
+const flagged = new vm.Script('new RegExp(p, f).test(s)');
+function matches(pattern, text, flags) {
+  ctx.p = pattern; ctx.f = flags || ''; ctx.s = text;
+  try {
+    return flagged.runInContext(ctx, { timeout: TIMEOUT_MS }) === true;
+  } catch (e) {
+    return null;
+  } finally {
+    ctx.p = null; ctx.f = null; ctx.s = null;
+  }
+}
+
 // The patterns for one language, or null when the teacher grades this item.
 function ruleFor(item, lang) {
   const pick = (x) => (typeof x === 'string' ? x : x && typeof x === 'object' && typeof x[lang] === 'string' ? x[lang] : '') || null;
@@ -123,4 +136,4 @@ function normalizePattern(v, languages, key) {
   return Object.keys(out).length ? out : undefined;
 }
 
-module.exports = { stripCode, ruleFor, check, autoRubric, normalizePattern };
+module.exports = { stripCode, ruleFor, check, autoRubric, normalizePattern, matches };

@@ -5,7 +5,7 @@ const { q, tx } = require('./db');
 const store = require('./store');
 const fs = require('node:fs');
 const path = require('node:path');
-const { loadQuizFile, normalizeQuiz, QuizError, ASSET_TYPES } = require('./quizfile');
+const { loadQuizFile, normalizeQuiz, markdownImages, QuizError, ASSET_TYPES } = require('./quizfile');
 const { writeZip } = require('./zip');
 const { checkReferences, checkOutputs, runnerConfigured, runnerHealthy, runSamples, gradeCode } = require('./coderun');
 const { totals, questionScore, gradeAttempt, answerReport, cleanAnswers, gradeAuto, studentReport, reportQuiz, isRun } = require('./grade');
@@ -177,7 +177,7 @@ function quizSource(quiz) {
     if (qq.shared) o.shared = qq.shared;
     if (qq.image) { o.image = qq.image; if (qq.imageAlt) o.imageAlt = qq.imageAlt; }
     if (qq.type === 'text') { o.answer = qq.answer; if (qq.caseSensitive) o.caseSensitive = true; }
-    if (qq.type === 'single' || qq.type === 'multi') { o.choices = qq.choices; o.answer = qq.answer; if (qq.shuffleChoices === false) o.shuffleChoices = false; }
+    if (qq.type === 'single' || qq.type === 'multi') { o.choices = qq.choices; o.answer = qq.answer; if (qq.shuffleChoices === false) o.shuffleChoices = false; if (qq.partialCredit) o.partialCredit = true; }
     if (qq.type === 'output') Object.assign(o, { code: qq.code, language: qq.language, answer: qq.answer });
     if (qq.type === 'trace') {
       if (qq.code) o.code = qq.code;
@@ -201,6 +201,7 @@ function quizSource(quiz) {
     if (qq.type === 'code') {
       o.mode = qq.mode;
       o.languages = qq.languages;
+      if (qq.types) o.types = Object.fromEntries(Object.entries(qq.types).map(([n, fs]) => [n, Object.fromEntries(fs.map((f) => [f.name, f.type]))]));
       if (qq.mode === 'method') o.signature = qq.signature; else o.class = qq.class;
       o.tests = qq.tests;
       if (qq.ban) o.ban = qq.ban;
@@ -235,8 +236,8 @@ function quizPrompt() {
 function parseQuizJson(buf) {
   try { return JSON.parse(buf.toString('utf8').replace(/^\uFEFF/, '')); } catch (e) { throw new QuizError('quiz.json is not valid JSON: ' + e.message); }
 }
-const imagePaths = (raw) => new Set([...(Array.isArray(raw && raw.questions) ? raw.questions : []), ...(Array.isArray(raw && raw.shared) ? raw.shared : [])]
-  .map((qq) => (qq && qq.image != null ? String(qq.image).replace(/^\.?\//, '') : null)).filter(Boolean));
+const imagePaths = (raw) => new Set([...[...(Array.isArray(raw && raw.questions) ? raw.questions : []), ...(Array.isArray(raw && raw.shared) ? raw.shared : [])]
+  .map((qq) => (qq && qq.image != null ? String(qq.image).replace(/^\.?\//, '') : null)).filter(Boolean), ...markdownImages(raw)]);
 
 // ---------- rosters ----------
 // One student per line, pasted from anywhere: "Name, ID", a spreadsheet (tabs), or a CSV with a header

@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { q } = require('./db');
 const store = require('./store');
 const H = require('./harness');
+const T = require('../../public/teacher/types.js');
 const { runSamples } = require('./coderun');
 const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } = require('./grade');
 const { fillTemplate } = require('./quizfile');
@@ -108,7 +109,7 @@ function current(req, { mustBeOpen = true } = {}) {
 
 function publicQuiz(quiz, layout) {
   const byId = new Map(quiz.questions.map((qq) => [qq.id, qq]));
-  const used = new Set(quiz.questions.map((qq) => qq.shared).filter(Boolean));
+  const used = new Set(quiz.questions.flatMap((qq) => [].concat(qq.shared || [])));
   return {
     title: quiz.title,
     timeLimitMin: quiz.timeLimitMin,
@@ -120,6 +121,7 @@ function publicQuiz(quiz, layout) {
       const qq = byId.get(id);
       const pub = { id, type: qq.type, prompt: qq.prompt, points: qq.points };
       if (qq.name) pub.name = qq.name;
+      if (qq.partialCredit) pub.partialCredit = true;
       if (qq.shared) pub.shared = qq.shared;
       if (qq.image) { pub.image = qq.image; pub.imageAlt = qq.imageAlt || ''; }
       if (qq.choices) pub.choices = layout.perms[id].map((i) => qq.choices[i]); // positions only
@@ -142,6 +144,8 @@ function publicQuiz(quiz, layout) {
         pub.mode = qq.mode;
         pub.languages = qq.languages;
         if (qq.ban) pub.ban = qq.ban; // a rule, so students see it
+        // The question's own classes, written out in each language: theirs to use, not to write.
+        if (qq.types) pub.given = Object.fromEntries(qq.languages.map((l) => [l, T.classSource(qq.types, l, true)]));
         pub.starter = Object.fromEntries(qq.languages.map((l) => [l, H.starterCode(qq, l)]));
         pub.samples = qq.tests.sample.map((t) => ({
           call: Object.fromEntries(qq.languages.map((l) => [l, H.callText(qq, t, l)])),

@@ -300,6 +300,11 @@ input[type="file"].input { padding: 6px 10px; }
 .qe-pattern .input { flex: 1; }
 .qe-pattern .input { min-width: 0; }
 .qe-choice input[type="radio"], .qe-choice input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
+/* A choice can grow to several lines (Shift+Enter): the marks stay level with its first line. */
+.qe-choice-row { align-items: flex-start; }
+.qe-choice-row > input[type="radio"], .qe-choice-row > input[type="checkbox"] { margin-top: 11px; }
+.qe-choice-row > .qe-grip { margin-top: 8px; }
+.qe-choice-text { flex: 1; min-width: 0; min-height: 40px; }
 .qe-grip { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; min-height: 24px; padding: 0; color: var(--ink-2); background: none; border: 0; border-radius: 4px; cursor: grab; user-select: none; }
 .qe-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* Square icon buttons: remove buttons match the 40px fields beside them, move buttons the small buttons beside them */

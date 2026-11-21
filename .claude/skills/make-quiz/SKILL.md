@@ -58,16 +58,22 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
 
   Keep choices about the same length. No "all/none of the above". `answer` counts from 0:
   recount it against the `choices` list.
-- **Choices are one line:** only `inline code`, **bold** and *italic*. Multi-line code goes in
-  the prompt as labeled segments (Segment I, II, …), and the choices name the segments. For
+- **Choices:** one line takes `inline code`, **bold**, *italic* and images. A choice with a
+  `\n` in it is full Markdown, so four short code blocks as the choices work. Long code still
+  reads better in the prompt as labeled segments (Segment I, II, …) that the choices name. For
   "I only / I and II" style answers, set `"shuffleChoices": false` on that question.
-- **Select all:** use only when 2+ choices are correct. Scoring is all or nothing.
+- **More than one image:** `![alt](assets/name.png)` anywhere in the text (no spaces in the file
+  name). `image` is still the one big picture under the prompt.
+- **Select all:** use only when 2+ choices are correct. Scoring is all or nothing unless the question
+  has `"partialCredit": true` (right picks earn, wrong picks take back).
 - **Short answer:** use only when there are few ways to say the answer. List every accepted
   form in `answer` (`"O(log n)"`, `"O(logn)"`).
 - **Code:**
   - Use only the types in the spec's table: scalars (including `char`), arrays and 2D arrays,
-    `list<...>` and `map<string|int, ...>`. Custom classes as parameters aren't supported (use
-    class mode instead). Overloads only work in Java-only class questions.
+    `list<...>` and `map<string|int, ...>`, plus classes the question declares in `types`
+    (`"types": { "Node": { "val": "int", "next": "Node" } }`, objects in tests as
+    `{ "val": 1, "next": { "val": 2 } }`). Don't write those classes in the starter or reference:
+    they're given. Overloads only work in Java-only class questions.
   - Write 2 simple `sample` tests that students can run, and 5–10 `hidden` tests. Only hidden
     tests are graded, so repeat the sample cases in `hidden` too. Cover:
     - empty input

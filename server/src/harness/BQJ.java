@@ -64,13 +64,29 @@ final class BQJ {
         return b.append('"').toString();
     }
 
+    // An object of one of the question's classes (Given.java): its public fields, as a JSON object.
+    private static String fields(Object o, int d) {
+        StringBuilder b = new StringBuilder("{");
+        for (java.lang.reflect.Field f : o.getClass().getFields()) {
+            if (java.lang.reflect.Modifier.isStatic(f.getModifiers())) continue;
+            Object v;
+            try { v = f.get(o); } catch (IllegalAccessException e) { continue; }
+            if (b.length() > 1) b.append(',');
+            b.append(str(f.getName())).append(':').append(json(v, d + 1));
+        }
+        return b.append('}').toString();
+    }
+
     static String num(double d) {
         if (Double.isNaN(d) || Double.isInfinite(d)) return str(Double.toString(d));
         return Double.toString(d);
     }
 
-    static String json(Object o) {
+    static String json(Object o) { return json(o, 0); }
+
+    static String json(Object o, int d) {
         if (o == null) return "null";
+        if (d > 400) return str("...");
         if (o instanceof String) return str((String) o);
         if (o instanceof Character) return str(String.valueOf(o));
         if (o instanceof Boolean || o instanceof Integer || o instanceof Long || o instanceof Short || o instanceof Byte) return String.valueOf(o);
@@ -80,7 +96,7 @@ final class BQJ {
             int i = 0;
             for (java.util.Map.Entry<?, ?> e : ((java.util.Map<?, ?>) o).entrySet()) {
                 if (i++ > 0) m.append(',');
-                m.append(str(String.valueOf(e.getKey()))).append(':').append(json(e.getValue()));
+                m.append(str(String.valueOf(e.getKey()))).append(':').append(json(e.getValue(), d + 1));
             }
             return m.append('}').toString();
         }
@@ -90,8 +106,9 @@ final class BQJ {
         else if (o instanceof double[]) { double[] x = (double[]) o; for (int i = 0; i < x.length; i++) { if (i > 0) b.append(','); b.append(num(x[i])); } }
         else if (o instanceof boolean[]) { boolean[] x = (boolean[]) o; for (int i = 0; i < x.length; i++) { if (i > 0) b.append(','); b.append(x[i]); } }
         else if (o instanceof char[]) { char[] x = (char[]) o; for (int i = 0; i < x.length; i++) { if (i > 0) b.append(','); b.append(str(String.valueOf(x[i]))); } }
-        else if (o instanceof Object[]) { Object[] x = (Object[]) o; for (int i = 0; i < x.length; i++) { if (i > 0) b.append(','); b.append(json(x[i])); } }
-        else if (o instanceof Iterable) { int i = 0; for (Object x : (Iterable<?>) o) { if (i++ > 0) b.append(','); b.append(json(x)); } }
+        else if (o instanceof Object[]) { Object[] x = (Object[]) o; for (int i = 0; i < x.length; i++) { if (i > 0) b.append(','); b.append(json(x[i], d + 1)); } }
+        else if (o instanceof Iterable) { int i = 0; for (Object x : (Iterable<?>) o) { if (i++ > 0) b.append(','); b.append(json(x, d + 1)); } }
+        else if (!o.getClass().getModule().isNamed()) return fields(o, d); // one of the question's classes
         else return str(String.valueOf(o));
         return b.append(']').toString();
     }
@@ -99,7 +116,7 @@ final class BQJ {
     // Facts for the ban check (server/src/bans.js), read from the compiled classes before any student code
     // runs: the classes compiled from the student's file, what they declare, and every method, field and class
     // they refer to. javac has already dealt with comments, strings, unicode escapes, imports and generics.
-    static void scan(String m, String source) {
+    static void scan(String m, String source, String given) {
         java.util.TreeSet<String> refs = new java.util.TreeSet<>();
         java.util.TreeSet<String> types = new java.util.TreeSet<>();
         StringBuilder cls = new StringBuilder();
@@ -107,7 +124,7 @@ final class BQJ {
         java.io.File[] files = new java.io.File(".").listFiles();
         if (files != null) for (java.io.File f : files) {
             if (!f.getName().endsWith(".class")) continue;
-            try { readClass(f, source, refs, types, cls); } catch (Exception e) { bad = true; }
+            try { readClass(f, source, given, refs, types, cls); } catch (Exception e) { bad = true; }
         }
         out(m, "{\"scan\":{\"classes\":[" + cls + "],\"refs\":" + list(refs) + ",\"types\":" + list(types) + (bad ? ",\"fail\":true" : "") + "}}");
     }
@@ -123,7 +140,7 @@ final class BQJ {
         while (mt.find()) types.add(mt.group(1));
     }
 
-    private static void readClass(java.io.File f, String source, java.util.Set<String> refs, java.util.Set<String> types, StringBuilder cls) throws java.io.IOException {
+    private static void readClass(java.io.File f, String source, String given, java.util.Set<String> refs, java.util.Set<String> types, StringBuilder cls) throws java.io.IOException {
         try (java.io.DataInputStream in = new java.io.DataInputStream(new java.io.BufferedInputStream(new java.io.FileInputStream(f)))) {
             if (in.readInt() != 0xCAFEBABE) throw new java.io.IOException("not a class file");
             in.readUnsignedShort();
@@ -166,16 +183,19 @@ final class BQJ {
                 if ("SourceFile".equals(name) && len == 2) src = utf[in.readUnsignedShort()];
                 else in.skipNBytes(len);
             }
-            if (!source.equals(src)) return;
-            for (int k = 1; k < n; k++) {
+            boolean mine = source.equals(src);
+            if (!mine && !(given != null && given.equals(src))) return;
+            if (mine) for (int k = 1; k < n; k++) {
                 if (tag[k] == 7) { String c = utf[a[k]]; if (c.startsWith("[")) addDesc(types, c); else types.add(c); }
                 else if (tag[k] == 9 || tag[k] == 10 || tag[k] == 11) { refs.add(utf[a[a[k]]] + "." + utf[a[b[k]]]); addDesc(types, utf[b[b[k]]]); }
                 else if (tag[k] == 16) addDesc(types, utf[a[k]]);
                 else if (tag[k] == 17 || tag[k] == 18) addDesc(types, utf[b[b[k]]]);
             }
-            for (String d : descs) addDesc(types, d);
-            if (superName != null) types.add(superName);
-            types.addAll(ifaces);
+            if (mine) {
+                for (String d : descs) addDesc(types, d);
+                if (superName != null) types.add(superName);
+                types.addAll(ifaces);
+            }
             if (cls.length() > 0) cls.append(',');
             cls.append("{\"n\":").append(str(self)).append(",\"s\":").append(str(superName)).append(",\"i\":").append(list(ifaces))
                .append(",\"m\":").append(list(new java.util.TreeSet<>(methods))).append(",\"f\":").append(list(fields)).append('}');

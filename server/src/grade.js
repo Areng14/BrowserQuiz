@@ -11,6 +11,28 @@ const strArray = (v, n, max) => (Array.isArray(v) ? v.slice(0, n).map((x) => (ty
 const isGiven = (qq, r, c) => qq.given.some((g) => g[0] === r && g[1] === c);
 
 const norm = (s, cs) => { const t = String(s).trim().replace(/\s+/g, ' '); return cs ? t : t.toLowerCase(); };
+const R = require('./rubric');
+
+// A short answer against the accepted ones. Spacing, capitals (unless caseSensitive) and a trailing period
+// don't matter; numbers match by value (3.5, 3.50, 7/2); an accepted answer written /like this/ is a
+// pattern, for answers with many phrasings. A blank answer never matches.
+const NUM = /^[+-]?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i;
+const FRAC = /^([+-]?\d+)\s*\/\s*(\d+)$/;
+const asNumber = (s) => { if (NUM.test(s)) return Number(s); const f = FRAC.exec(s); return f && Number(f[2]) ? Number(f[1]) / Number(f[2]) : null; };
+const isPattern = (x) => /^\/.+\/$/s.test(String(x).trim());
+function textMatches(qq, a) {
+  if (typeof a !== 'string') return false;
+  const got = norm(a, qq.caseSensitive).replace(/[.!;]+$/, '');
+  if (!got) return false;
+  const gotNum = asNumber(got);
+  return qq.answer.some((x) => {
+    if (isPattern(x)) return R.matches(String(x).trim().slice(1, -1), got, qq.caseSensitive ? '' : 'i') === true;
+    const want = norm(x, qq.caseSensitive).replace(/[.!;]+$/, '');
+    if (want === got) return true;
+    const wantNum = asNumber(want);
+    return wantNum != null && gotNum != null && Math.abs(wantNum - gotNum) <= 1e-9 * Math.max(1, Math.abs(wantNum));
+  });
+}
 
 // Answers arrive in the student's positional order; map them back to the quiz's original indexes.
 function cleanAnswers(quiz, layout, answers) {
@@ -51,10 +73,16 @@ function gradeAuto(quiz, layout, answers) {
     else if (qq.type === 'multi') {
       const got = new Set((Array.isArray(a) ? a : []).map(orig));
       ok = got.size === qq.answer.length && qq.answer.every((x) => got.has(x));
-    } else if (qq.type === 'text') ok = typeof a === 'string' && qq.answer.some((x) => norm(x, qq.caseSensitive) === norm(a, qq.caseSensitive));
+    } else if (qq.type === 'text') ok = textMatches(qq, a);
     else if (qq.type === 'output') ok = typeof a === 'string' && normOutput(a) === qq.answer;
     // Partial credit: each trace cell and each blank counts the same.
     let share = ok ? 1 : 0;
+    // Select-all with partial credit: each right pick earns a share, each wrong one takes one back.
+    if (qq.type === 'multi' && qq.partialCredit) {
+      const got = new Set((Array.isArray(a) ? a : []).map(orig));
+      const right = qq.answer.filter((x) => got.has(x)).length;
+      share = Math.max(0, (right - (got.size - right)) / qq.answer.length);
+    }
     if (qq.type === 'trace') {
       let right = 0;
       let cells = 0;
@@ -236,7 +264,7 @@ function studentReport(quiz, a, name, opts = {}) {
         row.correct = [].concat(qq.answer);
       } else if (qq.type === 'text') {
         row.answer = ans == null || String(ans).trim() === '' ? null : String(ans);
-        row.accepted = qq.answer;
+        row.accepted = opts.forStudent ? qq.answer.filter((x) => !isPattern(x)) : qq.answer; // patterns are the teacher's
       } else if (qq.type === 'output') {
         Object.assign(row, { code: qq.code, codeLang: qq.language, answer: typeof ans === 'string' && ans.trim() ? ans : null, correct: qq.answer });
       } else if (qq.type === 'trace') {
@@ -288,4 +316,4 @@ const reportQuiz = (quiz, quizId) => ({
   shared: Object.fromEntries((quiz.shared || []).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
 });
 
-module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, codeAnswered, answerReport, studentReport, reportQuiz, grading: running, isRun };
+module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, codeAnswered, answerReport, studentReport, reportQuiz, grading: running, isRun, textMatches };

@@ -181,7 +181,8 @@ function shuffle(arr) {
 function makeLayout(quiz) {
   const order = [];
   let run = [];
-  const sharedOf = new Map(quiz.questions.map((qq) => [qq.id, qq.shared || null]));
+  // Questions that use the same shared material (all of it, in order) stay together when shuffled.
+  const sharedOf = new Map(quiz.questions.map((qq) => [qq.id, [].concat(qq.shared || []).join('+') || null]));
   const flush = () => {
     const blocks = [];
     for (const id of run) {

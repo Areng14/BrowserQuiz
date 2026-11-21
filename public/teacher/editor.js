@@ -17,10 +17,15 @@
 
   // ---------- text formats ----------
   const fmt = (v) => JSON.stringify(v);
-  // Python spellings outside strings become JSON ones, so True/False/None work too.
+  // The classes the code question being read declares ({ Point: [{ name, type }] }): set by readCode and
+  // withUi, which read one question at a time, so the helpers below know Point when they see it.
+  let curD = null;
+  // Python spellings outside strings become JSON ones, so True/False/None work too. A declared class
+  // written as a call, Point(1, 2), becomes {"__new": "Point", "a": [1, 2]} (made an object by build()).
   function jsonish(src) {
     let out = '';
     let inStr = false;
+    const parens = [];
     const lastSig = () => out.trimEnd().slice(-1);
     for (let i = 0; i < src.length; i++) {
       const c = src[i];
@@ -44,6 +49,15 @@
         i += rng[0].length - 1;
         continue;
       }
+      const ctor = /^([A-Z]\w*)\s*\(/.exec(src.slice(i));
+      if (ctor && !/\w/.test(src[i - 1] || '')) {
+        out += `{"__new":${JSON.stringify(ctor[1])},"a":[`;
+        parens.push(true);
+        i += ctor[0].length - 1;
+        continue;
+      }
+      if (c === '(') { parens.push(false); out += c; continue; }
+      if (c === ')' && parens.length) { out += parens.pop() ? ']}' : c; continue; }
       const word = /^(True|False|None)\b/.exec(src.slice(i));
       if (word && !/\w/.test(src[i - 1] || '')) {
         out += { True: 'true', False: 'false', None: 'null' }[word[1]];
@@ -54,15 +68,31 @@
     }
     return out;
   }
+  // {"__new": "Point", "a": [1, 2]} -> {"x": 1, "y": 2}, by the class's fields in order.
+  function build(v) {
+    if (Array.isArray(v)) return v.map(build);
+    if (!v || typeof v !== 'object') return v;
+    if (typeof v.__new === 'string' && Array.isArray(v.a)) {
+      const fields = curD && curD[v.__new];
+      if (!fields) throw new Error(`there's no class ${v.__new} under Classes`);
+      if (v.a.length > fields.length) throw new Error(`${v.__new} has ${fields.length} field${fields.length === 1 ? '' : 's'}: ${fields.map((f) => f.name).join(', ')}`);
+      return Object.fromEntries(fields.map((f, k) => [f.name, k < v.a.length ? build(v.a[k]) : null]).filter(([, x], k) => k < v.a.length || x !== null));
+    }
+    return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, build(x)]));
+  }
   function parseValues(inner) {
-    try { return JSON.parse('[' + jsonish(inner) + ']'); } catch (e) {
+    let v;
+    try { v = JSON.parse('[' + jsonish(inner) + ']'); } catch (e) {
       throw new Error(`can't read (${inner}). Write values like "text", 3, 2.5, true, [1, 2]`);
     }
+    return build(v);
   }
   function parseValue(src) {
-    try { return JSON.parse(jsonish(src)); } catch (e) {
+    let v;
+    try { v = JSON.parse(jsonish(src)); } catch (e) {
       throw new Error(`can't read ${src}. Write values like "text", 3, 2.5, true, [1, 2]`);
     }
+    return build(v);
   }
   // "head(inner) rest": finds the ")" that closes the first "(", skipping strings and brackets.
   function splitCall(line) {
@@ -106,19 +136,25 @@
   }
 
   // ---------- types ----------
-  const checkValue = BT.checkValue;
+  const checkValue = (t, v) => BT.checkValue(t, v, curD);
   const elementType = BT.elementType;
   // Values written back as text. Doubles keep their ".0" so 100.0 doesn't turn into 100.
   const isRange = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && Array.isArray(v.range);
   const RANGE_TYPES = ['int[]', 'long[]', 'list<int>'];
   function show(type, v) {
+    if (v && typeof v === 'object' && !Array.isArray(v) && BT.isClass(type, curD)) {
+      const fs = curD[type];
+      let n = fs.length; // trailing nulls left off: Node(3) for Node(3, None)
+      while (n > 0 && (v[fs[n - 1].name] === undefined || v[fs[n - 1].name] === null)) n--;
+      return `${type}(${fs.slice(0, n).map((f) => show(f.type, v[f.name] === undefined ? null : v[f.name])).join(', ')})`;
+    }
     const kv = type ? BT.mapTypes(type) : null;
     if (isRange(v) && !kv) return `range(${v.range[0]}, ${v.range[1]}${v.range[2] && v.range[2] !== 1 ? ', ' + v.range[2] : ''})`;
     if (type === 'double' && Number.isInteger(v)) return v.toFixed(1);
     if (kv && v && typeof v === 'object' && !Array.isArray(v)) {
       return `{${Object.entries(v).map(([k, x]) => `${kv[0] === 'int' ? k : fmt(k)}: ${show(kv[1], x)}`).join(', ')}}`;
     }
-    if (Array.isArray(v) && type && BT.isValueType(type) && elementType(type)) return `[${v.map((x) => show(elementType(type), x)).join(', ')}]`;
+    if (Array.isArray(v) && type && BT.isValueType(type, curD) && elementType(type)) return `[${v.map((x) => show(elementType(type), x)).join(', ')}]`;
     return fmt(v);
   }
   // A range only stands in for int[], long[] and list<int>; anything else must be a real value.
@@ -145,18 +181,40 @@
       const pm = /^\s*([A-Za-z_]\w*)\s*:\s*(\S.*?)\s*$/.exec(p);
       if (!pm) throw new Error(`"${p.trim()}" should be name: type`);
       const type = BT.canon(pm[2]);
-      if (!BT.isValueType(type)) throw new Error(`${pm[2]} isn't a type. Use ${BT.HELP}`);
+      if (!BT.isValueType(type, curD)) throw new Error(`${pm[2]} isn't a type. Use ${BT.HELP}`);
       if (seen.has(pm[1])) throw new Error(`two parameters are named ${pm[1]}`);
       seen.add(pm[1]);
       return { name: pm[1], type };
     });
     return { name: m[1] || '', params, returns: m[3] ? BT.canon(m[3]) : '' };
   }
+  // Classes, one per line: Node(val: int, next: Node). -> { Node: [{ name, type }] }, or null for none.
+  function parseClasses(text) {
+    const lines = String(text || '').split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) return null;
+    const names = lines.map((l) => (/^([A-Za-z_]\w*)\s*\(/.exec(l) || [])[1]);
+    const D = Object.fromEntries(names.filter(Boolean).map((n) => [n, []]));
+    const was = curD;
+    curD = D; // a class's fields can be any of them, itself included
+    try {
+      lines.forEach((l, i) => {
+        if (!names[i] || !BT.CLASS.test(names[i])) throw new Error(`line ${i + 1}: write it like Point(x: int, y: int), the name starting with a capital letter`);
+        let s;
+        try { s = parseSig(l); } catch (e) { throw new Error(`line ${i + 1}: ${e.message.replace('countVowels(s: string): int', 'Point(x: int, y: int)')}`); }
+        if (s.returns) throw new Error(`line ${i + 1}: a class has fields, not a return type`);
+        D[s.name] = s.params;
+      });
+    } finally { curD = was; }
+    if (names.length !== new Set(names).size) throw new Error('two classes have the same name');
+    return D;
+  }
+  const classesText = (D) => Object.entries(D || {}).map(([n, fs]) => sigText(n, fs, '')).join('\n');
+  const classesJson = (D) => Object.fromEntries(Object.entries(D).map(([n, fs]) => [n, Object.fromEntries(fs.map((f) => [f.name, f.type]))]));
   const sigText = (name, params, returns) => `${name || ''}(${(params || []).map((p) => `${p.name}: ${p.type}`).join(', ')})${returns ? `: ${returns}` : ''}`;
   function fullSig(text, allowVoid) {
     const s = parseSig(text);
     if (!s.name || !s.returns) throw new Error(`write it like ${allowVoid ? 'deposit(amount: double): void' : 'countVowels(s: string): int'}`);
-    if (!BT.isValueType(s.returns) && !(allowVoid && s.returns === 'void')) throw new Error(`${s.returns} isn't a type. Use ${BT.HELP}${allowVoid ? ', or void' : ''}`);
+    if (!BT.isValueType(s.returns, curD) && !(allowVoid && s.returns === 'void')) throw new Error(`${s.returns} isn't a type. Use ${BT.HELP}${allowVoid ? ', or void' : ''}`);
     return s;
   }
 
@@ -332,6 +390,9 @@
       const C = q.class || { name: '', constructor: [], methods: [] };
       const S = q.signature;
       const T = q.tests || { sample: [], hidden: [] };
+      // From quiz.json ({ Point: { x: 'int' } }) or the server ({ Point: [{ name, type }] }).
+      curD = q.types ? Object.fromEntries(Object.entries(q.types).map(([n, fs]) => [n, Array.isArray(fs) ? fs : Object.entries(fs).map(([name, type]) => ({ name, type }))])) : null;
+      u.types = classesText(curD);
       Object.assign(u, {
         sig: S ? sigText(S.name, S.params, S.returns) : '',
         className: C.name,
@@ -382,7 +443,9 @@
     const u = q._ui;
     const isClass = q.mode === 'class';
     const hasRef = q.type === 'fill' || q.languages.some((l) => ((q.reference || {})[l] || '').trim()); // a fill question's answers are its reference
-    const r = { shape: null, shapeErrors: [], sample: null, hidden: null, problems: [] };
+    const r = { shape: null, shapeErrors: [], sample: null, hidden: null, problems: [], types: null };
+    curD = null;
+    try { r.types = parseClasses(u.types); curD = r.types; } catch (e) { r.shapeErrors.push(`Classes: ${e.message}`); }
     try {
       if (isClass) {
         const name = u.className.trim();
@@ -440,7 +503,7 @@
       .map((d) => ({ before: quiz.questions[d.at].id, title: (d.title || '').trim(), directions: (d.directions || '').trim() }));
     if (!out.sections.length) delete out.sections;
     // Shared material that no question uses is left out.
-    const used = new Set(quiz.questions.map((q) => q.shared).filter(Boolean));
+    const used = new Set(quiz.questions.flatMap((q) => [].concat(q.shared || [])));
     out.shared = (quiz.shared || []).filter((m) => used.has(m.id)).map((m) => {
       const o = { id: m.id, title: (m.title || '').trim(), text: m.text || '' };
       if (m.image) { o.image = m.image; if (m.imageAlt) o.imageAlt = m.imageAlt; }
@@ -493,6 +556,8 @@
         delete o.signature;
         delete o.class;
         Object.assign(o, r.shape);
+        delete o.types;
+        if (r.types) o.types = classesJson(r.types);
         o.mode = q.mode === 'class' ? 'class' : 'method';
         o.tests = { sample: r.sample.tests, hidden: r.hidden.tests };
       }
@@ -640,6 +705,17 @@
     let problems = [];
     const fromServer = new WeakMap(); // question -> what the server said about it
     const imageMissing = (p) => !newAssets[p] && !existingAssets.has(p);
+    // The images written into text as Markdown: prompts, choices, shared material and directions.
+    const markdownImages = (qz) => {
+      const texts = [];
+      for (const q of qz.questions || []) texts.push(q.prompt, q.explanation, ...(Array.isArray(q.choices) ? q.choices : []));
+      for (const m of qz.shared || []) texts.push(m.text);
+      if (qz.directions && typeof qz.directions === 'object') texts.push(...Object.values(qz.directions));
+      for (const sec of qz.sections || []) texts.push(sec.directions);
+      const out = new Set();
+      for (const t of texts) if (typeof t === 'string') for (const m of t.matchAll(/!\[[^\]]*\]\((?:\.\/)?(assets\/[A-Za-z0-9_.-]+)\)/g)) out.add(m[1]);
+      return [...out];
+    };
 
     const status = h('span', { class: 't-small qe-status', role: 'status' });
     const globalMsg = h('pre', { class: 't-error t-problems', role: 'alert' });
@@ -670,8 +746,10 @@
       if (!q.prompt.trim()) out.push('Write the prompt.');
       if (!(Number(q.points) > 0)) out.push('Points must be more than 0.');
       if (q.image && imageMissing(q.image)) out.push(`Add the image file for ${q.image}.`);
-      if (q.shared) {
-        const m = (quiz.shared || []).find((x) => x.id === q.shared);
+      const sharedOf = [].concat(q.shared || []).map((id) => (quiz.shared || []).find((x) => x.id === id)).filter(Boolean);
+      for (const p of markdownImages({ questions: [q], shared: sharedOf })) if (imageMissing(p)) out.push(`Add the image file for ${p}, or take it out of the text.`);
+      for (const sid of [].concat(q.shared || [])) {
+        const m = (quiz.shared || []).find((x) => x.id === sid);
         if (!m || (!(m.text || '').trim() && !m.image)) out.push('Write the shared material, or pick None.');
         else if (m.image && imageMissing(m.image)) out.push(`Add the image file for ${m.image}.`);
       }
@@ -737,7 +815,7 @@
       touch(q);
       renderPane();
     }
-    const focusChoice = (k) => { const el = pane.querySelectorAll('.qe-choice input.input')[k]; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } };
+    const focusChoice = (k) => { const el = pane.querySelectorAll('.qe-choice textarea.input')[k]; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } };
 
     function choicesEditor(q) {
       const multi = q.type === 'multi';
@@ -749,9 +827,13 @@
           else q.answer = k;
           touch(q);
         });
-        const text = input(q, c, (v) => { q.choices[k] = v; }, { placeholder: `Choice ${k + 1}`, 'aria-label': `Choice ${k + 1}` });
+        // A text box, so a choice can hold more than one line (code, a table): Shift+Enter for a new line.
+        const text = area(q, c, (v) => { q.choices[k] = v; }, { rows: 1, class: 'input qe-area qe-choice-text', placeholder: `Choice ${k + 1}`, 'aria-label': `Choice ${k + 1}`, spellcheck: 'true' });
         text.addEventListener('keydown', (e) => {
           if (e.ctrlKey || e.metaKey || e.altKey) return;
+          const atTop = !text.value.slice(0, text.selectionStart).includes('\n');
+          const atEnd = !text.value.slice(text.selectionEnd).includes('\n');
+          if (e.key === 'Enter' && e.shiftKey) return; // a new line in this choice
           if (e.key === 'Enter') {
             e.preventDefault();
             if (k + 1 < q.choices.length && !q.choices[k + 1].trim()) focusChoice(k + 1);
@@ -760,11 +842,16 @@
             e.preventDefault();
             editChoices(q, (r) => r.splice(k, 1));
             focusChoice(Math.max(0, k - 1));
-          } else if (e.key === 'ArrowDown' && k + 1 < q.choices.length) { e.preventDefault(); focusChoice(k + 1); } else if (e.key === 'ArrowUp' && k > 0) { e.preventDefault(); focusChoice(k - 1); }
+          } else if (e.key === 'ArrowDown' && atEnd && k + 1 < q.choices.length) { e.preventDefault(); focusChoice(k + 1); } else if (e.key === 'ArrowUp' && atTop && k > 0) { e.preventDefault(); focusChoice(k - 1); }
         });
-        // A pasted list becomes one choice per line.
+        // A pasted list becomes one choice per line; pasted code or a table stays in this choice. A pasted
+        // image goes in as Markdown.
         text.addEventListener('paste', (e) => {
-          const lines = (e.clipboardData.getData('text') || '').split(/\r?\n/).map((l) => l.trim().replace(/^(?:[-*•]|\(?[A-Ha-h1-8][.)])\s+/, '')).filter(Boolean);
+          const img = [...(e.clipboardData.files || [])].find((x) => /^image\//.test(x.type));
+          if (img) { e.preventDefault(); addInlineImage(text, img); return; }
+          const raw = e.clipboardData.getData('text') || '';
+          if (/```|^\s*\|.*\|\s*$|^(\t| {2,})\S/m.test(raw)) return;
+          const lines = raw.split(/\r?\n/).map((l) => l.trim().replace(/^(?:[-*•]|\(?[A-Ha-h1-8][.)])\s+/, '')).filter(Boolean);
           if (lines.length < 2) return;
           e.preventDefault();
           editChoices(q, (r) => {
@@ -790,7 +877,7 @@
           const g = pane.querySelectorAll('.qe-choice .qe-grip')[to];
           if (g) g.focus();
         });
-        return h('div', { class: 'qe-choice' }, grip, mark, text,
+        return h('div', { class: 'qe-choice qe-choice-row' }, grip, mark, text,
           xBtn('Remove choice', () => editChoices(q, (r) => r.splice(k, 1)), q.choices.length <= 2));
       });
       sortable(rows, (from, to) => editChoices(q, (r) => r.splice(to, 0, r.splice(from, 1)[0])), (row) => row.firstChild);
@@ -798,7 +885,8 @@
       const label = h('span', { class: 'field-label', id: `qe-choices-${q._ui ? q._ui.id || 'q' : 'q'}`, text: multi ? 'Choices, with the correct ones ticked' : 'Choices, with the correct one marked' });
       return h('div', { class: 'field' }, label,
         h('div', { class: 'qe-choices', role: 'group', 'aria-labelledby': label.id }, rows),
-        h('div', { class: 'qe-line' }, add, check(q, q.shuffleChoices === false, 'Keep choices in this order', (v) => { if (v) q.shuffleChoices = false; else delete q.shuffleChoices; })));
+        h('div', { class: 'qe-line' }, add, check(q, q.shuffleChoices === false, 'Keep choices in this order', (v) => { if (v) q.shuffleChoices = false; else delete q.shuffleChoices; }),
+          q.type === 'multi' ? check(q, !!q.partialCredit, 'Partial credit', (v) => { if (v) q.partialCredit = true; else delete q.partialCredit; }) : null));
     }
 
     // ---------- images ----------
@@ -819,8 +907,24 @@
       };
       reader.readAsDataURL(f);
     }
-    const imageSrc = (q) => (newAssets[q.image] ? `data:${IMAGE_MIME[extOf(q.image)]};base64,${newAssets[q.image]}`
-      : existingAssets.has(q.image) && assetQuizId ? `/api/t/quizzes/${encodeURIComponent(assetQuizId)}/asset?path=${encodeURIComponent(q.image)}` : null);
+    const assetSrc = (p) => (newAssets[p] ? `data:${IMAGE_MIME[extOf(p)]};base64,${newAssets[p]}`
+      : existingAssets.has(p) && assetQuizId ? `/api/t/quizzes/${encodeURIComponent(assetQuizId)}/asset?path=${encodeURIComponent(p)}` : null);
+    const imageSrc = (q) => assetSrc(q.image);
+    // More images go into the text as Markdown, ![](assets/name.png), at the cursor.
+    function addInlineImage(ta, f) {
+      if (!f) return;
+      if (!IMAGE_MIME[extOf(f.name)]) { alert('Images must be png, jpg, gif or webp.'); return; }
+      if (f.size > 5 * 1024 * 1024) { alert('Images can be up to 5 MB.'); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base = f.name.replace(/\s+/g, '-').replace(/[^A-Za-z0-9_.-]/g, '_').slice(-80);
+        let p2 = `assets/${base}`;
+        for (let n = 2; existingAssets.has(p2) || newAssets[p2]; n++) p2 = `assets/${base.replace(/(\.[^.]+)$/, `-${n}$1`)}`;
+        newAssets[p2] = String(reader.result).split(',')[1];
+        insert(ta, `![](${p2})`);
+      };
+      reader.readAsDataURL(f);
+    }
     function imageEditor(q, file) {
       if (!q.image) return null;
       const src = imageSrc(q);
@@ -853,9 +957,11 @@
           insert(ta, '    ');
         }
       });
-      const takeImage = (files, e) => { const f = [...(files || [])].find((x) => /^image\//.test(x.type)); if (f) { e.preventDefault(); addImage(q, f); } };
+      const takeImage = (files, e) => { const f = [...(files || [])].find((x) => /^image\//.test(x.type)); if (f) { e.preventDefault(); if (q.image) addInlineImage(ta, f); else addImage(q, f); } };
       ta.addEventListener('paste', (e) => takeImage(e.clipboardData && e.clipboardData.files, e));
       ta.addEventListener('drop', (e) => takeImage(e.dataTransfer && e.dataTransfer.files, e));
+      const moreFile = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp' });
+      moreFile.addEventListener('change', () => { addInlineImage(ta, moreFile.files[0]); moreFile.value = ''; });
       return [h('div', { class: 'field' },
         h('div', { class: 'qe-tools' },
           h('label', { class: 'field-label', for: 'qe-prompt', text: 'Prompt' }),
@@ -869,29 +975,32 @@
             const s = ta.value.slice(0, ta.selectionStart);
             insert(ta, `${s && !s.endsWith('\n') ? '\n\n' : s && !s.endsWith('\n\n') ? '\n' : ''}| Column | Column |\n| --- | --- |\n|  |  |\n`);
           }),
-          q.image ? null : tool('Image', 'Add an image. You can also paste or drop one into the prompt', () => file.click())),
-        ta, file), imageEditor(q, file)];
+          tool('Image', q.image ? 'Add another image where the cursor is. You can also paste or drop one' : 'Add an image. You can also paste or drop one into the prompt', () => (q.image ? moreFile : file).click())),
+        ta, file, moreFile), imageEditor(q, file)];
     }
 
     // What the student gets, redrawn as you type.
     function studentView(q) {
       const md = window.BQ && window.BQ.md;
       const out = [];
-      const sm = q.shared && (quiz.shared || []).find((x) => x.id === q.shared);
-      if (sm && ((sm.text || '').trim() || sm.title || sm.image)) {
+      const opts = { lang: quiz.language, assetUrl: assetSrc };
+      for (const sid of [].concat(q.shared || [])) {
+        const sm = (quiz.shared || []).find((x) => x.id === sid);
+        if (!sm || !((sm.text || '').trim() || sm.title || sm.image)) continue;
         const body = h('div', { class: 'prompt' });
-        if (md) body.append(md.render(sm.text || '', { lang: quiz.language })); else body.textContent = sm.text || '';
+        if (md) body.append(md.render(sm.text || '', opts)); else body.textContent = sm.text || '';
         out.push(h('section', { class: 'shared' }, sm.title ? h('p', { class: 'shared-title', text: sm.title }) : null, body,
           sm.image && imageSrc(sm) ? h('img', { class: 'qimg', src: imageSrc(sm), alt: sm.imageAlt || '' }) : null));
       }
       const prompt = h('div', { class: 'prompt' });
-      if (md) prompt.append(md.render(q.prompt, { lang: quiz.language })); else prompt.textContent = q.prompt;
+      if (md) prompt.append(md.render(q.prompt, opts)); else prompt.textContent = q.prompt;
       out.push(prompt);
       if (q.image && imageSrc(q)) out.push(h('img', { class: 'qimg', src: imageSrc(q), alt: q.imageAlt || '' }));
       if (q.type === 'single' || q.type === 'multi') {
         out.push(h('div', { class: 'choices' }, q.choices.filter((c) => c.trim()).map((c) => {
-          const text = h('span', { class: 'choice-text' });
-          if (md) text.append(md.renderInline(c, { lang: quiz.language })); else text.textContent = c;
+          const rich = /\n/.test(c);
+          const text = h(rich ? 'div' : 'span', { class: 'choice-text' + (rich ? ' choice-rich' : '') });
+          if (md) text.append(rich ? md.render(c, opts) : md.renderInline(c, opts)); else text.textContent = c;
           return h('div', { class: 'choice' }, h('input', { type: q.type === 'multi' ? 'checkbox' : 'radio', tabindex: '-1' }), text);
         })));
       }
@@ -922,7 +1031,9 @@
       if (q.type === 'code') {
         const lang = q.languages[0];
         const custom = q.starter && typeof q.starter === 'object' ? q.starter[lang] : null;
-        const shape = readCode(q).shape;
+        const rc = readCode(q);
+        const shape = rc.shape;
+        if (rc.types) out.push(h('p', { class: 'sub', text: 'Classes you can use' }), h('pre', { class: 'md-code' }, h('code', { text: BT.classSource(rc.types, lang, true).trimEnd() })));
         const code = custom || (shape ? starterCode(shape, lang, q.starter === 'empty') : '');
         if (code) out.push(h('pre', { class: 'md-code' }, h('code', { text: code.trimEnd() })));
       }
@@ -1156,6 +1267,7 @@
             field('Constructor', input(q, u.ctor, (v) => { u.ctor = v; }, Object.assign({}, mono, { placeholder: '(owner: string, balance: double)' })))),
           field('Methods, one per line', area(q, u.methods, (v) => { u.methods = v; }, { rows: 3, class: 'input qe-area qe-mono', placeholder: 'deposit(amount: double): void\ngetBalance(): double' }))]
           : field('Signature', input(q, u.sig, (v) => { u.sig = v; }, Object.assign({}, mono, { placeholder: 'countVowels(s: string): int' }))),
+        fill ? null : field('Classes (optional, one per line)', area(q, u.types, (v) => { u.types = v; }, { rows: 1, class: 'input qe-area qe-mono', placeholder: 'Point(x: int, y: int)' })),
         shapeNote];
       const testFields = [
         field('Sample tests (students can run these)', tests('sample', 2, isClass ? 'new BankAccount("Ava", 100.0)\ndeposit(50.0)\ngetBalance() -> 150.0' : '("hello") -> 2'), notes.sample),
@@ -1199,7 +1311,8 @@
       const fields = h('div', { class: 'qe-stack' }, name, sharedEditor(q, i), promptEditor(q));
       if (q.type === 'single' || q.type === 'multi') fields.append(choicesEditor(q));
       if (q.type === 'text') {
-        fields.append(field('Accepted answers, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2 })),
+        fields.append(field('Accepted answers, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2 }),
+          h('span', { class: 't-small t-muted', text: 'Numbers match by value (3.5 = 3.50 = 7/2). For many phrasings, write a pattern: /^(binary|bin) search$/' })),
           check(q, q.caseSensitive, 'Capital letters count', (v) => { if (v) q.caseSensitive = true; else delete q.caseSensitive; }));
       }
       const add = (nodes) => fields.append(...nodes.filter(Boolean));
@@ -1226,43 +1339,60 @@
     }
 
     // ---------- shared material: a case or passage written once, used by several questions ----------
+    // Shared material: a question can use up to 3. Each in use gets its own picker and fields; "Also uses"
+    // adds another. One is saved as an id, more as a list.
     function sharedEditor(q, i) {
       quiz.shared = quiz.shared || [];
-      const pick = h('select', { class: 'input qe-narrow', id: 'qe-shared', 'aria-label': 'Shared material' },
-        h('option', { value: '', text: 'None', selected: !q.shared }),
-        quiz.shared.map((m, k) => h('option', { value: m.id, text: m.title.trim() || `Shared material ${k + 1}`, selected: q.shared === m.id })),
-        h('option', { value: '+', text: 'New shared material' }));
-      pick.addEventListener('change', () => {
-        if (pick.value === '+') {
-          let n = quiz.shared.length + 1;
-          while (quiz.shared.some((m) => m.id === `s${n}`)) n++;
-          quiz.shared.push({ id: `s${n}`, title: '', text: '' });
-          q.shared = `s${n}`;
-        } else if (pick.value) q.shared = pick.value;
-        else delete q.shared;
-        touch(q);
-        renderPane();
-        if (pick.value === '+') { const t = pane.querySelector('.qe-shared input[type=text]'); if (t) t.focus(); }
-      });
-      const m = quiz.shared.find((x) => x.id === q.shared);
-      const others = m ? quiz.questions.map((x, k) => (x.shared === m.id && k !== i ? k + 1 : null)).filter(Boolean) : [];
-      // Images work like a question's: the button, or paste or drop one into the text.
-      const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp' });
-      file.addEventListener('change', () => addImage(m, file.files[0]));
-      const text = m ? area(q, m.text, (v) => { m.text = v; }, { rows: 6, placeholder: 'The case, passage or code every question in the set uses. Markdown works.', 'aria-label': 'Shared material' }) : null;
-      const takeImage = (files, e) => { const f = [...(files || [])].find((x) => /^image\//.test(x.type)); if (f) { e.preventDefault(); addImage(m, f); } };
-      if (text) {
-        text.addEventListener('paste', (e) => takeImage(e.clipboardData && e.clipboardData.files, e));
-        text.addEventListener('drop', (e) => takeImage(e.dataTransfer && e.dataTransfer.files, e));
-      }
-      return h('div', { class: 'qe-shared' + (m ? ' on' : '') },
-        h('div', { class: 'qe-line' }, h('label', { class: 'field-label', for: 'qe-shared', text: 'Shared material' }), pick,
-          others.length ? h('span', { class: 't-small t-muted', text: `Also on question${others.length > 1 ? 's' : ''} ${others.join(', ')}` }) : null),
-        m ? [
-          input(q, m.title, (v) => { m.title = v; }, { type: 'text', placeholder: 'Title, like Case A', 'aria-label': 'Shared material title', maxlength: '120' }),
-          text, file,
-          m.image ? imageEditor(m, file) : h('div', {}, h('button', { class: 'btn small', type: 'button', text: 'Add image', onclick: () => file.click() })),
-        ] : null);
+      const ids = [].concat(q.shared || []);
+      const setIds = (next) => { const list = [...new Set(next.filter(Boolean))]; if (!list.length) delete q.shared; else q.shared = list.length === 1 ? list[0] : list; };
+      const newShared = () => {
+        let n = quiz.shared.length + 1;
+        while (quiz.shared.some((m) => m.id === `s${n}`)) n++;
+        quiz.shared.push({ id: `s${n}`, title: '', text: '' });
+        return `s${n}`;
+      };
+      // slot k: the k-th material it uses, or (k === ids.length) a picker to add one
+      const picker = (k) => {
+        const cur = ids[k] || '';
+        const pick = h('select', { class: 'input qe-narrow', id: `qe-shared-${k}`, 'aria-label': k ? 'Also uses' : 'Shared material' },
+          h('option', { value: '', text: 'None', selected: !cur }),
+          quiz.shared.filter((m) => m.id === cur || !ids.includes(m.id)).map((m) => h('option', { value: m.id, text: m.title.trim() || `Shared material ${quiz.shared.indexOf(m) + 1}`, selected: cur === m.id })),
+          h('option', { value: '+', text: 'New shared material' }));
+        pick.addEventListener('change', () => {
+          const v = pick.value === '+' ? newShared() : pick.value;
+          const next = ids.slice();
+          if (v) next[k] = v; else next.splice(k, 1);
+          setIds(next);
+          touch(q);
+          renderPane();
+          if (pick.value === '+') { const t = pane.querySelector(`#qe-shared-${k}`)?.closest('.qe-shared')?.querySelector('input[type=text]'); if (t) t.focus(); }
+        });
+        return pick;
+      };
+      const block = (k) => {
+        const m = quiz.shared.find((x) => x.id === ids[k]);
+        const others = m ? quiz.questions.map((x, j) => ([].concat(x.shared || []).includes(m.id) && j !== i ? j + 1 : null)).filter(Boolean) : [];
+        // Images work like a question's: the button, or paste or drop one into the text.
+        const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp' });
+        file.addEventListener('change', () => addImage(m, file.files[0]));
+        const text = m ? area(q, m.text, (v) => { m.text = v; }, { rows: 6, placeholder: 'The case, passage or code every question in the set uses. Markdown works.', 'aria-label': 'Shared material' }) : null;
+        const takeImage = (files, e) => { const f = [...(files || [])].find((x) => /^image\//.test(x.type)); if (f) { e.preventDefault(); if (m.image) addInlineImage(text, f); else addImage(m, f); } };
+        if (text) {
+          text.addEventListener('paste', (e) => takeImage(e.clipboardData && e.clipboardData.files, e));
+          text.addEventListener('drop', (e) => takeImage(e.dataTransfer && e.dataTransfer.files, e));
+        }
+        return h('div', { class: 'qe-shared' + (m ? ' on' : '') },
+          h('div', { class: 'qe-line' }, h('label', { class: 'field-label', for: `qe-shared-${k}`, text: k ? 'Also uses' : 'Shared material' }), picker(k),
+            others.length ? h('span', { class: 't-small t-muted', text: `Also on question${others.length > 1 ? 's' : ''} ${others.join(', ')}` }) : null),
+          m ? [
+            input(q, m.title, (v) => { m.title = v; }, { type: 'text', placeholder: 'Title, like Case A', 'aria-label': 'Shared material title', maxlength: '120' }),
+            text, file,
+            m.image ? imageEditor(m, file) : h('div', {}, h('button', { class: 'btn small', type: 'button', text: 'Add image', onclick: () => file.click() })),
+          ] : null);
+      };
+      const blocks = ids.map((_, k) => block(k));
+      if (!ids.length) return block(0);
+      return h('div', { class: 'qe-stack' }, blocks, ids.length < 3 ? h('div', { class: 'qe-line' }, h('label', { class: 'field-label', for: `qe-shared-${ids.length}`, text: 'Also uses' }), picker(ids.length)) : null);
     }
 
     // The student app's built-in directions for each part (student/app.js PARTS), shown as placeholders.
@@ -1500,7 +1630,7 @@
       setStatus('Checking…');
       const at = edits;
       try {
-        const used = new Set([...out.questions, ...(out.shared || [])].map((q) => q.image).filter(Boolean));
+        const used = new Set([...[...out.questions, ...(out.shared || [])].map((q) => q.image).filter(Boolean), ...markdownImages(out)]);
         const assets = Object.fromEntries(Object.entries(newAssets).filter(([p2]) => used.has(p2)));
         const r = await post('/api/t/quizzes/json', { quiz: out, replaces: currentId, assets });
         currentId = r.id;

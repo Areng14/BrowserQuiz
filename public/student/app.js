@@ -528,7 +528,7 @@
   function quizDirections(text, heading) {
     if (!text) return null;
     return h('div', { class: 'directions quiz-directions' },
-      h('strong', { text: heading }), h('div', { class: 'prompt' }, BQ.md.render(text, { lang: S.quiz && S.quiz.language })));
+      h('strong', { text: heading }), h('div', { class: 'prompt' }, BQ.md.render(text, mdOpts())));
   }
 
   function screenPractice(err) {
@@ -755,7 +755,9 @@
     const parts = partsFor(questions.map((q) => q.type), S.quiz.sections);
     for (const p of parts) {
       // A section's own directions, or else each of its kinds' (the teacher's for that kind, or the built-in).
-      const textOf = (t) => custom[t] || (PARTS[t] || { text: '' }).text;
+      const inPart = questions.slice(p.start, p.end + 1);
+      const partial = inPart.some((q) => q.type === 'multi') && inPart.every((q) => q.type !== 'multi' || q.partialCredit);
+      const textOf = (t) => custom[t] || (t === 'multi' && partial ? 'Each right choice earns credit, and each wrong one takes it back.' : (PARTS[t] || { text: '' }).text);
       if (p.section && p.section.directions) p.md = p.section.directions;
       else if (p.types.length > 1) p.list = p.types.map((t) => [(PARTS[t] || { title: t }).title, textOf(t)]);
       else p.text = textOf(p.type);
@@ -1144,7 +1146,7 @@
       ] : null,
       h('div', { class: 'meta-row' }, h('span', { text: `Part ${part.n} of ${S.parts.length}` }), h('span', { text: range })),
       h(intro ? 'h2' : 'h1', { id: intro ? 'part-heading' : 'q-heading', class: 'part-title', text: part.title }),
-      part.md ? h('div', { class: 'directions prompt' }, BQ.md.render(part.md, { lang: S.quiz.language }))
+      part.md ? h('div', { class: 'directions prompt' }, BQ.md.render(part.md, mdOpts()))
         : part.list ? h('div', { class: 'directions' }, h('strong', { text: 'Directions' }), h('ul', {}, part.list.map(([t, text]) => h('li', {}, h('b', { text: `${t}: ` }), text))))
           : h('p', { class: 'directions' }, h('strong', { text: 'Directions: ' }), part.text),
       intro ? null : quizDirections(S.quiz.directions && S.quiz.directions.quiz, 'For the whole quiz'),
@@ -1203,7 +1205,7 @@
   function metaRow(q, kind) {
     return h('div', { class: 'meta-row' },
       h('span', {}, q.name ? h('b', { class: 'q-name', text: q.name }) : null, kind, ' ', h('button', { class: 'link-btn', type: 'button', text: 'Directions', onclick: openDirections })),
-      h('span', { class: 'meta-right' }, markButton(q), h('span', { text: plural(q.points, 'point') })));
+      h('span', { class: 'meta-right' }, markButton(q), h('span', { text: plural(q.points, 'point') + (q.partialCredit ? ' (partial credit)' : '') })));
   }
 
   // Question text is made once and kept for the whole quiz, so highlights (and colored code, and math)
@@ -1216,18 +1218,29 @@
 
   // A passage, case or listing that several questions use, written once in the quiz. Highlights in it
   // show on every question that uses it.
+  // Markdown options: the quiz's language for code, and where its images are.
+  const mdOpts = () => ({ lang: S.quiz && S.quiz.language, assetUrl: api.assetUrl });
+  // A choice with more than one line (code, a table, a list) is set as blocks; a one-line choice stays inline.
+  const choiceText = (c) => (/\n/.test(c)
+    ? h('div', { class: 'choice-text choice-rich hl-root' }, BQ.md.render(c, mdOpts()))
+    : h('span', { class: 'choice-text hl-root' }, BQ.md.renderInline(c, mdOpts())));
+
+  // A question can use more than one: they stack, in the quiz's order.
   function sharedBlock(q) {
-    const m = q.shared && S.quiz.shared ? S.quiz.shared[q.shared] : null;
-    if (!m) return null;
-    return kept('shared:' + q.shared, () => h('section', { class: 'shared', 'aria-label': m.title || 'Shared material' },
-      m.title ? h('p', { class: 'shared-title', text: m.title }) : null,
-      m.text ? h('div', { class: 'prompt hl-root' }, BQ.md.render(m.text, { lang: S.quiz.language })) : null,
-      m.image ? h('img', { class: 'qimg', src: api.assetUrl(m.image), alt: m.imageAlt || '' }) : null));
+    const blocks = [].concat(q.shared || []).map((sid) => {
+      const m = S.quiz.shared ? S.quiz.shared[sid] : null;
+      return m && kept('shared:' + sid, () => h('section', { class: 'shared', 'aria-label': m.title || 'Shared material' },
+        m.title ? h('p', { class: 'shared-title', text: m.title }) : null,
+        m.text ? h('div', { class: 'prompt hl-root' }, BQ.md.render(m.text, mdOpts())) : null,
+        m.image ? h('img', { class: 'qimg', src: api.assetUrl(m.image), alt: m.imageAlt || '' }) : null));
+    }).filter(Boolean);
+    if (!blocks.length) return null;
+    return blocks.length === 1 ? blocks[0] : h('div', { class: 'shared-stack' }, blocks);
   }
 
   function prompt(q) {
     return [
-      kept('prompt:' + q.id, () => h('div', { class: 'prompt hl-root' }, BQ.md.render(q.prompt, { lang: S.quiz.language }))),
+      kept('prompt:' + q.id, () => h('div', { class: 'prompt hl-root' }, BQ.md.render(q.prompt, mdOpts()))),
       q.image ? h('img', { class: 'qimg', src: api.assetUrl(q.image), alt: q.imageAlt || '' }) : null,
     ];
   }
@@ -1373,7 +1386,7 @@
         const x = h('button', { class: 'choice-x', type: 'button' });
         const outNote = h('span', { class: 'sr-only', id: `${id}-out`, text: 'crossed out' });
         const row = h('div', { class: 'choice-row' },
-          h('label', { class: 'choice', for: id }, input, kept(`choice:${q.id}:${i}`, () => h('span', { class: 'choice-text hl-root' }, BQ.md.renderInline(c, { lang: S.quiz.language }))), outNote), x);
+          h('label', { class: 'choice', for: id }, input, kept(`choice:${q.id}:${i}`, () => choiceText(c)), outNote), x);
         input.addEventListener('change', () => {
           if (input.checked && isCrossed(q, i)) setCrossed(q, i, false);
           if (!multi) setAnswer(q.id, i);
@@ -1581,6 +1594,9 @@
     const bans = !q.ban ? [] : Array.isArray(q.ban) ? q.ban : q.ban[lang] || [];
     const banNote = bans.length ? h('p', { class: 'ban-note' }, h('strong', { text: 'Not allowed: ' }),
       bans.map((b, i) => [i ? ', ' : '', h('code', { text: b })])) : null;
+    // Classes the question gives them (Point, Node, ...), in the language they're writing.
+    const given = q.given && q.given[lang] ? [h('h2', { class: 'sub', text: 'Classes you can use' }),
+      h('div', { class: 'prompt given-code hl-root' }, BQ.md.render('```' + lang + '\n' + q.given[lang] + '```', mdOpts()))] : null;
 
     let langCtl;
     if (q.languages.length > 1) {
@@ -1605,7 +1621,7 @@
       h('div', { class: 'code-q' },
         h('section', { class: 'code-left' },
           metaRow(q, KIND[q.mode] || KIND.method), sharedBlock(q), prompt(q),
-          banNote,
+          banNote, given,
           h('h2', { class: 'sub', text: 'Examples' }), samples),
         h('section', { class: 'code-right', 'aria-label': 'Code editor' },
           h('div', { class: 'editor-bar' }, langCtl, h('span', { class: 'spacer' }), h('span', { class: 'kbd-hint', text: leaveHint() }), runBtn),

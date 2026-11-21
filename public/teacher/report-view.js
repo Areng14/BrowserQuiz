@@ -23,8 +23,12 @@
   }
   const fmtPts = (n) => String(Math.round(n * 100) / 100);
   const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
-  const md = (src, lang) => h('div', { class: 'r-prompt' }, window.BQ.md.render(src, { lang }));
-  const inline = (src, lang) => h('span', {}, window.BQ.md.renderInline(src, { lang }));
+  // assetUrl: where the quiz's images are, for images written in Markdown.
+  const md = (src, lang, assetUrl) => h('div', { class: 'r-prompt' }, window.BQ.md.render(src, { lang, assetUrl }));
+  const inline = (src, lang, assetUrl) => (/\n/.test(src) // a choice with more than one line is set as blocks
+    ? h('div', { class: 'r-choice-rich' }, window.BQ.md.render(src, { lang, assetUrl }))
+    : h('span', {}, window.BQ.md.renderInline(src, { lang, assetUrl })));
+  const imagesOf = (quiz, o) => (p) => (o && o.assetUrl ? o.assetUrl(p) : `/api/t/quizzes/${encodeURIComponent(quiz.id)}/asset?path=${encodeURIComponent(p)}`);
   const codeBox = (text, lang) => h('pre', { class: 'r-code' }, h('code', { 'data-lang': lang || null, text }));
 
   function answered(q) {
@@ -72,7 +76,7 @@
         const mine = o.teacher ? 'Their answer' : 'Your answer';
         return h('li', { class: cls },
           h('span', { class: 'r-mark', text: correct ? '✓' : picked ? '✗' : '' }),
-          h('span', { class: 'r-choice' }, inline(c, quiz.language)),
+          h('span', { class: 'r-choice' }, inline(c, quiz.language, imagesOf(quiz, o))),
           picked ? h('span', { class: 'r-tag', text: mine }) : null,
           correct && !picked ? h('span', { class: 'r-tag', text: q.type === 'multi' && q.picked.length ? 'Missed' : 'Correct answer' }) : null);
       }));
@@ -254,14 +258,17 @@
     const [st, words] = status(q);
     const pts = q.points == null ? `– / ${fmtPts(q.max)}` : `${fmtPts(q.points)} / ${fmtPts(q.max)}`;
     const img = (p) => (o.assetUrl ? o.assetUrl(p) : `/api/t/quizzes/${encodeURIComponent(quiz.id)}/asset?path=${encodeURIComponent(p)}`);
-    // Shared material shows once, on the first question of its set (opts.sharedSeen tracks that).
-    const m = q.shared && quiz.shared ? quiz.shared[q.shared] : null;
-    const first = m && (!o.sharedSeen || !o.sharedSeen.has(q.shared));
-    if (first && o.sharedSeen) o.sharedSeen.add(q.shared);
-    const sharedEl = !m ? null : first
-      ? h('div', { class: 'r-shared' }, m.title ? h('p', { class: 'r-shared-title', text: m.title }) : null,
-        m.text ? md(m.text, quiz.language) : null, m.image ? h('img', { class: 'r-img', src: img(m.image), alt: m.imageAlt || '' }) : null)
-      : h('p', { class: 'r-also', text: m.title ? `Uses ${m.title}` : 'Uses the shared material above' });
+    // Shared material shows once, on the first question that uses it (opts.sharedSeen tracks that).
+    const sharedEl = [].concat(q.shared || []).map((sid) => {
+      const m = quiz.shared ? quiz.shared[sid] : null;
+      if (!m) return null;
+      const first = !o.sharedSeen || !o.sharedSeen.has(sid);
+      if (first && o.sharedSeen) o.sharedSeen.add(sid);
+      return first
+        ? h('div', { class: 'r-shared' }, m.title ? h('p', { class: 'r-shared-title', text: m.title }) : null,
+          m.text ? md(m.text, quiz.language, img) : null, m.image ? h('img', { class: 'r-img', src: img(m.image), alt: m.imageAlt || '' }) : null)
+        : h('p', { class: 'r-also', text: m.title ? `Uses ${m.title}` : 'Uses the shared material above' });
+    });
     return h('section', { class: `r-q st-${st}` + (q.type === 'code' || q.type === 'fill' ? ' code' : ''), id: o.anchor || null },
       h('div', { class: 'r-qhead' },
         h('span', { class: 'n', text: String(i + 1) }), h('span', { class: 'kind', text: kind }),
@@ -269,7 +276,7 @@
         q.review || st === 'pending' ? h('span', { class: 'r-waiting', text: words }) : null,
         h('span', { class: 'pts', text: pts })),
       sharedEl,
-      md(q.prompt, quiz.language),
+      md(q.prompt, quiz.language, img),
       q.image ? h('img', { class: 'r-img', src: o.assetUrl ? o.assetUrl(q.image) : `/api/t/quizzes/${encodeURIComponent(quiz.id)}/asset?path=${encodeURIComponent(q.image)}`, alt: q.imageAlt || '' }) : null,
       body(quiz, q, o));
   }
