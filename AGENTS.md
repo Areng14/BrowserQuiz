@@ -23,6 +23,9 @@ Put quizzes in `quizzes/`, which is gitignored because quiz files contain answer
   exception is the practice review after submitting, which shows answers and reference solutions
   (still no hidden tests or rubrics).
 - Keep UI copy short: no text that repeats what the screen already shows.
+- No slogans or explainer lines under headings, buttons, fields or dialogs. Add one only when the point
+  really can't be made by the UI itself.
+- No pill statuses: no rounded badges or chips for a status. Show it as plain text.
 - Teachers only reach their own quizzes, classes, runs and attempts. Every `/api/t/` route gets the
   teacher from `requireTeacher` and looks things up through them (`getQuizRow`, `getRoster`,
   `getRun`, `getAttemptRun`, or `owner_id = ?`), so another teacher's id is simply not found.
