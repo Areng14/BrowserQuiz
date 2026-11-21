@@ -380,7 +380,9 @@
   }
 
   function quizzesTab(data) {
-    const quizFile = h('input', { class: 'input', type: 'file', id: 'quiz-file', accept: '.quiz,.zip,.json' });
+    // No accept filter: Safari only knows file types it has heard of, so it greys out .quiz files. The server
+    // checks what comes in.
+    const quizFile = h('input', { class: 'input', type: 'file', id: 'quiz-file' });
     const quizMsg = h('p', { class: 't-error', role: 'alert' });
     // Paste quiz.json (from an AI chat, say) and upload it straight away.
     const pasteJson = h('textarea', { class: 'input t-textarea', id: 'paste-quiz', rows: 8, spellcheck: 'false', placeholder: '{ "title": "...", "questions": [ ... ] }' });

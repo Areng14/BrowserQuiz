@@ -520,7 +520,8 @@ module.exports = function teacherRoutes(r) {
     const entries = [{ name: 'quiz.json', data: Buffer.from(JSON.stringify(quizSource(store.getQuiz(row.id)), null, 2)) }];
     for (const a of store.listAssets(row.id)) entries.push({ name: a.path, data: a.bytes });
     send(res, 200, writeZip(entries), {
-      'Content-Type': 'application/zip', 'Cache-Control': 'no-store',
+      // A .quiz is a zip, but sent as one Safari may unzip it into a folder or add ".zip" to the name.
+      'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store',
       'Content-Disposition': `attachment; filename="${row.title.replace(/[^\w -]/g, '').slice(0, 60) || 'quiz'}.quiz"`,
     });
   });
