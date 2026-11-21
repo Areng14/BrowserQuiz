@@ -38,6 +38,8 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
   "what is printed" and tracing questions.
 - **Order** questions single → multi → text → output → trace → fill → code → essay. Consecutive questions of one type form a part,
   with its own directions page, and shuffling stays inside parts.
+- **Sections:** only when asked for them ("Part A: Arrays, Part B: Strings"), add top-level `sections`,
+  each starting at a question id with a title and optional directions.
 - **Names:** give each question a short `name` ("BankAccount class", "Trace the sum loop").
   Students see names, types and points before they start, so a name never hints at the answer.
 - **Prompts** say exactly what's asked, including edge cases ("return 0 for an empty array").

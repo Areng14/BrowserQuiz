@@ -204,6 +204,23 @@ function normalizeQuiz(raw, assetNames) {
     }
     quiz.questions.push(out);
   });
+  // Section dividers the teacher put in: each starts at a question, with its own title and directions.
+  // Questions before the first one are grouped by type, as without any.
+  if (raw.sections != null) {
+    if (!Array.isArray(raw.sections)) fail('sections should be a list.');
+    const at = new Map(quiz.questions.map((qq, i) => [qq.id, i]));
+    const seen = new Set();
+    quiz.sections = raw.sections.slice(0, 50).map((sec, k) => {
+      const where = `sections[${k}]`;
+      if (!sec || typeof sec !== 'object') fail(`${where} should be an object.`);
+      const before = String(sec.before || '');
+      if (!at.has(before)) fail(`${where}.before: there's no question "${before}".`);
+      if (seen.has(before)) fail(`${where}: two sections start at question "${before}".`);
+      seen.add(before);
+      return { before, title: typeof sec.title === 'string' ? sec.title.trim().slice(0, 120) : '', directions: typeof sec.directions === 'string' ? sec.directions.trim().slice(0, 4000) : '' };
+    }).sort((a, b) => at.get(a.before) - at.get(b.before));
+    if (!quiz.sections.length) delete quiz.sections;
+  }
   return quiz;
 }
 

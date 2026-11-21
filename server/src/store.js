@@ -192,8 +192,9 @@ function makeLayout(quiz) {
     order.push(...(quiz.shuffleQuestions ? shuffle(blocks) : blocks).flatMap((b) => b.ids));
     run = [];
   };
+  const sectionStart = new Set((quiz.sections || []).map((sec) => sec.before));
   quiz.questions.forEach((qq, i) => {
-    if (run.length && quiz.questions[i - 1].type !== qq.type) flush();
+    if (run.length && (quiz.questions[i - 1].type !== qq.type || sectionStart.has(qq.id))) flush(); // shuffling stays inside a section
     run.push(qq.id);
   });
   flush();

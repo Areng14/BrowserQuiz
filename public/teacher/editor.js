@@ -436,6 +436,9 @@
   // quiz.json from the editor. Call it once every question is free of problems.
   function collect(quiz) {
     const out = Object.assign({}, quiz, { questions: [] });
+    out.sections = (quiz.sections || []).filter((d) => quiz.questions[d.at])
+      .map((d) => ({ before: quiz.questions[d.at].id, title: (d.title || '').trim(), directions: (d.directions || '').trim() }));
+    if (!out.sections.length) delete out.sections;
     // Shared material that no question uses is left out.
     const used = new Set(quiz.questions.map((q) => q.shared).filter(Boolean));
     out.shared = (quiz.shared || []).filter((m) => used.has(m.id)).map((m) => {
@@ -621,8 +624,13 @@
     if (preset) quiz = preset.quiz;
     if (!quiz) quiz = { format: 1, title: '', timeLimitMin: 20, language: 'java', shuffleQuestions: true, shuffleChoices: true, integrity: { graceStrikes: 1 }, questions: [] };
     quiz.questions.forEach(withUi);
+    // Section dividers: here each sits at a place in the list (before question number at+1), so moving a question
+    // across one moves it into that section. Saved as the id of the question each starts at (collect).
+    quiz.sections = (quiz.sections || []).map((sec) => ({ at: quiz.questions.findIndex((q) => q.id === sec.before), title: sec.title || '', directions: sec.directions || '' }))
+      .filter((d) => d.at >= 0).sort((a, b) => a.at - b.at);
 
     let sel = quiz.questions.length ? 0 : -1; // -1 is Settings
+    let selDiv = null; // the section divider that's open, if any
     let dirty = !!preset;
     let edits = 0;
     let saving = false;
@@ -1299,9 +1307,38 @@
           h('div', {}, pasteBtn), pasteMsg)];
     }
 
+    function selectDivider(k) {
+      selDiv = k;
+      renderPane();
+      const t = pane.querySelector('#qe-div-title');
+      if (t) t.focus({ preventScroll: true });
+    }
+    // A divider goes before the open question (the first one from Settings).
+    function addDivider() {
+      if (!quiz.questions.length) return;
+      const at = Math.max(0, sel);
+      if (!quiz.sections.some((d) => d.at === at)) {
+        quiz.sections.push({ at, title: '', directions: '' });
+        quiz.sections.sort((a, b) => a.at - b.at);
+        touch();
+      }
+      selectDivider(quiz.sections.findIndex((d) => d.at === at));
+    }
+    function dividerPane(k) {
+      const d = quiz.sections[k];
+      const title = input(null, d.title, (v) => { d.title = v; renderOutline(); }, { id: 'qe-div-title', maxlength: '120', placeholder: `Section ${k + 1}` });
+      const dirs = area(null, d.directions, (v) => { d.directions = v; }, { rows: 4, spellcheck: 'true', placeholder: 'Optional. Students see these when the section starts.' });
+      const del = h('button', { class: 'btn small', type: 'button', text: 'Remove section', onclick: () => { quiz.sections.splice(k, 1); touch(); select(d.at); } });
+      paneTick = null;
+      return [h('div', { class: 'qe-head' }, h('h1', { class: 'qe-n', text: 'Section' }), h('span', { class: 'qe-grow' }), del),
+        h('p', { class: 't-small t-muted', text: `Starts at question ${d.at + 1} and runs to the next section.` }),
+        h('div', { class: 'qe-stack' }, field('Title', title), field('Directions', dirs))];
+    }
+
     function renderPane() {
       const q = quiz.questions[sel];
-      pane.replaceChildren(...(q ? questionPane(q, sel) : settingsPane()).flat(Infinity).filter(Boolean));
+      const div = selDiv != null ? quiz.sections[selDiv] : null;
+      pane.replaceChildren(...(div ? dividerPane(selDiv) : q ? questionPane(q, sel) : settingsPane()).flat(Infinity).filter(Boolean));
       pane.querySelectorAll('textarea.qe-area').forEach(grow);
       if (paneTick) paneTick();
       renderOutline();
@@ -1313,11 +1350,19 @@
       const kids = [];
       const rows = [];
       quiz.questions.forEach((q, i) => {
-        if (i === 0 || quiz.questions[i - 1].type !== q.type) kids.push(h('li', { class: 'qe-part', text: TYPES[q.type] }));
+        const k = quiz.sections.findIndex((d) => d.at === i);
+        if (k >= 0) {
+          const d = quiz.sections[k];
+          kids.push(h('li', { class: `qe-divider${selDiv === k ? ' sel' : ''}` },
+            h('button', { class: 'qe-row-btn', type: 'button', 'aria-current': selDiv === k ? 'true' : null, onclick: () => selectDivider(k) },
+              h('span', { class: 'qe-row-text', text: d.title || `Section ${k + 1}` }))));
+        }
+        if (i === 0 || k >= 0 || quiz.questions[i - 1].type !== q.type) kids.push(h('li', { class: 'qe-part', text: TYPES[q.type] }));
         const text = q.name || snippet(q.prompt);
         const bad = problems[i].length && (tried || fromServer.has(q));
-        const row = h('li', { class: `qe-row${i === sel ? ' sel' : ''}${bad ? ' bad' : ''}` },
-          h('button', { class: 'qe-row-btn', type: 'button', 'aria-current': i === sel ? 'true' : null, onclick: () => select(i, true) },
+        const here = i === sel && selDiv == null;
+        const row = h('li', { class: `qe-row${here ? ' sel' : ''}${bad ? ' bad' : ''}` },
+          h('button', { class: 'qe-row-btn', type: 'button', 'aria-current': here ? 'true' : null, onclick: () => select(i, true) },
             h('span', { class: 'qe-row-n', text: String(i + 1) }),
             h('span', { class: `qe-row-text${text ? '' : ' t-muted'}`, text: text || 'No prompt yet' }),
             problems[i].length ? h('span', { class: 'qe-dot', title: problems[i].join('\n'), role: 'img', 'aria-label': bad ? 'Has problems' : 'Not finished' }) : null,
@@ -1327,12 +1372,13 @@
       });
       sortable(rows, moveQuestion);
       outline.replaceChildren(...kids);
-      settingsBtn.classList.toggle('sel', sel < 0);
+      settingsBtn.classList.toggle('sel', sel < 0 && selDiv == null);
       const pts = Math.round(quiz.questions.reduce((s, q) => s + (Number(q.points) || 0), 0) * 100) / 100;
       total.textContent = quiz.questions.length ? `${plural(quiz.questions.length, 'question')}, ${plural(pts, 'point')}` : '';
       undoRow.replaceChildren(...(removed ? [`Deleted question ${removed.at + 1}. `, h('button', { class: 't-link', type: 'button', text: 'Undo', onclick: () => {
         const r = removed;
         removed = null;
+        for (const d of quiz.sections) if (r.wasStart ? d.at > r.at : d.at >= r.at) d.at++;
         quiz.questions.splice(Math.min(r.at, quiz.questions.length), 0, r.q);
         touch();
         select(quiz.questions.indexOf(r.q));
@@ -1340,6 +1386,7 @@
     }
 
     function select(i, focus) {
+      selDiv = null;
       sel = Math.max(-1, Math.min(quiz.questions.length - 1, i));
       renderPane();
       const top = root.getBoundingClientRect().top + window.scrollY;
@@ -1361,6 +1408,7 @@
       if (!like) { at = 0; quiz.questions.forEach((q, i) => { if (order.indexOf(q.type) <= rank) at = i + 1; }); }
       const q = blank(type, like ? { id: nextId(), points: like.points, mode: type === 'code' ? like.mode : null, languages: like.languages && like.languages.slice(), language: like.language } : { id: nextId() });
       if (like && like.shuffleChoices === false) q.shuffleChoices = false;
+      for (const d of quiz.sections) if (d.at >= at) d.at++; // a new question joins the section of the one before it
       quiz.questions.splice(at, 0, q);
       removed = null;
       touch();
@@ -1369,13 +1417,19 @@
     function duplicate(i) {
       const q = JSON.parse(JSON.stringify(quiz.questions[i]));
       q.id = nextId();
+      for (const d of quiz.sections) if (d.at >= i + 1) d.at++;
       quiz.questions.splice(i + 1, 0, q);
       removed = null;
       touch();
       select(i + 1, true);
     }
     function remove(i) {
-      removed = { q: quiz.questions.splice(i, 1)[0], at: i };
+      // A section left with no questions goes too; later dividers move up one.
+      if (quiz.sections.some((d) => d.at === i + 1)) quiz.sections = quiz.sections.filter((d) => d.at !== i);
+      const wasStart = quiz.sections.some((d) => d.at === i);
+      for (const d of quiz.sections) if (d.at > i) d.at--;
+      removed = { q: quiz.questions.splice(i, 1)[0], at: i, wasStart };
+      quiz.sections = quiz.sections.filter((d) => d.at < quiz.questions.length);
       touch();
       select(quiz.questions.length ? Math.min(i, quiz.questions.length - 1) : -1);
     }
@@ -1384,7 +1438,14 @@
       const cur = quiz.questions[sel];
       const active = document.activeElement;
       const keep = pane.contains(active) && active.id ? active.id : null;
-      quiz.questions.splice(to, 0, quiz.questions.splice(from, 1)[0]);
+      // One step at the edge of a section crosses the divider: the question changes section and stays put,
+      // instead of jumping over its neighbor. (Not when it's a section's only question.)
+      const at = (i) => quiz.sections.find((d) => d.at === i);
+      const crossUp = to === from - 1 && at(from) && !at(from + 1) && from + 1 < quiz.questions.length;
+      const crossDown = to === from + 1 && at(to) && !at(from);
+      if (crossUp) at(from).at = from + 1;
+      else if (crossDown) at(to).at = from;
+      else quiz.questions.splice(to, 0, quiz.questions.splice(from, 1)[0]);
       sel = quiz.questions.indexOf(cur);
       removed = null;
       touch();
@@ -1498,7 +1559,8 @@
         h('nav', { class: 'qe-side', 'aria-label': 'Questions' },
           settingsBtn, total, outline, undoRow,
           h('div', { class: 'qe-add' }, h('span', { class: 'field-label', text: 'Add' }),
-            h('div', { class: 'qe-add-btns' }, Object.keys(TYPES).map((t) => h('button', { class: 'btn small', type: 'button', text: short[t], 'data-add': t, onclick: () => addQuestion(t) })))),
+            h('div', { class: 'qe-add-btns' }, Object.keys(TYPES).map((t) => h('button', { class: 'btn small', type: 'button', text: short[t], 'data-add': t, onclick: () => addQuestion(t) })),
+              h('button', { class: 'btn small qe-add-section', type: 'button', text: 'Section divider', title: 'Starts a section at the open question', onclick: addDivider }))),
           h('details', { class: 'qe-keys t-small' }, h('summary', { text: 'Shortcuts' }),
             h('dl', {}, keys.map(([k, what]) => [h('dt', { text: k }), h('dd', { text: what })])))),
         pane));

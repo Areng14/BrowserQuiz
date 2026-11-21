@@ -503,16 +503,22 @@
     return `${plural(n, 'question')}${pts ? ` (${plural(pts, 'point')})` : ''}${mins ? ` in ${plural(mins, 'minute')}` : ''}.`;
   }
   function overview(run) {
-    const groups = [];
-    for (const q of run.outline || []) {
-      let g = groups.find((x) => x.type === q.type);
-      if (!g) groups.push(g = { type: q.type, qs: [], points: 0 });
-      g.qs.push(q);
-      g.points += q.points;
+    const outline = run.outline || [];
+    let groups = [];
+    if (run.sections && run.sections.length) {
+      // the teacher's sections, in order
+      groups = partsFor(outline.map((q) => q.type), run.sections).map((p) => ({ title: p.title, qs: outline.slice(p.start, p.end + 1) }));
+    } else {
+      for (const q of outline) {
+        let g = groups.find((x) => x.type === q.type);
+        if (!g) groups.push(g = { type: q.type, title: (PARTS[q.type] || { title: 'Questions' }).title, qs: [] });
+        g.qs.push(q);
+      }
     }
+    groups.forEach((g) => { g.points = g.qs.reduce((t, q) => t + q.points, 0); });
     if (!groups.length) return null;
     return h('div', { class: 'overview' }, groups.map((g) => h('details', { class: 'ov-group' },
-      h('summary', {}, h('span', {}, h('b', { text: `${(PARTS[g.type] || { title: 'Questions' }).title}: ` }), `${plural(g.qs.length, 'question')} (${plural(round2(g.points), 'point')})`)),
+      h('summary', {}, h('span', {}, h('b', { text: `${g.title}: ` }), `${plural(g.qs.length, 'question')} (${plural(round2(g.points), 'point')})`)),
       h('ul', { class: 'ov-list' }, g.qs.map((q) => h('li', {},
         q.n ? `Question ${q.n}${q.name ? `: ${q.name}` : ''}` : q.name || 'Unnamed question',
         h('span', { class: 'ov-pts', text: ` (${plural(q.points, 'point')})` })))))));
@@ -728,21 +734,36 @@
   }
 
   // ---------- parts + directions ----------
-  // Back-to-back questions of the same type form a part. Entering a part the first time shows its directions.
-  function buildParts(questions) {
+  // Back-to-back questions of the same type form a part, unless the teacher divided the quiz into sections:
+  // each section is a part, whatever its questions' types. Entering a part the first time shows its directions.
+  // types: each question's type, in order. sections: [{ start, title, directions }] from the server.
+  function partsFor(types, sections) {
+    const starts = new Map((sections || []).map((sec) => [sec.start, sec]));
     const parts = [];
-    questions.forEach((q, i) => {
+    types.forEach((type, i) => {
       const last = parts[parts.length - 1];
-      if (last && last.type === q.type) last.end = i;
-      else parts.push({ type: q.type, start: i, end: i });
+      if (starts.has(i)) parts.push({ type, types: [type], start: i, end: i, section: starts.get(i) });
+      else if (last && (last.section || last.type === type)) { last.end = i; if (!last.types.includes(type)) last.types.push(type); }
+      else parts.push({ type, types: [type], start: i, end: i });
     });
-    const custom = S.quiz.directions || {};
+    let made = 0;
     parts.forEach((p, n) => {
-      const base = PARTS[p.type] || { title: 'Questions', text: '' };
       p.n = n + 1;
-      p.title = base.title;
-      p.text = custom[p.type] || base.text;
+      if (p.section) made++;
+      p.title = p.section ? p.section.title || `Section ${made}` : (PARTS[p.type] || { title: 'Questions' }).title;
     });
+    return parts;
+  }
+  function buildParts(questions) {
+    const custom = S.quiz.directions || {};
+    const parts = partsFor(questions.map((q) => q.type), S.quiz.sections);
+    for (const p of parts) {
+      // A section's own directions, or else each of its kinds' (the teacher's for that kind, or the built-in).
+      const textOf = (t) => custom[t] || (PARTS[t] || { text: '' }).text;
+      if (p.section && p.section.directions) p.md = p.section.directions;
+      else if (p.types.length > 1) p.list = p.types.map((t) => [(PARTS[t] || { title: t }).title, textOf(t)]);
+      else p.text = textOf(p.type);
+    }
     return parts;
   }
   const partOf = (i) => S.parts.find((p) => i >= p.start && i <= p.end);
@@ -1113,7 +1134,9 @@
     return h('div', { class: 'qview' },
       h('div', { class: 'meta-row' }, h('span', { text: `Part ${part.n} of ${S.parts.length}` }), h('span', { text: range })),
       h('h1', { id: 'q-heading', text: part.title }),
-      h('p', { class: 'directions' }, h('strong', { text: 'Directions: ' }), part.text),
+      part.md ? h('div', { class: 'directions prompt' }, BQ.md.render(part.md, { lang: S.quiz.language }))
+        : part.list ? h('div', { class: 'directions' }, h('strong', { text: 'Directions' }), h('ul', {}, part.list.map(([t, text]) => h('li', {}, h('b', { text: `${t}: ` }), text))))
+          : h('p', { class: 'directions' }, h('strong', { text: 'Directions: ' }), part.text),
       quizDirections(S.quiz.directions && S.quiz.directions.quiz, 'For the whole quiz'),
       h('div', {}, h('button', { class: 'btn primary', type: 'button', text: seen ? 'Back to the question' : 'Start this part', onclick: closeDirections })));
   }
@@ -2186,7 +2209,7 @@
       return;
     }
     S.quiz = r.quiz;
-    S.run = { title: r.quiz.title, timeLimitMin: r.quiz.timeLimitMin, questionCount: r.quiz.questions.length, outline: r.quiz.questions.map((q, i) => ({ type: q.type, points: q.points, name: q.name, n: i + 1 })), quizDirections: (r.quiz.directions && r.quiz.directions.quiz) || '', hasCode: r.quiz.questions.some((q) => q.type === 'code') };
+    S.run = { title: r.quiz.title, timeLimitMin: r.quiz.timeLimitMin, questionCount: r.quiz.questions.length, outline: r.quiz.questions.map((q, i) => ({ type: q.type, points: q.points, name: q.name, n: i + 1 })), quizDirections: (r.quiz.directions && r.quiz.directions.quiz) || '', sections: r.quiz.sections || [], hasCode: r.quiz.questions.some((q) => q.type === 'code') };
     S.deadline = 0;
     S.answers = {};
     loadMarks();

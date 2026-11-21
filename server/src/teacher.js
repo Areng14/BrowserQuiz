@@ -170,6 +170,7 @@ function quizSource(quiz) {
     shuffleQuestions: quiz.shuffleQuestions, shuffleChoices: quiz.shuffleChoices, integrity: quiz.integrity };
   if (Object.keys(quiz.directions || {}).length) out.directions = quiz.directions;
   if (quiz.shared && quiz.shared.length) out.shared = quiz.shared;
+  if (quiz.sections && quiz.sections.length) out.sections = quiz.sections;
   out.questions = quiz.questions.map((qq) => {
     const o = { id: qq.id, type: qq.type, prompt: qq.prompt, points: qq.points };
     if (qq.name) o.name = qq.name;

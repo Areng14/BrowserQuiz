@@ -250,6 +250,11 @@ input[type="file"].input { padding: 6px 10px; }
 .qe-add > .field-label { padding-left: 8px; }
 .qe-add-btns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
 .qe-add-btns .btn { padding: 0 6px; }
+.qe-add-btns .qe-add-section { grid-column: 1 / -1; }
+/* a section divider in the question list: a heading row */
+.qe-divider { margin-top: 8px; border-top: 2px solid var(--line); }
+.qe-divider .qe-row-btn { font-weight: 700; padding-block: 8px; }
+.qe-divider.sel .qe-row-btn { background: var(--soft); }
 .qe-keys { padding: 0 8px; color: var(--ink-2); }
 .qe-keys summary, .qe-paste summary { cursor: pointer; width: max-content; }
 .qe-keys dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0 0; }
