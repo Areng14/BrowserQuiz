@@ -158,6 +158,9 @@ input[type="file"].input { padding: 6px 10px; }
 .t-app .t-temp { padding: 1px 6px; font: 600 15px var(--mono); background: var(--soft); border: 1px solid var(--line); border-radius: 4px; user-select: all; }
 
 .t-table-wrap { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+/* Scrolling boxes hold what's placed absolutely inside them (screen-reader labels), so it can't stick out
+   past the page's end and leave blank space to scroll into. */
+.t-steps, .t-ai-prompt, .t-ai-table, .t-ai-key, .t-events, .t-answer pre, .qe-code, .qe-view, .qe-grid-wrap { position: relative; }
 .t-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
 .t-table th, .t-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 .t-table th { font-size: 13px; font-weight: 600; color: var(--ink-2); background: var(--soft); }

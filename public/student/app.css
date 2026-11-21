@@ -202,7 +202,10 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .timer.warn { color: var(--bad); }
 .timer.crit { color: var(--bad); font-weight: 800; }
 
-.qmain { overflow: auto; padding: 32px var(--gut-r) 48px var(--gut-l); outline: none; }
+/* position: things placed absolutely inside (screen-reader labels) stay in its scrolling. Otherwise they're
+   placed against the whole quiz, and a long question makes the page itself scroll, bars and all. */
+.qmain { position: relative; overflow: auto; padding: 32px var(--gut-r) 48px var(--gut-l); outline: none; }
+.results, .res-pre, .q-navigator, .md-code, .md-table, .trace-wrap, .choice-rich pre { position: relative; } /* the same, for the smaller scrolling boxes */
 .bq-app .qmain:focus, .bq-app .qmain:focus-visible { outline: none; } /* focus lands here between questions */
 .qview { max-width: 720px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .qview.wide { max-width: 2400px; }

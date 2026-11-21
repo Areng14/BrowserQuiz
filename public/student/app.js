@@ -134,6 +134,13 @@
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
 
+  // The page itself never scrolls (index.html): if something nudges it anyway (find in page, a field
+  // brought into view, the browser putting back an old scroll), the bars would end up off the edge. Put it
+  // back. Not on phones, where the keyboard moves the page to show the field being typed in.
+  if (window.matchMedia('(pointer: fine)').matches) {
+    window.addEventListener('scroll', () => { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); }, { passive: true });
+  }
+
   // ---------- light / dark ----------
   const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
   function isDark() {

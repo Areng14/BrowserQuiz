@@ -79,6 +79,7 @@
 .r-view blockquote p { margin: 2px 0; }
 .r-view hr { margin: 8px 0; border: 0; border-top: 1px solid var(--line); }
 .r-view .md-table { max-width: 100%; margin: 6px 0; overflow-x: auto; }
+.r-view .md-table, .r-view .r-trace-wrap, .r-view .r-tests-wrap { position: relative; } /* what's placed inside stays inside */
 .r-view .md-table table { border-collapse: collapse; font-size: 14px; }
 .r-view .md-table th, .r-view .md-table td { padding: 5px 10px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
 .r-view .md-table th { font-weight: 600; background: var(--soft); }

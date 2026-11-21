@@ -11,6 +11,9 @@
   <link rel="stylesheet" href="/teacher/teacher.css">
   <style>
     html, body { height: 100%; margin: 0; }
+    /* The app fills the window and scrolls inside itself; the page never scrolls (not on phones, where the
+       keyboard needs to bring a field into view). */
+    @media (pointer: fine) { html, body { overflow: hidden; overscroll-behavior: none; } }
     body.t-app { display: flex; flex-direction: column; min-height: 0; background: var(--soft); color: var(--ink); }
     .w-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--line); font-size: 14px; }
     .w-bar h1 { margin: 0; font-size: 15px; font-weight: 600; }

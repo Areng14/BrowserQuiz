@@ -10,6 +10,9 @@
   <link rel="stylesheet" href="app.css">
   <style>
     html, body { height: 100%; margin: 0; }
+    /* The app fills the window and scrolls inside itself; the page never scrolls (not on phones, where the
+       keyboard needs to bring a field into view). */
+    @media (pointer: fine) { html, body { overflow: hidden; overscroll-behavior: none; } }
     body { background: var(--bg); }
     [hidden] { display: none !important; }
   </style>
