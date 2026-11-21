@@ -2,17 +2,21 @@
 // Safe Exam Browser (SEB) settings that BrowserQuiz makes for a quiz, as a .seb file, plus the Config
 // Key SEB works out from them. SEB sends X-SafeExamBrowser-ConfigKeyHash (SHA-256 of the request URL
 // followed by the Config Key) on every request, which is how the server knows it's SEB running these
-// settings (student.js requireSeb).
+// settings (student.js requireSeb). SEB's newer engine (SEB for iPad, newer Macs) can't add headers: it
+// gives the page the same hash for the page's own address instead, and the page sends that along.
 const crypto = require('crypto');
 
 // The settings for one quiz. SEB starts on the join page with the code filled in, and quits when the
 // student opens quitURL from the "turned in" screen. Everything else is SEB's default: full screen,
 // no other apps, no address bar, one display, no screenshots.
-function settingsFor(origin, code) {
+// A quit password is what makes SEB lock the device: without one, SEB on an iPad opens the quiz without
+// Assessment Mode. The teacher sees it on the live run page.
+function settingsFor(origin, code, quitPassword) {
   return {
     allowPreferencesWindow: false, // students can't open SEB's settings
-    allowQuit: true, // a stuck student can still get out (that's logged as leaving the quiz)
+    allowQuit: true, // a stuck student can still get out, with the teacher's quit password (logged as leaving the quiz)
     browserWindowWebView: 3, // macOS: the modern WebKit, which the code editor needs
+    ...(quitPassword ? { hashedQuitPassword: crypto.createHash('sha256').update(quitPassword).digest('hex') } : {}),
     quitURL: `${origin}/seb-quit.html`,
     sendBrowserExamKey: true, // sends the Config Key hash header
     startURL: `${origin}/?code=${code}`,
@@ -73,9 +77,15 @@ function configKey(settings) {
 }
 
 // A run's SEB file and key. origin: the address students use (scheme and host, no path).
-function makeConfig(origin, code) {
-  const settings = settingsFor(origin, code);
-  return { xml: plist(settings), key: configKey(settings) };
+// A quit password the teacher can type on a student's screen: 10 letters and digits, none that look alike.
+function newQuitPassword() {
+  const abc = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  return Array.from(crypto.randomBytes(10), (b) => abc[b % abc.length]).join('');
 }
 
-module.exports = { makeConfig, configKey, sebJson, plist, settingsFor };
+function makeConfig(origin, code, quitPassword = newQuitPassword()) {
+  const settings = settingsFor(origin, code, quitPassword);
+  return { xml: plist(settings), key: configKey(settings), quitPassword };
+}
+
+module.exports = { makeConfig, configKey, sebJson, plist, settingsFor, newQuitPassword };

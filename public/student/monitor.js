@@ -302,12 +302,18 @@
 
       // Only the window changing size counts. Zooming the page (which a student may need to read it) changes
       // the inner size only.
+      // Turning a tablet sideways isn't one either (only on touch screens: a desktop window snapped to half the
+      // screen can turn tall too).
       let outer = window.outerWidth + 'x' + window.outerHeight;
+      const portrait = () => window.matchMedia('(orientation: portrait)').matches;
+      let wasPortrait = portrait();
       this.on(window, 'resize', () => {
         const now = window.outerWidth + 'x' + window.outerHeight;
         if (now === outer) return;
         outer = now;
-        if (Date.now() - this.fsChangedAt > 1500) this.report('resize', window.innerWidth + 'x' + window.innerHeight);
+        const turned = portrait() !== wasPortrait && window.matchMedia('(pointer: coarse)').matches;
+        wasPortrait = portrait();
+        if (!turned && Date.now() - this.fsChangedAt > 1500) this.report('resize', window.innerWidth + 'x' + window.innerHeight);
       });
 
       // In fullscreen the page is the whole window. Zoom scales width and height alike, so if one of

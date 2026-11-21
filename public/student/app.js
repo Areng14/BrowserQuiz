@@ -298,10 +298,12 @@
     const btn = h('button', { class: 'btn primary', type: 'submit', text: 'Join' });
     // A quiz that needs Safe Exam Browser: the seb:// (sebs:// on https) link starts SEB with the quiz's settings.
     const seb = h('div', { class: 'seb-launch', hidden: true });
+    // iPads say they're Macs; a touch screen gives them away. SEB for them comes from the App Store.
+    const apple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
     const showSeb = (c) => {
       const href = `${location.protocol === 'https:' ? 'sebs' : 'seb'}://${location.host}/api/seb/${c}.seb`;
       seb.replaceChildren(h('a', { class: 'btn primary', href, text: 'Open Safe Exam Browser' }),
-        h('p', { class: 'hint' }, 'Nothing happens? ', h('a', { href: 'https://safeexambrowser.org/download_en.html', target: '_blank', rel: 'noopener', text: 'Get Safe Exam Browser' })));
+        h('p', { class: 'hint' }, 'Nothing happens? ', h('a', { href: apple ? 'https://apps.apple.com/app/id1155002964' : 'https://safeexambrowser.org/download_en.html', target: '_blank', rel: 'noopener', text: 'Get Safe Exam Browser' })));
       seb.hidden = false;
     };
     const form = h('form', { class: 'panel', novalidate: true },
@@ -482,9 +484,12 @@
     return [
       { label: 'Browser extension', ok: !page.spoofed.length, note: page.spoofed.length ? 'An extension is changing this page. Turn your extensions off, then reload.' : null },
       { label: 'Extensions', ok: !page.added.length, soft: true, note: page.added.length ? 'Turn off any you don\'t need. Your teacher sees which are on.' : null },
-      { label: 'One display', ok: ext !== true, note: ext === true ? 'Unplug the second monitor, then reload this page.' : null },
-      { label: 'Fullscreen works', ok: !!document.fullscreenEnabled, note: document.fullscreenEnabled ? null : 'Open this page in Edge or Chrome.' },
-      { label: 'Desktop computer', ok: desktop, note: desktop ? null : window.matchMedia('(pointer: fine)').matches ? 'Maximize this window.' : 'Take the quiz on a lab computer with a mouse.' },
+      // Safe Exam Browser locks the screen itself, on a computer or an iPad.
+      ...(S.run && S.run.seb ? [] : [
+        { label: 'One display', ok: ext !== true, note: ext === true ? 'Unplug the second monitor, then reload this page.' : null },
+        { label: 'Fullscreen works', ok: !!document.fullscreenEnabled, note: document.fullscreenEnabled ? null : 'Open this page in Edge or Chrome.' },
+        { label: 'Desktop computer', ok: desktop, note: desktop ? null : window.matchMedia('(pointer: fine)').matches ? 'Maximize this window.' : 'Take the quiz on a lab computer with a mouse.' },
+      ]),
     ];
   }
 

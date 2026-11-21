@@ -669,6 +669,7 @@ module.exports = function teacherRoutes(r) {
     const id = crypto.randomUUID();
     const code = newJoinCode();
     let sebConfig = null;
+    let sebQuit = null;
     if (body.seb && !sebKey) {
       // SEB opens the quiz at the address the teacher is using now, which students use too.
       const host = String(req.headers.host || '');
@@ -676,9 +677,10 @@ module.exports = function teacherRoutes(r) {
       const made = makeSebConfig(`${isHttps(req) ? 'https' : 'http'}://${host}`, code);
       sebKey = made.key;
       sebConfig = made.xml;
+      sebQuit = made.quitPassword;
     }
-    q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at, owner_id, seb_key, seb_config) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)")
-      .run(id, body.quizId, body.rosterId, code, body.ipLock ? clientIp(req) : null, body.practice ? 'practice' : 'exam', Date.now(), me.id, sebKey, sebConfig);
+    q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at, owner_id, seb_key, seb_config, seb_quit) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)")
+      .run(id, body.quizId, body.rosterId, code, body.ipLock ? clientIp(req) : null, body.practice ? 'practice' : 'exam', Date.now(), me.id, sebKey, sebConfig, sebQuit);
     audit(me, 'open-run', null, code);
     json(res, 200, { id, code });
   });
@@ -741,7 +743,7 @@ module.exports = function teacherRoutes(r) {
     const roster = rosterStudentsForRun(run);
     const byStudent = new Map(q('SELECT id, student_id FROM attempts WHERE run_id = ? AND archived = 0').all(run.id).map((x) => [x.student_id, store.getAttempt(x.id)]));
     json(res, 200, {
-      run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin },
+      run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, sebQuit: run.seb_quit || null, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin },
       students: roster.map((s) => liveRow(s, byStudent.get(s.id), quiz)),
     });
   });

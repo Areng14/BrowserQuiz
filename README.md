@@ -17,7 +17,7 @@ it against hidden tests, and your data never leaves your machine.
 - **Auto grading and reports.** Every answer next to the right one, with a diff view for code. Export to
   CSV.
 - **Exam lockdown.** Full screen, leaving the window gets flagged quietly, and Safe Exam Browser is an
-  option.
+  option, on lab PCs or locked-down iPads.
 - **Student tools.** Scratchpad, highlighting, mark for review, cross out choices, dark mode. Works with
   a keyboard and screen readers.
 - **Multiple teachers.** Each one only sees their own stuff.

@@ -89,7 +89,19 @@ can't require it.)
    the page links to SEB's download page. The quiz's page also has the SEB link and the `.seb` file,
    to post or hand out.
 
-When students turn in, **Quit Safe Exam Browser** closes it.
+When students turn in, **Quit Safe Exam Browser** closes it. A stuck student can also quit with the
+**SEB quit password** on the quiz's page; that counts as leaving the quiz.
+
+**iPads** work too, much like Bluebook: SEB locks the iPad into Assessment Mode, so students can't
+switch apps until they turn in.
+
+1. Install **SafeExamBrowser** from the App Store on each iPad (iPadOS 12 or later).
+2. Students join in Safari and tap **Open Safe Exam Browser**, or open the SEB link from the quiz's
+   page. Without SEB installed, the page links to the App Store.
+3. The iPad stays locked until they turn in and tap **Quit Safe Exam Browser**, or you type the quit
+   password.
+
+Phones can take practice quizzes, but not exams.
 
 Have your own settings from SEB Config Tool? Open **Use my own .seb file** and paste the Config Key.
 It's on the Exam tab, with sending the Browser Exam Key and Config Key turned on. If you change those

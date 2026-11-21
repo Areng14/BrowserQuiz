@@ -655,6 +655,8 @@
     const toggle = h('button', { class: 'btn', type: 'button' });
     const lockBtn = h('button', { class: 'btn', type: 'button' });
     const howTo = h('p', { class: 't-muted t-small' });
+    // A stuck student can only leave Safe Exam Browser with this; it's also what locks an iPad.
+    const quitPw = h('p', { class: 't-small', hidden: true });
     const sebLinks = h('span', { class: 't-seb-links', hidden: true });
     const failedBox = h('div');
     let lastDetail = '';
@@ -695,6 +697,8 @@
       title.textContent = run.title;
       meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
       howTo.textContent = run.sebFile ? `Join at ${location.origin}, which opens Safe Exam Browser` : `Join at ${location.origin}`;
+      quitPw.hidden = !run.sebQuit || run.status !== 'open';
+      if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp', text: run.sebQuit }));
       if (run.sebFile && !sebLinks.childNodes.length) sebLinks.append(...sebButtons(run.code));
       sebLinks.hidden = !run.sebFile || run.status !== 'open';
       toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
@@ -852,7 +856,7 @@
     mount(shell(tab === 'results' ? 'results' : 'give',
         h('section', { class: 't-section' },
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
-          howTo,
+          howTo, quitPw,
           h('div', { class: 't-row' }, admitAll, toggle, lockBtn, sebLinks, exportLink, classReport),
           failedBox, summary),
         h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },

@@ -48,13 +48,31 @@ const safeEqual = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buff
 // Safe Exam Browser: a run with a Config Key only answers SEB running that exam's settings. SEB sends
 // X-SafeExamBrowser-ConfigKeyHash on every request: SHA-256 of the request's full URL followed by the
 // Config Key. A normal browser doesn't have it, and can't make it without the key.
+const sameHash = (got, want) => got.length === want.length && crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want));
+
+// Only Safe Exam Browser running the quiz's settings gets in. Two ways it proves that, each SHA-256 of an
+// address followed by the Config Key:
+// - the X-SafeExamBrowser-ConfigKeyHash header, for this request's address (SEB for Windows, older Macs)
+// - the hash SEB's newer engine (SEB for iPad, newer Macs) gives the page through its JavaScript API, for
+//   the page's own address. The page sends both along (api.js); the address has to be one of ours.
 function requireSeb(req, run) {
   if (!run.seb_key) return;
-  const url = `${isHttps(req) ? 'https' : 'http'}://${req.headers.host}${req.url}`;
-  const want = crypto.createHash('sha256').update(url + run.seb_key).digest('hex');
-  const got = String(req.headers['x-safeexambrowser-configkeyhash'] || '').toLowerCase();
+  const origin = `${isHttps(req) ? 'https' : 'http'}://${req.headers.host}`;
+  const header = String(req.headers['x-safeexambrowser-configkeyhash'] || '').toLowerCase();
+  if (header && sameHash(header, sha256(origin + req.url + run.seb_key))) return;
+  let pages = [req.headers['x-bq-seb-page'], req.headers['x-bq-seb-first']];
+  let key = req.headers['x-bq-seb-key'];
+  if (!key && req.url.includes('sebkey=')) { // pictures: <img> can't send headers, so they come in the address
+    const u = new URL(req.url, origin);
+    pages = [u.searchParams.get('seb'), u.searchParams.get('sebfirst')];
+    key = u.searchParams.get('sebkey');
+  }
+  key = String(key || '').toLowerCase();
+  // the address the hash was made for: the page now, or as it first loaded (before the app dropped ?code=)
+  const ours = (page) => { try { const u = new URL(String(page || '')); return u.origin === origin && (u.pathname === '/' || u.pathname === '/index.html'); } catch (e) { return false; } };
+  if (/^[0-9a-f]{64}$/.test(key) && pages.some((page) => ours(page) && sameHash(key, sha256(page + run.seb_key)))) return;
   // seb_launch: BrowserQuiz made the settings, so the join page can start SEB with them.
-  if (got.length !== want.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want))) throw new HttpError(403, run.seb_config ? 'seb_launch' : 'seb_required');
+  throw new HttpError(403, run.seb_config ? 'seb_launch' : 'seb_required');
 }
 
 function openRun(runId, req) {
