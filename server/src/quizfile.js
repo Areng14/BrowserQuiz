@@ -30,7 +30,7 @@ function loadQuizFile(buf) {
   if (!Buffer.isBuffer(buf) || buf.length === 0) fail('The upload was empty.');
   if (buf.length > LIMITS.uploadBytes) fail('The .quiz file is bigger than 25 MB.');
   let files;
-  try { files = readZip(buf); } catch (e) { fail("That file isn't a valid .quiz file (it should be a zip): " + e.message); }
+  try { files = readZip(buf); } catch (e) { fail("That isn't a .quiz file. Pick a .quiz from BrowserQuiz, or a quiz.json."); }
   for (const name of [...files.keys()]) {
     if (name.startsWith('__MACOSX/') || /(^|\/)(\.DS_Store|Thumbs\.db|desktop\.ini)$/i.test(name)) files.delete(name);
     else if (name.startsWith('/') || name.split('/').some((s) => s === '..' || s === '')) fail(`Bad file name in the zip: ${name}`);

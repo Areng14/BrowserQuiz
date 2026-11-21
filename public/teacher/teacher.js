@@ -380,9 +380,12 @@
   }
 
   function quizzesTab(data) {
-    // No accept filter: Safari only knows file types it has heard of, so it greys out .quiz files. The server
-    // checks what comes in.
-    const quizFile = h('input', { class: 'input', type: 'file', id: 'quiz-file' });
+    // Only .quiz (and quiz.json) files can be picked, except in Safari's engine (Safari, and every iPhone
+    // and iPad browser): it only knows file types it has heard of, so it greys .quiz files out. There any
+    // file can be picked; the server checks what comes in either way.
+    const ua = navigator.userAgent;
+    const webkitPicker = /AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg|OPR|Android/.test(ua);
+    const quizFile = h('input', { class: 'input', type: 'file', id: 'quiz-file', accept: webkitPicker ? null : '.quiz,.zip,.json' });
     const quizMsg = h('p', { class: 't-error', role: 'alert' });
     // Paste quiz.json (from an AI chat, say) and upload it straight away.
     const pasteJson = h('textarea', { class: 'input t-textarea', id: 'paste-quiz', rows: 8, spellcheck: 'false', placeholder: '{ "title": "...", "questions": [ ... ] }' });
