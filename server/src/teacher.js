@@ -18,17 +18,34 @@ const G = require('./grade');
 const { fillTemplate: fillT } = require('./quizfile');
 // AI grading in progress, per run: { total, graded, failed, errors, running }. One at a time per run.
 const aiJobs = new Map();
-// The key AI grading uses for this teacher: their own (sealed in the database with their quiz key, so it
-// reads only while they're signed in), or else the server's. Never sent back to the browser.
+// The key AI grading uses for this teacher, and whose it is (Anthropic, OpenAI or Google): their own
+// (sealed in the database with their quiz key, so it reads only while they're signed in), or else the
+// server's. Never sent back to the browser.
 const aiKeyAad = (id) => `aikey:${id}`;
 function aiKeyOf(me) {
   const row = q('SELECT ai_key FROM teachers WHERE id = ?').get(me.id);
   if (row && row.ai_key) {
-    try { return { key: V.openText(V.needKey(me.id), row.ai_key, aiKeyAad(me.id)), mine: true }; } catch (e) { /* unreadable: treat as none */ }
+    try {
+      const key = V.openText(V.needKey(me.id), row.ai_key, aiKeyAad(me.id));
+      const provider = AI.providerOf(key);
+      if (provider) return { key, provider, mine: true };
+    } catch (e) { /* unreadable: treat as none */ }
   }
-  return process.env.ANTHROPIC_API_KEY ? { key: process.env.ANTHROPIC_API_KEY, mine: false } : null;
+  const sk = AI.serverKey();
+  return sk ? { ...sk, mine: false } : null;
 }
 const keyHint = (k) => `…${String(k).slice(-4)}`;
+// What the dialog shows about the keys: whose, and the last four of the teacher's own.
+function keyState(me) {
+  const k = aiKeyOf(me);
+  const sk = AI.serverKey();
+  const P = (id) => AI.PROVIDERS[id];
+  return {
+    mine: !!(k && k.mine), hint: k && k.mine ? keyHint(k.key) : null,
+    name: k ? P(k.provider).name : null, company: k ? P(k.provider).company : null,
+    server: sk ? P(sk.provider).company : null,
+  };
+}
 const keyChecks = new Map(); // teacher id -> times they had a key checked
 const { HttpError, clientIp, isHttps, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
 const { makeConfig: makeSebConfig } = require('./seb');
@@ -737,23 +754,22 @@ module.exports = function teacherRoutes(r) {
   // Runs in the background; the live page shows how far it's got.
   function startAi(me, run, quiz, attempts) {
     const k = aiKeyOf(me);
-    if (!k) throw new HttpError(409, 'ai_off', 'Grading here needs an Anthropic API key: add yours in Grade with AI, or copy and paste instead.');
+    if (!k) throw new HttpError(409, 'ai_off', 'Grading here needs an API key: add yours in Grade with AI, or copy and paste instead.');
     const was = aiJobs.get(run.id);
     if (was && was.running) throw new HttpError(409, 'ai_busy', 'AI grading is already running for this quiz.');
     const job = { total: 0, graded: 0, failed: 0, errors: [], running: true, started: Date.now() };
     aiJobs.set(run.id, job);
     const sub = attempts.filter((x) => x && x.status === 'submitted' && x.result);
-    AI.gradeAttempts(quiz, sub, { questionScore: G.questionScore, autoMarks: G.autoMarks, isRun: G.isRun, fillTemplate: fillT }, store, (o) => Object.assign(job, o, { running: true }), k.key)
+    AI.gradeAttempts(quiz, sub, { questionScore: G.questionScore, autoMarks: G.autoMarks, isRun: G.isRun, fillTemplate: fillT }, store, (o) => Object.assign(job, o, { running: true }), k)
       .then((o) => Object.assign(job, o, { running: false, ended: Date.now() }))
       .catch((e) => Object.assign(job, { running: false, ended: Date.now(), errors: [String(e.message || e)] }));
     return job;
   }
-  // A teacher's own Anthropic key for grading here: whether there is one (its last four characters, never
-  // the key), saving one (checked with Anthropic first), and removing it.
+  // A teacher's own key for grading here (Anthropic, OpenAI or Google): whether there is one (its last four
+  // characters, never the key), saving one (checked with its provider first), and removing it.
   r.get('/api/t/ai-key', (req, res) => {
     const me = requireTeacher(req);
-    const k = aiKeyOf(me);
-    json(res, 200, { mine: !!(k && k.mine), hint: k && k.mine ? keyHint(k.key) : null, server: !!process.env.ANTHROPIC_API_KEY });
+    json(res, 200, keyState(me));
   });
   r.post('/api/t/ai-key', async (req, res) => {
     const me = requireTeacher(req);
@@ -761,21 +777,23 @@ module.exports = function teacherRoutes(r) {
     if (body.key === null) {
       q('UPDATE teachers SET ai_key = NULL WHERE id = ?').run(me.id);
       audit(me, 'ai-key-removed', null, null);
-      return json(res, 200, { mine: false, hint: null, server: !!process.env.ANTHROPIC_API_KEY });
+      return json(res, 200, keyState(me));
     }
     const key = String(body.key || '').trim();
-    if (!/^sk-ant-[A-Za-z0-9_-]{20,200}$/.test(key)) throw new HttpError(400, 'bad_key', "That doesn't look like an Anthropic API key. They start with sk-ant-.");
-    // ten checks per teacher per 10 minutes, so this isn't a way to test keys against Anthropic
+    const provider = AI.providerOf(key);
+    if (!provider) throw new HttpError(400, 'bad_key', "That doesn't look like an API key from Anthropic (sk-ant-…), OpenAI (sk-…) or Google (AIza…).");
+    // ten checks per teacher per 10 minutes, so this isn't a way to test keys against the providers
     const now = Date.now();
     const tries = (keyChecks.get(me.id) || []).filter((t) => now - t < 10 * 60 * 1000);
     if (tries.length >= 10) throw new HttpError(429, 'slow_down', 'Too many keys tried. Wait a few minutes.');
     keyChecks.set(me.id, [...tries, now]);
-    const ok = await AI.checkKey(key);
-    if (ok === false) throw new HttpError(400, 'bad_key', 'Anthropic refused that key. Check it in the Anthropic Console.');
-    if (ok === null) throw new HttpError(502, 'unreachable', "Couldn't reach Anthropic to check the key. Try again in a moment.");
+    const company = AI.PROVIDERS[provider].company;
+    const ok = await AI.checkKey({ provider, key });
+    if (ok === false) throw new HttpError(400, 'bad_key', `${company} refused that key. Check it where you made it.`);
+    if (ok === null) throw new HttpError(502, 'unreachable', `Couldn't check the key with ${company}. Try again in a moment.`);
     q('UPDATE teachers SET ai_key = ? WHERE id = ?').run(V.sealText(V.needKey(me.id), key, aiKeyAad(me.id)), me.id);
-    audit(me, 'ai-key-saved', null, null);
-    json(res, 200, { mine: true, hint: keyHint(key), server: !!process.env.ANTHROPIC_API_KEY });
+    audit(me, 'ai-key-saved', null, company);
+    json(res, 200, keyState(me));
   });
 
   // Grading with any AI chat (aicsv.js): the prompt to copy, and the CSV it answers with, pasted back.

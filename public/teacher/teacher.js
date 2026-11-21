@@ -663,9 +663,11 @@
 
   // Grade with AI (server: aicsv.js, aigrade.js), two ways. Copy & paste, in three steps: copy a prompt,
   // paste it into any AI chat, paste the reply back; a table shows each student's grade before anything
-  // applies. API key: Claude grades here, in the background, with the teacher's own key (saved here,
+  // applies. API key: Claude, ChatGPT or Gemini grades here, in the background, with the teacher's own key (saved here,
   // sealed on the server) or the server's. attemptId: one student only.
   const CHATS = [['ChatGPT', 'https://chatgpt.com/'], ['Claude', 'https://claude.ai/new'], ['Gemini', 'https://gemini.google.com/app']];
+  // Where each provider makes API keys (aigrade.js tells them apart by the key).
+  const KEY_PAGES = [['Anthropic', 'https://console.anthropic.com/settings/keys'], ['OpenAI', 'https://platform.openai.com/api-keys'], ['Google AI Studio', 'https://aistudio.google.com/apikey']];
   async function aiDialog(runId, attemptId, done) {
     const qs = attemptId ? `?attempt=${encodeURIComponent(attemptId)}` : '';
     let p;
@@ -746,24 +748,25 @@
       gradeBtn.disabled = !has || editing;
       if (has && !editing) {
         keyPanel.replaceChildren(h('div', { class: 't-ai-ready' },
-          h('p', {}, h('b', { text: `Claude grades ${plural(p.answers, 'answer')} right here.` }), ' It works in the background, and the live page shows how far it has got. About 2 to 5 cents an answer, on the key below.'),
-          h('p', { class: 't-small t-muted' }, ks.mine ? `Your key ${ks.hint}. ` : "This server's key. ",
+          h('p', {}, h('b', { text: `${ks.name} grades ${plural(p.answers, 'answer')} right here.` }), ' It works in the background, and the live page shows how far it has got. A few cents an answer, on the key below.'),
+          h('p', { class: 't-small t-muted' }, ks.mine ? `Your ${ks.company} key ${ks.hint}. ` : `This server's ${ks.server} key. `,
             linkBtn2(ks.mine ? 'Change' : 'Use my own', () => drawKey(true, true)),
             ks.mine ? [' · ', linkBtn2('Remove', async () => { try { ks = await post('/api/t/ai-key', { key: null }); } catch (e) { /* stays */ } drawKey(false, true); })] : null)));
         if (focus) setTimeout(() => gradeBtn.focus(), 0);
         return;
       }
-      const input = h('input', { class: 'input', type: 'password', id: 't-ai-keyin', autocomplete: 'off', spellcheck: 'false', placeholder: 'sk-ant-…' });
+      const input = h('input', { class: 'input', type: 'password', id: 't-ai-keyin', autocomplete: 'off', spellcheck: 'false', placeholder: 'sk-ant-…, sk-… or AIza…' });
       const msg = h('p', { class: 't-small', role: 'status' });
       const save = h('button', { class: 'btn', type: 'button', text: 'Save key' });
       save.addEventListener('click', async () => {
-        save.disabled = true; msg.className = 't-small t-muted'; msg.textContent = 'Checking it with Anthropic…';
+        save.disabled = true; msg.className = 't-small t-muted'; msg.textContent = 'Checking it…';
         try { ks = await post('/api/t/ai-key', { key: input.value }); drawKey(false, true); } catch (e) { msg.className = 't-small t-error'; msg.textContent = e.message; save.disabled = false; }
       });
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save.click(); });
       keyPanel.replaceChildren(
-        h('label', { class: 'field', for: 't-ai-keyin' }, h('span', { class: 'field-label', text: 'Your Anthropic API key' }), h('div', { class: 't-row t-ai-keyrow' }, input, save)),
-        h('p', { class: 't-small t-muted', text: "Make one at console.anthropic.com, under API keys. It's checked, stored encrypted, and only used to grade your quizzes. Grading costs go to it." }),
+        h('label', { class: 'field', for: 't-ai-keyin' }, h('span', { class: 'field-label', text: 'Your API key' }), h('div', { class: 't-row t-ai-keyrow' }, input, save)),
+        h('div', { class: 't-ai-chats', role: 'group', 'aria-label': 'Make a key' }, KEY_PAGES.map(([name, url]) => h('a', { class: 't-chip', href: url, target: '_blank', rel: 'noopener noreferrer', text: name }))),
+        h('p', { class: 't-small t-muted', text: "Any of the three. It's checked, stored encrypted, and only used to grade your quizzes. Grading costs go to it." }),
         msg);
       if (has) keyPanel.append(linkBtn2('Cancel', () => drawKey(false, true)));
       if (focus) setTimeout(() => input.focus(), 0);
