@@ -22,7 +22,8 @@ COPY docs/quiz-format.md ./docs/quiz-format.md
 COPY examples/ap-csa-unit4/quiz.json ./examples/ap-csa-unit4/quiz.json
 COPY --from=editor /src/public/vendor ./public/vendor
 RUN mkdir -p /data && chown node:node /data
-USER node
+# Starts as root only to make the data volume the app's, then runs the app as the node user.
+ENTRYPOINT ["sh", "/app/server/entrypoint.sh"]
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "--disable-warning=ExperimentalWarning", "server/src/index.js"]
