@@ -122,7 +122,8 @@ function normalizeQuiz(raw, assetNames) {
     shuffleChoices: raw.shuffleChoices !== false,
     // How inline code is highlighted; "none" leaves it plain (say, networking or math quizzes).
     language: LANGS.includes(raw.language) || raw.language === 'none' ? raw.language : 'java',
-    integrity: { graceStrikes: Math.max(0, Math.min(10, Math.floor(Number(g.graceStrikes) || 0))) },
+    // One free slip by default: the student gets the "You left the quiz" warning, and the second time counts.
+    integrity: { graceStrikes: g.graceStrikes == null || g.graceStrikes === '' ? 1 : Math.max(0, Math.min(10, Math.floor(Number(g.graceStrikes) || 0))) },
     directions: {},
     questions: [],
   };

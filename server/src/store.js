@@ -156,7 +156,7 @@ function record(a, type, detail, quiz, at) {
     if (!merged) {
       a.burstStart = t;
       a.strikes++;
-      const grace = quiz && quiz.integrity ? quiz.integrity.graceStrikes : 0;
+      const grace = quiz && quiz.integrity && quiz.integrity.graceStrikes != null ? quiz.integrity.graceStrikes : 1;
       if (a.integrity === 'clean' && a.strikes > grace) {
         a.integrity = 'invalidated';
         a.reason = type;

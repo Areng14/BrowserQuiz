@@ -3,7 +3,7 @@
   "title": "AP CSA Unit 4 Check",
   "timeLimitMin": 20,
   "language": "java",
-  "integrity": { "graceStrikes": 0 },
+  "integrity": { "graceStrikes": 1 },
   "questions": [
     {
       "id": "q1",

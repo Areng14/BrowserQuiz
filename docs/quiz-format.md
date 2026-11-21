@@ -32,7 +32,7 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `language` | `"java"` | `"java"`, `"python"` or `"none"`: how `inline code` and unlabeled code blocks are highlighted. `"none"` leaves them plain, for quizzes that aren't about code (networking, math); blocks labeled ```` ```java ```` still get colors. Output, trace and fill questions then default to Java |
 | `shuffleQuestions` | `true` | Shuffle order per student, within each part (see below) |
 | `shuffleChoices` | `true` | Shuffle multiple choice options per student |
-| `integrity.graceStrikes` | `0` | Times a student can leave the window before the attempt is invalidated (0–10) |
+| `integrity.graceStrikes` | `1` | Times a student can leave the window before the attempt is invalidated (0–10). The default lets one slip go; 0 invalidates on the first. |
 | `directions` | built in | Override the directions text per part: `{ "single": "...", "multi": "...", "text": "...", "code": "..." }` |
 | `shared` | none | Shared material that several questions use (below) |
 | `questions` | required | List of questions |

@@ -19,7 +19,7 @@
     title: 'AP CSA Unit 4 Check',
     timeLimitMin: 20,
     language: 'java', // highlights code in prompts and choices
-    graceStrikes: 0,
+    graceStrikes: 1,
     questions: [
       {
         id: 'q1', type: 'single', points: 1,

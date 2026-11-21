@@ -619,7 +619,7 @@
       existingAssets = new Set(src.assets);
     }
     if (preset) quiz = preset.quiz;
-    if (!quiz) quiz = { format: 1, title: '', timeLimitMin: 20, language: 'java', shuffleQuestions: true, shuffleChoices: true, integrity: { graceStrikes: 0 }, questions: [] };
+    if (!quiz) quiz = { format: 1, title: '', timeLimitMin: 20, language: 'java', shuffleQuestions: true, shuffleChoices: true, integrity: { graceStrikes: 1 }, questions: [] };
     quiz.questions.forEach(withUi);
 
     let sel = quiz.questions.length ? 0 : -1; // -1 is Settings
@@ -1267,7 +1267,7 @@
       return [h('div', { class: 'qe-head' }, h('h1', { class: 'qe-n', text: 'Settings' })),
         h('div', { class: 'qe-settings-grid' },
           field('Time limit (minutes, 0 = none)', input(q, quiz.timeLimitMin, (v) => { quiz.timeLimitMin = Number(v) || 0; }, { type: 'number', min: '0', max: '600' })),
-          field('Window exits allowed before invalidating', input(q, (quiz.integrity || {}).graceStrikes || 0, (v) => { quiz.integrity = { graceStrikes: Number(v) || 0 }; }, { type: 'number', min: '0', max: '10' })),
+          field('Window exits allowed before invalidating', input(q, (quiz.integrity || {}).graceStrikes ?? 1, (v) => { quiz.integrity = { graceStrikes: Number(v) || 0 }; }, { type: 'number', min: '0', max: '10' })),
           field('Code highlighting', langSel)),
         h('div', { class: 'qe-line' },
           check(q, quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { quiz.shuffleQuestions = v; }),

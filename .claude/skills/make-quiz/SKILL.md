@@ -103,7 +103,7 @@ Report:
 - the `.quiz` path
 - number of questions and total points
 - the time limit
-- the defaults you picked, including `graceStrikes` (0 means one window switch invalidates)
+- the defaults you picked, including `graceStrikes` (1, the default, lets one window switch go; 0 means the first one invalidates)
   and shuffling
 - anything you couldn't verify
 
