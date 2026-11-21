@@ -650,23 +650,40 @@
     S.monitor.arm();
   }
 
-  // What's on screen, for a teacher watching live: the page, the scroll, and the window's size.
+  // What's on screen, for a teacher watching live: the page, the scroll, the window's size, what's
+  // highlighted, and the scratchpad.
   function currentView() {
     if (!S || !S.el || !S.quiz) return null;
     const q = S.quiz.questions[S.idx];
     const a = q && q.type === 'code' ? S.answers[q.id] : null;
-    return {
+    const modal = S.el.wrap.querySelector('.modal-backdrop:not(.nav-pop) [aria-labelledby]');
+    const pad = !!(S.el.scratch && !S.el.scratch.hidden);
+    const v = {
       q: q ? q.id : null, review: !!S.reviewOpen, dir: !!S.dirOpen && !S.reviewOpen, intro: !!S.introOpen,
       scroll: Math.round(S.el.main.scrollTop), wscroll: Math.round(S.el.wrap.scrollTop),
       w: window.innerWidth, h: window.innerHeight, lang: a ? a.language : null,
-      nav: !!S.el.wrap.querySelector('.nav-pop'), modal: !!S.el.wrap.querySelector('.modal-backdrop'),
+      nav: !!S.el.wrap.querySelector('.nav-pop'), modal: modal ? modal.getAttribute('aria-labelledby') : false,
       marks: S.marks || null, // marked for review, crossed-out choices: only ever in their browser otherwise
+      hl: highlightsNow(), pad,
     };
+    // The scratchpad page on screen, when it's changed since the server last had it (onBeat)
+    if (pad && q && S.scratch) {
+      const key = `${q.id}:${S.scratchVer || 0}`;
+      if (key !== S.padSent) { v.page = { q: q.id, items: S.scratch.pages[q.id] || [] }; S.padSending = key; }
+    }
+    return v;
+  }
+  // What's highlighted, by the piece of question text it's in (see kept)
+  function highlightsNow() {
+    const out = {};
+    for (const [key, node] of S.kept) if (node.querySelector('mark.hl')) out[key] = marksIn(node);
+    return out;
   }
 
   // ---------- connection + save state ----------
   function onBeat(res, info) {
     if (!S.el) return;
+    if (S.padSending) { S.padSent = S.padSending; S.padSending = null; }
     if (res && res.now) S.skew = res.now - Date.now();
     if (res && res.deadline && res.deadline !== S.deadline) { // teacher gave extra time
       if (S.deadline && res.deadline > S.deadline + 30000) toast('Your teacher gave you more time.', 6000);
@@ -915,8 +932,8 @@
 
   // ---------- scratchpad ----------
   // The student's own working space: one board a question, where they draw and drop typed notes
-  // anywhere. It stays in this browser (per run and student), isn't graded, and is cleared when the
-  // quiz is turned in.
+  // anywhere. It's kept in this browser (per run and student), isn't graded, and is cleared when the
+  // quiz is turned in. A teacher watching live sees the page on screen (the server keeps it in memory).
   const scratchKey = () => 'bq-scratch:' + [S.run && (S.run.id || S.run.code || S.run.title), S.me && S.me.name].join(':');
   function loadScratch() {
     S.scratch = { tool: 'pen', pages: {} };
@@ -927,6 +944,8 @@
   }
   let scratchTimer = 0;
   function saveScratch() {
+    S.scratchVer = (S.scratchVer || 0) + 1;
+    if (cfg.watch) return; // the student's, shown to a teacher: not theirs to keep
     clearTimeout(scratchTimer);
     scratchTimer = setTimeout(() => { try { localStorage.setItem(scratchKey(), JSON.stringify(S.scratch)); } catch (e) { /* kept for this page */ } }, 400);
   }
@@ -2349,10 +2368,26 @@
     if (S.run.hasCode) loadMonaco().catch(() => {});
     screenQuiz();
   }
-  function watchView(v, answers) {
+  function watchView(v, answers, extra) {
     if (!S || !S.el || !S.quiz) return false;
+    // Turned in: the screen they got, confetti and all
+    if (v && v.done) {
+      S.done = true;
+      clearInterval(S.timer);
+      disposeEditor();
+      screenDone(DONE[v.done] ? v.done : 'submitted');
+      return { where: 'Turned in' };
+    }
     let redraw = false;
+    let padDraw = false;
     const q = S.quiz.questions[S.idx];
+    // Their sample runs' results, and their scratchpad pages
+    if (extra && extra.runs && JSON.stringify(extra.runs) !== S.watchRuns) {
+      S.watchRuns = JSON.stringify(extra.runs);
+      S.results = JSON.parse(S.watchRuns);
+      if (q && (q.type === 'code' || q.type === 'fill')) redraw = true;
+    }
+    if (extra && extra.pages) { S.scratch.pages = extra.pages; padDraw = true; }
     if (answers) {
       const text = JSON.stringify(answers);
       if (text !== S.watchAnswers) {
@@ -2387,7 +2422,16 @@
         redraw = true;
       }
     }
+    if (v && S.el.scratch && S.el.scratch.hidden === !!v.pad) { // the scratchpad opened or closed
+      S.el.scratch.hidden = !v.pad;
+      S.el.wrap.classList.toggle('with-scratch', !!v.pad);
+      if (S.editor) S.editor.layout();
+      padDraw = true;
+    }
     if (redraw) renderQuestion();
+    else if (padDraw) renderScratch();
+    if (v && v.hl) watchHighlights(v.hl);
+    if (v) watchModal(v.modal);
     if (v) {
       S.el.main.scrollTop = v.scroll || 0;
       S.el.wrap.scrollTop = v.wscroll || 0;
@@ -2397,6 +2441,29 @@
     }
     const total = S.quiz.questions.length;
     return { where: S.reviewOpen ? 'Check your work' : S.dirOpen ? (S.introOpen ? 'Directions' : partOf(S.idx).title) : `Question ${S.idx + 1} of ${total}` };
+  }
+  // Their highlights, put on the same text here
+  function watchHighlights(hl) {
+    for (const [key, node] of S.kept) {
+      const want = hl[key] || [];
+      if (JSON.stringify(marksIn(node)) === JSON.stringify(want)) continue;
+      for (const m of [...node.querySelectorAll('mark.hl')]) { const parent = m.parentNode; m.replaceWith(...m.childNodes); parent.normalize(); }
+      for (const [a, b] of want) {
+        const r = rangeAt(node, a, b);
+        if (!r.collapsed && node.contains(r.startContainer) && node.contains(r.endContainer)) addHighlight(r, true);
+      }
+    }
+  }
+  // The dialog they have open, if it's one of these
+  function watchModal(id) {
+    const show = { 'submit-title': openSubmit, 'turnin-title': submittingOverlay, 'exit-title': openExit, 'left-title': showLeftWarning };
+    const want = typeof id === 'string' && show[id] ? id : null;
+    const open = S.el.wrap.querySelector('.modal-backdrop:not(.nav-pop)');
+    const title = open && open.querySelector('[aria-labelledby]');
+    const now = title ? title.getAttribute('aria-labelledby') : null;
+    if (now === want) return;
+    if (open) { open.remove(); for (const el of S.el.wrap.children) el.inert = false; }
+    if (want && !S.el.wrap.querySelector('.modal-backdrop')) show[want]();
   }
 
   // ---------- lifecycle ----------
@@ -2442,6 +2509,6 @@
       screenJoin();
     },
     // Teacher watch page: follow the student's screen and answers. False until the quiz is on screen.
-    watch: (view, answers) => watchView(view, answers),
+    watch: (view, answers, extra) => watchView(view, answers, extra),
   };
 })();

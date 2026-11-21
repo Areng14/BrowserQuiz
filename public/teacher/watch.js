@@ -16,10 +16,14 @@
   let skew = 0; // server clock minus ours
   let since = 0; // newest trail point we have
   let ver = ''; // version of the answers the frame has
+  let xver = ''; // and of their run results and scratchpad
   let size = null; // the student's window
   let trail = []; // [[t, x, y, click]], x and y out of 1000
   const views = []; // [[t, view]] still to show
   let pendingAnswers = null;
+  let pendingExtra = null;
+  let wasActive = false; // seen working: when they turn in, play it instead of just saying so
+  let doneQueued = false;
   let frameReady = false;
   let lastClick = 0;
   let status = '';
@@ -42,16 +46,16 @@
   window.addEventListener('resize', fit);
 
   // Whatever the frame's app says it can show yet.
-  function apply(view, answers) {
+  function apply(view, answers, extra) {
     const app = frame.contentWindow && frame.contentWindow.BQ && frame.contentWindow.BQ.app;
     if (!app || !app.watch) return false;
-    return app.watch(view, answers);
+    return app.watch(view, answers, extra);
   }
 
   async function poll() {
     let r;
     try {
-      const res = await fetch(`/api/t/attempts/${encodeURIComponent(id)}/watch?since=${since}&ver=${encodeURIComponent(ver)}`, { credentials: 'same-origin' });
+      const res = await fetch(`/api/t/attempts/${encodeURIComponent(id)}/watch?since=${since}&ver=${encodeURIComponent(ver)}&xver=${encodeURIComponent(xver)}`, { credentials: 'same-origin' });
       if (res.status === 401) { show('Sign in to the teacher dashboard again, then reopen Watch.'); return; }
       if (!res.ok) { show("Can't find this student's quiz."); return; }
       r = await res.json();
@@ -73,7 +77,13 @@
     }
     if (r.view && (!views.length || views[views.length - 1][0] !== r.viewAt)) views.push([r.viewAt, r.view]);
     if (r.answers !== undefined) { pendingAnswers = { at: r.now, answers: r.answers }; ver = r.ver; }
-    if (r.status === 'submitted') show('Turned in.');
+    if (r.extra !== undefined) { pendingExtra = { at: r.now, extra: r.extra }; xver = r.xver; }
+    if (r.status === 'active') wasActive = true;
+    if (r.status === 'submitted' && wasActive && !doneQueued) {
+      doneQueued = true;
+      views.push([Math.max(r.submittedAt || r.now, views.length ? views[views.length - 1][0] : 0), { done: r.ended || 'submitted' }]);
+    }
+    if (r.status === 'submitted') show(doneQueued ? '' : 'Turned in.');
     else if (r.status !== 'active') show("They haven't started yet.");
     else if (!r.view) show('Waiting for their screen…');
     else if (frameReady) show('');
@@ -84,19 +94,23 @@
   function tick() {
     const t = Date.now() + skew - DELAY;
     const due = pendingAnswers && t >= pendingAnswers.at - 1500 ? pendingAnswers.answers : undefined;
+    const dueX = pendingExtra && t >= pendingExtra.at - 1500 ? pendingExtra.extra : undefined;
     let used = false;
+    let usedX = false;
     while (views.length && views[0][0] <= t) {
       const v = views[0][1];
-      if (!size || size.w !== v.w || size.h !== v.h) { size = { w: v.w, h: v.h }; screen.hidden = false; fit(); }
-      const shown = apply(v, used ? undefined : due);
+      if (v.w && (!size || size.w !== v.w || size.h !== v.h)) { size = { w: v.w, h: v.h }; screen.hidden = false; fit(); }
+      const shown = apply(v, used ? undefined : due, usedX ? undefined : dueX);
       if (!shown) break; // the frame isn't up yet: next time
       views.shift();
       used = true;
+      usedX = true;
       if (!frameReady) { frameReady = true; if (status === 'active') show(''); }
       $('w-where').textContent = shown.where;
     }
-    if (due !== undefined && !used && frameReady && apply(null, due)) used = true; // new answers, same screen
+    if ((due !== undefined || dueX !== undefined) && !used && frameReady && apply(null, due, dueX)) { used = true; usedX = true; } // new answers, same screen
     if (used && due !== undefined) pendingAnswers = null;
+    if (usedX && dueX !== undefined) pendingExtra = null;
     // The cursor: between the two samples around t.
     let k = 0;
     while (k < trail.length && trail[k][0] <= t) k++;

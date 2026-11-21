@@ -436,11 +436,14 @@ module.exports = function studentRoutes(r) {
     if (!qq || !qq.languages.includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
     if (qq.noRun) throw new HttpError(403, 'run_off'); // this question is written without running
     store.logEvent(a, 'run', 'info', `${qq.id} (${body.language === 'python' ? 'Python' : 'Java'})`);
+    let out;
     try {
-      json(res, 200, await runSamples(qq, body.language, body.code.slice(0, 50000)));
+      out = await runSamples(qq, body.language, body.code.slice(0, 50000));
     } catch (e) {
-      json(res, 200, { status: 'error', message: 'Code runner offline. Tell your teacher.' });
+      out = { status: 'error', message: 'Code runner offline. Tell your teacher.' };
     }
+    W.ran(a.id, `${qq.id}:${body.language}`, out); // what a teacher watching sees under the editor
+    json(res, 200, out);
   });
 
   // Practice only: the student's own answers next to the correct ones, once grading is done.

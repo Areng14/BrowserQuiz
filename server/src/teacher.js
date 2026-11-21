@@ -997,12 +997,20 @@ module.exports = function teacherRoutes(r) {
     // The answers only when they've changed since the version the page has.
     const text = JSON.stringify(a.answers || {});
     const ver = crypto.createHash('sha1').update(text).digest('hex').slice(0, 16);
+    // How it was turned in, for the same "done" screen the student got (app.js DONE)
+    let ended = null;
+    if (a.status === 'submitted') {
+      const ev = q("SELECT detail FROM events WHERE attempt_id = ? AND type = 'submit' ORDER BY id DESC LIMIT 1").get(a.id);
+      const why = ev ? ev.detail : null;
+      ended = why === 'time ran out' ? 'time' : why === 'quiz closed' ? 'ended' : why === 'ended by teacher' ? 'mine'
+        : a.deadline && a.submittedAt >= a.deadline - 1500 ? 'time' : 'submitted';
+    }
     json(res, 200, {
-      name: student ? student.name : '?', status: a.status, now, ver,
+      name: student ? student.name : '?', status: a.status, now, ver, ended, submittedAt: a.submittedAt || null,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - now) : null,
       away: !!store.awayNow(a, now) || !!a.away,
       answers: url.searchParams.get('ver') === ver ? undefined : (a.answers || {}),
-      ...W.look(a, url.searchParams.get('since'), now),
+      ...W.look(a, url.searchParams.get('since'), now, url.searchParams.get('xver')),
     });
   });
 
