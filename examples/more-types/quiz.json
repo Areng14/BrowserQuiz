@@ -2,7 +2,7 @@
   "title": "More types: chars, maps, 2D arrays, overloads",
   "questions": [
     {
-      "id": "freq",
+      "id": "freq", "name": "Word counts",
       "type": "code",
       "points": 4,
       "languages": [
@@ -69,7 +69,7 @@
       }
     },
     {
-      "id": "invert",
+      "id": "invert", "name": "Invert a map",
       "type": "code",
       "points": 3,
       "languages": [
@@ -124,7 +124,7 @@
       }
     },
     {
-      "id": "firstUpper",
+      "id": "firstUpper", "name": "First uppercase letter",
       "type": "code",
       "points": 2,
       "languages": [
@@ -175,7 +175,7 @@
       }
     },
     {
-      "id": "vowels",
+      "id": "vowels", "name": "Vowels in order",
       "type": "code",
       "points": 2,
       "languages": [
@@ -240,7 +240,7 @@
       }
     },
     {
-      "id": "transpose",
+      "id": "transpose", "name": "Transpose a grid",
       "type": "code",
       "points": 3,
       "languages": [
@@ -317,7 +317,7 @@
       }
     },
     {
-      "id": "means",
+      "id": "means", "name": "Averages of lists",
       "type": "code",
       "points": 2,
       "languages": [
@@ -371,7 +371,7 @@
       }
     },
     {
-      "id": "calc",
+      "id": "calc", "name": "Calculator overloads",
       "type": "code",
       "points": 3,
       "languages": [

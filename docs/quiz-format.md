@@ -68,6 +68,7 @@ questions together.
 | `type` | `"single"` | `single`, `multi`, `text`, `code`, `output`, `trace`, `fill` or `essay` |
 | `prompt` | required | Markdown subset (below) |
 | `points` | `1` | Positive number |
+| `name` | none | Up to 80 characters, like `"BankAccount class"`. Students see each question's name, type and points before they start, so it shouldn't give the answer away |
 | `image` | none | `"assets/diagram.png"`, must exist in the zip |
 | `imageAlt` | `""` | Alt text for the image |
 | `shared` | none | The `id` of a shared material this question uses |

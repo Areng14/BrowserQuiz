@@ -172,6 +172,7 @@ function quizSource(quiz) {
   if (quiz.shared && quiz.shared.length) out.shared = quiz.shared;
   out.questions = quiz.questions.map((qq) => {
     const o = { id: qq.id, type: qq.type, prompt: qq.prompt, points: qq.points };
+    if (qq.name) o.name = qq.name;
     if (qq.shared) o.shared = qq.shared;
     if (qq.image) { o.image = qq.image; if (qq.imageAlt) o.imageAlt = qq.imageAlt; }
     if (qq.type === 'text') { o.answer = qq.answer; if (qq.caseSensitive) o.caseSensitive = true; }

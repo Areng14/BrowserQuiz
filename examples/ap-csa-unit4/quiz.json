@@ -6,14 +6,14 @@
   "integrity": { "graceStrikes": 1 },
   "questions": [
     {
-      "id": "q1",
+      "id": "q1", "name": "Arithmetic",
       "type": "single",
       "prompt": "What does this print?\n\n```java\nint x = 7;\nint y = x / 2 * 2;\nSystem.out.println(x - y);\n```",
       "choices": ["`0`", "`1`", "`3`", "`3.5`"],
       "answer": 1
     },
     {
-      "id": "q2",
+      "id": "q2", "name": "Lists and generics",
       "type": "multi",
       "points": 2,
       "prompt": "Which of these lines compile? Assume `java.util.*` is imported.",
@@ -26,13 +26,13 @@
       "answer": [0, 1]
     },
     {
-      "id": "q3",
+      "id": "q3", "name": "Search running time",
       "type": "text",
       "prompt": "What is the worst-case time complexity of binary search on a sorted array of `n` items? Use Big-O notation.",
       "answer": ["O(log n)", "O(logn)", "O(log(n))", "O(lg n)"]
     },
     {
-      "id": "q4",
+      "id": "q4", "name": "countVowels",
       "type": "code",
       "points": 8,
       "languages": ["java", "python"],
@@ -57,7 +57,7 @@
       }
     },
     {
-      "id": "q5",
+      "id": "q5", "name": "BankAccount class",
       "type": "code",
       "mode": "class",
       "points": 9,

@@ -1179,7 +1179,9 @@
         h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(i) }));
       const probs = h('ul', { class: 't-error qe-problems', role: 'alert' });
       const view = h('div', { class: 'qe-view', inert: true }); // a picture of the student's screen, not something to use
-      const fields = h('div', { class: 'qe-stack' }, sharedEditor(q, i), promptEditor(q));
+      // Optional. Students see names, types and points before they start, so a name shouldn't give the answer away.
+      const name = field('Name', input(q, q.name || '', (v) => { const t = v.replace(/\s+/g, ' ').trim(); if (t) q.name = t; else delete q.name; renderOutline(); }, { class: 'input qe-name', maxlength: '80', placeholder: 'Optional, shown before the quiz starts' }));
+      const fields = h('div', { class: 'qe-stack' }, name, sharedEditor(q, i), promptEditor(q));
       if (q.type === 'single' || q.type === 'multi') fields.append(choicesEditor(q));
       if (q.type === 'text') {
         fields.append(field('Accepted answers, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2 })),
@@ -1292,7 +1294,7 @@
       const rows = [];
       quiz.questions.forEach((q, i) => {
         if (i === 0 || quiz.questions[i - 1].type !== q.type) kids.push(h('li', { class: 'qe-part', text: TYPES[q.type] }));
-        const text = snippet(q.prompt);
+        const text = q.name || snippet(q.prompt);
         const bad = problems[i].length && (tried || fromServer.has(q));
         const row = h('li', { class: `qe-row${i === sel ? ' sel' : ''}${bad ? ' bad' : ''}` },
           h('button', { class: 'qe-row-btn', type: 'button', 'aria-current': i === sel ? 'true' : null, onclick: () => select(i, true) },

@@ -172,6 +172,9 @@ function normalizeQuiz(raw, assetNames) {
     if (!PART_TYPES.includes(type)) fail(`${where}: type must be single, multi, text, code, output, trace, fill or essay.`);
     if (typeof q.prompt !== 'string' || !q.prompt.trim()) fail(`${where}: prompt is required.`);
     const out = { id, type, prompt: q.prompt.slice(0, 10000), points: Number(q.points) > 0 ? Math.min(1000, Number(q.points)) : 1 };
+    // An optional short name. Students see it, with the type and points, before they start.
+    const name = typeof q.name === 'string' ? q.name.replace(/\s+/g, ' ').trim().slice(0, 80) : '';
+    if (name) out.name = name;
     if (q.shared != null && q.shared !== '') {
       const sid = String(q.shared);
       if (!(quiz.shared || []).some((m) => m.id === sid)) fail(`${where}: shared "${sid}" isn't one of the quiz's shared materials.`);

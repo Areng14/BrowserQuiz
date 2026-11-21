@@ -5,19 +5,19 @@
   "language": "java",
   "questions": [
     {
-      "id": "o1",
+      "id": "o1", "name": "Two printlns",
       "type": "output",
       "prompt": "What does this print?",
       "code": "int x = 7;\nint y = 2;\nSystem.out.println(x / y);\nSystem.out.println(x % y);"
     },
     {
-      "id": "o2",
+      "id": "o2", "name": "Loop output",
       "type": "output",
       "prompt": "What does this print?",
       "code": "for (int i = 1; i <= 3; i++) {\n    System.out.print(i * i + \" \");\n}"
     },
     {
-      "id": "t1",
+      "id": "t1", "name": "Sum loop",
       "type": "trace",
       "points": 3,
       "prompt": "Trace the loop. Fill in `i` and `sum` at the end of each pass.",
@@ -27,7 +27,7 @@
       "given": [[0, 0], [0, 1]]
     },
     {
-      "id": "f1",
+      "id": "f1", "name": "Array total",
       "type": "fill",
       "points": 2,
       "prompt": "Complete the code so `total` ends up as the sum of `nums`.",
@@ -35,7 +35,7 @@
       "answer": ["0", ["+=", "= total +"]]
     },
     {
-      "id": "f2",
+      "id": "f2", "name": "countEvens",
       "type": "fill",
       "points": 4,
       "prompt": "Complete `countEvens` so it returns how many numbers in `nums` are even.",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "id": "e1",
+      "id": "e1", "name": "Comparing Strings",
       "type": "essay",
       "points": 3,
       "prompt": "Explain why `a == b` can be `false` for two `String` variables that hold the same text.",

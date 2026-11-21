@@ -5,7 +5,7 @@
   "language": "java",
   "questions": [
     {
-      "id": "q1",
+      "id": "q1", "name": "Sum part of an array",
       "type": "single",
       "prompt": "What does this print?\n\n```java\nint[] arr = {2, 4, 6, 8};\nint sum = 0;\nfor (int i = 1; i < arr.length; i++) {\n    sum += arr[i];\n}\nSystem.out.println(sum);\n```",
       "choices": [
@@ -17,7 +17,7 @@
       "answer": 1
     },
     {
-      "id": "q2",
+      "id": "q2", "name": "Two array variables",
       "type": "single",
       "prompt": "What does this print?\n\n```java\nint[] a = {1, 2, 3};\nint[] b = a;\nb[0] = 10;\na = new int[] {7, 8, 9};\nSystem.out.println(b[0] + \" \" + a[0]);\n```",
       "choices": [
@@ -29,7 +29,7 @@
       "answer": 3
     },
     {
-      "id": "q3",
+      "id": "q3", "name": "Enhanced for loop",
       "type": "single",
       "prompt": "What does this print?\n\n```java\nint[] vals = {1, 2, 3};\nfor (int v : vals) {\n    v = v * 2;\n}\nSystem.out.println(vals[0] + vals[1] + vals[2]);\n```",
       "choices": [
@@ -41,7 +41,7 @@
       "answer": 0
     },
     {
-      "id": "q4",
+      "id": "q4", "name": "Average score",
       "type": "single",
       "prompt": "What does this print?\n\n```java\nint[] scores = {90, 85, 80, 86};\nint total = 0;\nfor (int s : scores) {\n    total += s;\n}\ndouble avg = total / scores.length;\nSystem.out.println(avg);\n```",
       "choices": [
@@ -53,7 +53,7 @@
       "answer": 1
     },
     {
-      "id": "q5",
+      "id": "q5", "name": "Finding the max",
       "type": "multi",
       "points": 2,
       "prompt": "`nums` is an `int[]` with at least one element. Which code segments leave `max` holding the largest value in `nums`?\n\n**Segment I**\n\n```java\nint max = nums[0];\nfor (int i = 1; i < nums.length; i++) {\n    if (nums[i] > max) max = nums[i];\n}\n```\n\n**Segment II**\n\n```java\nint max = 0;\nfor (int n : nums) {\n    if (n > max) max = n;\n}\n```\n\n**Segment III**\n\n```java\nint max = nums[0];\nfor (int n : nums) {\n    if (n > max) max = n;\n}\n```\n\n**Segment IV**\n\n```java\nint max = nums[0];\nfor (int i = 1; i < nums.length; i++) {\n    if (nums[i] > nums[i - 1]) max = nums[i];\n}\n```",
@@ -70,7 +70,7 @@
       "shuffleChoices": false
     },
     {
-      "id": "q6",
+      "id": "q6", "name": "Backward loop",
       "type": "text",
       "prompt": "What does this print?\n\n```java\nint[] a = {4, 7, 1, 9, 2};\nfor (int i = a.length - 1; i > 0; i--) {\n    a[i] = a[i - 1];\n}\nSystem.out.println(a[0] + a[4]);\n```",
       "answer": [
@@ -78,7 +78,7 @@
       ]
     },
     {
-      "id": "q7",
+      "id": "q7", "name": "longestRun",
       "type": "code",
       "points": 6,
       "languages": [
@@ -281,7 +281,7 @@
       }
     },
     {
-      "id": "q8",
+      "id": "q8", "name": "find",
       "type": "code",
       "points": 6,
       "languages": [

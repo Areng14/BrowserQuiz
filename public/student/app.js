@@ -488,10 +488,37 @@
     ];
   }
 
+  // What's on the quiz, before it starts: one line per type, each opening to its questions' names.
+  // Prompts stay on the server until the quiz starts.
+  const round2 = (x) => Math.round(x * 100) / 100;
+  function summaryLine(run) {
+    const n = run.questionCount;
+    const pts = run.outline ? round2(run.outline.reduce((t, q) => t + q.points, 0)) : 0;
+    const mins = run.timeLimitMin;
+    return `${plural(n, 'question')}${pts ? ` (${plural(pts, 'point')})` : ''}${mins ? ` in ${plural(mins, 'minute')}` : ''}.`;
+  }
+  function overview(run) {
+    const groups = [];
+    for (const q of run.outline || []) {
+      let g = groups.find((x) => x.type === q.type);
+      if (!g) groups.push(g = { type: q.type, qs: [], points: 0 });
+      g.qs.push(q);
+      g.points += q.points;
+    }
+    if (!groups.length) return null;
+    // Without any names there's nothing to open, so no room is kept for the arrows.
+    return h('div', { class: 'overview' + (groups.some((g) => g.qs.some((q) => q.name)) ? '' : ' flat') }, groups.map((g) => {
+      const line = h('span', {}, h('b', { text: `${(PARTS[g.type] || { title: 'Questions' }).title}: ` }), `${plural(g.qs.length, 'question')} (${plural(round2(g.points), 'point')})`);
+      if (!g.qs.some((q) => q.name)) return h('p', { class: 'ov-group' }, line);
+      return h('details', { class: 'ov-group' }, h('summary', {}, line),
+        h('ul', { class: 'ov-list' }, g.qs.map((q) => h('li', {},
+          q.n ? `Question ${q.n}${q.name ? `: ${q.name}` : ''}` : q.name || 'Unnamed question',
+          h('span', { class: 'ov-pts', text: ` (${plural(q.points, 'point')})` })))));
+    }));
+  }
+
   function screenPractice(err) {
     if (S.run.hasCode) loadMonaco().catch(() => {});
-    const n = S.run.questionCount;
-    const mins = S.run.timeLimitMin;
     const btn = h('button', { class: 'btn primary', type: 'button', text: 'Start' });
     const msg = h('p', { class: 'error', role: 'alert', text: err || '' });
     btn.addEventListener('click', () => beginQuiz(btn, msg, 'Start'));
@@ -499,8 +526,9 @@
       h('p', { class: 'eyebrow', text: S.run.title }),
       h('div', { class: 'heading' },
         h('h1', { text: 'Practice' }),
-        h('p', { text: mins ? `${plural(n, 'question')} in ${plural(mins, 'minute')}.` : `${plural(n, 'question')}.` }),
+        h('p', { text: summaryLine(S.run) }),
         h('p', { text: 'You see the answers when you finish.' })),
+      overview(S.run),
       btn, msg)));
     btn.focus();
   }
@@ -508,7 +536,6 @@
   function screenRules(err) {
     if (S.run.practice) return screenPractice(err);
     if (S.run.hasCode) loadMonaco().catch(() => {});
-    const n = S.run.questionCount;
     const mins = S.run.timeLimitMin;
     const agree = h('input', { type: 'checkbox', id: 'agree' });
     const btn = h('button', { class: 'btn primary', type: 'button', text: 'Start quiz', disabled: true });
@@ -536,7 +563,8 @@
       h('p', { class: 'eyebrow', text: S.run.title }),
       h('div', { class: 'heading' },
         h('h1', { text: 'Before you start' }),
-        h('p', { text: mins ? `${plural(n, 'question')} in ${plural(mins, 'minute')}.` : `${plural(n, 'question')}.` })),
+        h('p', { text: summaryLine(S.run) })),
+      overview(S.run),
       h('div', { class: 'cheat-rule', role: 'note' },
         h('p', { class: 'cheat-title', text: 'Leaving the quiz counts as cheating.' }),
         h('p', { text: 'That means switching to another window, tab or app, leaving fullscreen, reloading or closing this page, or using Exit when your teacher didn\'t say to. Your teacher sees each time it happens.' })),
@@ -798,7 +826,7 @@
     // Shared material sits beside the question (above it on narrow screens). Code questions put it in
     // their left column themselves.
     if (!S.dirOpen && q.shared && !view.classList.contains('wide')) view = h('div', { class: 'shared-split' }, sharedBlock(q), view);
-    const where = S.dirOpen ? partOf(S.idx).title : `Question ${S.idx + 1} of ${total}`;
+    const where = S.dirOpen ? partOf(S.idx).title : `Question ${S.idx + 1} of ${total}${q.name ? `: ${q.name}` : ''}`;
     document.title = `${where} – ${S.quiz.title}`;
     if (S.el.hlBar) S.el.hlBar.hide();
     S.el.main.replaceChildren(...(S.dirOpen ? [] : [h('h1', { class: 'sr-only', id: 'q-heading', text: where })]), view);
@@ -1105,7 +1133,7 @@
 
   function metaRow(q, kind) {
     return h('div', { class: 'meta-row' },
-      h('span', {}, kind, ' ', h('button', { class: 'link-btn', type: 'button', text: 'Directions', onclick: openDirections })),
+      h('span', {}, q.name ? h('b', { class: 'q-name', text: q.name }) : null, kind, ' ', h('button', { class: 'link-btn', type: 'button', text: 'Directions', onclick: openDirections })),
       h('span', { class: 'meta-right' }, markButton(q), h('span', { text: plural(q.points, 'point') })));
   }
 
@@ -2061,7 +2089,7 @@
       return;
     }
     S.quiz = r.quiz;
-    S.run = { title: r.quiz.title, timeLimitMin: r.quiz.timeLimitMin, questionCount: r.quiz.questions.length, hasCode: r.quiz.questions.some((q) => q.type === 'code') };
+    S.run = { title: r.quiz.title, timeLimitMin: r.quiz.timeLimitMin, questionCount: r.quiz.questions.length, outline: r.quiz.questions.map((q, i) => ({ type: q.type, points: q.points, name: q.name, n: i + 1 })), hasCode: r.quiz.questions.some((q) => q.type === 'code') };
     S.deadline = 0;
     S.answers = {};
     loadMarks();

@@ -260,6 +260,7 @@ input[type="file"].input { padding: 6px 10px; }
 .qe-codegrid { padding-top: 18px; border-top: 1px solid var(--line); }
 .qe-stack { display: grid; gap: 14px; min-width: 0; }
 .qe-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.qe-name { max-width: 460px; }
 .qe-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 12px; }
 .qe-settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; align-items: end; max-width: 900px; }
 .qe-area { display: block; padding: 8px 10px; line-height: 1.5; resize: none; overflow: hidden; }

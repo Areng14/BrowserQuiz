@@ -100,6 +100,7 @@ function publicQuiz(quiz, layout) {
     questions: layout.order.map((id) => {
       const qq = byId.get(id);
       const pub = { id, type: qq.type, prompt: qq.prompt, points: qq.points };
+      if (qq.name) pub.name = qq.name;
       if (qq.shared) pub.shared = qq.shared;
       if (qq.image) { pub.image = qq.image; pub.imageAlt = qq.imageAlt || ''; }
       if (qq.choices) pub.choices = layout.perms[id].map((i) => qq.choices[i]); // positions only
@@ -135,7 +136,11 @@ function publicQuiz(quiz, layout) {
 function runInfo(run, quiz) {
   return {
     runId: run.id, title: quiz.title, timeLimitMin: quiz.timeLimitMin,
-    questionCount: quiz.questions.length, hasCode: quiz.questions.some((qq) => qq.type !== 'single' && qq.type !== 'multi' && qq.type !== 'text'),
+    questionCount: quiz.questions.length,
+    // What's on the quiz, for the start screen: types, points and names, never prompts. Numbers only when
+    // every student gets the same order.
+    outline: quiz.questions.map((qq, i) => Object.assign({ type: qq.type, points: qq.points }, qq.name ? { name: qq.name } : {}, quiz.shuffleQuestions ? {} : { n: i + 1 })),
+    hasCode: quiz.questions.some((qq) => qq.type !== 'single' && qq.type !== 'multi' && qq.type !== 'text'),
     practice: run.mode === 'practice',
     seb: !!run.seb_key, // SEB keeps the window locked full screen itself
     sebQuit: !!run.seb_config, // our settings: opening seb-quit.html closes SEB
