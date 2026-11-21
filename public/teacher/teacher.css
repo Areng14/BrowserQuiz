@@ -138,7 +138,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 input[type="file"].input { padding: 6px 10px; }
 .t-login { max-width: 360px; margin: 96px auto 0; padding: 0 16px; display: grid; gap: 14px; }
 .t-gh { justify-self: start; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); text-decoration: none; }
-.t-gh svg { flex: none; }
+.t-gh svg { flex: none; margin-top: -1.5px; } /* the cat's middle on the letters' middle */
 .t-gh:hover { color: var(--accent); text-decoration: underline; }
 .t-login-foot { max-width: 360px; margin: 28px auto 0; padding: 0 16px; }
 .t-who { white-space: nowrap; }

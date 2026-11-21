@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Hosted quiz and CS exam app with server-side grading and silent integrity checks",
+  "license": "MIT",
   "scripts": {
     "build:monaco": "node scripts/build-monaco.mjs",
     "build:demo": "node scripts/build-demo.mjs",

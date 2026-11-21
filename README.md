@@ -53,3 +53,7 @@ It prints the address to open. Sign in at `/teacher` as `admin`, with the passwo
 - [Setup](docs/setup.md): hosting, HTTPS, Railway, Safe Exam Browser, accounts, backups
 - [Security](docs/security.md): how it works, and what it can't do
 - [Quiz format](docs/quiz-format.md): writing quizzes by hand or with AI
+
+## License
+
+[MIT](LICENSE)

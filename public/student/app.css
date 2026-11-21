@@ -103,6 +103,7 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .screen.center { display: flex; justify-content: center; align-items: flex-start; }
 .corner { position: absolute; top: 16px; right: var(--gut-r); }
 .screen > .site-link { position: absolute; left: 0; right: 0; bottom: 18px; width: max-content; margin: 0 auto; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); text-decoration: none; }
+.screen > .site-link svg { flex: none; margin-top: -1.5px; } /* the cat's middle on the letters' middle */
 .screen > .site-link:hover { color: var(--accent); text-decoration: underline; }
 .panel { width: min(100%, 420px); display: grid; gap: 16px; }
 .wait-status { display: grid; gap: 16px; }
