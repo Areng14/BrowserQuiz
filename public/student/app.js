@@ -1716,7 +1716,8 @@
     if (!bar) return;
     bar.classList.remove('compact');
     const first = S.el.sheet.firstElementChild;
-    bar.classList.toggle('compact', !!first && S.el.sheet.scrollHeight > first.offsetHeight + 6);
+    const last = S.el.sheet.lastElementChild;
+    bar.classList.toggle('compact', !!first && last.offsetTop > first.offsetTop + 2); // wrapped onto a second row
   }
   function chevronUp() {
     const s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });

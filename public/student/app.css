@@ -12,6 +12,8 @@
   --accent: #2257d6;
   --accent-ink: #ffffff;
   --good: #1b7f45;
+  /* question numbers: answered is a dark green, for review a light yellow, so they differ in lightness too */
+  --q-done: #1b7f45; --q-done-ink: #fff; --q-review: #f5c84c; --q-review-edge: #b8860b; --q-review-ink: #1f1600;
   --warn: #9a5b00;
   --bad: #c0352d;
   --backdrop: rgba(0, 0, 0, 0.45);
@@ -25,6 +27,7 @@
   :root:not([data-theme="light"]) {
     --bg: #16181d; --soft: #1f2329; --editor: #1b1e23; --ink: #e6e8eb; --ink-2: #9aa3ad; --line: #2e333b; --field-line: #6b7480; --hl: #3a3300; --hl-edge: #e2c044;
     --accent: #7ea3ff; --accent-ink: #0d1424; --good: #5ccb8a; --warn: #e2a64a; --bad: #ff7a70;
+    --q-done: #238552; --q-done-ink: #fff; --q-review: #e3b341; --q-review-edge: #e3b341; --q-review-ink: #1f1600;
     --backdrop: rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
@@ -32,6 +35,7 @@
 :root[data-theme="dark"] {
   --bg: #16181d; --soft: #1f2329; --editor: #1b1e23; --ink: #e6e8eb; --ink-2: #9aa3ad; --line: #2e333b; --field-line: #6b7480; --hl: #3a3300; --hl-edge: #e2c044;
   --accent: #7ea3ff; --accent-ink: #0d1424; --good: #5ccb8a; --warn: #e2a64a; --bad: #ff7a70;
+  --q-done: #238552; --q-done-ink: #fff; --q-review: #e3b341; --q-review-edge: #e3b341; --q-review-ink: #1f1600;
   --backdrop: rgba(0, 0, 0, 0.6);
   color-scheme: dark;
 }
@@ -253,7 +257,7 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
   background: none; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
 }
 .mark-btn:hover { color: var(--ink); background: var(--soft); }
-.mark-btn[aria-pressed="true"] { color: var(--warn); border-color: var(--warn); }
+.mark-btn[aria-pressed="true"] { color: var(--q-review-ink); background: var(--q-review); border-color: var(--q-review-edge); } /* same yellow as its number */
 .mark-icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
 .mark-btn[aria-pressed="true"] .mark-icon { fill: currentColor; }
 .choice-text code { background: none; padding: 0; font-size: 15px; }
@@ -316,14 +320,18 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .res-pre { margin: 0; padding: 8px 10px; font: 13px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--soft); border-radius: 6px; max-height: 160px; overflow: auto; }
 .demo-note { color: var(--warn); font-size: 13px; }
 
-.sheet { flex: 1; display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.sheet { flex: 1; display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; min-width: 0; padding: 4px; }
 .sheet-dot {
   min-width: 32px; height: 32px; padding: 0 6px; font: 600 13px var(--font); color: var(--ink-2);
   background: var(--bg); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
 }
 /* answered: a bar under the number as well as the fill, so it doesn't rest on color alone */
-.sheet-dot.answered { color: var(--ink); background: var(--soft); box-shadow: inset 0 -3px 0 var(--ink-2); }
-.sheet-dot.current { color: var(--accent); border-color: var(--accent); }
+/* green: answered. yellow: marked for review (it wins if both). blue ring: the question you're on. */
+.sheet-dot.answered { color: var(--q-done-ink); background: var(--q-done); border-color: var(--q-done); }
+.sheet-dot.marked { color: var(--q-review-ink); background: var(--q-review); border-color: var(--q-review-edge); }
+/* the ring sits outside the box, against the page, so it shows on green and yellow alike */
+.sheet-dot.current { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+.sheet-dot.current:not(.answered):not(.marked) { color: var(--accent); }
 .sheet-dot { position: relative; }
 /* every question at once, from the "Question x of y" button */
 .q-navigator { width: min(100%, 520px); max-height: calc(100% - 16px); overflow: auto; gap: 14px; }
@@ -331,17 +339,13 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .nav-head h2 { margin: 0; }
 .nav-close { display: inline-flex; align-items: center; justify-content: center; width: 40px; padding: 0; }
 .nav-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; font-size: 13px; color: var(--ink-2); }
-.nav-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.nav-legend > span { display: inline-flex; align-items: center; gap: 10px; } /* room for the current ring */
 .sheet-dot.mini { display: inline-block; min-width: 16px; width: 16px; height: 16px; padding: 0; cursor: default; }
 .nav-part { display: grid; gap: 8px; }
 .nav-part h3 { margin: 0; font-size: 14px; }
 .nav-range { font-weight: 400; color: var(--ink-2); }
-.nav-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; }
+.nav-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 10px; padding: 4px; }
 .nav-grid .sheet-dot { min-width: 0; height: 44px; font-size: 15px; }
-.sheet-dot.marked::after {
-  content: ''; position: absolute; top: -4px; right: 3px; width: 8px; height: 10px; background: var(--warn);
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%);
-}
 
 /* overlays */
 .modal-backdrop, .fs-overlay { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: var(--backdrop); }
