@@ -30,6 +30,33 @@
   let status = '';
 
   $('w-close').addEventListener('click', () => window.close());
+  // Caught them: invalidate from here (or restore). Their screen stays the same either way.
+  let name = '';
+  let invalidated = false;
+  const integrityBtn = $('w-integrity');
+  integrityBtn.addEventListener('click', async () => {
+    let body = {};
+    if (invalidated) { if (!confirm(`Restore ${name}?`)) return; } else {
+      const note = prompt('Reason (optional)');
+      if (note === null) return;
+      body = { note };
+    }
+    integrityBtn.disabled = true;
+    try {
+      const res = await fetch(`/api/t/attempts/${encodeURIComponent(id)}/${invalidated ? 'restore' : 'invalidate'}`, {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      if (res.ok) setIntegrity(!invalidated);
+    } catch (e) { /* the next poll shows where it stands */ }
+    integrityBtn.disabled = false;
+  });
+  function setIntegrity(bad) {
+    invalidated = bad;
+    $('w-state').hidden = !bad;
+    integrityBtn.textContent = bad ? 'Restore' : 'Invalidate';
+    integrityBtn.setAttribute('aria-label', `${bad ? 'Restore' : 'Invalidate'} ${name}`);
+    integrityBtn.hidden = false;
+  }
   frame.src = `/teacher/watch-frame.html?attempt=${encodeURIComponent(id)}`;
 
   const show = (text) => { msg.textContent = text; msg.hidden = !text; };
@@ -67,6 +94,8 @@
     $('w-live').classList.remove('off');
     skew = r.now - Date.now();
     document.title = `Watching ${r.name}`;
+    name = r.name;
+    if (!integrityBtn.disabled) setIntegrity(r.integrity === 'invalidated');
     $('w-name').textContent = `Watching ${r.name}`;
     $('w-away').hidden = !(r.away && r.status === 'active');
     status = r.status;

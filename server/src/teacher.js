@@ -1008,7 +1008,7 @@ module.exports = function teacherRoutes(r) {
         : a.deadline && a.submittedAt >= a.deadline - 1500 ? 'time' : 'submitted';
     }
     json(res, 200, {
-      name: student ? student.name : '?', status: a.status, now, ver, ended, submittedAt: a.submittedAt || null, deadline: a.deadline || null,
+      name: student ? student.name : '?', status: a.status, integrity: a.integrity, now, ver, ended, submittedAt: a.submittedAt || null, deadline: a.deadline || null,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - now) : null,
       away: !!store.awayNow(a, now) || !!a.away,
       answers: url.searchParams.get('ver') === ver ? undefined : (a.answers || {}),

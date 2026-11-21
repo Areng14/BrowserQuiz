@@ -20,7 +20,7 @@
     @keyframes w-pulse { 50% { opacity: 0.3; } }
     @media (prefers-reduced-motion: reduce) { .w-live::before { animation: none; } }
     .w-where { color: var(--ink-2); }
-    .w-away { padding: 2px 8px; border-radius: 999px; font-weight: 600; color: #fff; background: var(--bad, #c62828); }
+    .w-away, .w-state { font-weight: 600; color: var(--bad, #c62828); }
     .w-grow { flex: 1; }
     .w-stage { flex: 1; min-height: 0; position: relative; overflow: hidden; }
     .w-screen { position: absolute; top: 0; left: 0; transform-origin: 0 0; background: var(--bg); box-shadow: 0 1px 6px rgba(0, 0, 0, 0.18); border-radius: 4px; overflow: hidden; }
@@ -39,6 +39,8 @@
     <span class="w-where" id="w-where"></span>
     <span class="w-away" id="w-away" hidden>Away from the quiz</span>
     <span class="w-grow"></span>
+    <span class="w-state" id="w-state" hidden>Invalidated</span>
+    <button class="btn small" type="button" id="w-integrity" hidden>Invalidate</button>
     <button class="btn small" type="button" id="w-close">Close</button>
   </header>
   <div class="w-stage" id="w-stage">
