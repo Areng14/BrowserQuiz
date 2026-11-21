@@ -181,7 +181,12 @@
 
       this.on(window, 'drop', (e) => { e.preventDefault(); e.stopImmediatePropagation(); }, true);
       this.on(window, 'dragstart', (e) => { if (!inAnswerField(e.target)) e.preventDefault(); }, true);
-      this.on(document, 'selectstart', (e) => { if (!inAnswerField(e.target)) e.preventDefault(); });
+      // Selecting is allowed in answers and in question text (to highlight it); copying question text out
+      // is still blocked above.
+      this.on(document, 'selectstart', (e) => {
+        const el = e.target && (e.target.nodeType === 1 ? e.target : e.target.parentElement);
+        if (!inAnswerField(el) && !(el && el.closest && el.closest('.hl-root'))) e.preventDefault();
+      });
 
       // Only the window changing size counts. Zooming the page (which a student may need to read it) changes
       // the inner size only.

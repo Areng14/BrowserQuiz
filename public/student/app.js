@@ -50,7 +50,7 @@
       run: null, me: null, quiz: null, idx: 0, answers: {}, deadline: 0, skew: 0,
       monitor: null, models: {}, editor: null, editorSubs: [], parts: [], partsSeen: new Set(), dirOpen: false,
       timer: 0, poll: 0, done: false, runBusy: false, results: {}, el: null, warned: {}, saveState: 'saved',
-      marks: null,
+      marks: null, kept: new Map(),
     };
   }
 
@@ -176,6 +176,7 @@
     if (window.monaco) window.monaco.editor.setTheme(editorTheme());
     // Colored code keeps the old theme's color classes, which point at the wrong colors after a switch.
     // Redraw it: the question on screen, or any other colored blocks.
+    if (S && S.kept) for (const n of S.kept.values()) n.querySelectorAll('code[data-colored]').forEach((c) => c.removeAttribute('data-colored'));
     if (S && S.el && S.quiz && !S.done) renderQuestion();
     else if (root) {
       root.querySelectorAll('code[data-colored]').forEach((c) => { c.textContent = c.textContent; c.removeAttribute('data-colored'); });
@@ -240,13 +241,20 @@
         code.setAttribute('data-colored', '');
         const inlineCode = !code.closest('pre');
         const inFill = !!code.closest('.fill-code'); // pieces of code between blanks: stay inline, keep line breaks
+        // Coloring rewrites the element from its plain text (the colorizer only reads one text node), so
+        // keep the source, and put any highlights back afterwards.
+        const hl = marksIn(code);
+        if (code.dataset.src == null) code.dataset.src = code.textContent;
+        code.textContent = code.dataset.src;
         const endsWithNewline = /\n$/.test(code.textContent);
         m.editor.colorizeElement(code, { theme: editorTheme() }).then(() => {
-          if (!inlineCode && !inFill) return;
-          // keep inline code inline: unwrap the colorizer's block wrapper (and, for inline code, line breaks)
-          code.querySelectorAll('div').forEach((d) => d.replaceWith(...d.childNodes));
-          if (inlineCode) code.querySelectorAll('br').forEach((b) => b.remove());
-          else if (!endsWithNewline && code.lastChild && code.lastChild.nodeName === 'BR') code.lastChild.remove();
+          if (inlineCode || inFill) {
+            // keep inline code inline: unwrap the colorizer's block wrapper (and, for inline code, line breaks)
+            code.querySelectorAll('div').forEach((d) => d.replaceWith(...d.childNodes));
+            if (inlineCode) code.querySelectorAll('br').forEach((b) => b.remove());
+            else if (!endsWithNewline && code.lastChild && code.lastChild.nodeName === 'BR') code.lastChild.remove();
+          }
+          for (const [a, b] of hl) addHighlight(rangeAt(code, a, b), true);
         }).catch(() => {});
       });
     }).catch(() => {});
@@ -695,6 +703,10 @@
       if (S.idx === S.quiz.questions.length - 1) return openSubmit();
       go(S.idx + 1);
     });
+    const hlBar = highlightBar();
+    main.addEventListener('mouseup', () => setTimeout(hlBar.update, 0));
+    main.addEventListener('keyup', (e) => { if (e.shiftKey || e.key === 'Shift') hlBar.update(); });
+    main.addEventListener('scroll', hlBar.hide, { passive: true });
     const scratchBtn = h('button', { class: 'btn small ghost scratch-btn', type: 'button', text: 'Scratchpad', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() });
     const scratch = h('aside', { class: 'scratch', id: 'scratch', 'aria-label': 'Scratchpad' });
     scratch.hidden = true;
@@ -712,8 +724,8 @@
       main,
       scratch,
       h('footer', { class: 'qnav' }, prev, sheet, next),
-      live);
-    S.el = { wrap, main, timer, sheet, prev, next, save, conn, scratch, scratchBtn, live, fsOverlay: null };
+      live, hlBar.bar);
+    S.el = { wrap, main, timer, sheet, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null };
     if (!keysBound) { document.addEventListener('keydown', quizKeys); keysBound = true; }
     S.saveState = 'saved';
     mount(wrap);
@@ -762,6 +774,7 @@
     if (!S.dirOpen && q.shared && !view.classList.contains('wide')) view = h('div', { class: 'shared-split' }, sharedBlock(q), view);
     const where = S.dirOpen ? partOf(S.idx).title : `Question ${S.idx + 1} of ${total}`;
     document.title = `${where} – ${S.quiz.title}`;
+    if (S.el.hlBar) S.el.hlBar.hide();
     S.el.main.replaceChildren(...(S.dirOpen ? [] : [h('h1', { class: 'sr-only', id: 'q-heading', text: where })]), view);
     colorize(view);
     renderSheet();
@@ -1070,21 +1083,138 @@
       h('span', { class: 'meta-right' }, markButton(q), h('span', { text: plural(q.points, 'point') })));
   }
 
-  // A passage, case or listing that several questions use, written once in the quiz.
+  // Question text is made once and kept for the whole quiz, so highlights (and colored code, and math)
+  // are still there when a student comes back to the question.
+  function kept(key, make) {
+    let n = S.kept.get(key);
+    if (!n) { n = make(); S.kept.set(key, n); }
+    return n;
+  }
+
+  // A passage, case or listing that several questions use, written once in the quiz. Highlights in it
+  // show on every question that uses it.
   function sharedBlock(q) {
     const m = q.shared && S.quiz.shared ? S.quiz.shared[q.shared] : null;
     if (!m) return null;
-    return h('section', { class: 'shared', 'aria-label': m.title || 'Shared material' },
+    return kept('shared:' + q.shared, () => h('section', { class: 'shared', 'aria-label': m.title || 'Shared material' },
       m.title ? h('p', { class: 'shared-title', text: m.title }) : null,
-      m.text ? h('div', { class: 'prompt' }, BQ.md.render(m.text, { lang: S.quiz.language })) : null,
-      m.image ? h('img', { class: 'qimg', src: api.assetUrl(m.image), alt: m.imageAlt || '' }) : null);
+      m.text ? h('div', { class: 'prompt hl-root' }, BQ.md.render(m.text, { lang: S.quiz.language })) : null,
+      m.image ? h('img', { class: 'qimg', src: api.assetUrl(m.image), alt: m.imageAlt || '' }) : null));
   }
 
   function prompt(q) {
     return [
-      h('div', { class: 'prompt' }, BQ.md.render(q.prompt, { lang: S.quiz.language })),
+      kept('prompt:' + q.id, () => h('div', { class: 'prompt hl-root' }, BQ.md.render(q.prompt, { lang: S.quiz.language }))),
       q.image ? h('img', { class: 'qimg', src: api.assetUrl(q.image), alt: q.imageAlt || '' }) : null,
     ];
+  }
+
+  // ---------- highlighting ----------
+  // Students select question text and highlight it, like on paper. Copying or dragging it out stays
+  // blocked by the monitor. A small bar over the selection offers Highlight, and Remove when the
+  // selection (or a click) touches a highlight.
+  function highlightBar() {
+    let range = null;
+    const hl = h('button', { class: 'btn small', type: 'button', text: 'Highlight', onclick: () => { if (range) addHighlight(range); hide(); } });
+    const un = h('button', { class: 'btn small', type: 'button', text: 'Remove highlight', onclick: () => { if (range) removeHighlight(range); hide(); } });
+    const bar = h('div', { class: 'hl-bar', role: 'toolbar', 'aria-label': 'Highlight', hidden: true }, hl, un);
+    bar.addEventListener('mousedown', (e) => e.preventDefault()); // keep the selection while clicking
+    function hide() { bar.hidden = true; range = null; }
+    const rootOf = (n) => { const el = n && (n.nodeType === 1 ? n : n.parentElement); return el && el.closest('.hl-root'); };
+    function update() {
+      const sel = window.getSelection();
+      if (!S.el || !sel || !sel.rangeCount) return hide();
+      const r = sel.getRangeAt(0);
+      const root = rootOf(r.startContainer);
+      if (!root || root !== rootOf(r.endContainer) || !S.el.main.contains(root)) return hide();
+      const marks = [...root.querySelectorAll('mark.hl')].filter((m) => r.intersectsNode(m));
+      // A click (no selection) on a highlight offers to remove it; not on a choice, where a click picks it.
+      if (sel.isCollapsed && (!marks.length || root.closest('.choice'))) return hide();
+      if (sel.isCollapsed) { range = document.createRange(); range.selectNodeContents(marks[0]); } else range = r.cloneRange();
+      hl.hidden = sel.isCollapsed;
+      un.hidden = !marks.length;
+      bar.hidden = false;
+      const at = (sel.isCollapsed ? marks[0] : r).getBoundingClientRect();
+      const box = S.el.wrap.getBoundingClientRect();
+      const top = at.top - box.top - bar.offsetHeight - 8;
+      bar.style.top = `${top > 4 ? top : at.bottom - box.top + 8}px`;
+      bar.style.left = `${Math.max(8, Math.min(box.width - bar.offsetWidth - 8, at.left - box.left + at.width / 2 - bar.offsetWidth / 2))}px`;
+    }
+    return { bar, update, hide };
+  }
+  function textNodesIn(range) {
+    const top = range.commonAncestorContainer;
+    const root = top.nodeType === 1 ? top : top.parentNode;
+    const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      // math keeps its own layout, so it isn't split up
+      acceptNode: (n) => (n.nodeValue && range.intersectsNode(n) && !n.parentElement.closest('.katex') ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+    });
+    const out = [];
+    if (top.nodeType === 3) { if (!top.parentElement.closest('.katex')) out.push(top); return out; }
+    while (walk.nextNode()) out.push(walk.currentNode);
+    return out;
+  }
+  // Highlights in el as [start, end) character offsets, counting a line break element as one character,
+  // so they survive el being rewritten with the same text.
+  function marksIn(el) {
+    const out = [];
+    let pos = 0;
+    (function walk(n) {
+      for (const c of n.childNodes) {
+        if (c.nodeType === 3) {
+          const len = c.nodeValue.length;
+          if (c.parentElement.closest('mark.hl')) {
+            const last = out[out.length - 1];
+            if (last && last[1] === pos) last[1] += len; else out.push([pos, pos + len]);
+          }
+          pos += len;
+        } else if (c.nodeName === 'BR') pos += 1;
+        else if (c.nodeType === 1) walk(c);
+      }
+    }(el));
+    return out;
+  }
+  function rangeAt(el, a, b) {
+    const r = document.createRange();
+    let pos = 0;
+    let started = false;
+    (function walk(n) {
+      for (const c of n.childNodes) {
+        if (c.nodeType === 3) {
+          const len = c.nodeValue.length;
+          if (!started && a <= pos + len) { r.setStart(c, a - pos); started = true; }
+          if (started && b <= pos + len) { r.setEnd(c, b - pos); return true; }
+          pos += len;
+        } else if (c.nodeName === 'BR') pos += 1;
+        else if (c.nodeType === 1 && walk(c)) return true;
+      }
+      return false;
+    }(el));
+    return r;
+  }
+  function addHighlight(range, keepSelection) {
+    for (let node of textNodesIn(range)) {
+      if (node.parentElement.closest('mark.hl')) continue;
+      const start = node === range.startContainer ? range.startOffset : 0;
+      const end = node === range.endContainer ? range.endOffset : node.length;
+      if (start >= end) continue;
+      if (end < node.length) node.splitText(end);
+      if (start > 0) node = node.splitText(start);
+      if (!node.nodeValue.trim() && node.nodeValue.includes('\n')) continue; // the gap between two paragraphs
+      const mark = h('mark', { class: 'hl' });
+      node.replaceWith(mark);
+      mark.append(node);
+    }
+    if (!keepSelection) window.getSelection().removeAllRanges();
+  }
+  function removeHighlight(range) {
+    for (const m of [...S.el.main.querySelectorAll('mark.hl')]) {
+      if (!range.intersectsNode(m)) continue;
+      const parent = m.parentNode;
+      m.replaceWith(...m.childNodes);
+      parent.normalize();
+    }
+    window.getSelection().removeAllRanges();
   }
 
   function basicView(q) {
@@ -1093,6 +1223,12 @@
       const multi = q.type === 'multi';
       const cur = S.answers[q.id];
       const list = h('div', { class: 'choices', role: multi ? 'group' : 'radiogroup', 'aria-label': 'Answer choices' });
+      // Selecting text in a choice (to highlight it) shouldn't also pick that choice.
+      list.addEventListener('click', (e) => {
+        const sel = window.getSelection();
+        const label = e.target.closest && e.target.closest('label.choice');
+        if (label && sel && !sel.isCollapsed && label.contains(sel.anchorNode)) e.preventDefault();
+      }, true);
       const picked = (i) => (multi ? Array.isArray(S.answers[q.id]) && S.answers[q.id].includes(i) : S.answers[q.id] === i);
       const rows = q.choices.map((c, i) => {
         const id = `${q.id}-c${i}`;
@@ -1104,7 +1240,7 @@
         const x = h('button', { class: 'choice-x', type: 'button' });
         const outNote = h('span', { class: 'sr-only', id: `${id}-out`, text: 'crossed out' });
         const row = h('div', { class: 'choice-row' },
-          h('label', { class: 'choice', for: id }, input, h('span', { class: 'choice-text' }, BQ.md.renderInline(c, { lang: S.quiz.language })), outNote), x);
+          h('label', { class: 'choice', for: id }, input, kept(`choice:${q.id}:${i}`, () => h('span', { class: 'choice-text hl-root' }, BQ.md.renderInline(c, { lang: S.quiz.language }))), outNote), x);
         input.addEventListener('change', () => {
           if (input.checked && isCrossed(q, i)) setCrossed(q, i, false);
           if (!multi) setAnswer(q.id, i);
