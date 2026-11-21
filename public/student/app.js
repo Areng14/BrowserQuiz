@@ -749,15 +749,15 @@
     const conn = h('div', { class: 'conn-banner', role: 'alert', hidden: true },
       'Offline. Keep working, answers save when you reconnect.');
     const main = h('main', { class: 'qmain', tabindex: '-1', 'aria-labelledby': 'q-heading' });
-    const sheet = h('nav', { class: 'sheet', 'aria-label': 'Questions' });
-    // Too many numbers for one row: a "Question 3 of 20" button that opens all of them instead.
+    // "Question 3 of 20" opens every question; the review page lists them all before turning in.
     const jump = h('button', { class: 'btn q-jump', type: 'button', 'aria-haspopup': 'dialog', onclick: () => openNavigator() });
-    const mid = h('div', { class: 'qnav-mid' }, sheet, jump);
-    const prev = h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => go(S.idx - 1) });
+    const mid = h('div', { class: 'qnav-mid' }, jump);
+    const prev = h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => go(S.reviewOpen ? S.quiz.questions.length - 1 : S.idx - 1) });
     const next = h('button', { class: 'btn', type: 'button' });
     next.addEventListener('click', () => {
+      if (S.reviewOpen) return openSubmit();
       if (S.dirOpen) return closeDirections();
-      if (S.idx === S.quiz.questions.length - 1) return openSubmit();
+      if (S.idx === S.quiz.questions.length - 1) return openReview();
       go(S.idx + 1);
     });
     const hlBar = highlightBar();
@@ -782,9 +782,7 @@
       scratch,
       h('footer', { class: 'qnav' }, prev, mid, next),
       live, hlBar.bar);
-    S.el = { wrap, main, timer, sheet, jump, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null };
-    const refit = () => { if (!wrap.isConnected) { window.removeEventListener('resize', refit); return; } fitSheet(); };
-    window.addEventListener('resize', refit);
+    S.el = { wrap, main, timer, jump, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null };
     wrap.addEventListener('scroll', hlBar.hide, { passive: true }); // a short window scrolls the whole quiz
     if (!keysBound) { document.addEventListener('keydown', quizKeys); keysBound = true; }
     S.saveState = 'saved';
@@ -795,11 +793,21 @@
 
   function go(i) {
     if (i < 0 || i >= S.quiz.questions.length) return;
+    S.reviewOpen = false;
     S.idx = i;
     S.dirOpen = !S.partsSeen.has(partOf(i).n);
     renderQuestion();
     S.el.main.scrollTop = 0;
     S.el.main.focus({ preventScroll: true });
+  }
+  // Every question at a glance before turning in (Bluebook's "Check your work").
+  function openReview() {
+    S.reviewOpen = true;
+    S.dirOpen = false;
+    renderQuestion();
+    S.el.main.scrollTop = 0;
+    const head = document.getElementById('q-heading');
+    if (head) head.focus({ preventScroll: true });
   }
   function openDirections() {
     S.dirOpen = true;
@@ -823,9 +831,21 @@
     disposeEditor();
     const q = S.quiz.questions[S.idx];
     const total = S.quiz.questions.length;
+    if (S.reviewOpen) {
+      S.el.prev.disabled = false;
+      S.el.next.textContent = 'Submit';
+      S.el.next.className = 'btn primary';
+      S.el.jump.hidden = true;
+      document.title = `Check your work – ${S.quiz.title}`;
+      if (S.el.hlBar) S.el.hlBar.hide();
+      S.el.main.replaceChildren(reviewView());
+      renderScratch();
+      return;
+    }
+    S.el.jump.hidden = false;
     S.el.prev.disabled = S.idx === 0;
     const last = S.idx === total - 1;
-    S.el.next.textContent = S.dirOpen ? 'Continue' : last ? 'Review and submit' : 'Next';
+    S.el.next.textContent = S.dirOpen ? 'Continue' : last ? 'Review' : 'Next';
     S.el.next.className = 'btn' + (last && !S.dirOpen ? ' primary' : '');
     const views = { code: codeView, output: outputView, trace: traceView, fill: fillView, essay: essayView };
     let view = S.dirOpen ? directionsView(partOf(S.idx)) : (views[q.type] || basicView)(q);
@@ -1696,28 +1716,41 @@
   function sheetDot(q, i, onPick) {
     const done = isAnswered(q);
     const marked = isMarked(q);
+    const here = i === S.idx && !S.reviewOpen; // the review page isn't on any one question
     return h('button', {
-      type: 'button', class: 'sheet-dot' + (done ? ' answered' : '') + (i === S.idx ? ' current' : '') + (marked ? ' marked' : ''),
-      'aria-label': `Question ${i + 1}${done ? ', answered' : ''}${marked ? ', marked for review' : ''}`, 'aria-current': i === S.idx ? 'step' : null,
+      type: 'button', class: 'sheet-dot' + (done ? ' answered' : '') + (here ? ' current' : '') + (marked ? ' marked' : ''),
+      'aria-label': `Question ${i + 1}${done ? ', answered' : ''}${marked ? ', marked for review' : ''}`, 'aria-current': here ? 'step' : null,
       text: String(i + 1), onclick: () => onPick(i),
     });
   }
   function renderSheet() {
     if (!S.el || !S.quiz) return;
     const n = S.quiz.questions.length;
-    S.el.sheet.replaceChildren(...S.quiz.questions.map((q, i) => sheetDot(q, i, go)));
     S.el.jump.replaceChildren(h('span', {}, h('span', { class: 'q-jump-word', text: 'Question ' }), `${S.idx + 1} of ${n}`), chevronUp());
     S.el.jump.setAttribute('aria-label', `Question ${S.idx + 1} of ${n}. Show all questions`);
-    fitSheet();
   }
-  // The numbers show when they fit on one row; otherwise the bar has the "Question x of y" button.
-  function fitSheet() {
-    const bar = S.el && S.el.sheet.parentElement && S.el.sheet.parentElement.parentElement;
-    if (!bar) return;
-    bar.classList.remove('compact');
-    const first = S.el.sheet.firstElementChild;
-    const last = S.el.sheet.lastElementChild;
-    bar.classList.toggle('compact', !!first && last.offsetTop > first.offsetTop + 2); // wrapped onto a second row
+  // The key and every question by part, numbered: for the panel and the review page.
+  function questionGrid(onPick) {
+    const legend = h('p', { class: 'nav-legend', 'aria-hidden': 'true' },
+      h('span', {}, h('span', { class: 'sheet-dot mini answered' }), 'Answered'),
+      h('span', {}, h('span', { class: 'sheet-dot mini marked' }), 'For review'),
+      S.reviewOpen ? null : h('span', {}, h('span', { class: 'sheet-dot mini current' }), 'Current'));
+    const parts = S.parts && S.parts.length ? S.parts : [{ title: 'Questions', start: 0, end: S.quiz.questions.length - 1 }];
+    return [legend, ...parts.map((p) => {
+      const range = p.start === p.end ? `Question ${p.start + 1}` : `Questions ${p.start + 1}–${p.end + 1}`;
+      return h('section', { class: 'nav-part', 'aria-label': `${p.title}, ${range}` },
+        h('h3', {}, p.title, h('span', { class: 'nav-range', text: ` ${range}` })),
+        h('div', { class: 'nav-grid' }, S.quiz.questions.slice(p.start, p.end + 1).map((q, k) => sheetDot(q, p.start + k, onPick))));
+    })];
+  }
+  function reviewView() {
+    const qs = S.quiz.questions;
+    const done = qs.filter(isAnswered).length;
+    const marked = qs.filter(isMarked).length;
+    return h('div', { class: 'qview review' },
+      h('h1', { id: 'q-heading', tabindex: '-1', text: 'Check your work' }),
+      h('p', { class: 'muted', text: `${done} of ${plural(qs.length, 'question')} answered${marked ? `, ${marked} for review` : ''}. Pick a number to go back to it.` }),
+      ...questionGrid(go));
   }
   function chevronUp() {
     const s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
@@ -1733,20 +1766,15 @@
     const close = () => { backdrop.remove(); release(); };
     const pick = (i) => { backdrop.remove(); release(false); go(i); };
     const x = h('button', { class: 'btn small ghost nav-close', type: 'button', 'aria-label': 'Close', onclick: close }, closeIcon());
-    const legend = h('p', { class: 'nav-legend', 'aria-hidden': 'true' },
-      h('span', {}, h('span', { class: 'sheet-dot mini answered' }), 'Answered'),
-      h('span', {}, h('span', { class: 'sheet-dot mini marked' }), 'For review'),
-      h('span', {}, h('span', { class: 'sheet-dot mini current' }), 'Current'));
-    const groups = (S.parts && S.parts.length ? S.parts : [{ title: 'Questions', start: 0, end: S.quiz.questions.length - 1 }]).map((p) => {
-      const range = p.start === p.end ? `Question ${p.start + 1}` : `Questions ${p.start + 1}–${p.end + 1}`;
-      return h('section', { class: 'nav-part', 'aria-label': `${p.title}, ${range}` },
-        h('h3', {}, p.title, h('span', { class: 'nav-range', text: ` ${range}` })),
-        h('div', { class: 'nav-grid' }, S.quiz.questions.slice(p.start, p.end + 1).map((q, k) => sheetDot(q, p.start + k, pick))));
-    });
-    backdrop = h('div', { class: 'modal-backdrop' },
+    const toReview = h('button', { class: 'btn', type: 'button', text: 'Go to review page', onclick: () => { backdrop.remove(); release(false); openReview(); } });
+    backdrop = h('div', { class: 'modal-backdrop nav-pop' },
       h('div', { class: 'modal q-navigator', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'nav-title' },
         h('div', { class: 'nav-head' }, h('h2', { id: 'nav-title', text: `Question ${S.idx + 1} of ${S.quiz.questions.length}` }), x),
-        legend, ...groups));
+        ...questionGrid(pick),
+        h('div', { class: 'nav-foot' }, toReview)));
+    // It opens just above the bottom bar, like a menu from its button.
+    const bar = S.el.next.closest('.qnav');
+    if (bar) backdrop.style.paddingBottom = `${Math.max(16, Math.round(S.el.wrap.getBoundingClientRect().bottom - bar.getBoundingClientRect().top + 8))}px`;
     S.el.wrap.append(backdrop);
     release = holdFocus(backdrop, close);
     const cur = backdrop.querySelector('.sheet-dot.current:not(.mini)');
