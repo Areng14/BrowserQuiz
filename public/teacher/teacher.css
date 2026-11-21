@@ -95,6 +95,11 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
   .t-side-btns .btn.small { padding-left: 10px; padding-right: 10px; }
   .t-nav-more { display: none; }
 }
+/* The smallest phones, with six tabs (Current quiz is open): every label still whole */
+@media (max-width: 360px) {
+  .t-nav { gap: 0; padding-left: max(2px, env(safe-area-inset-left)); padding-right: max(2px, env(safe-area-inset-right)); }
+  .t-nav-item { padding: 6px 0; font-size: 11px; letter-spacing: -0.01em; }
+}
 .t-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; }
 .t-row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .t-row .field { min-width: 200px; flex: 1 1 200px; }
