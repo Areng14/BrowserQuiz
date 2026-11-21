@@ -289,7 +289,7 @@
     if (cur) tabs.splice(1, 0, Object.assign({}, CURRENT, { href: '#run/' + encodeURIComponent(cur.id), title: `${cur.title} (${cur.code})` }));
     return h('div', { class: 't-shell' },
       h('nav', { class: 't-side', 'aria-label': 'Dashboard' },
-        h('div', { class: 't-brand', text: 'BrowserQuiz' }),
+        h('div', { class: 't-brand' }, h('img', { class: 't-brand-icon', src: '/icon.svg', alt: '', width: 26, height: 26 }), 'BrowserQuiz'),
         h('div', { class: 't-nav' }, tabs.map((t) => h('a', { class: 't-nav-item', href: t.href || '#' + t.id, title: t.title || null, 'aria-current': t.id === active ? 'page' : null },
           icon(t.icon), h('span', { class: 't-nav-label' }, t.short || t.label, t.short ? h('span', { class: 't-nav-more', text: t.label.slice(t.short.length) }) : null),
           t.id === 'current' && live > 1 ? h('span', { class: 't-badge', title: `${live} open`, 'aria-label': `${live} open`, text: String(live) }) : null))),
