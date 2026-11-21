@@ -71,7 +71,7 @@
       who && who.role !== 'admin' ? h('button', { class: 'btn small', type: 'button', text: 'Password', onclick: () => showSetPassword(false) }) : null,
       h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } }));
   }
-  function mount(...nodes) { clearInterval(pollTimer); root.replaceChildren(...nodes); }
+  function mount(...nodes) { clearInterval(pollTimer); leaveGuard = null; root.replaceChildren(...nodes); }
 
   // ---------- sign in ----------
   function showLogin() {
@@ -88,7 +88,7 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       btn.disabled = true; msg.textContent = '';
-      try { const r = await post('/api/t/login', { username: user.value.trim(), password: pw.value }); if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else showHome(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
+      try { const r = await post('/api/t/login', { username: user.value.trim(), password: pw.value }); if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else route(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
     });
     mount(form);
     user.focus();
@@ -143,7 +143,7 @@
       h('p', { text: 'Your quizzes are encrypted with your password, so only you can open them, not whoever runs this server. If you forget your password, this code is the only way to get them back.' }),
       h('div', { class: 't-row' }, h('code', { class: 't-code-big', text: codeText }), copy),
       h('p', { class: 't-small t-muted', text: "It isn't shown again. Keep it somewhere other than this computer." }),
-      h('div', {}, h('button', { class: 'btn primary', type: 'button', text: 'I saved it', onclick: () => showHome() }))));
+      h('div', {}, h('button', { class: 'btn primary', type: 'button', text: 'I saved it', onclick: () => route() }))));
   }
 
   // ---------- teacher accounts (admin) ----------
@@ -193,34 +193,154 @@
       add.disabled = false;
     });
     load();
-    return h('section', { class: 't-section' }, h('h2', { text: 'Teachers' }), list, form, msg);
+    return h('section', { class: 't-section' }, h('h1', { text: 'Teachers' }), list, form, msg);
   }
 
-  // ---------- home ----------
-  async function showHome() {
+  // ---------- dashboard: a sidebar of tabs, each with its own address (#give, #run/<id>, ...) ----------
+  const TABS = [
+    { id: 'give', label: 'Give a quiz', icon: ['M6 4l14 8-14 8z'] },
+    { id: 'results', label: 'Results', icon: ['M3 3v18h18', 'M18 17V9', 'M13 17V5', 'M8 17v-3'] },
+    { id: 'quizzes', label: 'Quizzes', icon: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6', 'M16 13H8', 'M16 17H8'] },
+    { id: 'classes', label: 'Classes', icon: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'] },
+    { id: 'teachers', label: 'Teachers', icon: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'], admin: true },
+  ];
+  let tab = 'give';
+  let live = 0; // open quizzes, shown next to "Give a quiz"
+  let here = location.hash;
+  let leaveGuard = null; // set by a page with unsaved work; false keeps the teacher there
+  let navSeq = 0; // the latest page asked for, so a slow load doesn't replace a newer page
+
+  function setHash(hash, replace) {
+    here = hash;
+    if (location.hash === hash) return;
+    history[replace ? 'replaceState' : 'pushState'](null, '', hash);
+  }
+  async function route() {
+    if (leaveGuard && !leaveGuard()) { history.pushState(null, '', here); return; }
+    leaveGuard = null;
+    if (!who) { try { who = (await api('/api/t/me')).teacher; } catch (e) { return; } } // signs in first if needed
+    const [a, b] = location.hash.slice(1).split('/');
+    const id = b ? decodeURIComponent(b) : null;
+    if (a === 'run' && id) showRun(id);
+    else if (a === 'class') showRoster(id === 'new' ? null : id);
+    else if (a === 'quiz') openQuiz(id === 'new' ? null : id);
+    else showHome(TABS.some((t) => t.id === a) ? a : 'give');
+  }
+  window.addEventListener('hashchange', route);
+  function openQuiz(id) {
+    setHash('#quiz/' + (id ? encodeURIComponent(id) : 'new'));
+    window.BQT.showQuizEditor(id);
+  }
+
+  function icon(paths) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const s = document.createElementNS(ns, 'svg');
+    for (const [k, v] of Object.entries({ width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) s.setAttribute(k, String(v));
+    for (const d of paths) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); s.append(p); }
+    return s;
+  }
+  // The page frame: tabs on the left, the page on the right. active: the tab this page belongs to.
+  function shell(active, ...content) {
+    const tabs = TABS.filter((t) => !t.admin || (who && who.role === 'admin'));
+    return h('div', { class: 't-shell' },
+      h('nav', { class: 't-side', 'aria-label': 'Dashboard' },
+        h('div', { class: 't-brand', text: 'BrowserQuiz' }),
+        h('div', { class: 't-nav' }, tabs.map((t) => h('a', { class: 't-nav-item', href: '#' + t.id, 'aria-current': t.id === active ? 'page' : null },
+          icon(t.icon), h('span', { class: 't-nav-label', text: t.label }),
+          t.id === 'give' && live ? h('span', { class: 't-badge', title: `${live} open`, 'aria-label': `${live} open`, text: String(live) }) : null))),
+        h('div', { class: 't-side-foot' },
+          who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null,
+          h('div', { class: 't-side-btns' }, themeButton(),
+            who && who.role !== 'admin' ? h('button', { class: 'btn small', type: 'button', text: 'Password', onclick: () => showSetPassword(false) }) : null,
+            h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } })))),
+      h('main', { class: 't-main' }, ...content));
+  }
+
+  async function showHome(next) {
+    const same = !next || next === tab;
+    if (next) tab = next;
+    setHash('#' + tab);
+    const seq = ++navSeq;
     let data;
     let me = null;
     try { [data, me] = await Promise.all([api('/api/t/overview'), api('/api/t/me').catch(() => null)]); } catch (e) { if (e.message !== 'login') mount(h('p', { class: 't-error', text: e.message })); return; }
+    if (seq !== navSeq) return;
     who = me && me.teacher;
+    if (tab === 'teachers' && !(who && who.role === 'admin')) { showHome('give'); return; }
+    live = data.runs.filter((r) => r.status === 'open').length;
+    const page = { give: giveTab, results: resultsTab, quizzes: quizzesTab, classes: classesTab, teachers: teachersSection }[tab](data, me);
+    const y = same ? window.scrollY : 0;
+    mount(shell(tab, page));
+    window.scrollTo(0, y);
+  }
+
+  const runsTable = (runs) => h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
+    h('thead', {}, h('tr', {}, ['Code', 'Quiz', 'Class', 'Status', 'Joined', 'Started', ''].map((x) => h('th', { text: x })))),
+    h('tbody', {}, runs.map((r) => h('tr', {},
+      h('td', {}, h('button', { class: 't-link t-mono', type: 'button', text: r.code, onclick: () => showRun(r.id) })),
+      h('td', { text: r.quiz }), h('td', { text: r.roster }),
+      h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.practice ? ' (practice)' : r.seb ? ' (SEB)' : ''}` }),
+      h('td', { class: 'num', text: String(r.joined) }), h('td', { text: date(r.createdAt) }),
+      h('td', { class: 't-actions' }, h('button', { class: 'btn small', type: 'button', text: 'Delete',
+        onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?${r.status === 'open' ? " It's still open: anyone taking it gets signed out." : ''}`) })))))));
+
+  // Start a quiz: what, who, and how it's locked down. Open quizzes are listed under it.
+  function giveTab(data, me) {
     const runner = !me || !me.runner || me.runnerOk ? null
       : h('p', { class: 't-error t-small' }, h('span', { class: 'dot bad' }), 'Code runner offline. Code questions get graded once it is back.');
     const quizSel = picker('run-quiz', 'Quiz', data.quizzes.map((x) => ({ value: x.id, label: x.title, meta: [plural(x.questions, 'question'), date(x.createdAt)] })));
     const rosterSel = picker('run-roster', 'Class', data.rosters.map((x) => ({ value: x.id, label: x.name, meta: [plural(x.students, 'student')] })));
-    const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', checked: true });
-    const practice = h('input', { type: 'checkbox', id: 'practice' });
+    const MODES = [
+      { id: 'exam', title: 'Exam', text: 'Locked down and watched. Leaving the window is flagged.' },
+      { id: 'seb', title: 'Safe Exam Browser', text: 'An exam that only opens in SEB with your settings.' },
+      { id: 'practice', title: 'Practice', text: 'No lockdown. Students see the answers at the end.' },
+    ];
+    let mode = 'exam';
     // Safe Exam Browser: only SEB running the exam's settings can open the quiz.
-    const seb = h('input', { type: 'checkbox', id: 'seb' });
     const sebKey = h('input', { class: 'input t-mono', id: 'seb-key', autocomplete: 'off', spellcheck: 'false', maxlength: '64', placeholder: '64 letters and digits' });
-    const sebField = h('label', { class: 'field t-seb', for: 'seb-key' }, h('span', { class: 'field-label', text: "Config Key (SEB Config Tool, Exam tab)" }), sebKey);
+    const sebField = h('label', { class: 'field t-seb', for: 'seb-key' }, h('span', { class: 'field-label', text: 'Config Key (SEB Config Tool, Exam tab)' }), sebKey);
     sebField.hidden = true;
-    seb.addEventListener('change', () => { sebField.hidden = !seb.checked; if (seb.checked) sebKey.focus(); });
+    const modeCards = MODES.map((m) => {
+      const input = h('input', { type: 'radio', name: 'mode', id: 'mode-' + m.id, value: m.id, checked: m.id === mode });
+      input.addEventListener('change', () => { mode = m.id; sebField.hidden = mode !== 'seb'; if (mode === 'seb') sebKey.focus(); });
+      return h('label', { class: 't-mode', for: 'mode-' + m.id }, input,
+        h('span', { class: 't-mode-title', text: m.title }), h('span', { class: 't-mode-text', text: m.text }));
+    });
+    const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', class: 't-switch', role: 'switch', checked: true });
     const startMsg = h('p', { class: 't-error', role: 'alert' });
-    const startBtn = h('button', { class: 'btn primary', type: 'button', text: 'Start quiz', disabled: !data.quizzes.length || !data.rosters.length });
+    const ready = data.quizzes.length && data.rosters.length;
+    const startBtn = h('button', { class: 'btn primary t-start', type: 'button', text: 'Start quiz', disabled: !ready });
     startBtn.addEventListener('click', async () => {
       startBtn.disabled = true;
-      try { const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked, practice: practice.checked, sebKey: seb.checked ? sebKey.value.trim() : null }); showRun(r.id); } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
+      startMsg.textContent = '';
+      try {
+        const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked, practice: mode === 'practice', sebKey: mode === 'seb' ? sebKey.value.trim() : null });
+        showRun(r.id);
+      } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
     });
+    const missing = [!data.quizzes.length && ['quiz', '#quizzes'], !data.rosters.length && ['class', '#classes']].filter(Boolean);
+    const open = data.runs.filter((r) => r.status === 'open');
+    return [
+      h('section', { class: 't-section' },
+        h('h1', { text: 'Give a quiz' }),
+        missing.length ? h('p', { class: 't-muted' }, 'Add a ', missing.map(([w, href], i) => [i ? ' and a ' : '', h('a', { href, text: w })]), ' first.') : null,
+        h('div', { class: 't-start-form' },
+          h('div', { class: 't-row' }, quizSel.el, rosterSel.el),
+          h('fieldset', { class: 't-modes' }, h('legend', { class: 'field-label', text: 'Mode' }), modeCards),
+          sebField,
+          h('label', { class: 't-check t-switch-row', for: 'ip-lock' }, ipLock, h('span', { text: 'Only students on my current network' })),
+          h('div', { class: 't-row t-start-row' }, startBtn, startMsg), runner)),
+      open.length ? h('section', { class: 't-section' }, h('h2', { text: 'Open now' }), runsTable(open)) : null,
+    ];
+  }
 
+  function resultsTab(data) {
+    return h('section', { class: 't-section' },
+      h('h1', { text: 'Results' }),
+      data.runs.length ? runsTable(data.runs) : h('p', { class: 't-muted', text: 'Quizzes you give show up here.' }));
+  }
+
+  function quizzesTab(data) {
     const quizFile = h('input', { class: 'input', type: 'file', id: 'quiz-file', accept: '.quiz,.zip,.json' });
     const quizMsg = h('p', { class: 't-error', role: 'alert' });
     // Paste quiz.json (from an AI chat, say) and upload it straight away.
@@ -238,7 +358,28 @@
       quizBtn.disabled = true; quizBtn.textContent = 'Checking…'; quizMsg.textContent = '';
       try { await api('/api/t/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() }); showHome(); } catch (e) { quizMsg.textContent = e.message; quizBtn.disabled = false; quizBtn.textContent = 'Upload .quiz'; }
     });
+    return h('section', { class: 't-section' },
+      h('div', { class: 't-head' }, h('h1', { text: 'Quizzes' }),
+        copyPromptBtn(),
+        h('button', { class: 'btn small primary', type: 'button', text: 'New quiz', onclick: () => openQuiz(null) })),
+      data.quizzes.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
+        h('tbody', {}, data.quizzes.map((x) => h('tr', {},
+          h('td', { text: x.title }),
+          h('td', { class: 't-muted', text: plural(x.questions, 'question') }),
+          h('td', { class: 't-muted', text: x.timeLimitMin ? `${x.timeLimitMin} min` : 'No time limit' }),
+          h('td', { class: 't-muted', text: date(x.createdAt) }),
+          h('td', { class: 't-actions' },
+            linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true),
+            h('button', { class: 'btn small', type: 'button', text: 'Edit', onclick: () => openQuiz(x.id) }),
+            linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
+            h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}? Past results stay.`) }))))))) : null,
+      h('div', { class: 't-row' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizBtn),
+      h('details', { class: 't-paste' }, h('summary', { text: 'Paste a quiz.json' }),
+        h('label', { class: 'field', for: 'paste-quiz' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteJson), h('div', {}, pasteBtn)),
+      quizMsg);
+  }
 
+  function classesTab(data) {
     const rosterName = h('input', { class: 'input', id: 'roster-name', placeholder: 'Period 3' });
     const rosterFile = h('input', { class: 'input', type: 'file', id: 'roster-file', accept: '.csv,text/csv' });
     const rosterMsg = h('p', { class: 't-error', role: 'alert' });
@@ -249,64 +390,21 @@
       rosterBtn.disabled = true; rosterMsg.textContent = '';
       try { await post('/api/t/rosters', { name: rosterName.value, csv: await f.text() }); showHome(); } catch (e) { rosterMsg.textContent = e.message; rosterBtn.disabled = false; }
     });
-
-    mount(bar('BrowserQuiz (Teacher Panel)'), h('main', { class: 't-main' },
-      h('section', { class: 't-section' },
-        h('h1', { text: 'Start a quiz' }),
-        !data.quizzes.length || !data.rosters.length ? h('p', { class: 't-muted', text: 'Upload a quiz and a roster below first.' }) : null,
-        h('div', { class: 't-row' },
-          quizSel.el, rosterSel.el),
-        h('label', { class: 't-check', for: 'ip-lock' }, ipLock, h('span', { text: 'Only allow students on my current network' })),
-        h('label', { class: 't-check', for: 'practice' }, practice, h('span', { text: 'Practice: no lockdown or monitoring, and students see the answers at the end' })),
-        h('label', { class: 't-check', for: 'seb' }, seb, h('span', { text: 'Require Safe Exam Browser' })),
-        sebField,
-        h('div', {}, startBtn), startMsg, runner),
-      h('section', { class: 't-section' },
-        h('h2', { text: 'Recent quizzes' }),
-        data.runs.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
-          h('thead', {}, h('tr', {}, ['Code', 'Quiz', 'Class', 'Status', 'Joined', 'Started', ''].map((x) => h('th', { text: x })))),
-          h('tbody', {}, data.runs.map((r) => h('tr', {},
-            h('td', {}, h('button', { class: 't-link', type: 'button', text: r.code, onclick: () => showRun(r.id) })),
-            h('td', { text: r.quiz }), h('td', { text: r.roster }),
-            h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.practice ? ' (practice)' : r.seb ? ' (SEB)' : ''}` }),
-            h('td', { class: 'num', text: String(r.joined) }), h('td', { text: date(r.createdAt) }),
-            h('td', { class: 't-actions' }, h('button', { class: 'btn small', type: 'button', text: 'Delete',
-              onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?${r.status === 'open' ? " It's still open: anyone taking it gets signed out." : ''}`) }))))))) : h('p', { class: 't-muted', text: 'None yet.' })),
-      h('section', { class: 't-section' },
-        h('div', { class: 't-head' }, h('h2', { text: 'Quizzes' }),
-          copyPromptBtn(),
-          h('button', { class: 'btn small primary', type: 'button', text: 'New quiz', onclick: () => window.BQT.showQuizEditor(null) })),
-        data.quizzes.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
-          h('tbody', {}, data.quizzes.map((x) => h('tr', {},
-            h('td', { text: x.title }),
-            h('td', { class: 't-muted', text: plural(x.questions, 'question') }),
-            h('td', { class: 't-muted', text: x.timeLimitMin ? `${x.timeLimitMin} min` : 'No time limit' }),
-            h('td', { class: 't-muted', text: date(x.createdAt) }),
-            h('td', { class: 't-actions' },
-              linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true),
-              h('button', { class: 'btn small', type: 'button', text: 'Edit', onclick: () => window.BQT.showQuizEditor(x.id) }),
-              linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
-              h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}? Past results stay.`) }))))))) : null,
-        h('div', { class: 't-row' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizBtn),
-        h('details', { class: 't-paste' }, h('summary', { text: 'Paste a quiz.json' }),
-          h('label', { class: 'field', for: 'paste-quiz' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteJson), h('div', {}, pasteBtn)),
-        quizMsg),
-      h('section', { class: 't-section' },
-        h('div', { class: 't-head' }, h('h2', { text: 'Classes' }),
-          h('button', { class: 'btn small primary', type: 'button', text: 'New class', onclick: () => showRoster(null) })),
-        data.rosters.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
-          h('tbody', {}, data.rosters.map((x) => h('tr', {},
-            h('td', { text: x.name }),
-            h('td', { class: 't-muted', text: plural(x.students, 'student') }),
-            h('td', { class: 't-actions' },
-              h('button', { class: 'btn small', type: 'button', text: 'Edit', onclick: () => showRoster(x.id) }),
-              h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}? Past results stay.`) }))))))) : null,
-        h('div', { class: 't-row' },
-          h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
-          h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student_id)' }), rosterFile),
-          rosterBtn),
-        rosterMsg),
-      who && who.role === 'admin' ? teachersSection() : null));
+    return h('section', { class: 't-section' },
+      h('div', { class: 't-head' }, h('h1', { text: 'Classes' }),
+        h('button', { class: 'btn small primary', type: 'button', text: 'New class', onclick: () => showRoster(null) })),
+      data.rosters.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
+        h('tbody', {}, data.rosters.map((x) => h('tr', {},
+          h('td', { text: x.name }),
+          h('td', { class: 't-muted', text: plural(x.students, 'student') }),
+          h('td', { class: 't-actions' },
+            h('button', { class: 'btn small', type: 'button', text: 'Edit', onclick: () => showRoster(x.id) }),
+            h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}? Past results stay.`) }))))))) : null,
+      h('div', { class: 't-row' },
+        h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
+        h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile),
+        rosterBtn),
+      rosterMsg);
   }
 
   function linkBtn(text, href, newTab) {
@@ -424,6 +522,8 @@
 
   // ---------- roster maker ----------
   async function showRoster(id) {
+    setHash('#class/' + (id ? encodeURIComponent(id) : 'new'));
+    const seq = ++navSeq;
     let roster = { name: '', students: [] };
     if (id) {
       try { roster = await api(`/api/t/rosters/${encodeURIComponent(id)}`); } catch (e) { return; }
@@ -450,17 +550,17 @@
       try {
         if (id) await post(`/api/t/rosters/${encodeURIComponent(id)}/edit`, { name: name.value, add: add.value, remove: [...removing] });
         else await post('/api/t/rosters', { name: name.value, text: add.value });
-        showHome();
+        showHome('classes');
       } catch (e) { msg.textContent = e.message; save.disabled = false; }
     });
-    mount(bar(h('button', { class: 't-link', type: 'button', text: '← All quizzes', onclick: () => showHome() })),
-      h('main', { class: 't-main' }, h('section', { class: 't-section' },
+    if (seq !== navSeq) return;
+    mount(shell('classes', h('section', { class: 't-section' },
         h('h1', { text: id ? 'Edit class' : 'New class' }),
         h('label', { class: 'field', for: 'class-name' }, h('span', { class: 'field-label', text: 'Class name' }), name),
         id ? h('h2', { text: plural(roster.students.length, 'student') }) : null,
         list,
         h('label', { class: 'field', for: 'class-add' }, h('span', { class: 'field-label', text: id ? 'Add students: name, student ID (one per line)' : 'Students: name, student ID (one per line)' }), add),
-        h('div', { class: 't-row' }, save, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => showHome() })),
+        h('div', { class: 't-row' }, save, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => showHome('classes') })),
         msg)));
     (id ? add : name).focus();
   }
@@ -482,6 +582,8 @@
   }
 
   async function showRun(runId) {
+    setHash('#run/' + encodeURIComponent(runId));
+    ++navSeq;
     selected = null;
     const code = h('span', { class: 't-joincode' });
     const title = h('h1');
@@ -657,8 +759,7 @@
         pointsRow);
     }
 
-    mount(bar(h('button', { class: 't-link', type: 'button', text: '← All quizzes', onclick: () => showHome() })),
-      h('main', { class: 't-main' },
+    mount(shell(tab === 'results' ? 'results' : 'give',
         h('section', { class: 't-section' },
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
           howTo,
@@ -689,6 +790,6 @@
     ctx.globalAlpha = 1;
   }
 
-  window.BQT = { h, api, post, mount, bar, showHome, plural, date };
-  api('/api/t/me').then(showHome).catch(() => {});
+  window.BQT = { h, api, post, mount, bar, showHome, plural, date, setHash, guard: (fn) => { leaveGuard = fn; } };
+  route();
 })();

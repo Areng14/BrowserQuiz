@@ -1395,6 +1395,7 @@
         const assets = Object.fromEntries(Object.entries(newAssets).filter(([p2]) => used.has(p2)));
         const r = await post('/api/t/quizzes/json', { quiz: out, replaces: currentId, assets });
         currentId = r.id;
+        if (root.isConnected) window.BQT.setHash('#quiz/' + encodeURIComponent(r.id), true);
         assetQuizId = r.id;
         for (const p2 of Object.keys(assets)) existingAssets.add(p2);
         newAssets = {};
@@ -1443,7 +1444,7 @@
       if (saved && w) w.location = `/teacher/preview.html?quiz=${encodeURIComponent(saved)}`;
       else if (w) w.close();
     });
-    const leave = () => { if (!dirty || confirm('Leave without saving?')) showHome(); };
+    const leave = () => { if (!dirty || confirm('Leave without saving?')) showHome('quizzes'); };
 
     const title = h('input', { class: 'input qe-title', value: quiz.title || '', placeholder: 'Quiz title', 'aria-label': 'Title', maxlength: '120' });
     title.addEventListener('input', () => { quiz.title = title.value; touch(); });
@@ -1480,7 +1481,9 @@
     document.addEventListener('keydown', onKey);
     window.addEventListener('beforeunload', onUnload);
 
-    mount(bar(h('button', { class: 't-link', type: 'button', text: '← All quizzes', onclick: leave })), root);
+    mount(bar(h('button', { class: 't-link', type: 'button', text: '← Quizzes', onclick: leave })), root);
+    // The browser's Back button asks too.
+    window.BQT.guard(() => !dirty || confirm('Leave without saving?'));
     renderPane();
     if (!id && !preset) title.focus();
   }

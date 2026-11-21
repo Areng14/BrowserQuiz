@@ -40,8 +40,7 @@ If students can't reach it, open port 8080 in the server's firewall.
 ## Teachers
 
 Sign in as `admin` with the teacher password from setup (`ADMIN_PASSWORD` in `.env`; leaving the
-username blank also means admin). To add teachers, go to **Teachers** at the bottom of the
-dashboard. Each new teacher gets a temporary password to pass on, and picks their own the first
+username blank also means admin). To add teachers, open the **Teachers** tab. Each new teacher gets a temporary password to pass on, and picks their own the first
 time they sign in. Each teacher sees only their own quizzes, classes and results.
 
 - **Reset password** gives a teacher a new temporary password and signs them out.
@@ -68,12 +67,12 @@ recovery code) unlocks, so whoever hosts BrowserQuiz can't read them from the da
 
 ## Making quizzes and classes
 
-- **Quizzes:** build them on the dashboard with **New quiz**, or upload a `.quiz` file. Every quiz
+- **Quizzes:** on the **Quizzes** tab, build them with **New quiz** or upload a `.quiz` file. Every quiz
   has **Preview**, which shows exactly what students see, lets you run code, and gives you the score.
-- **Classes:** use **New class** and paste one student per line (`name, student ID`, or straight
+- **Classes:** on the **Classes** tab, use **New class** and paste one student per line (`name, student ID`, or straight
   from a spreadsheet), or upload a CSV.
-- **With an AI chat (ChatGPT, Claude, …):** click **AI prompt** next to New quiz, fill in the blanks
-  at the top, and paste it into the chat. AIs that can make files hand back a `.quiz` (images
+- **With an AI chat (ChatGPT, Claude, …):** click **Copy AI prompt** on the Quizzes tab, paste it
+  into the chat, and fill in the blanks at the top. AIs that can make files hand back a `.quiz` (images
   included) to upload. Others give a `quiz.json`: upload it, or paste it under New quiz and add
   any images there.
 - **With an AI coding assistant in this repo:** it follows `AGENTS.md` and the Claude Code skill.
@@ -99,7 +98,7 @@ LockDown Browser only works inside an LMS like Canvas, so BrowserQuiz can't requ
 2. In SEB Config Tool, set the **Start URL** to your BrowserQuiz address (the "Join at" link).
    On the **Exam** tab, turn on sending the Browser Exam Key and Config Key, and copy the
    **Config Key**. Save the settings as a `.seb` file.
-3. Start the quiz with **Require Safe Exam Browser** ticked and paste the Config Key.
+3. Under **Give a quiz**, pick the **Safe Exam Browser** mode and paste the Config Key.
 4. Students open the `.seb` file, which starts SEB on the quiz.
 
 If you change the SEB settings, the Config Key changes too: start the quiz with the new one.
