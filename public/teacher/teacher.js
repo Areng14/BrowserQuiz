@@ -56,7 +56,7 @@
   }
   function themeButton() {
     const b = h('button', { class: 'theme-btn', type: 'button' });
-    const paint = () => { const d = isDark(); b.textContent = d ? '☀' : '☾'; b.setAttribute('aria-label', d ? 'Switch to light mode' : 'Switch to dark mode'); };
+    const paint = () => { const d = isDark(); b.replaceChildren(icon(d ? ICONS.sun : ICONS.moon)); b.setAttribute('aria-label', d ? 'Switch to light mode' : 'Switch to dark mode'); };
     paint();
     b.addEventListener('click', () => {
       const next = isDark() ? 'light' : 'dark';
@@ -248,10 +248,20 @@
     window.BQT.showQuizEditor(id);
   }
 
-  function icon(paths) {
+  // Line icons (24x24, stroked), so buttons look the same everywhere instead of as each phone's emoji.
+  const ICONS = {
+    sun: ['M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z', 'M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'],
+    moon: ['M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'],
+    x: ['M18 6L6 18', 'M6 6l12 12'],
+    up: ['M12 19V5', 'M5 12l7-7 7 7'],
+    down: ['M12 5v14', 'M19 12l-7 7-7-7'],
+    back: ['M19 12H5', 'M12 19l-7-7 7-7'],
+    grip: ['M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01'],
+  };
+  function icon(paths, size = 18) {
     const ns = 'http://www.w3.org/2000/svg';
     const s = document.createElementNS(ns, 'svg');
-    for (const [k, v] of Object.entries({ width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) s.setAttribute(k, String(v));
+    for (const [k, v] of Object.entries({ width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) s.setAttribute(k, String(v));
     for (const d of paths) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); s.append(p); }
     return s;
   }
@@ -865,6 +875,6 @@
     ctx.globalAlpha = 1;
   }
 
-  window.BQT = { h, api, post, mount, bar, showHome, plural, date, setHash, guard: (fn) => { leaveGuard = fn; } };
+  window.BQT = { h, api, post, mount, bar, showHome, plural, date, setHash, icon, ICONS, guard: (fn) => { leaveGuard = fn; } };
   route();
 })();

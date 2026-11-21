@@ -161,6 +161,12 @@
     }
     return s;
   }
+  // A pass/fail mark as a drawn icon, so phones don't swap in their own emoji.
+  function markIcon(pass) {
+    const s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    s.append(svgEl('path', { d: pass ? 'M20 6L9 17l-5-5' : 'M18 6L6 18M6 6l12 12' }));
+    return s;
+  }
   function paintThemeButton(b) {
     const dark = isDark();
     const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
@@ -1619,7 +1625,7 @@
       const passed = tests.filter((t) => t.pass).length;
       parts.push(h('p', { class: 'res-head ' + (passed === tests.length ? 'good' : 'bad'), text: `${passed} of ${tests.length} examples passed` }));
       parts.push(h('ul', { class: 'res-tests' }, tests.map((t) => h('li', { class: t.pass ? 'ok' : 'bad' },
-        h('span', { class: 'res-mark', role: 'img', text: t.pass ? '✓' : '✗', 'aria-label': t.pass ? 'Passed' : 'Failed' }),
+        h('span', { class: 'res-mark', role: 'img', 'aria-label': t.pass ? 'Passed' : 'Failed' }, markIcon(t.pass)),
         h('div', { class: 'res-body' },
           h('pre', { class: 'res-call' }, h('code', { 'data-lang': lang, text: t.call })),
           t.pass

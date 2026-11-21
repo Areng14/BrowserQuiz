@@ -606,7 +606,7 @@
 
   // preset: { quiz, missing } from a pasted quiz.json, loaded into this editor unsaved.
   async function showQuizEditor(id, preset) {
-    const { h, api, post, mount, bar, showHome, plural } = window.BQT;
+    const { h, api, post, mount, bar, showHome, plural, icon, ICONS } = window.BQT;
     let quiz;
     let currentId = id;
     let existingAssets = new Set(); // images already stored with the quiz being edited
@@ -715,7 +715,7 @@
       return h('label', { class: 't-check' }, cb, h('span', { text: label }));
     };
     const field = (label, el, ...more) => h('label', { class: 'field' }, h('span', { class: 'field-label', text: label }), el, ...more);
-    const xBtn = (label, onclick, disabled) => h('button', { class: 'btn small qe-x', type: 'button', text: '✕', 'aria-label': label, title: label, disabled, onclick });
+    const xBtn = (label, onclick, disabled) => h('button', { class: 'btn small qe-x', type: 'button', 'aria-label': label, title: label, disabled, onclick }, icon(ICONS.x, 16));
 
     // ---------- choices ----------
     // Marks travel with their choices when rows are added, removed or moved.
@@ -772,7 +772,7 @@
           focusChoice(Math.min(k + lines.length, q.choices.length - 1));
         });
         // Drag the grip, or focus it and use the arrow keys.
-        const grip = h('button', { class: 'qe-grip', type: 'button', text: '⋮⋮', title: 'Drag, or use ↑ ↓, to move', 'aria-label': `Move choice ${k + 1}` });
+        const grip = h('button', { class: 'qe-grip', type: 'button', title: 'Drag, or use ↑ ↓, to move', 'aria-label': `Move choice ${k + 1}` }, icon(ICONS.grip, 18));
         grip.addEventListener('keydown', (e) => {
           const to = e.key === 'ArrowUp' ? k - 1 : e.key === 'ArrowDown' ? k + 1 : -1;
           if (to < 0 || to >= q.choices.length || e.altKey || e.ctrlKey || e.metaKey) return;
@@ -1000,8 +1000,8 @@
         const el = input(q, name, (v) => { u.cols[c] = v; }, { type: 'text', class: 'qe-gridcell', placeholder: 'Name', 'aria-label': `Column ${c + 1}`, 'data-r': '-1', 'data-c': c, maxlength: '40', autocomplete: 'off', spellcheck: 'false' });
         el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const next = cell(0, c); if (next) next.focus(); } });
         return h('th', {}, h('div', { class: 'qe-cell' }, el,
-          h('button', { class: 'qe-tool', type: 'button', text: '✕', title: 'Remove column', 'aria-label': `Remove column ${c + 1}`, disabled: u.cols.length <= 1,
-            onclick: () => edit(() => { u.cols.splice(c, 1); u.cells.forEach((row) => row.splice(c, 1)); }) })));
+          h('button', { class: 'qe-tool', type: 'button', title: 'Remove column', 'aria-label': `Remove column ${c + 1}`, disabled: u.cols.length <= 1,
+            onclick: () => edit(() => { u.cols.splice(c, 1); u.cells.forEach((row) => row.splice(c, 1)); }) }, icon(ICONS.x, 14))));
       }), h('td', { class: 'qe-grid-side' }, h('button', { class: 'btn small', type: 'button', text: 'Add column', disabled: wide,
         onclick: () => edit(() => { u.cols.push(''); u.cells.forEach((row) => row.push({ v: '', given: false })); }, -1, u.cols.length) })));
       const body = u.cells.map((row, r) => h('tr', {}, row.map((cl, c) => {
@@ -1028,8 +1028,8 @@
         given.addEventListener('change', () => { cl.given = given.checked; td.classList.toggle('given', cl.given); touch(q); });
         td.append(h('div', { class: 'qe-cell' }, el, given));
         return td;
-      }), h('td', { class: 'qe-grid-side' }, h('button', { class: 'qe-tool', type: 'button', text: '✕', title: 'Remove row', 'aria-label': `Remove row ${r + 1}`, disabled: u.cells.length <= 1,
-        onclick: () => edit(() => u.cells.splice(r, 1)) }))));
+      }), h('td', { class: 'qe-grid-side' }, h('button', { class: 'qe-tool', type: 'button', title: 'Remove row', 'aria-label': `Remove row ${r + 1}`, disabled: u.cells.length <= 1,
+        onclick: () => edit(() => u.cells.splice(r, 1)) }, icon(ICONS.x, 14)))));
       return [h('div', { class: 'field' }, codeHead(q, 'Code (optional)'), code),
         h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'Table, with the correct values' }),
           h('div', { class: 'qe-grid-wrap' }, h('table', { class: 'qe-grid' }, h('thead', {}, head), h('tbody', {}, body))),
@@ -1173,8 +1173,8 @@
         h('h1', { class: 'qe-n', text: `Question ${i + 1}` }), type,
         h('label', { class: 'qe-pts' }, 'Points', input(q, q.points, (v) => { q.points = Number(v); }, { type: 'number', min: '0.5', step: '0.5', class: 'input t-points' })),
         h('span', { class: 'qe-grow' }),
-        h('button', { class: 'btn small', type: 'button', text: '↑', 'aria-label': 'Move up', title: `Move up (${ALT}Shift+↑)`, disabled: i === 0, onclick: () => moveQuestion(i, i - 1) }),
-        h('button', { class: 'btn small', type: 'button', text: '↓', 'aria-label': 'Move down', title: `Move down (${ALT}Shift+↓)`, disabled: i === n - 1, onclick: () => moveQuestion(i, i + 1) }),
+        h('button', { class: 'btn small qe-icon', type: 'button', 'aria-label': 'Move up', title: `Move up (${ALT}Shift+↑)`, disabled: i === 0, onclick: () => moveQuestion(i, i - 1) }, icon(ICONS.up, 16)),
+        h('button', { class: 'btn small qe-icon', type: 'button', 'aria-label': 'Move down', title: `Move down (${ALT}Shift+↓)`, disabled: i === n - 1, onclick: () => moveQuestion(i, i + 1) }, icon(ICONS.down, 16)),
         h('button', { class: 'btn small', type: 'button', text: 'Duplicate', onclick: () => duplicate(i) }),
         h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(i) }));
       const probs = h('ul', { class: 't-error qe-problems', role: 'alert' });
@@ -1498,7 +1498,7 @@
     document.addEventListener('keydown', onKey);
     window.addEventListener('beforeunload', onUnload);
 
-    mount(bar(h('button', { class: 't-link', type: 'button', text: '← Quizzes', onclick: leave })), root);
+    mount(bar(h('button', { class: 't-link t-back', type: 'button', onclick: leave }, icon(ICONS.back, 16), 'Quizzes')), root);
     // The browser's Back button asks too.
     window.BQT.guard(() => !dirty || confirm('Leave without saving?'));
     renderPane();
