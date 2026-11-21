@@ -75,6 +75,27 @@ use the defaults for the rest and start writing.
      - **By me:** rubric items with no `require` or `forbid`. I tick them on the dashboard.
      - **Left out:** no rubric. The tests are worth all the points.
 
+## Keep it fair
+
+Students should lose points for not knowing the material, never for guessing what you meant.
+
+- Test only what's been taught. No trivia, and no library methods or syntax outside the topic.
+- No trick questions: no misleading names, no typos planted in code, no wording traps. A question
+  that asks what's NOT true says **NOT** in bold.
+- Code questions give the exact signature and say what to return. Every hidden test checks
+  something the prompt says: if a test uses an empty array, a negative or a tie, the prompt says
+  what to do with it. A speed test means the prompt names the speed needed.
+- Code students read compiles, is formatted normally, uses sensible names, and stays under about
+  15 lines. Predict-the-output code prints a few short lines, never output where only the spacing
+  differs.
+- Short answer accepts every reasonable way to write it: synonyms, abbreviations, with or
+  without units. Use a pattern when there are many.
+- Fill in the blanks: each blank has one clear answer, or list every one that works.
+- Trace tables: about 8 rows at most, with the starting values given.
+- Select-all with 3 or more correct choices uses `"partialCredit": true`.
+- Points match the work: a 10-minute code question is worth more than a 1-minute recall question.
+- The time limit leaves room to check work, about 20% more than the per-question minutes add up to.
+
 ## Images
 
 Use an image only when the question needs one:

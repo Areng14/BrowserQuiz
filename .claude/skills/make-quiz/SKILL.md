@@ -91,6 +91,17 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
     item, so it grades itself (see "Rubric checks" in the format spec). Keep the patterns
     simple, and check them against the reference: the checker refuses ones it fails.
   - For `list`/array answers where order doesn't matter, set `"compare": "unordered"`.
+- **Fair to students:** they lose points for not knowing the material, never for guessing what
+  was meant.
+  - Only what's been taught. No trivia, trick questions, misleading names or planted typos. "NOT"
+    questions say **NOT** in bold.
+  - Every hidden test checks something the prompt says (empty input, negatives, ties); a speed
+    test means the prompt names the speed needed.
+  - Code students read compiles, reads normally and stays under about 15 lines; output questions
+    print a few short lines.
+  - Short answers and blanks accept every reasonable form. Trace tables: about 8 rows, starting
+    values given. Select-all with 3+ correct choices gets `"partialCredit": true`.
+  - Points match the work, and the time limit is about 20% more than the questions need.
 
 ## 3. Check it, and fix until it's clean
 
