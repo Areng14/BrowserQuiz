@@ -176,6 +176,13 @@ input[type="file"].input { padding: 6px 10px; }
 /* under the phone top bar */
 @media (max-width: 820px) { .t-detail > .t-row:first-child { top: calc(57px + env(safe-area-inset-top, 0px)); } }
 
+/* Progress on the live page: a bar of what's answered, then where they are right now */
+.t-progress { white-space: nowrap; }
+.t-prog { display: inline-block; width: 56px; height: 6px; margin-right: 8px; vertical-align: middle; overflow: hidden; background: var(--line); border-radius: 3px; }
+.t-prog > span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.t-on { display: block; font-size: 12px; color: var(--ink-2); }
+@media (forced-colors: active) { .t-prog { border: 1px solid CanvasText; } .t-prog > span { background: Highlight; } }
+
 /* The live page. Wide: every button in view. Phone: a short header, one compact row per student (what
    needs doing now stays on the row; the rest is on the student's page), and the student's page as a sheet
    over the list, so closing it lands where you were. */
@@ -199,6 +206,19 @@ input[type="file"].input { padding: 6px 10px; }
   .t-run td.st-bad[data-label] { color: var(--bad); }
   .t-run td.t-late[data-label] { color: var(--warn); }
   .t-run td.t-actions { padding-top: 6px; }
+  /* line 2: the bar, where they are and the time left; anything else after */
+  .t-run td { order: 2; }
+  .t-run td:nth-child(-n+3) { order: 0; }
+  .t-run td.t-progress, .t-run td[data-tick="left"] { order: 1; }
+  .t-run td.t-actions { order: 3; }
+  .t-run td.t-progress { flex: 0 1 auto; padding-top: 4px; text-align: left; }
+  .t-run td.t-progress::before { content: none; }
+  .t-run td[data-tick="left"] { padding-top: 4px; }
+  .t-run td[data-tick="left"]::before { content: none; }
+  .t-run td[data-tick="left"]::after { content: " left"; }
+  .t-run .t-prog { width: 64px; }
+  .t-run .t-on { display: inline; font-size: inherit; }
+  .t-run .t-on::before { content: " · "; }
   .t-run .t-link { padding: 4px 0; }
   html.t-sheet-open { overflow: hidden; }
   .t-sheet-open .t-detail-host { position: fixed; inset: 0; z-index: 40; overflow-y: auto; overscroll-behavior: contain; background: var(--bg);

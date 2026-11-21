@@ -660,6 +660,16 @@
     return h('td', { class: 'st-good t-clean', text: 'Clean' });
   }
   const phone = () => matchMedia('(max-width: 820px)').matches;
+  // How far along: a bar of what's answered, the count, and where they are right now.
+  function progressCell(a) {
+    if (!a || a.status === 'waiting') return h('td', { class: 'num', 'data-label': 'Answered' });
+    const pct = a.total ? Math.round((a.answered / a.total) * 100) : 0;
+    const on = a.status !== 'active' || !a.on ? null : a.on === 'review' ? 'checking their work' : a.on === 'directions' ? 'reading directions' : `on question ${a.on}`;
+    return h('td', { class: 'num t-progress', 'data-label': 'Answered' },
+      h('span', { class: 't-prog', 'aria-hidden': 'true' }, h('span', { style: `width:${pct}%` })),
+      h('span', { text: `${a.answered}/${a.total}` }),
+      on ? h('span', { class: 't-on', text: on }) : null);
+  }
   function watchLink(id, name) {
     const w = h('a', { class: 'btn small', href: `/teacher/watch.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Watch', 'aria-label': `Watch ${name}`, 'data-key': `${id}:watch` });
     w.style.cssText = 'display:inline-flex;align-items:center;text-decoration:none';
@@ -787,7 +797,7 @@
           h('td', { class: 'num' + (a && !a.strikes ? ' t-zero' : ''), 'data-label': 'Strikes', text: a ? String(a.strikes) : '' }),
           h('td', Object.assign({ class: 'num' + (a && a.awayNow ? ' st-bad' : ''), 'data-label': 'Away', text: a && a.awayMs ? (a.awayNow ? 'Now, ' : '') + mmss(a.awayMs) : '' }, a && a.awayNow ? ticks('away', -a.awayMs) : {})),
           h('td', { class: 'num quiet', 'data-label': 'Warnings', text: a ? String(a.warnings) : '' }),
-          h('td', { class: 'num', 'data-label': 'Answered', text: a && a.status !== 'waiting' ? `${a.answered}/${a.total}` : '' }),
+          progressCell(a),
           h('td', Object.assign({ class: 'num' + (beat != null && beat > 6 ? ' t-late' : ' quiet'), 'data-label': 'Heartbeat', text: beat != null ? `${beat}s ago` : '' }, beat != null && a.status === 'active' ? ticks('beat', -a.lastBeatAgo) : {})),
           h('td', Object.assign({ class: 'num', 'data-label': 'Time left', text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }, a && a.timeLeft != null && a.status === 'active' ? ticks('left', a.timeLeft) : {})),
           h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), 'data-label': 'Score', text: score }),

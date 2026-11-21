@@ -108,6 +108,11 @@ function liveRow(student, a, quiz) {
   if (!a) return { rosterId: student.id, name: student.name, attempt: null };
   const t = totals(a.result, quiz, a.answers);
   const answered = a.answers ? Object.keys(a.answers).length : 0;
+  // Where they are right now (watch.js has their last heartbeat's screen): question 4 in their own order,
+  // the review page, or a part's directions.
+  const v = a.status === 'active' ? W.where(a.id) : null;
+  const order = a.layout && Array.isArray(a.layout.order) ? a.layout.order : [];
+  const on = !v ? null : v.review ? 'review' : v.dir ? 'directions' : order.indexOf(v.q) + 1 || null;
   return {
     rosterId: student.id,
     name: student.name,
@@ -116,7 +121,7 @@ function liveRow(student, a, quiz) {
       awayMs: (a.awayMs || 0) + store.awayNow(a, Date.now()), awayNow: store.awayNow(a, Date.now()) || null,
       leftAgain: a.integrity === 'restored' && a.restoreStrikes != null ? Math.max(0, a.strikes - a.restoreStrikes) : 0,
       reason: a.reason, invalidatedAt: a.invalidatedAt, lastBeatAgo: a.status === 'active' && a.lastBeat ? Date.now() - a.lastBeat : null,
-      answered, total: quiz.questions.length, deadline: a.deadline,
+      answered, total: quiz.questions.length, on, deadline: a.deadline,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
       letIn: !!(a.letIn && Date.now() - a.letIn < LET_IN_MS),
       score: t ? (a.integrity === 'invalidated' ? 0 : t.score) : null, rawScore: t ? t.score : null, max: t ? t.max : null,

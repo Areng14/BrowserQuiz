@@ -74,9 +74,15 @@ function look(a, since, now) {
   };
 }
 
+// What an attempt has on screen now, from its last heartbeat (for the live page's progress), or null.
+function where(attemptId) {
+  const v = views.get(attemptId);
+  return v ? v.view : null;
+}
+
 function forget(attemptId) {
   views.delete(attemptId);
   trails.delete(attemptId);
 }
 
-module.exports = { beat, look, forget, isWatched, FAST_BEAT_MS };
+module.exports = { beat, look, where, forget, isWatched, FAST_BEAT_MS };
