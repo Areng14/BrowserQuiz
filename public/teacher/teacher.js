@@ -268,6 +268,8 @@
     sun: ['M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z', 'M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'],
     moon: ['M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'],
     x: ['M18 6L6 18', 'M6 6l12 12'],
+    check: ['M5 12.5l4.5 4.5L19 7.5'],
+    cross: ['M7 7l10 10', 'M17 7L7 17'],
     up: ['M12 19V5', 'M5 12l7-7 7 7'],
     down: ['M12 5v14', 'M19 12l-7 7-7-7'],
     back: ['M19 12H5', 'M12 19l-7-7 7-7'],
@@ -719,7 +721,7 @@
       const rows = (r.preview || []).map((x) => h('tr', {},
         h('td', { text: x.name }),
         h('td', {}, `Q${x.n}`, x.qname ? h('span', { class: 't-muted', text: ` ${x.qname}` }) : null,
-          x.items.length ? h('span', { class: 't-ai-items' }, x.items.map((it) => h('span', { class: it.met ? 'met' : 'unmet', title: it.met ? 'Met' : 'Not met' }, it.met ? '✓ ' : '✗ ', it.text))) : null),
+          x.items.length ? h('span', { class: 't-ai-items' }, x.items.map((it) => h('span', { class: it.met ? 'met' : 'unmet', title: it.met ? 'Met' : 'Not met' }, icon(it.met ? ICONS.check : ICONS.cross, 13), it.text))) : null),
         h('td', { class: 'num' }, h('b', { text: `${x.got}/${x.of}` }))));
       const problems = r.skipped;
       preview.replaceChildren(...[

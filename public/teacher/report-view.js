@@ -37,7 +37,20 @@
     if (q.type === 'fill') return q.blanks.some((b) => b.value);
     return q.answer != null;
   }
-  const ICON = { full: '✓', partial: '✓', zero: '✗', pending: '–' };
+  // Marks as thin line icons: the text ✓ and ✗ look hand-drawn in most fonts.
+  const MARKS = { yes: 'M5 12.5l4.5 4.5L19 7.5', no: 'M7 7l10 10M17 7L7 17', dash: 'M7 12h10' };
+  function mark(kind) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const s = document.createElementNS(ns, 'svg');
+    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.25, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) s.setAttribute(k, v);
+    const p = document.createElementNS(ns, 'path');
+    p.setAttribute('d', MARKS[kind]);
+    s.append(p);
+    return s;
+  }
+  // a mark with words for screen readers
+  const markSpan = (kind, label) => h('span', { class: 'r-mark', role: 'img', 'aria-label': label }, mark(kind));
+  const ICON = { full: 'yes', partial: 'yes', zero: 'no', pending: 'dash' };
   // full | partial | zero | pending, and the words for it. A rubric still to grade keeps the color the
   // auto-graded part earned; written answers have nothing until the teacher grades them.
   function status(q) {
@@ -62,7 +75,7 @@
     const graded = (r) => (r.graded != null ? r.graded : !!q.rubricGraded);
     return [h('p', { class: 'r-label', text: q.rubric.some(graded) ? 'Rubric' : 'Rubric (not graded yet)' }),
       h('ul', { class: 'r-rubric' }, q.rubric.map((r) => h('li', { class: !graded(r) ? '' : r.met ? 'met' : 'unmet' },
-        h('span', { class: 'r-mark', text: !graded(r) ? '–' : r.met ? '✓' : '✗' }), `${r.text} (${unit(r.points)})`)))];
+        !graded(r) ? markSpan('dash', 'Not graded') : r.met ? markSpan('yes', 'Met') : markSpan('no', 'Not met'), `${r.text} (${unit(r.points)})`)))];
   }
 
   function body(quiz, q, o) {
@@ -75,7 +88,7 @@
         const cls = picked ? (correct ? 'is-correct' : 'is-wrong') : correct ? 'is-missed' : '';
         const mine = o.teacher ? 'Their answer' : 'Your answer';
         return h('li', { class: cls },
-          h('span', { class: 'r-mark', text: correct ? '✓' : picked ? '✗' : '' }),
+          correct ? markSpan('yes', 'Correct') : picked ? markSpan('no', 'Wrong') : h('span', { class: 'r-mark' }),
           h('span', { class: 'r-choice' }, inline(c, quiz.language, imagesOf(quiz, o))),
           picked ? h('span', { class: 'r-tag', text: mine }) : null,
           correct && !picked ? h('span', { class: 'r-tag', text: q.type === 'multi' && q.picked.length ? 'Missed' : 'Correct answer' }) : null);
@@ -107,7 +120,7 @@
           seg ? h('code', { 'data-lang': q.codeLang, text: seg }) : null,
           i < pieces.length - 1 ? h('span', { class: 'r-blank ' + (q.blanks[i].ok ? 'ok' : 'no') }, q.blanks[i].value || `(${i + 1})`) : null])),
         h('ul', { class: 'r-blanks' }, q.blanks.map((b, i) => h('li', { class: b.ok ? 'met' : 'unmet' },
-          h('span', { class: 'r-mark', text: b.ok ? '✓' : '✗' }),
+          b.ok ? markSpan('yes', 'Right') : markSpan('no', 'Wrong'),
           h('span', { class: 'r-blank-n', text: `Blank ${i + 1}` }),
           b.value ? h('code', { text: b.value }) : h('span', { class: 'r-none', text: 'no answer' }),
           b.ok ? null : h('span', { class: 'r-also' }, ' Correct: ', b.accepted.map((x, k) => [k ? ' or ' : '', h('code', { text: x })]))))),
@@ -142,7 +155,7 @@
       h('div', { class: 'r-tests-wrap' }, h('table', {},
         h('thead', {}, h('tr', {}, h('th', { 'aria-label': 'Result' }), h('th', { text: 'Call' }), h('th', { text: 'Expected' }), h('th', { text: 'Got' }))),
         h('tbody', {}, q.tests.map((t) => h('tr', { class: t.pass ? 'ok' : 'no' },
-          h('td', { class: 'r-mark', 'aria-label': t.pass ? 'Passed' : 'Failed', text: t.pass ? '✓' : '✗' }),
+          h('td', { class: 'r-mark-cell' }, t.pass ? markSpan('yes', 'Passed') : markSpan('no', 'Failed')),
           h('td', {}, h('code', { text: t.call }), t.speed ? h('span', { class: 'r-speed', text: 'speed' }) : null),
           h('td', {}, t.expected ? h('code', { text: t.expected }) : null),
           h('td', {}, t.got == null ? null : h('code', { text: t.got }))))))));
@@ -291,7 +304,7 @@
     return h('section', { class: `r-q st-${st}` + (q.type === 'code' || q.type === 'fill' ? ' code' : ''), id: o.anchor || null },
       h('div', { class: 'r-qhead' },
         h('span', { class: 'n', text: String(i + 1) }), h('span', { class: 'kind', text: kind }),
-        h('span', { class: 'r-status', role: 'img', 'aria-label': words, title: words, text: ICON[st] }),
+        h('span', { class: 'r-status', role: 'img', 'aria-label': words, title: words }, mark(ICON[st])),
         q.review || st === 'pending' ? h('span', { class: 'r-waiting', text: words }) : null,
         h('span', { class: 'pts', text: pts })),
       sharedEl,

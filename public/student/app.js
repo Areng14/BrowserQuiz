@@ -1384,11 +1384,18 @@
       const multi = q.type === 'multi';
       const cur = S.answers[q.id];
       const list = h('div', { class: 'choices', role: multi ? 'group' : 'radiogroup', 'aria-label': 'Answer choices' });
-      // Selecting text in a choice (to highlight it) shouldn't also pick that choice.
+      // Selecting text in a choice (to highlight it) shouldn't also pick that choice. Only a selection made
+      // by this press counts: one left over from before (an exam stops a click on the frame from clearing
+      // it) is dropped, and the click picks the choice.
+      let before = '';
+      list.addEventListener('pointerdown', () => { const sel = window.getSelection(); before = sel ? sel.toString() : ''; }, true);
       list.addEventListener('click', (e) => {
         const sel = window.getSelection();
         const label = e.target.closest && e.target.closest('label.choice');
-        if (label && sel && !sel.isCollapsed && label.contains(sel.anchorNode)) e.preventDefault();
+        if (!label || !sel || sel.isCollapsed || !label.contains(sel.anchorNode)) return;
+        const now = sel.toString();
+        if (now !== before && now.trim().length > 1) e.preventDefault();
+        else sel.removeAllRanges();
       }, true);
       const picked = (i) => (multi ? Array.isArray(S.answers[q.id]) && S.answers[q.id].includes(i) : S.answers[q.id] === i);
       const rows = q.choices.map((c, i) => {

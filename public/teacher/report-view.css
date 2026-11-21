@@ -133,7 +133,9 @@
 .r-view .r-choices li.is-wrong { background: var(--tint-bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); }
 .r-view .r-choice { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .r-view .r-choice code { background: none; padding: 0; }
-.r-view .r-mark { width: 1.1em; flex: none; font-weight: 700; text-align: center; }
+.r-view .r-mark { width: 1.1em; height: 1.1em; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.r-view .r-mark svg { width: 1em; height: 1em; }
+.r-view .r-status svg { width: 14px; height: 14px; stroke-width: 2.75; }
 .r-view .is-correct .r-mark, .r-view li.met .r-mark { color: var(--good); }
 .r-view .is-wrong .r-mark, .r-view li.unmet .r-mark { color: var(--bad); }
 .r-view .r-tag { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
@@ -188,7 +190,7 @@
 .r-view .r-tests th { padding: 4px 8px; font-size: 12px; font-weight: 600; text-align: left; color: var(--ink-2); border-bottom: 1px solid var(--line); }
 .r-view .r-tests td { padding: 5px 8px; vertical-align: top; border-bottom: 1px solid var(--line); }
 .r-view .r-tests tr:last-child td { border-bottom: 0; }
-.r-view .r-tests td.r-mark { width: 1.4em; }
+.r-view .r-tests td.r-mark-cell { width: 1.4em; }
 .r-view .r-tests tr.ok .r-mark { color: var(--good); }
 .r-view .r-tests code { color: var(--ink); }
 .r-view .r-tests tr.no .r-mark, .r-view .r-tests tr.no td:last-child code { color: var(--bad); }
