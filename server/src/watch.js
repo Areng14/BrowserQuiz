@@ -69,6 +69,13 @@ const PAGES_MAX = 1500000; // and of all of an attempt's pages
 const RUN_MAX = 200000; // one run's results
 const extraOf = (aid) => { let x = extras.get(aid); if (!x) { x = { runs: {}, pages: {}, sizes: {}, ver: 0 }; extras.set(aid, x); } return x; };
 
+// The code editor: scroll, and the selection as [anchor line, column, cursor line, column]
+function cleanEd(e) {
+  if (!e || typeof e !== 'object') return null;
+  const sel = Array.isArray(e.sel) && e.sel.length === 4 && e.sel.every((x) => Number.isInteger(x) && x >= 1 && x <= 1e6) ? e.sel.slice() : null;
+  return { top: num(e.top, 0, 1e7) || 0, left: num(e.left, 0, 1e7) || 0, sel };
+}
+
 // The modals a watch page can show as the student sees them (app.js watchView), by their title's id.
 const MODALS = ['submit-title', 'turnin-title', 'exit-title', 'left-title'];
 
@@ -76,6 +83,8 @@ function cleanView(v) {
   if (!v || typeof v !== 'object') return null;
   return {
     marks: cleanMarks(v.marks), hl: cleanHl(v.hl), pad: v.pad === true,
+    toast: typeof v.toast === 'string' && v.toast ? v.toast.replace(/[\u0000-\u001f]/g, ' ').slice(0, 200) : null,
+    fs: v.fs === true, dark: typeof v.dark === 'boolean' ? v.dark : null, ed: cleanEd(v.ed),
     q: id(v.q), review: v.review === true, dir: v.dir === true, intro: v.intro === true,
     scroll: num(v.scroll, 0, 1e6) || 0, wscroll: num(v.wscroll, 0, 1e6) || 0,
     w: num(v.w, 200, 8000) || 1280, h: num(v.h, 200, 8000) || 800,

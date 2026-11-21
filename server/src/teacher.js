@@ -986,7 +986,9 @@ module.exports = function teacherRoutes(r) {
     const { a, run } = getAttemptRun(me, p.id);
     if (!a.layout) throw new HttpError(409, 'not_started');
     const quiz = store.getQuiz(run.quiz_id);
-    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {} });
+    const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
+    // their clock, as of the watch page's playback (watch.js DELAY)
+    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, now: Date.now(), delay: 2500 });
   });
   r.get('/api/t/attempts/:id/watch', (req, res, p) => {
     const me = requireTeacher(req);
@@ -1006,7 +1008,7 @@ module.exports = function teacherRoutes(r) {
         : a.deadline && a.submittedAt >= a.deadline - 1500 ? 'time' : 'submitted';
     }
     json(res, 200, {
-      name: student ? student.name : '?', status: a.status, now, ver, ended, submittedAt: a.submittedAt || null,
+      name: student ? student.name : '?', status: a.status, now, ver, ended, submittedAt: a.submittedAt || null, deadline: a.deadline || null,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - now) : null,
       away: !!store.awayNow(a, now) || !!a.away,
       answers: url.searchParams.get('ver') === ver ? undefined : (a.answers || {}),

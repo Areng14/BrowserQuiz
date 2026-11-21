@@ -468,6 +468,10 @@ h1[tabindex="-1"]:focus { outline: none; }
   .quiz.with-scratch { grid-template-columns: minmax(0, 1fr) clamp(420px, 24vw, 760px); }
 }
 
+/* A teacher watching: the student's cursor and selection in the code editor */
+.monaco-editor .watch-caret { display: inline-block; width: 0; height: 1.3em; margin-left: -1px; vertical-align: text-bottom; border-left: 2px solid var(--accent); }
+.monaco-editor .watch-sel { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+
 /* Custom radio buttons and checkboxes: the browser's own are bright white in dark mode. */
 :is(.bq-app, .t-app) input:is([type="radio"], [type="checkbox"]) {
   appearance: none; -webkit-appearance: none; flex: none; display: inline-grid; place-content: center;

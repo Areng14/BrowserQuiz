@@ -665,7 +665,14 @@
       nav: !!S.el.wrap.querySelector('.nav-pop'), modal: modal ? modal.getAttribute('aria-labelledby') : false,
       marks: S.marks || null, // marked for review, crossed-out choices: only ever in their browser otherwise
       hl: highlightsNow(), pad,
+      toast: toastNow(), fs: !!S.el.fsOverlay, dark: isDark(),
     };
+    // The code editor: where it's scrolled, their cursor and selection
+    if (S.editor) {
+      const sel = S.editor.getSelection();
+      v.ed = { top: Math.round(S.editor.getScrollTop()), left: Math.round(S.editor.getScrollLeft()),
+        sel: sel ? [sel.selectionStartLineNumber, sel.selectionStartColumn, sel.positionLineNumber, sel.positionColumn] : null };
+    }
     // The scratchpad page on screen, when it's changed since the server last had it (onBeat)
     if (pad && q && S.scratch) {
       const key = `${q.id}:${S.scratchVer || 0}`;
@@ -673,6 +680,7 @@
     }
     return v;
   }
+  const toastNow = () => { const t = S.el.wrap.querySelector('.toast'); return t ? t.textContent.slice(0, 200) : null; };
   // What's highlighted, by the piece of question text it's in (see kept)
   function highlightsNow() {
     const out = {};
@@ -840,11 +848,11 @@
       h('header', { class: 'qbar' },
         h('div', { class: 'qbar-side' },
           h('span', { class: 'qbar-name' }, h('span', { class: 'qbar-title', text: S.quiz.title }),
-            S.me && S.me.name && !cfg.preview ? h('span', { class: 'qbar-who', title: 'Signed in as', text: S.me.name }) : null),
+            S.me && S.me.name && (!cfg.preview || cfg.watch) ? h('span', { class: 'qbar-who', title: 'Signed in as', text: S.me.name }) : null),
           save),
         timer,
         h('div', { class: 'qbar-side qbar-end' }, scratchBtn, themeButton(),
-          cfg.preview ? null : h('button', { class: 'btn small ghost', type: 'button', text: 'Exit', onclick: () => openExit() }))),
+          cfg.preview && !cfg.watch ? null : h('button', { class: 'btn small ghost', type: 'button', text: 'Exit', onclick: () => openExit() }))),
       conn,
       main,
       scratch,
@@ -1961,10 +1969,10 @@
         if (left > mins * 60000 + 1000) S.warned[mins] = false; // re-arm after extra time
         else if (!S.warned[mins] && left > 0) {
           S.warned[mins] = true;
-          if (left > (mins - 1) * 60000 + 30000) toast(`${plural(mins, 'minute')} left.`, 6000);
+          if (left > (mins - 1) * 60000 + 30000 && !cfg.watch) toast(`${plural(mins, 'minute')} left.`, 6000);
         }
       }
-      if (left <= 0) submitNow('time');
+      if (left <= 0 && !cfg.watch) submitNow('time');
     };
     tick();
     S.timer = setInterval(tick, 250);
@@ -2359,7 +2367,9 @@
     }
     S.quiz = r.quiz;
     S.run = { title: r.quiz.title, timeLimitMin: 0, questionCount: r.quiz.questions.length, outline: r.quiz.questions.map((q, i) => ({ type: q.type, points: q.points, name: q.name, n: i + 1 })), quizDirections: (r.quiz.directions && r.quiz.directions.quiz) || '', sections: r.quiz.sections || [], hasCode: r.quiz.questions.some((q) => q.type === 'code') };
-    S.deadline = 0;
+    S.deadline = r.deadline || 0;
+    S.skew = r.now ? r.now - Date.now() - (r.delay || 0) : 0;
+    S.me = { name: r.name || '' };
     S.answers = restoreAnswers(r.answers || {});
     S.watchAnswers = JSON.stringify(r.answers || {});
     S.marks = { review: [], out: {} };
@@ -2422,6 +2432,11 @@
         redraw = true;
       }
     }
+    if (v && typeof v.dark === 'boolean' && v.dark !== isDark()) { // their light or dark
+      document.documentElement.dataset.theme = v.dark ? 'dark' : 'light';
+      onThemeChange();
+    }
+    if (v && v.deadline !== undefined) S.deadline = v.deadline || 0; // extra time
     if (v && S.el.scratch && S.el.scratch.hidden === !!v.pad) { // the scratchpad opened or closed
       S.el.scratch.hidden = !v.pad;
       S.el.wrap.classList.toggle('with-scratch', !!v.pad);
@@ -2432,6 +2447,10 @@
     else if (padDraw) renderScratch();
     if (v && v.hl) watchHighlights(v.hl);
     if (v) watchModal(v.modal);
+    if (v && v.fs && !S.el.fsOverlay) showFsOverlay();
+    else if (v && !v.fs && S.el.fsOverlay) hideFsOverlay();
+    if (v) watchToast(v.toast);
+    if (v && v.ed) watchEditor(v.ed);
     if (v) {
       S.el.main.scrollTop = v.scroll || 0;
       S.el.wrap.scrollTop = v.wscroll || 0;
@@ -2453,6 +2472,29 @@
         if (!r.collapsed && node.contains(r.startContainer) && node.contains(r.endContainer)) addHighlight(r, true);
       }
     }
+  }
+  function watchToast(text) {
+    let t = S.el.wrap.querySelector('.toast');
+    if (!text) { if (t) t.remove(); return; }
+    if (!t) { t = h('div', { class: 'toast' }); S.el.wrap.append(t); }
+    if (t.textContent !== text) t.textContent = text;
+  }
+  // Their code editor: scrolled where theirs is, with their cursor and selection drawn in
+  function watchEditor(ed) {
+    if (!S.editor || !window.monaco) return;
+    S.editor.setScrollTop(ed.top || 0);
+    S.editor.setScrollLeft(ed.left || 0);
+    const m = window.monaco;
+    const model = S.editor.getModel();
+    const marks = [];
+    if (ed.sel) {
+      const [al, ac, pl, pc] = ed.sel;
+      if (al !== pl || ac !== pc) marks.push({ range: new m.Range(al, ac, pl, pc), options: { className: 'watch-sel' } });
+      marks.push({ range: new m.Range(pl, pc, pl, pc), options: { beforeContentClassName: 'watch-caret' } });
+    }
+    if (S.watchDecs && S.watchDecs.model !== model && !S.watchDecs.model.isDisposed()) S.watchDecs.model.deltaDecorations(S.watchDecs.ids, []);
+    const ids = model.deltaDecorations(S.watchDecs && S.watchDecs.model === model ? S.watchDecs.ids : [], marks);
+    S.watchDecs = { model, ids };
   }
   // The dialog they have open, if it's one of these
   function watchModal(id) {

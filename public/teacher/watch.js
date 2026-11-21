@@ -22,6 +22,7 @@
   const views = []; // [[t, view]] still to show
   let pendingAnswers = null;
   let pendingExtra = null;
+  let deadline; // theirs, for the clock in their top bar (extra time moves it)
   let wasActive = false; // seen working: when they turn in, play it instead of just saying so
   let doneQueued = false;
   let frameReady = false;
@@ -32,7 +33,6 @@
   frame.src = `/teacher/watch-frame.html?attempt=${encodeURIComponent(id)}`;
 
   const show = (text) => { msg.textContent = text; msg.hidden = !text; };
-  const mmss = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 
   function fit() {
     if (!size) return;
@@ -69,7 +69,6 @@
     document.title = `Watching ${r.name}`;
     $('w-name').textContent = `Watching ${r.name}`;
     $('w-away').hidden = !(r.away && r.status === 'active');
-    $('w-left').textContent = r.timeLeft != null ? `${mmss(r.timeLeft)} left` : '';
     status = r.status;
     if (r.trail && r.trail.length) {
       trail = trail.concat(r.trail).filter((p) => p[0] > r.now - 30000);
@@ -79,6 +78,7 @@
     if (r.answers !== undefined) { pendingAnswers = { at: r.now, answers: r.answers }; ver = r.ver; }
     if (r.extra !== undefined) { pendingExtra = { at: r.now, extra: r.extra }; xver = r.xver; }
     if (r.status === 'active') wasActive = true;
+    deadline = r.deadline || 0;
     if (r.status === 'submitted' && wasActive && !doneQueued) {
       doneQueued = true;
       views.push([Math.max(r.submittedAt || r.now, views.length ? views[views.length - 1][0] : 0), { done: r.ended || 'submitted' }]);
@@ -100,7 +100,7 @@
     while (views.length && views[0][0] <= t) {
       const v = views[0][1];
       if (v.w && (!size || size.w !== v.w || size.h !== v.h)) { size = { w: v.w, h: v.h }; screen.hidden = false; fit(); }
-      const shown = apply(v, used ? undefined : due, usedX ? undefined : dueX);
+      const shown = apply(v.done || deadline === undefined ? v : Object.assign({}, v, { deadline }), used ? undefined : due, usedX ? undefined : dueX);
       if (!shown) break; // the frame isn't up yet: next time
       views.shift();
       used = true;
