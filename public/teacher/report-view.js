@@ -164,9 +164,15 @@
   }
 
   // ---------- code answer vs the reference ----------
-  // Same code (ignoring indentation and blank lines): shown once. Otherwise "Show differences" swaps the
-  // two blocks for one diff, with the changed words marked inside lines that were edited.
-  const norm = (line) => line.trim();
+  // Same code (ignoring blank lines, and indentation outside Python): shown once. Otherwise "Show differences"
+  // swaps the two blocks for one diff, with the changed words marked inside lines that were edited.
+  const norm = (lines) => lines.map((line) => line.trim());
+  // Python's indentation is its structure, so it counts: as levels, so 2 spaces and 4 spaces still match.
+  const normPy = (lines) => {
+    const lead = lines.map((l) => l.replace(/\t/g, '    ').match(/^ */)[0].length);
+    const unit = Math.min(...lead.filter((n) => n > 0), Infinity);
+    return lines.map((l, i) => `${lead[i] && unit < Infinity ? Math.round(lead[i] / unit) : 0}|${l.trim()}`);
+  };
   // Word-level changes between an edited line and its counterpart: [start, end] ranges in each line.
   // Lines that share too little get no marks, since everything would light up.
   function wordRanges(a, b) {
@@ -209,9 +215,9 @@
       }
     }
   }
-  function diffLines(a, b) {
-    const A = a.map(norm);
-    const B = b.map(norm);
+  function diffLines(a, b, py) {
+    const A = (py ? normPy : norm)(a);
+    const B = (py ? normPy : norm)(b);
     const n = A.length;
     const m = B.length;
     if (n * m > 4e6) return null;
@@ -237,7 +243,7 @@
     const mine = strip(q.answer);
     const ref = strip(q.reference);
     const sameLang = q.language === q.referenceLanguage;
-    const d = sameLang ? diffLines(mine, ref) : null;
+    const d = sameLang ? diffLines(mine, ref, q.language === 'python') : null;
     if (d && d.common === mine.length && d.common === ref.length) {
       return h('div', { class: 'r-side' }, h('p', { class: 'r-label', text: o.teacher ? 'Their answer' : 'Your answer' }),
         codeBox(q.answer, q.language), h('p', { class: 'r-also', text: 'Same as the correct answer.' }));

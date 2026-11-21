@@ -417,7 +417,8 @@ module.exports = function studentRoutes(r) {
         q('INSERT INTO code_edits (attempt_id, t, deltas) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(edits).slice(0, 400000));
         a.edits += edits.length;
       }
-      if (body.answers && !pastDeadline(a, now)) a.answers = cleanAnswers(quiz, a.layout, body.answers);
+      // autosave stops at time's up; only the final submit gets the grace, for its trip over the network
+      if (body.answers && !(a.deadline && now > a.deadline)) a.answers = cleanAnswers(quiz, a.layout, body.answers);
       store.save(a);
     }
     // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
@@ -481,8 +482,20 @@ module.exports.submit = submit;
 module.exports.publicQuiz = publicQuiz;
 module.exports.current = current;
 module.exports.hashSid = hashSid;
+// Only once the quiz has started, and only images this student's quiz shows (or, after a practice
+// submit, its review shows), so an image used only in an answer key or a hidden part stays put.
+const shownAssets = new WeakMap();
+function seesAsset(a, run, quiz, rel) {
+  if (a.status !== 'active' && a.status !== 'submitted') return false;
+  let shown = shownAssets.get(a);
+  if (!shown) { shown = JSON.stringify(publicQuiz(quiz, a.layout)); shownAssets.set(a, shown); }
+  if (shown.includes(rel)) return true;
+  if (!a.practice || a.status !== 'submitted') return false;
+  return JSON.stringify([reportQuiz(quiz, run.quiz_id), studentReport(quiz, a, '', { forStudent: true })]).includes(rel);
+}
 module.exports.serveAsset = function serveAsset(req, res, rel) {
-  const { run } = current(req, { mustBeOpen: false });
+  const { a, run, quiz } = current(req, { mustBeOpen: false });
+  if (!seesAsset(a, run, quiz, rel)) throw new HttpError(404, 'not_found');
   const row = store.getAsset(run.quiz_id, rel);
   if (!row) throw new HttpError(404, 'not_found');
   send(res, 200, Buffer.from(row.bytes), {

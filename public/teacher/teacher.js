@@ -374,6 +374,9 @@
     const ready = data.quizzes.length && data.rosters.length;
     const startBtn = h('button', { class: 'btn primary t-start', type: 'button', text: 'Start quiz', disabled: !ready });
     startBtn.addEventListener('click', async () => {
+      const pick = data.quizzes.find((x) => x.id === quizSel.value);
+      if (mode !== 'practice' && pick && pick.practiced
+        && !confirm(`Students who practiced "${pick.title}" have seen its answers. Give it as a graded quiz anyway?`)) return;
       startBtn.disabled = true;
       startMsg.textContent = '';
       try {
@@ -722,13 +725,17 @@
     const applyBtn = h('button', { class: 'btn primary', type: 'button', text: 'Apply grades', disabled: true });
     let timer = 0;
     let seq = 0;
+    let previewed = null; // Apply sends only the exact text whose preview is on screen
     const check = async () => {
       const n = ++seq;
       const text = replyBox.value;
       if (!text.trim()) { preview.replaceChildren(); applyBtn.disabled = true; applyBtn.textContent = 'Apply grades'; status.textContent = ''; s3.done(false); return; }
       let r;
-      try { r = await post(`/api/t/runs/${runId}/ai-csv`, { csv: text, attempt: attemptId || undefined }); } catch (e) { preview.replaceChildren(h('p', { class: 't-error t-small', text: e.message })); return; }
-      if (n !== seq) return;
+      try { r = await post(`/api/t/runs/${runId}/ai-csv`, { csv: text, attempt: attemptId || undefined }); } catch (e) {
+        if (n === seq) { preview.replaceChildren(h('p', { class: 't-error t-small', text: e.message })); s3.done(false); }
+        return;
+      }
+      if (n !== seq || text !== replyBox.value) return;
       const rows = (r.preview || []).map((x) => h('tr', {},
         h('td', { text: x.name }),
         h('td', {}, `Q${x.n}`, x.qname ? h('span', { class: 't-muted', text: ` ${x.qname}` }) : null,
@@ -740,16 +747,23 @@
         problems.length ? h('div', { class: 't-ai-warn', role: 'note' }, h('b', { text: r.found ? 'Left for you' : "Couldn't read that" }),
           h('ul', {}, problems.map((x) => h('li', { text: x })))) : null,
       ].filter(Boolean)); // replaceChildren would print a null
+      previewed = r.found ? text : null;
       applyBtn.disabled = !r.found;
       applyBtn.textContent = r.found ? `Apply ${plural(r.found, 'grade')}` : 'Apply grades';
       status.textContent = r.found ? `${r.found} of ${r.waiting} answers` : '';
       s3.done(!!r.found);
     };
-    replyBox.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(check, 250); });
+    replyBox.addEventListener('input', () => {
+      // an edit makes the preview out of date: no applying until it's checked again
+      previewed = null; applyBtn.disabled = true; ++seq;
+      clearTimeout(timer); timer = setTimeout(check, 250);
+    });
     applyBtn.addEventListener('click', async () => {
+      const text = previewed;
+      if (text == null || text !== replyBox.value) return;
       applyBtn.disabled = true;
       try {
-        const r = await post(`/api/t/runs/${runId}/ai-csv`, { csv: replyBox.value, attempt: attemptId || undefined, apply: true });
+        const r = await post(`/api/t/runs/${runId}/ai-csv`, { csv: text, attempt: attemptId || undefined, apply: true });
         close();
         done(`AI grades applied to ${plural(r.applied, 'answer')}.`);
       } catch (e) { status.textContent = e.message; applyBtn.disabled = false; }
@@ -882,8 +896,12 @@
     const sebLinks = h('span', { class: 't-seb-links', hidden: true });
     const failedBox = h('div');
     let lastDetail = '';
-    let waitingN = 0;
-    const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => beforeAdmit(runId, waitingN, null, () => act(`/api/t/runs/${runId}/admit-all`)) });
+    let waitingIds = [];
+    // only the students waiting when the checklist opens: anyone who joins while it's up waits for the next round
+    const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => {
+      const ids = waitingIds.slice();
+      beforeAdmit(runId, ids.length, null, () => act(`/api/t/runs/${runId}/admit-all`, { ids }));
+    } });
     // AI grading: everything waiting for the teacher in this run, sent to Claude (server: aigrade.js).
     const aiBtn = h('button', { class: 'btn', type: 'button', hidden: true });
     const aiMsg = h('p', { class: 't-small t-muted', role: 'status', hidden: true });
@@ -927,8 +945,8 @@
         [count((a) => a.status === 'submitted'), 'turned in'], [count((a) => a.integrity === 'invalidated'), 'invalidated']]
         .filter(([n]) => n).map(([n, w]) => `${n} ${w}`).join(', ') || 'Nobody has joined yet';
       if (summary.textContent !== said) summary.textContent = said;
-      waitingN = count((a) => a.status === 'waiting');
-      admitAll.hidden = !waitingN;
+      waitingIds = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting').map((x) => x.attempt.id);
+      admitAll.hidden = !waitingIds.length;
       // Grade with AI: shown while there's something waiting for the teacher, or while it runs.
       aiWaiting = data.students.reduce((n, x) => n + (x.attempt && x.attempt.status === 'submitted' ? x.attempt.review || 0 : 0), 0);
       const job = data.ai && data.ai.job;

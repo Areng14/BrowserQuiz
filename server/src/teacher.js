@@ -481,9 +481,12 @@ module.exports = function teacherRoutes(r) {
 
   r.get('/api/t/overview', (req, res) => {
     const me = requireTeacher(req);
-    const quizzes = q('SELECT id, title, created_at FROM quizzes WHERE archived = 0 AND owner_id = ? ORDER BY created_at DESC').all(me.id).map((x) => {
+    // practiced: a student has turned it in as practice, so they've seen its answers
+    const quizzes = q(`SELECT id, title, created_at, EXISTS(SELECT 1 FROM runs JOIN attempts ON attempts.run_id = runs.id
+        WHERE runs.quiz_id = quizzes.id AND runs.mode = 'practice' AND attempts.status = 'submitted') AS practiced
+      FROM quizzes WHERE archived = 0 AND owner_id = ? ORDER BY created_at DESC`).all(me.id).map((x) => {
       const quiz = store.getQuiz(x.id);
-      return { id: x.id, title: x.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin, createdAt: x.created_at };
+      return { id: x.id, title: x.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin, createdAt: x.created_at, practiced: !!x.practiced };
     });
     const rosters = q('SELECT r.id, r.name, r.created_at, COUNT(s.id) AS n FROM rosters r LEFT JOIN roster_students s ON s.roster_id = r.id AND s.removed = 0 WHERE r.archived = 0 AND r.owner_id = ? GROUP BY r.id ORDER BY r.created_at DESC').all(me.id)
       .map((x) => ({ id: x.id, name: x.name, students: x.n, createdAt: x.created_at }));
@@ -891,7 +894,12 @@ module.exports = function teacherRoutes(r) {
     } else if (p.action === 'open') {
       q("UPDATE runs SET status = 'open', closed_at = NULL WHERE id = ?").run(run.id);
     } else if (p.action === 'admit-all') {
+      // The dashboard sends the students it showed when the teacher checked them in; anyone who joined
+      // after that keeps waiting. Without a list (an API caller), everyone waiting.
+      const body = await readJson(req, 64 * 1024);
+      const only = Array.isArray(body.ids) ? new Set(body.ids.filter((x) => typeof x === 'string').slice(0, 2000)) : null;
       for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'waiting'").all(run.id)) {
+        if (only && !only.has(row.id)) continue;
         const a = store.getAttempt(row.id);
         a.status = 'admitted';
         store.logEvent(a, 'admit', 'info', null);
