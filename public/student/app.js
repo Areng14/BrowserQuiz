@@ -37,6 +37,7 @@
     teacher_login: 'Sign in on the teacher page first.',
     locked: 'Your teacher needs to sign in to BrowserQuiz first. Try again in a minute.',
     seb_required: 'Open this quiz in Safe Exam Browser. Your teacher has the file that starts it.',
+    seb_launch: 'This quiz opens in Safe Exam Browser.',
   };
 
   let api;
@@ -234,7 +235,8 @@
     return h('main', { class: 'screen center' }, h('div', { class: 'corner' }, themeButton()), ...kids);
   }
 
-  function screenJoin(err) {
+  // code: from the address (?code=), as Safe Exam Browser opens it; joins straight away.
+  function screenJoin(err, code) {
     const input = h('input', {
       id: 'join-code', class: 'input code-input', maxlength: '6', autocomplete: 'off', spellcheck: 'false',
       autocapitalize: 'characters',
@@ -245,27 +247,39 @@
     });
     const msg = h('p', { class: 'error', role: 'alert', text: err || '' });
     const btn = h('button', { class: 'btn primary', type: 'submit', text: 'Join' });
+    // A quiz that needs Safe Exam Browser: the seb:// (sebs:// on https) link starts SEB with the quiz's settings.
+    const seb = h('div', { class: 'seb-launch', hidden: true });
+    const showSeb = (c) => {
+      const href = `${location.protocol === 'https:' ? 'sebs' : 'seb'}://${location.host}/api/seb/${c}.seb`;
+      seb.replaceChildren(h('a', { class: 'btn primary', href, text: 'Open Safe Exam Browser' }),
+        h('p', { class: 'hint', text: "Nothing happens? Safe Exam Browser isn't installed on this computer." }));
+      seb.hidden = false;
+    };
     const form = h('form', { class: 'panel', novalidate: true },
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
       h('div', { class: 'heading' }, h('h1', { text: 'Join your quiz' })),
       h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'join-code', text: 'Join code' }), input),
-      btn, msg,
+      btn, msg, seb,
       demoHint('Demo code: ', h('b', { text: 'K7QX4M' })));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (input.value.length !== 6) { msg.textContent = 'Join codes are 6 characters.'; input.focus(); return; }
       btn.disabled = true; btn.textContent = 'Joining…'; msg.textContent = '';
+      seb.hidden = true;
       try {
         S.run = await api.join(input.value);
         screenWho();
       } catch (ex) {
         msg.textContent = errorText(ex);
+        if (ex && ex.code === 'seb_launch') showSeb(input.value);
         btn.disabled = false; btn.textContent = 'Join';
         input.focus();
       }
     });
     mount(entry(form));
     input.focus();
+    code = String(code || '').toUpperCase().replace(CODE_ALPHABET, '');
+    if (code.length === 6 && !err) { input.value = code; btn.click(); }
   }
 
   // Type your name, then pick it. The server only ever sends back names that match what you typed.
@@ -1668,7 +1682,9 @@
   };
   function screenDone(kind) {
     S.el = null;
-    const [title, text] = DONE[kind] || DONE.submitted;
+    const quitSeb = !!(S.run && S.run.sebQuit && !cfg.preview); // in Safe Exam Browser: a button to quit it
+    const [title, plain] = DONE[kind] || DONE.submitted;
+    const text = quitSeb && plain === DONE.submitted[1] ? null : plain;
     const r = cfg.preview && S.result && S.result.questions ? S.result : null;
     const screen = entry(h('div', { class: 'panel done-panel' },
       h('p', { class: 'eyebrow', text: S.quiz ? S.quiz.title : S.run ? S.run.title : '' }),
@@ -1696,6 +1712,9 @@
       });
       const see = h('a', { class: 'btn primary', href: '/teacher/report.html?practice=1', target: '_blank', rel: 'noopener', text: 'See answers' });
       screen.querySelector('.panel').append(h('div', { class: 'row-actions' }, see, again));
+    }
+    if (quitSeb) {
+      screen.querySelector('.panel').append(h('div', {}, h('a', { class: 'btn primary', href: '/seb-quit.html', text: 'Quit Safe Exam Browser' })));
     }
     if (kind !== 'already') screen.prepend(confetti());
     mount(screen);
@@ -1739,16 +1758,22 @@
       S = freshState();
       if (cfg.preview) { startPreview(); return; }
       if (!api.resume) { screenJoin(); return; }
+      let code = null;
+      try {
+        const u = new URL(location.href);
+        code = u.searchParams.get('code');
+        if (code) { u.searchParams.delete('code'); history.replaceState(null, '', u.pathname + u.search + u.hash); }
+      } catch (e) { /* no code */ }
       // Already signed in on this browser (say, after a reload)? Pick up where they were.
       api.resume().then((r) => {
-        if (!r || !r.status) return screenJoin();
+        if (!r || !r.status) return screenJoin(null, code);
         S.run = r.run;
         S.me = { name: r.name };
         if (r.status === 'waiting') return screenWait();
         if (r.status === 'admitted') return screenRules();
         if (r.status === 'active') return screenContinue();
-        return screenJoin(); // turned in already: free to join the next quiz
-      }).catch(() => screenJoin());
+        return screenJoin(null, code); // turned in already: free to join the next quiz
+      }).catch(() => screenJoin(null, code));
     },
     restart() {
       teardown();

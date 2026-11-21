@@ -315,6 +315,8 @@
 /* Practice */
 .row-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .row-actions a.btn { display: inline-flex; align-items: center; text-decoration: none; }
+.seb-launch { display: grid; justify-items: start; gap: 8px; }
+.seb-launch a.btn, .done-panel a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 
 /* Big screens: scale the text up. Not the code editor itself: CSS zoom throws off where its cursor lands,
    so its font size grows through its own setting instead (see editorFontSize in app.js). */

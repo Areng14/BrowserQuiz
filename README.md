@@ -90,18 +90,25 @@ node scripts/check-quiz.mjs examples/ap-csa-unit4 --run
 ## Safe Exam Browser (optional)
 
 For graded exams, a quiz can require [Safe Exam Browser](https://safeexambrowser.org) (SEB), a
-free lockdown browser that keeps students out of other apps. BrowserQuiz only lets in SEB running
-your exam's settings: any other browser gets "Open this quiz in Safe Exam Browser". (Respondus
-LockDown Browser only works inside an LMS like Canvas, so BrowserQuiz can't require it.)
+free lockdown browser that keeps students out of other apps. BrowserQuiz makes the SEB settings for
+the quiz and only lets in SEB running them. Any other browser gets "This quiz opens in Safe Exam
+Browser" and a button that starts it. (Respondus LockDown Browser only works inside an LMS like
+Canvas, so BrowserQuiz can't require it.)
 
 1. Have SEB installed on the student computers. Installing it needs an administrator, so ask IT.
-2. In SEB Config Tool, set the **Start URL** to your BrowserQuiz address (the "Join at" link).
-   On the **Exam** tab, turn on sending the Browser Exam Key and Config Key, and copy the
-   **Config Key**. Save the settings as a `.seb` file.
-3. Under **Give a quiz**, pick the **Safe Exam Browser** mode and paste the Config Key.
-4. Students open the `.seb` file, which starts SEB on the quiz.
+2. Open the dashboard at the address students use, since SEB opens the quiz there. Under
+   **Give a quiz**, pick **Safe Exam Browser** and start it.
+3. Students join with the code as usual and click **Open Safe Exam Browser**. The quiz's page also
+   has the SEB link and the `.seb` file, to post or hand out.
 
-If you change the SEB settings, the Config Key changes too: start the quiz with the new one.
+When students turn in, **Quit Safe Exam Browser** closes it.
+
+Have your own settings from SEB Config Tool? Open **Use my own .seb file** and paste the Config Key
+(on the Exam tab, with sending the Browser Exam Key and Config Key turned on). If you change those
+settings, the Config Key changes too, so start the quiz with the new one.
+
+BrowserQuiz checks SEB's Config Key, as Moodle does. A student who can write a browser extension
+could fake it, so SEB stops everyday cheating, not a determined programmer.
 
 ## Do I just need the IP?
 

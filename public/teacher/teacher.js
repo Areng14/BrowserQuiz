@@ -290,21 +290,28 @@
       : h('p', { class: 't-error t-small' }, h('span', { class: 'dot bad' }), 'Code runner offline. Code questions get graded once it is back.');
     const quizSel = picker('run-quiz', 'Quiz', data.quizzes.map((x) => ({ value: x.id, label: x.title, meta: [plural(x.questions, 'question'), date(x.createdAt)] })));
     const rosterSel = picker('run-roster', 'Class', data.rosters.map((x) => ({ value: x.id, label: x.name, meta: [plural(x.students, 'student')] })));
+    // level: how locked down, out of 3.
     const MODES = [
-      { id: 'exam', title: 'Exam', text: 'Locked down and watched. Leaving the window is flagged.' },
-      { id: 'seb', title: 'Safe Exam Browser', text: 'An exam that only opens in SEB with your settings.' },
-      { id: 'practice', title: 'Practice', text: 'No lockdown. Students see the answers at the end.' },
+      { id: 'exam', title: 'Exam', level: 2, security: 'Medium security' },
+      { id: 'seb', title: 'Safe Exam Browser', level: 3, security: 'High security' },
+      { id: 'practice', title: 'Practice', level: 0, security: 'No security' },
     ];
     let mode = 'exam';
-    // Safe Exam Browser: only SEB running the exam's settings can open the quiz.
+    // Safe Exam Browser: BrowserQuiz makes the settings, unless the teacher has their own .seb file
+    // (then its Config Key, from SEB Config Tool's Exam tab).
     const sebKey = h('input', { class: 'input t-mono', id: 'seb-key', autocomplete: 'off', spellcheck: 'false', maxlength: '64', placeholder: '64 letters and digits' });
-    const sebField = h('label', { class: 'field t-seb', for: 'seb-key' }, h('span', { class: 'field-label', text: 'Config Key (SEB Config Tool, Exam tab)' }), sebKey);
-    sebField.hidden = true;
+    const sebOwn = h('details', { class: 't-seb' }, h('summary', { text: 'Use my own .seb file' }),
+      h('label', { class: 'field', for: 'seb-key' }, h('span', { class: 'field-label', text: 'Config Key (SEB Config Tool, Exam tab)' }), sebKey));
+    sebOwn.hidden = true;
+    sebOwn.addEventListener('toggle', () => { if (sebOwn.open) sebKey.focus(); });
     const modeCards = MODES.map((m) => {
       const input = h('input', { type: 'radio', name: 'mode', id: 'mode-' + m.id, value: m.id, checked: m.id === mode });
-      input.addEventListener('change', () => { mode = m.id; sebField.hidden = mode !== 'seb'; if (mode === 'seb') sebKey.focus(); });
-      return h('label', { class: 't-mode', for: 'mode-' + m.id }, input,
-        h('span', { class: 't-mode-title', text: m.title }), h('span', { class: 't-mode-text', text: m.text }));
+      input.addEventListener('change', () => { mode = m.id; sebOwn.hidden = mode !== 'seb'; });
+      return h('label', { class: 't-mode', for: 'mode-' + m.id, 'data-level': String(m.level) }, input,
+        h('span', { class: 't-mode-title', text: m.title }),
+        h('span', { class: 't-mode-sec' },
+          h('span', { class: 't-meter', 'aria-hidden': 'true' }, [1, 2, 3].map((i) => h('span', { class: i <= m.level ? 'on' : null }))),
+          m.security));
     });
     const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', class: 't-switch', role: 'switch', checked: true });
     const startMsg = h('p', { class: 't-error', role: 'alert' });
@@ -314,7 +321,8 @@
       startBtn.disabled = true;
       startMsg.textContent = '';
       try {
-        const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked, practice: mode === 'practice', sebKey: mode === 'seb' ? sebKey.value.trim() : null });
+        const own = mode === 'seb' && sebOwn.open && sebKey.value.trim();
+        const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked, practice: mode === 'practice', seb: mode === 'seb', sebKey: own || null });
         showRun(r.id);
       } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
     });
@@ -327,7 +335,7 @@
         h('div', { class: 't-start-form' },
           h('div', { class: 't-row' }, quizSel.el, rosterSel.el),
           h('fieldset', { class: 't-modes' }, h('legend', { class: 'field-label', text: 'Mode' }), modeCards),
-          sebField,
+          sebOwn,
           h('label', { class: 't-check t-switch-row', for: 'ip-lock' }, ipLock, h('span', { text: 'Only students on my current network' })),
           h('div', { class: 't-row t-start-row' }, startBtn, startMsg), runner)),
       open.length ? h('section', { class: 't-section' }, h('h2', { text: 'Open now' }), runsTable(open)) : null,
@@ -479,6 +487,25 @@
     return { el, get value() { return value; } };
   }
 
+  // The .seb file BrowserQuiz made for a Safe Exam Browser quiz, and the link that opens SEB with it
+  // (to post for students, say). The join page offers the same link.
+  function sebButtons(code) {
+    const file = `/api/seb/${encodeURIComponent(code)}.seb`;
+    const link = `${location.protocol === 'https:' ? 'sebs' : 'seb'}://${location.host}${file}`;
+    const dl = linkBtn('Download .seb', file);
+    dl.classList.remove('small');
+    dl.setAttribute('download', `${code}.seb`);
+    const copy = h('button', { class: 'btn', type: 'button', text: 'Copy SEB link' });
+    let reset = 0;
+    copy.addEventListener('click', async () => {
+      if (!(await copyText(link))) { prompt('Copy this link:', link); return; }
+      copy.textContent = 'Copied';
+      clearTimeout(reset);
+      reset = setTimeout(() => { copy.textContent = 'Copy SEB link'; }, 2000);
+    });
+    return [dl, copy];
+  }
+
   // The AI prompt goes on the clipboard, ready to paste into a chatbot. It's fetched ahead of time so
   // the copy happens right in the click. If copying is blocked, it downloads instead.
   function copyPromptBtn() {
@@ -593,6 +620,7 @@
     const toggle = h('button', { class: 'btn', type: 'button' });
     const lockBtn = h('button', { class: 'btn', type: 'button' });
     const howTo = h('p', { class: 't-muted t-small' });
+    const sebLinks = h('span', { class: 't-seb-links', hidden: true });
     const failedBox = h('div');
     let lastDetail = '';
     const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => act(`/api/t/runs/${runId}/admit-all`) });
@@ -623,7 +651,9 @@
       code.textContent = run.code;
       title.textContent = run.title;
       meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
-      howTo.textContent = `Join at ${location.origin}`;
+      howTo.textContent = run.sebFile ? `Join at ${location.origin}, which opens Safe Exam Browser` : `Join at ${location.origin}`;
+      if (run.sebFile && !sebLinks.childNodes.length) sebLinks.append(...sebButtons(run.code));
+      sebLinks.hidden = !run.sebFile || run.status !== 'open';
       toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
       toggle.onclick = () => {
         if (run.status === 'open' && !confirm('Close the quiz? Anyone still working gets turned in.')) return;
@@ -763,7 +793,7 @@
         h('section', { class: 't-section' },
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
           howTo,
-          h('div', { class: 't-row' }, admitAll, toggle, lockBtn, exportLink, classReport),
+          h('div', { class: 't-row' }, admitAll, toggle, lockBtn, sebLinks, exportLink, classReport),
           failedBox),
         h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
           h('thead', {}, h('tr', {}, ['Student', 'Status', 'Integrity', 'Strikes', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score', ''].map((x) => h('th', { text: x })))),

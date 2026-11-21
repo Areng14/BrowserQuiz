@@ -27,7 +27,8 @@ function requireSeb(req, run) {
   const url = `${isHttps(req) ? 'https' : 'http'}://${req.headers.host}${req.url}`;
   const want = crypto.createHash('sha256').update(url + run.seb_key).digest('hex');
   const got = String(req.headers['x-safeexambrowser-configkeyhash'] || '').toLowerCase();
-  if (got.length !== want.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want))) throw new HttpError(403, 'seb_required');
+  // seb_launch: BrowserQuiz made the settings, so the join page can start SEB with them.
+  if (got.length !== want.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(want))) throw new HttpError(403, run.seb_config ? 'seb_launch' : 'seb_required');
 }
 
 function openRun(runId, req) {
@@ -111,6 +112,7 @@ function runInfo(run, quiz) {
     questionCount: quiz.questions.length, hasCode: quiz.questions.some((qq) => qq.type !== 'single' && qq.type !== 'multi' && qq.type !== 'text'),
     practice: run.mode === 'practice',
     seb: !!run.seb_key, // SEB keeps the window locked full screen itself
+    sebQuit: !!run.seb_config, // our settings: opening seb-quit.html closes SEB
   };
 }
 
@@ -144,6 +146,21 @@ module.exports = function studentRoutes(r) {
     if (run.ip_lock && !sameNetwork(ip, run.ip_lock)) throw new HttpError(403, 'wrong_network');
     requireSeb(req, run);
     json(res, 200, runInfo(run, store.getQuiz(run.quiz_id)));
+  });
+
+  // The .seb file for a quiz BrowserQuiz made SEB settings for. Opening it (or the seb:// / sebs:// link
+  // to it) starts SEB on the join page. It holds no secrets: the same settings are on every student's
+  // computer anyway.
+  r.get('/api/seb/:file', (req, res, p) => {
+    const m = /^([A-Za-z0-9]{6})\.seb$/.exec(String(p.file || ''));
+    const run = m ? q("SELECT code, seb_config FROM runs WHERE code = ? AND status = 'open'").get(m[1].toUpperCase()) : null;
+    if (!run || !run.seb_config) {
+      if (!joinFails(clientIp(req))) throw new HttpError(429, 'too_many');
+      throw new HttpError(404, 'bad_code');
+    }
+    send(res, 200, run.seb_config, {
+      'Content-Type': 'application/seb', 'Content-Disposition': `attachment; filename="${run.code}.seb"`, 'Cache-Control': 'no-store',
+    });
   });
 
   // Page load: is this browser already signed in? Lets a reloaded page skip the join screens.

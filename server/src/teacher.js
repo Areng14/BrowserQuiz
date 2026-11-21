@@ -11,7 +11,8 @@ const { checkReferences, checkOutputs, runnerConfigured, runnerHealthy, runSampl
 const { totals, questionScore, gradeAttempt, answerReport, cleanAnswers, gradeAuto, studentReport, reportQuiz, isRun } = require('./grade');
 const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
-const { HttpError, clientIp, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
+const { HttpError, clientIp, isHttps, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
+const { makeConfig: makeSebConfig } = require('./seb');
 const A = require('./accounts');
 const V = require('./vault');
 
@@ -657,13 +658,23 @@ module.exports = function teacherRoutes(r) {
     const body = await readJson(req, 4096);
     if (!q('SELECT 1 FROM quizzes WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.quizId || ''), me.id)) throw new HttpError(400, 'bad_quiz');
     if (!q('SELECT 1 FROM rosters WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.rosterId || ''), me.id)) throw new HttpError(400, 'bad_roster');
-    // Safe Exam Browser: the Config Key from SEB Config Tool for this exam's settings (64 hex digits).
-    const sebKey = body.sebKey ? String(body.sebKey).trim().toLowerCase() : null;
+    // Safe Exam Browser: settings BrowserQuiz makes (seb), or the Config Key of the teacher's own .seb
+    // file from SEB Config Tool (sebKey, 64 hex digits).
+    let sebKey = body.sebKey ? String(body.sebKey).trim().toLowerCase() : null;
     if (sebKey && !/^[0-9a-f]{64}$/.test(sebKey)) throw new HttpError(400, 'bad_seb_key', "The Config Key is 64 letters and digits. Copy it from SEB Config Tool's Exam tab.");
     const id = crypto.randomUUID();
     const code = newJoinCode();
-    q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at, owner_id, seb_key) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?)")
-      .run(id, body.quizId, body.rosterId, code, body.ipLock ? clientIp(req) : null, body.practice ? 'practice' : 'exam', Date.now(), me.id, sebKey);
+    let sebConfig = null;
+    if (body.seb && !sebKey) {
+      // SEB opens the quiz at the address the teacher is using now, which students use too.
+      const host = String(req.headers.host || '');
+      if (!/^[A-Za-z0-9.-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:.]+\](:\d{1,5})?$/.test(host)) throw new HttpError(400, 'bad_host', "Open the dashboard at the address students use, then start the quiz again.");
+      const made = makeSebConfig(`${isHttps(req) ? 'https' : 'http'}://${host}`, code);
+      sebKey = made.key;
+      sebConfig = made.xml;
+    }
+    q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at, owner_id, seb_key, seb_config) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)")
+      .run(id, body.quizId, body.rosterId, code, body.ipLock ? clientIp(req) : null, body.practice ? 'practice' : 'exam', Date.now(), me.id, sebKey, sebConfig);
     audit(me, 'open-run', null, code);
     json(res, 200, { id, code });
   });
@@ -726,7 +737,7 @@ module.exports = function teacherRoutes(r) {
     const roster = rosterStudentsForRun(run);
     const byStudent = new Map(q('SELECT id, student_id FROM attempts WHERE run_id = ? AND archived = 0').all(run.id).map((x) => [x.student_id, store.getAttempt(x.id)]));
     json(res, 200, {
-      run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin },
+      run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin },
       students: roster.map((s) => liveRow(s, byStudent.get(s.id), quiz)),
     });
   });
