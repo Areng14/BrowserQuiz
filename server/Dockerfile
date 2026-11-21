@@ -3,11 +3,12 @@
 FROM node:22-bookworm-slim AS editor
 WORKDIR /src
 COPY package.json package-lock.json ./
-# extra_ca is optional: only needed behind a TLS-intercepting proxy.
-#   docker build --secret id=extra_ca,src=/path/to/ca.crt ...
-RUN --mount=type=secret,id=extra_ca,required=false \
-    if [ -s /run/secrets/extra_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/extra_ca; fi; \
-    npm ci --no-audit --no-fund
+# Only behind a TLS-intercepting proxy (some school networks): pass the proxy's CA certificate. It's
+# a public certificate, so a build argument is fine (and hosts like Railway don't take build secrets).
+#   docker build --build-arg EXTRA_CA="$(cat /path/to/ca.crt)" -f server/Dockerfile -t browserquiz-app .
+ARG EXTRA_CA=""
+RUN if [ -n "$EXTRA_CA" ]; then printf '%s\n' "$EXTRA_CA" > /tmp/extra-ca.crt; export NODE_EXTRA_CA_CERTS=/tmp/extra-ca.crt; fi; \
+    npm ci --no-audit --no-fund && rm -f /tmp/extra-ca.crt
 COPY scripts ./scripts
 RUN node scripts/build-monaco.mjs
 

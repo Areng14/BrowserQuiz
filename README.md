@@ -70,11 +70,13 @@ everything stays on a machine you control.
 
 ### Student code runs in a sandbox
 
-Code runs in its own container, on a network with no way out to the internet. Each job:
+Code runs in its own container. With Docker Compose, that container sits on a network with no way out
+to the internet. Wherever it runs, each job:
 
 - runs as its own user, and everything it started is killed when it's done
 - can only write to its own job folder, so it can't touch other jobs or the system (Landlock)
-- can't open network sockets (seccomp)
+- can't open network sockets, so it can't reach anything at all (seccomp, plus Landlock on newer
+  kernels)
 - has limits on CPU time, memory, processes, file size and run time
 
 The runner checks its own sandbox when it starts, and refuses to run code if anything's missing.
@@ -215,8 +217,7 @@ Where to host:
   "only my network" lock matches the school's public IP.
 - **A box on the school network:** fine too, but the lab PCs have to reach it, and IT usually has
   opinions about that. The network lock then accepts any private (10.x / 192.168.x) address.
-- **Railway and similar:** the runner sandbox was tested there. The compose file is for plain Docker
-  hosts, though.
+- **Railway:** see [Hosting on Railway](#hosting-on-railway).
 
 ## Requirements
 
@@ -256,13 +257,28 @@ Backups made before quiz encryption was added still hold plain copies of quizzes
 
 ## Behind a TLS-intercepting proxy
 
-If `npm ci` or `apt-get` fails during the build with certificate errors, pass the proxy's CA:
+If `npm ci` or `apt-get` fails during the build with certificate errors, pass the proxy's CA
+certificate (just that one, not a whole bundle):
 
 ```bash
-docker build --secret id=extra_ca,src=/path/to/ca.crt -f server/Dockerfile -t browserquiz-app .
-docker build --secret id=extra_ca,src=/path/to/ca.crt -t browserquiz-runner runner
+docker build --build-arg EXTRA_CA="$(cat /path/to/ca.crt)" -f server/Dockerfile -t browserquiz-app .
+docker build --build-arg EXTRA_CA="$(cat /path/to/ca.crt)" -t browserquiz-runner runner
 docker compose up -d --no-build
 ```
+
+## Hosting on Railway
+
+BrowserQuiz runs on [Railway](https://railway.com) as two services from this repo, with HTTPS on your
+own domain:
+
+| Service | Settings |
+| --- | --- |
+| `runner` | Root directory `/runner`. No public domain. Variables: `RUNNER_TOKEN=${{shared.RUNNER_TOKEN}}`, `PORT=8080`. |
+| `app` | Dockerfile `server/Dockerfile`, a volume at `/data`, health check `/healthz`, your domain on port 8080. Variables: `ADMIN_PASSWORD`, `ID_PEPPER` and `RUNNER_TOKEN` as `${{shared.…}}` references, `RUNNER_URL=http://${{runner.RAILWAY_PRIVATE_DOMAIN}}:8080`, `TRUST_PROXY=1`, `PORT=8080`. |
+
+Put the three secrets in the project's **shared variables**. On Railway the runner's container can
+reach the internet, unlike with Docker Compose. Student code still can't, because the sandbox blocks
+network sockets.
 
 ## Layout
 
