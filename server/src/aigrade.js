@@ -4,7 +4,8 @@
 // rubric ticks or the points on that question, labeled as the AI's, with a reason for each, so the
 // teacher can read them and change any.
 //
-// Off unless the server has ANTHROPIC_API_KEY (AI_GRADER_MODEL picks another model). What goes to
+// Uses the teacher's own key (saved, sealed, from the dialog) or else the server's ANTHROPIC_API_KEY;
+// AI_GRADER_MODEL picks another model. Without either, teachers grade by copy and paste (aicsv.js). What goes to
 // Anthropic, per answer: the question, its rubric and points, the teacher's model answer or reference
 // solution, how many tests the code passed, and the student's answer. Never their name, ID, or
 // anything about integrity. Hidden tests never go anywhere.
@@ -77,10 +78,10 @@ function promptFor(qq, job) {
   return L.join('\n');
 }
 
-async function callClaude(qq, job) {
+async function callClaude(qq, job, key) {
   const headers = {
     'content-type': 'application/json',
-    'x-api-key': process.env.ANTHROPIC_API_KEY,
+    'x-api-key': key,
     'anthropic-version': '2026-10-21',
   };
   const body = {
@@ -115,11 +116,11 @@ async function callClaude(qq, job) {
 }
 
 // Retries what can be retried (busy, cut off, network), with backoff.
-async function grade(qq, job) {
+async function grade(qq, job, key) {
   let wait = 2000;
   for (let attempt = 1; ; attempt++) {
     try {
-      return await callClaude(qq, job);
+      return await callClaude(qq, job, key);
     } catch (e) {
       if (!(e instanceof AiError) || !e.retry || attempt >= 4) throw e;
       await new Promise((r) => setTimeout(r, wait));
@@ -189,14 +190,14 @@ async function pool(list, fn) {
 
 // Grades every waiting answer in these attempts. progress(done, failed) after each answer.
 // Returns { graded, failed, errors }. Each attempt is saved as its answers come back.
-async function gradeAttempts(quiz, attempts, G, store, progress) {
+async function gradeAttempts(quiz, attempts, G, store, progress, key) {
   const work = [];
   for (const a of attempts) for (const w of jobsFor(quiz, a, G)) work.push({ a, ...w });
   const out = { total: work.length, graded: 0, failed: 0, errors: [] };
   if (progress) progress(out);
   await pool(work, async ({ a, qq, job }) => {
     try {
-      const { out: verdict, model } = await grade(qq, job);
+      const { out: verdict, model } = await grade(qq, job, key);
       if (a.status !== 'submitted' || !a.result) return; // reset or regraded meanwhile
       const now = (a.result.manual || {})[qq.id];
       if (now && now.reviewed && !now.ai) return; // the teacher graded it while Claude was working
@@ -213,4 +214,13 @@ async function gradeAttempts(quiz, attempts, G, store, progress) {
   return out;
 }
 
-module.exports = { configured, gradeAttempts, jobsFor, schemaFor, promptFor, MODEL };
+// Does Anthropic take this key? A free call (the list of models). true, false (refused) or null (unreachable).
+async function checkKey(key) {
+  try {
+    const res = await fetch(API.replace(/\/messages$/, '/models?limit=1'), { headers: { 'x-api-key': key, 'anthropic-version': '2026-10-21' }, signal: AbortSignal.timeout(15000) });
+    if (res.ok) return true;
+    return res.status === 401 || res.status === 403 ? false : null;
+  } catch (e) { return null; }
+}
+
+module.exports = { configured, gradeAttempts, jobsFor, schemaFor, promptFor, checkKey, MODEL };

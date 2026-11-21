@@ -117,10 +117,14 @@ Every grade is labeled as the AI's, and you can change any of them (its reasons 
 - **With any AI chat, no setup:** copy the prompt, paste it into ChatGPT, Claude, Gemini or the like,
   and paste the CSV it answers with back into BrowserQuiz. Rows it can't use (a typo in an ID, a
   missing rubric item) are listed and left for you.
-- **Right here, with a key:** set `ANTHROPIC_API_KEY` in `.env` (or the app's variables on Railway)
-  and restart, and the dialog also offers **Grade here**: Claude grades in the background, with the
-  progress on the live page. `AI_GRADER_MODEL` picks another model; the default is `claude-opus-5-5`.
-  About 2 to 5 cents an answer.
+- **Right here, with an API key:** on the dialog's **API key** tab, paste a key from
+  [console.anthropic.com](https://console.anthropic.com) (API keys). It's checked with Anthropic,
+  stored encrypted with your other data, never shown again (only its last 4 characters), and only
+  used for your quizzes. Then Claude grades in the background, with the progress on the live page.
+  About 2 to 5 cents an answer, billed to that key. Remove or change it on the same tab.
+- **One key for every teacher:** set `ANTHROPIC_API_KEY` in `.env` (or the app's variables on
+  Railway) and restart. A teacher's own key wins over it. `AI_GRADER_MODEL` picks another model; the
+  default is `claude-opus-5-5`.
 - **What the AI sees:** the question, its rubric and points, your notes or reference solution, how
   many tests the code passed, and the student's answer, under a short code instead of their name.
   Never names, IDs, integrity, or hidden tests.

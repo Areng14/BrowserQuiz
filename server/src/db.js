@@ -87,6 +87,8 @@ addColumn('audit', 'teacher_id', 'TEXT');
 // enc = 1 marks a quiz's json or an asset's bytes as sealed with the owner's key.
 addColumn('teachers', 'key_wrap', 'TEXT');
 addColumn('teachers', 'rec_wrap', 'TEXT');
+// A teacher's own Anthropic API key for AI grading (aigrade.js), sealed with their quiz key.
+addColumn('teachers', 'ai_key', 'TEXT');
 addColumn('quizzes', 'enc', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('assets', 'enc', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('runs', 'seb_key', 'TEXT'); // Safe Exam Browser Config Key: only SEB with that config can take the quiz

@@ -661,15 +661,18 @@
   }
   const phone = () => matchMedia('(max-width: 820px)').matches;
 
-  // Grade with AI (server: aicsv.js, aigrade.js), in three steps: copy a prompt, paste it into any AI chat,
-  // paste the reply back. Before anything applies, a table shows each student's grade. With an
-  // Anthropic key on the server, Claude can also grade right here. attemptId: one student only.
+  // Grade with AI (server: aicsv.js, aigrade.js), two ways. Copy & paste, in three steps: copy a prompt,
+  // paste it into any AI chat, paste the reply back; a table shows each student's grade before anything
+  // applies. API key: Claude grades here, in the background, with the teacher's own key (saved here,
+  // sealed on the server) or the server's. attemptId: one student only.
   const CHATS = [['ChatGPT', 'https://chatgpt.com/'], ['Claude', 'https://claude.ai/new'], ['Gemini', 'https://gemini.google.com/app']];
-  async function aiDialog(runId, attemptId, apiOn, done) {
+  async function aiDialog(runId, attemptId, done) {
     const qs = attemptId ? `?attempt=${encodeURIComponent(attemptId)}` : '';
     let p;
     try { p = await api(`/api/t/runs/${runId}/ai-prompt${qs}`); } catch (e) { alert(e.message); return; }
     if (!p.answers) { alert('Nothing is waiting for you to grade.'); return; }
+    let ks = { mine: false, hint: null, server: false };
+    try { ks = await api('/api/t/ai-key'); } catch (e) { /* the copy and paste way still works */ }
     const dlg = h('dialog', { class: 't-dialog t-ai-dialog', 'aria-labelledby': 't-ai-title' });
     const close = () => { dlg.close(); };
     // a step: its number (a check once done), a title, and what's in it
@@ -714,7 +717,7 @@
         h('td', {}, `Q${x.n}`, x.qname ? h('span', { class: 't-muted', text: ` ${x.qname}` }) : null,
           x.items.length ? h('span', { class: 't-ai-items' }, x.items.map((it) => h('span', { class: it.met ? 'met' : 'unmet', title: it.met ? 'Met' : 'Not met' }, it.met ? '✓ ' : '✗ ', it.text))) : null),
         h('td', { class: 'num' }, h('b', { text: `${x.got}/${x.of}` }))));
-      const problems = r.found ? r.skipped : r.skipped;
+      const problems = r.skipped;
       preview.replaceChildren(
         rows.length ? h('div', { class: 't-ai-table' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Student' }), h('th', { text: 'Question' }), h('th', { class: 'num', text: "AI's grade" }))), h('tbody', {}, rows))) : null,
         problems.length ? h('div', { class: 't-ai-warn', role: 'note' }, h('b', { text: r.found ? 'Left for you' : "Couldn't read that" }),
@@ -734,24 +737,79 @@
       } catch (e) { status.textContent = e.message; applyBtn.disabled = false; }
     });
 
-    const here = apiOn ? h('div', { class: 't-ai-here' },
-      h('span', { class: 't-small t-muted', text: 'This server has an Anthropic key, so Claude can grade them here instead.' }),
-      h('button', { class: 'btn small', type: 'button', text: 'Grade here', onclick: async () => {
-        try { await post(attemptId ? `/api/t/attempts/${attemptId}/ai-grade` : `/api/t/runs/${runId}/ai-grade`); close(); done(''); } catch (e) { status.textContent = e.message; }
-      } })) : null;
+    // The API key way: ready (which key, change or remove it) or a field to add one.
+    const keyPanel = h('div', { class: 't-ai-key', role: 'tabpanel', id: 't-ai-p-key', 'aria-labelledby': 't-ai-t-key' });
+    const gradeBtn = h('button', { class: 'btn primary', type: 'button', text: `Grade ${plural(p.answers, 'answer')}` });
+    const linkBtn2 = (text, onclick) => h('button', { class: 't-linkbtn', type: 'button', text, onclick });
+    const drawKey = (editing, focus) => {
+      const has = ks.mine || ks.server;
+      gradeBtn.disabled = !has || editing;
+      if (has && !editing) {
+        keyPanel.replaceChildren(h('div', { class: 't-ai-ready' },
+          h('p', {}, h('b', { text: `Claude grades ${plural(p.answers, 'answer')} right here.` }), ' It works in the background, and the live page shows how far it has got. About 2 to 5 cents an answer, on the key below.'),
+          h('p', { class: 't-small t-muted' }, ks.mine ? `Your key ${ks.hint}. ` : "This server's key. ",
+            linkBtn2(ks.mine ? 'Change' : 'Use my own', () => drawKey(true, true)),
+            ks.mine ? [' · ', linkBtn2('Remove', async () => { try { ks = await post('/api/t/ai-key', { key: null }); } catch (e) { /* stays */ } drawKey(false, true); })] : null)));
+        if (focus) setTimeout(() => gradeBtn.focus(), 0);
+        return;
+      }
+      const input = h('input', { class: 'input', type: 'password', id: 't-ai-keyin', autocomplete: 'off', spellcheck: 'false', placeholder: 'sk-ant-…' });
+      const msg = h('p', { class: 't-small', role: 'status' });
+      const save = h('button', { class: 'btn', type: 'button', text: 'Save key' });
+      save.addEventListener('click', async () => {
+        save.disabled = true; msg.className = 't-small t-muted'; msg.textContent = 'Checking it with Anthropic…';
+        try { ks = await post('/api/t/ai-key', { key: input.value }); drawKey(false, true); } catch (e) { msg.className = 't-small t-error'; msg.textContent = e.message; save.disabled = false; }
+      });
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save.click(); });
+      keyPanel.replaceChildren(
+        h('label', { class: 'field', for: 't-ai-keyin' }, h('span', { class: 'field-label', text: 'Your Anthropic API key' }), h('div', { class: 't-row t-ai-keyrow' }, input, save)),
+        h('p', { class: 't-small t-muted', text: "Make one at console.anthropic.com, under API keys. It's checked, stored encrypted, and only used to grade your quizzes. Grading costs go to it." }),
+        msg);
+      if (has) keyPanel.append(linkBtn2('Cancel', () => drawKey(false, true)));
+      if (focus) setTimeout(() => input.focus(), 0);
+    };
+    gradeBtn.addEventListener('click', async () => {
+      gradeBtn.disabled = true;
+      try { await post(attemptId ? `/api/t/attempts/${attemptId}/ai-grade` : `/api/t/runs/${runId}/ai-grade`); close(); done(''); } catch (e) {
+        keyPanel.append(h('p', { class: 't-small t-error', role: 'alert', text: e.message }));
+        gradeBtn.disabled = false;
+      }
+    });
+
+    // The two ways, as tabs; the footer's main button follows the tab.
+    const steps = h('ol', { class: 't-steps', role: 'tabpanel', id: 't-ai-p-paste', 'aria-labelledby': 't-ai-t-paste' }, s1, s2, s3);
+    const tabBtn = (id, text) => h('button', { class: 't-tab', type: 'button', role: 'tab', id: `t-ai-t-${id}`, 'aria-controls': `t-ai-p-${id}`, text });
+    const tPaste = tabBtn('paste', 'Copy & paste');
+    const tKey = tabBtn('key', 'API key');
+    const show = (which) => {
+      const k = which === 'key';
+      tPaste.setAttribute('aria-selected', String(!k)); tKey.setAttribute('aria-selected', String(k));
+      tPaste.tabIndex = k ? -1 : 0; tKey.tabIndex = k ? 0 : -1;
+      steps.hidden = k; keyPanel.hidden = !k;
+      applyBtn.hidden = k; gradeBtn.hidden = !k; status.hidden = k;
+      if (k) drawKey(false);
+    };
+    tPaste.addEventListener('click', () => show('paste'));
+    tKey.addEventListener('click', () => show('key'));
+    const tabs = h('div', { class: 't-tabs', role: 'tablist', 'aria-label': 'How to grade' }, tPaste, tKey);
+    tabs.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const to = document.activeElement === tPaste ? tKey : tPaste;
+      to.focus(); to.click();
+    });
     const x = h('button', { class: 'btn small ghost t-dialog-x', type: 'button', 'aria-label': 'Close', onclick: close }, icon(ICONS.x, 18));
     dlg.append(
       h('header', { class: 't-dialog-head' },
         h('div', {}, h('h2', { id: 't-ai-title', text: 'Grade with AI' }),
           h('p', { class: 't-muted t-small', text: attemptId ? `${plural(p.answers, 'answer')} waiting for you.` : `${plural(p.answers, 'answer')} from ${plural(p.students, 'student')} waiting for you.` })),
         x),
-      h('ol', { class: 't-steps' }, s1, s2, s3),
-      ...(here ? [here] : []),
-      h('footer', { class: 't-dialog-foot' }, status, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: close }), applyBtn));
+      tabs, steps, keyPanel,
+      h('footer', { class: 't-dialog-foot' }, status, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: close }), applyBtn, gradeBtn));
     dlg.addEventListener('close', () => dlg.remove());
     root.append(dlg); // inside the dashboard, for its fonts and sizing
+    show(ks.mine || ks.server ? 'key' : 'paste');
     dlg.showModal();
-    copyBtn.focus();
+    (ks.mine || ks.server ? tKey : copyBtn).focus();
   }
   // How far along: a bar of what's answered, the count, and where they are right now.
   function progressCell(a) {
@@ -791,9 +849,8 @@
     const aiBtn = h('button', { class: 'btn', type: 'button', hidden: true });
     const aiMsg = h('p', { class: 't-small t-muted', role: 'status', hidden: true });
     let aiWaiting = 0;
-    let aiOn = false;
     const aiDone = (text) => { if (text) { aiMsg.hidden = false; aiMsg.className = 't-small t-muted'; aiMsg.textContent = text; } lastDetail = ''; refresh(); };
-    aiBtn.addEventListener('click', () => aiDialog(runId, null, aiOn, aiDone));
+    aiBtn.addEventListener('click', () => aiDialog(runId, null, aiDone));
     // On a phone the less-used buttons fold under More, so the students start near the top.
     const extra = h('span', { class: 't-run-extra', id: 't-run-extra' });
     const moreBtn = h('button', { class: 'btn t-run-morebtn', type: 'button', text: 'More', 'aria-expanded': 'false', 'aria-controls': 't-run-extra',
@@ -835,7 +892,6 @@
       // Grade with AI: shown while there's something waiting for the teacher, or while it runs.
       aiWaiting = data.students.reduce((n, x) => n + (x.attempt && x.attempt.status === 'submitted' ? x.attempt.review || 0 : 0), 0);
       const job = data.ai && data.ai.job;
-      aiOn = !!(data.ai && data.ai.on);
       if (job && job.running) {
         aiBtn.hidden = false; aiBtn.disabled = true;
         aiBtn.textContent = `Grading with AI… ${job.graded + job.failed} of ${job.total}`;
@@ -992,7 +1048,7 @@
           d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
           d.status === 'submitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) }, dk('regrade'))) : null,
           d.status === 'submitted' && d.totals && d.totals.review ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Grade with AI', title: 'Send the answers waiting for you to Claude. Names and IDs stay here.',
-            onclick: () => aiDialog(runId, id, aiOn, aiDone) }, dk('ai'))) : null,
+            onclick: () => aiDialog(runId, id, aiDone) }, dk('ai'))) : null,
           d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Restore', onclick: () => { if (confirm(`Restore ${d.name}?`)) act(`/api/t/attempts/${id}/restore`); } }, dk('restore'))) : null,
           d.status === 'active' || d.status === 'admitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Let back in', title: 'Crashed computer or new seat: they sign in again and keep their answers and time', onclick: () => act(`/api/t/attempts/${id}/let-in`) }, dk('letin'))) : null,
           h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Reset', title: 'Throw out this attempt and let them start over', onclick: () => { if (confirm(`Reset ${d.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) { closeDetail(); act(`/api/t/attempts/${id}/reset`); } } }, dk('reset')))),

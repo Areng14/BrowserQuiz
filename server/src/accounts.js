@@ -67,6 +67,12 @@ function rekeyOwned(ownerId, oldKey, newKey) {
       }
       n++;
     }
+    // their own Anthropic key for AI grading (teacher.js aiKeyOf)
+    const t = q('SELECT ai_key FROM teachers WHERE id = ?').get(ownerId);
+    if (t && t.ai_key) {
+      const aad = `aikey:${ownerId}`;
+      try { q('UPDATE teachers SET ai_key = ? WHERE id = ?').run(V.sealText(newKey, V.openText(oldKey, t.ai_key, aad), aad), ownerId); n++; } catch (e) { /* not under the old key */ }
+    }
   });
   if (n) db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
   return n;
