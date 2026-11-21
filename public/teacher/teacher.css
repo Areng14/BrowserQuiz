@@ -171,6 +171,37 @@ input[type="file"].input { padding: 6px 10px; }
 /* under the phone top bar */
 @media (max-width: 820px) { .t-detail > .t-row:first-child { top: calc(57px + env(safe-area-inset-top, 0px)); } }
 
+/* The live page. Wide: every button in view. Phone: a short header, one compact row per student (what
+   needs doing now stays on the row; the rest is on the student's page), and the student's page as a sheet
+   over the list, so closing it lands where you were. */
+.t-run-morebtn { display: none; }
+.t-run-extra { display: contents; }
+.t-detail-acts { gap: 8px; align-items: center; }
+@media (max-width: 820px) {
+  .t-code .t-joincode { font-size: 28px; }
+  .t-code h1 { font-size: 19px; }
+  .t-run-acts { gap: 8px; }
+  .t-run-morebtn { display: inline-flex; align-items: center; justify-content: center; }
+  .t-run-extra { display: none; }
+  .t-run-extra.open { display: flex; flex-wrap: wrap; gap: 8px; flex-basis: 100%; }
+  /* name and status on the first line (the name takes most of it, so the numbers drop to a second line) */
+  .t-run tr { gap: 0 12px; padding: 9px 12px; cursor: pointer; }
+  .t-run td:first-child { flex: 1 1 60%; }
+  .t-run td:nth-child(2) { flex: none; margin-left: auto; }
+  .t-run td.t-clean, .t-run td.t-zero, .t-run .t-row-extra, .t-run td.t-actions.t-only-extra { display: none; }
+  .t-run td[data-label] { font-size: 13px; color: var(--ink-2); }
+  .t-run td[data-label]::before { content: attr(data-label) ": "; }
+  .t-run td.st-bad[data-label] { color: var(--bad); }
+  .t-run td.t-late[data-label] { color: var(--warn); }
+  .t-run td.t-actions { padding-top: 6px; }
+  .t-run .t-link { padding: 4px 0; }
+  html.t-sheet-open { overflow: hidden; }
+  .t-sheet-open .t-detail-host { position: fixed; inset: 0; z-index: 40; overflow-y: auto; overscroll-behavior: contain; background: var(--bg);
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+  .t-sheet-open .t-detail { border: 0; border-radius: 0; padding: 0 var(--gut-r) 28px var(--gut-l); }
+  .t-sheet-open .t-detail > .t-row:first-child { top: 0; margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l)); padding: 10px var(--gut-r) 10px var(--gut-l); border-radius: 0; }
+}
+
 .t-code { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .t-joincode { font: 600 44px var(--mono); letter-spacing: 0.15em; }
 .st-waiting { color: var(--warn); font-weight: 600; }

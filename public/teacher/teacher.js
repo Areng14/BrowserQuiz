@@ -81,6 +81,7 @@
   function mount(...nodes) {
     clearInterval(pollTimer);
     clearInterval(tickTimer);
+    document.documentElement.classList.remove('t-sheet-open');
     leaveGuard = null;
     root.replaceChildren(...nodes);
     const head = root.querySelector('main h1, h1');
@@ -227,8 +228,15 @@
     { id: 'classes', label: 'Classes', icon: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'] },
     { id: 'teachers', label: 'Teachers', icon: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'], admin: true },
   ];
+  // The open quiz (the newest, if there are several): its live page is a tab of its own, Current quiz.
+  const CURRENT = { id: 'current', label: 'Current quiz', short: 'Current', icon: ['M12 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4z', 'M16.24 7.76a6 6 0 0 1 0 8.49', 'M7.76 16.24a6 6 0 0 1 0-8.49', 'M19.07 4.93a10 10 0 0 1 0 14.14', 'M4.93 19.07a10 10 0 0 1 0-14.14'] };
+  let openRuns = null; // [{ id, title, code }], newest first; null until the overview says
+  function noteRuns(runs) {
+    openRuns = runs.filter((r) => r.status === 'open').map((r) => ({ id: r.id, title: r.quiz_title, code: r.code }));
+    live = openRuns.length;
+  }
   let tab = 'give';
-  let live = 0; // open quizzes, shown next to "Give a quiz"
+  let live = 0; // open quizzes, shown on Current quiz when there's more than one
   let here = location.hash;
   let leaveGuard = null; // set by a page with unsaved work; false keeps the teacher there
   let navSeq = 0; // the latest page asked for, so a slow load doesn't replace a newer page
@@ -275,12 +283,14 @@
   // The page frame: tabs on the left, the page on the right. active: the tab this page belongs to.
   function shell(active, ...content) {
     const tabs = TABS.filter((t) => !t.admin || (who && who.role === 'admin'));
+    const cur = openRuns && openRuns[0];
+    if (cur) tabs.splice(1, 0, Object.assign({}, CURRENT, { href: '#run/' + encodeURIComponent(cur.id), title: `${cur.title} (${cur.code})` }));
     return h('div', { class: 't-shell' },
       h('nav', { class: 't-side', 'aria-label': 'Dashboard' },
         h('div', { class: 't-brand', text: 'BrowserQuiz' }),
-        h('div', { class: 't-nav' }, tabs.map((t) => h('a', { class: 't-nav-item', href: '#' + t.id, 'aria-current': t.id === active ? 'page' : null },
+        h('div', { class: 't-nav' }, tabs.map((t) => h('a', { class: 't-nav-item', href: t.href || '#' + t.id, title: t.title || null, 'aria-current': t.id === active ? 'page' : null },
           icon(t.icon), h('span', { class: 't-nav-label' }, t.short || t.label, t.short ? h('span', { class: 't-nav-more', text: t.label.slice(t.short.length) }) : null),
-          t.id === 'give' && live ? h('span', { class: 't-badge', title: `${live} open`, 'aria-label': `${live} open`, text: String(live) }) : null))),
+          t.id === 'current' && live > 1 ? h('span', { class: 't-badge', title: `${live} open`, 'aria-label': `${live} open`, text: String(live) }) : null))),
         h('div', { class: 't-side-foot' },
           who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null,
           h('div', { class: 't-side-btns' }, themeButton(),
@@ -300,7 +310,7 @@
     if (seq !== navSeq) return;
     who = me && me.teacher;
     if (tab === 'teachers' && !(who && who.role === 'admin')) { showHome('give'); return; }
-    live = data.runs.filter((r) => r.status === 'open').length;
+    noteRuns(data.runs);
     const page = { give: giveTab, results: resultsTab, quizzes: quizzesTab, classes: classesTab, teachers: teachersSection }[tab](data, me);
     const y = same ? window.scrollY : 0;
     mount(shell(tab, page));
@@ -647,7 +657,13 @@
     if (a.integrity === 'invalidated') return h('td', { class: 'st-bad', text: `Invalidated (${LABEL[a.reason] || a.reason})` });
     // Restoring doesn't re-arm the strikes, so say when a restored student has left again.
     if (a.integrity === 'restored') return h('td', { class: a.leftAgain ? 'st-bad' : 'st-waiting', text: a.leftAgain ? `Restored, left ${a.leftAgain} more` : 'Restored' });
-    return h('td', { class: 'st-good', text: 'Clean' });
+    return h('td', { class: 'st-good t-clean', text: 'Clean' });
+  }
+  const phone = () => matchMedia('(max-width: 820px)').matches;
+  function watchLink(id, name) {
+    const w = h('a', { class: 'btn small', href: `/teacher/watch.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Watch', 'aria-label': `Watch ${name}`, 'data-key': `${id}:watch` });
+    w.style.cssText = 'display:inline-flex;align-items:center;text-decoration:none';
+    return w;
   }
 
   async function showRun(runId) {
@@ -668,6 +684,10 @@
     const failedBox = h('div');
     let lastDetail = '';
     const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => act(`/api/t/runs/${runId}/admit-all`) });
+    // On a phone the less-used buttons fold under More, so the students start near the top.
+    const extra = h('span', { class: 't-run-extra', id: 't-run-extra' });
+    const moreBtn = h('button', { class: 'btn t-run-morebtn', type: 'button', text: 'More', 'aria-expanded': 'false', 'aria-controls': 't-run-extra',
+      onclick: () => moreBtn.setAttribute('aria-expanded', String(extra.classList.toggle('open'))) });
     // Read out when the counts change, not on every 2-second refresh.
     const summary = h('p', { class: 'sr-only', 'aria-live': 'polite' });
     const exportLink = h('a', { class: 'btn', href: `/api/t/runs/${runId}/export.csv`, download: true, text: 'Export CSV' });
@@ -701,6 +721,16 @@
         [count((a) => a.status === 'submitted'), 'turned in'], [count((a) => a.integrity === 'invalidated'), 'invalidated']]
         .filter(([n]) => n).map(([n, w]) => `${n} ${w}`).join(', ') || 'Nobody has joined yet';
       if (summary.textContent !== said) summary.textContent = said;
+      admitAll.hidden = !count((a) => a.status === 'waiting');
+      // This run's place in the Current quiz tab.
+      if (openRuns && (run.status === 'open') !== openRuns.some((r) => r.id === runId)) {
+        api('/api/t/overview').then((o) => {
+          noteRuns(o.runs);
+          const nav = root.querySelector('.t-side');
+          const cur = openRuns[0] && openRuns[0].id === runId;
+          if (nav && root.contains(tbody)) nav.replaceWith(shell(cur ? 'current' : tab === 'results' ? 'results' : 'give').querySelector('.t-side'));
+        }).catch(() => {});
+      }
       title.textContent = run.title;
       meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
       howTo.textContent = run.sebFile ? `Join at ${location.origin}, which opens Safe Exam Browser` : `Join at ${location.origin}`;
@@ -728,12 +758,7 @@
         const btn = (text, key, onclick, extra) => h('button', Object.assign({ class: 'btn small', type: 'button', text, onclick, 'data-key': `${a.id}:${key}`, 'aria-label': `${text} ${s.name}` }, extra || {}));
         if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => act(`/api/t/attempts/${a.id}/admit`), { class: 'btn small primary' }));
         // Their screen, live, in a new tab (watch.html).
-        if (a && a.status === 'active') {
-          const watch = linkBtn('Watch', `/teacher/watch.html?attempt=${encodeURIComponent(a.id)}`, true);
-          watch.setAttribute('aria-label', `Watch ${s.name}`);
-          watch.dataset.key = `${a.id}:watch`;
-          actions.append(watch);
-        }
+        if (a && a.status === 'active') actions.append(watchLink(a.id, s.name));
         if (a && a.integrity === 'invalidated') actions.append(btn('Restore', 'restore', () => { if (confirm(`Restore ${s.name}?`)) act(`/api/t/attempts/${a.id}/restore`); }));
         // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
         // popup doesn't end anyone's quiz without the teacher looking).
@@ -744,6 +769,9 @@
             : btn('Let back in', 'letin', () => act(`/api/t/attempts/${a.id}/let-in`), { title: 'Crashed computer or new seat: they sign in again and keep their answers and time' }));
         }
         if (a) actions.append(btn('Reset', 'reset', () => { if (confirm(`Reset ${s.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) act(`/api/t/attempts/${a.id}/reset`); }, { title: 'Throw out this attempt and let them start over' }));
+        // On a phone a row shows only what needs doing now (Admit, End quiz); the rest is one tap away, on the student.
+        for (const b of actions.children) if (!/:(admit|end)$/.test(b.dataset.key || '')) b.classList.add('t-row-extra');
+        if (![...actions.children].some((b) => !b.classList.contains('t-row-extra'))) actions.classList.add('t-only-extra');
         const beat = a && a.lastBeatAgo != null ? Math.round(a.lastBeatAgo / 1000) : null;
         let score = '';
         if (a && a.score != null) {
@@ -752,10 +780,11 @@
           else if (a.failed) score += ' (grading failed)';
           else if (a.review) score += ' (needs review)';
         }
-        return h('tr', { class: selected === (a && a.id) ? 'sel' : null },
-          h('td', { role: 'rowheader', class: 't-rowhead' }, a ? h('button', { class: 't-link', type: 'button', text: s.name, 'data-key': `${a.id}:name`, 'aria-expanded': String(selected === a.id), onclick: () => { selected = a.id; lastDetail = ''; showDetail(a.id); refresh(); } }) : s.name),
+        const open = () => { selected = a.id; lastDetail = ''; showDetail(a.id); refresh(); };
+        return h('tr', { class: selected === (a && a.id) ? 'sel' : null, onclick: a ? (e) => { if (!e.target.closest('a, button, input') && phone()) open(); } : null },
+          h('td', { role: 'rowheader', class: 't-rowhead' }, a ? h('button', { class: 't-link', type: 'button', text: s.name, 'data-key': `${a.id}:name`, 'aria-expanded': String(selected === a.id), onclick: open }) : s.name),
           statusCell(s), integrityCell(a),
-          h('td', { class: 'num', 'data-label': 'Strikes', text: a ? String(a.strikes) : '' }),
+          h('td', { class: 'num' + (a && !a.strikes ? ' t-zero' : ''), 'data-label': 'Strikes', text: a ? String(a.strikes) : '' }),
           h('td', Object.assign({ class: 'num' + (a && a.awayNow ? ' st-bad' : ''), 'data-label': 'Away', text: a && a.awayMs ? (a.awayNow ? 'Now, ' : '') + mmss(a.awayMs) : '' }, a && a.awayNow ? ticks('away', -a.awayMs) : {})),
           h('td', { class: 'num quiet', 'data-label': 'Warnings', text: a ? String(a.warnings) : '' }),
           h('td', { class: 'num', 'data-label': 'Answered', text: a && a.status !== 'waiting' ? `${a.answered}/${a.total}` : '' }),
@@ -806,20 +835,30 @@
         if (d.status === 'submitted') sec.append(gradeControls(id, x));
         return sec;
       }));
+      const closeDetail = () => {
+        selected = null;
+        detail.replaceChildren();
+        document.documentElement.classList.remove('t-sheet-open');
+        detail.removeAttribute('role');
+        detail.removeAttribute('aria-modal');
+        refresh().then(() => { const n = tbody.querySelector(`[data-key="${CSS.escape(id)}:name"]`); if (n) n.focus({ preventScroll: true }); });
+      };
+      detail.onkeydown = (e) => { if (e.key === 'Escape' && document.documentElement.classList.contains('t-sheet-open')) closeDetail(); };
       detail.replaceChildren(h('section', { class: 't-detail' },
-        h('div', { class: 't-row' },
-          h('h2', { style: 'flex:1', tabindex: '-1', class: 't-detail-name', text: d.name }),
+        h('div', { class: 't-row t-detail-head' },
+          h('h2', { style: 'flex:1', tabindex: '-1', class: 't-detail-name', id: 't-detail-name', text: d.name }),
+          h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Close', onclick: closeDetail }, dk('close')))),
+        h('div', { class: 't-row t-detail-acts' },
+          d.status === 'active' ? watchLink(id, d.name) : null,
           d.status === 'active' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }, dk('end'))) : null,
           d.integrity !== 'invalidated' ? h('button', Object.assign(dk('invalidate'), { class: 'btn small', type: 'button', text: 'Invalidate', onclick: () => { const note = prompt('Reason (optional)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } })) : null,
           d.status === 'active' && d.deadline ? h('span', Object.assign({ class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }, ticks('left-label', d.timeLeft || 0))) : null,
           d.status === 'active' && d.deadline ? h('button', Object.assign({ class: 'btn small', type: 'button', text: '+5 min', 'aria-label': 'Add 5 minutes', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } }, dk('extend'))) : null,
           d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
           d.status === 'submitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) }, dk('regrade'))) : null,
-          h('button', { class: 'btn small', type: 'button', text: 'Close', onclick: () => {
-            selected = null;
-            detail.replaceChildren();
-            refresh().then(() => { const n = tbody.querySelector(`[data-key="${CSS.escape(id)}:name"]`); if (n) n.focus({ preventScroll: true }); });
-          } })),
+          d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Restore', onclick: () => { if (confirm(`Restore ${d.name}?`)) act(`/api/t/attempts/${id}/restore`); } }, dk('restore'))) : null,
+          d.status === 'active' || d.status === 'admitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Let back in', title: 'Crashed computer or new seat: they sign in again and keep their answers and time', onclick: () => act(`/api/t/attempts/${id}/let-in`) }, dk('letin'))) : null,
+          h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Reset', title: 'Throw out this attempt and let them start over', onclick: () => { if (confirm(`Reset ${d.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) { closeDetail(); act(`/api/t/attempts/${id}/reset`); } } }, dk('reset')))),
         d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}` }) : null,
         d.strikes ? h('p', { class: 't-small t-away', text: `Left ${d.strikes === 1 ? 'once' : d.strikes + ' times'}. Away ${mmss(d.awayMs)} in all${d.strikes > 1 ? `, ${mmss(d.awayMax)} at the longest` : ''}.` }) : null,
         h('div', { class: 't-detail-grid' },
@@ -832,7 +871,14 @@
       drawTrail(canvas, d.mouse);
       window.BQReport.highlight(answers);
       if (keep) { const again = detail.querySelector(`[data-key="${CSS.escape(keep)}"]`); if (again) again.focus({ preventScroll: true }); }
-      if (!quiet) { detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); detail.querySelector('.t-detail-name').focus({ preventScroll: true }); }
+      if (!quiet) {
+        // A phone: the student's page covers the list, and closing it is back where they were.
+        const sheet = phone();
+        document.documentElement.classList.toggle('t-sheet-open', sheet);
+        if (sheet) { detail.setAttribute('role', 'dialog'); detail.setAttribute('aria-modal', 'true'); } else { detail.removeAttribute('role'); detail.removeAttribute('aria-modal'); }
+        if (!sheet) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        detail.querySelector('.t-detail-name').focus({ preventScroll: true });
+      }
     }
 
     // Rubric checkboxes and a points override for one answer.
@@ -867,11 +913,16 @@
         pointsRow);
     }
 
-    mount(shell(tab === 'results' ? 'results' : 'give',
+    extra.append(toggle, lockBtn, sebLinks, exportLink, classReport);
+    detail.className = 't-detail-host';
+    detail.setAttribute('aria-labelledby', 't-detail-name');
+    if (openRuns === null) { try { noteRuns((await api('/api/t/overview')).runs); } catch (e) { /* the tab can wait */ } }
+    const isCurrent = openRuns && openRuns[0] && openRuns[0].id === runId;
+    mount(shell(isCurrent ? 'current' : tab === 'results' ? 'results' : 'give',
         h('section', { class: 't-section' },
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
           howTo, quitPw,
-          h('div', { class: 't-row' }, admitAll, toggle, lockBtn, sebLinks, exportLink, classReport),
+          h('div', { class: 't-row t-run-acts' }, admitAll, moreBtn, extra),
           failedBox, summary),
         h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },
           h('thead', {}, h('tr', {}, heads(['Student', 'Status', 'Integrity', 'Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score'], ['Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score']), actionsHead())),
