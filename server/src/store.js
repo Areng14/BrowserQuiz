@@ -46,6 +46,10 @@ const CLIENT_EVENTS = {
   'mouse-left': 'warning', 'copy': 'warning', 'paste': 'warning', 'contextmenu': 'warning', 'blocked-key': 'warning',
   'print-screen': 'warning', 'resize': 'warning', 'bulk-insert': 'warning', 'inhuman-typing': 'warning',
   'return': 'info', 'exit': 'violation',
+  // Evidence only, never strikes: each has an honest explanation often enough (a spelling helper, a
+  // read-aloud toolbar), and the teacher is the one who can ask.
+  'extension': 'warning', 'spoofed-checks': 'warning', 'no-frames': 'warning', 'scripted-input': 'warning', 'viewport': 'warning',
+  'setup': 'info',
 };
 // Events only the server records.
 // A lost heartbeat is only a warning: school wifi drops, and actually leaving the window is caught by
@@ -70,8 +74,9 @@ function fromRow(r) {
     layout: r.layout ? JSON.parse(r.layout) : null, answers: r.answers ? JSON.parse(r.answers) : {},
     result: r.result ? JSON.parse(r.result) : null, ip: r.ip, userAgent: r.user_agent, edits: r.edits,
     archived: !!r.archived, createdAt: r.created_at,
+    awayMs: r.away_ms || 0, awayMax: r.away_max || 0, restoreStrikes: r.restore_strikes,
     // runtime only
-    away: false, burstStart: 0, beatLost: false, eventCount: null, warnWindow: new Map(), flagged: new Set(),
+    awaySince: 0, away: false, burstStart: 0, beatLost: false, eventCount: null, warnWindow: new Map(), flagged: new Set(),
   };
 }
 function getAttempt(id) {
@@ -91,10 +96,11 @@ function attemptByToken(token) {
 }
 function save(a) {
   q(`UPDATE attempts SET status = ?, integrity = ?, strikes = ?, warnings = ?, reason = ?, invalidated_at = ?, started_at = ?,
-     deadline = ?, submitted_at = ?, last_beat = ?, layout = ?, answers = ?, result = ?, edits = ?, archived = ? WHERE id = ?`).run(
+     deadline = ?, submitted_at = ?, last_beat = ?, layout = ?, answers = ?, result = ?, edits = ?, archived = ?,
+     away_ms = ?, away_max = ?, restore_strikes = ? WHERE id = ?`).run(
     a.status, a.integrity, a.strikes, a.warnings, a.reason, a.invalidatedAt, a.startedAt, a.deadline, a.submittedAt,
     a.lastBeat, a.layout ? JSON.stringify(a.layout) : null, JSON.stringify(a.answers || {}), a.result ? JSON.stringify(storedResult(a.result)) : null,
-    a.edits || 0, a.archived ? 1 : 0, a.id,
+    a.edits || 0, a.archived ? 1 : 0, a.awayMs || 0, a.awayMax || 0, a.restoreStrikes == null ? null : a.restoreStrikes, a.id,
   );
 }
 function forget(id) { attempts.delete(id); }
@@ -109,6 +115,20 @@ function logEvent(a, type, severity, detail) {
   a.eventCount++;
   return true;
 }
+
+// The student is back (they said so, or a heartbeat came in focused): add up how long they were gone.
+// A strike says that they left; this says for how long, which is what tells a stray popup from a search.
+function back(a, t) {
+  if (a.away && a.awaySince) {
+    const ms = Math.max(0, t - a.awaySince);
+    a.awayMs = (a.awayMs || 0) + ms;
+    a.awayMax = Math.max(a.awayMax || 0, ms);
+  }
+  a.away = false;
+  a.awaySince = 0;
+}
+// Time away so far, counting an absence that is still going on.
+const awayNow = (a, now) => (a.status === 'active' && a.away && a.awaySince ? Math.max(0, now - a.awaySince) : 0);
 
 // A strike is a move from "present" to "away". Everything that fires while already away (blur + hidden +
 // fullscreen-exit together, unfocused heartbeats) is logged but doesn't stack. The merge window is anchored
@@ -127,10 +147,11 @@ function record(a, type, detail, quiz, at) {
     a.warnWindow.set(type, n);
   }
   logEvent(a, type, severity, detail);
-  if (type === 'return') a.away = false;
+  if (type === 'return') back(a, t);
   if (severity === 'warning') a.warnings++;
   if (severity === 'violation' && a.status === 'active') {
     const merged = a.away || (a.burstStart && Math.abs(t - a.burstStart) < MERGE_MS);
+    if (!a.away) a.awaySince = t;
     a.away = true;
     if (!merged) {
       a.burstStart = t;
@@ -186,6 +207,6 @@ function makeLayout(quiz) {
 }
 
 module.exports = {
-  getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, logEvent, makeLayout, attempts,
+  getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, back, awayNow, logEvent, makeLayout, attempts,
   CLIENT_EVENTS, SERVER_EVENTS, quizCache,
 };

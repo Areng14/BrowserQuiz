@@ -112,10 +112,17 @@
     toast.timer = setTimeout(() => t.remove(), ms || 2600);
   }
 
+  let keysHeld = false;
   async function enterFullscreen() {
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
-      if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock(['Escape']).catch(() => {});
+      // Hold Escape (so it can't drop out of fullscreen by accident), and the keys that switch windows:
+      // Tab for Alt+Tab and Ctrl+Tab, and the Windows key, which sits where a stray finger opens the Start
+      // menu. The page gets them instead (monitor.js). Holding Escape for two seconds still exits.
+      keysHeld = false;
+      if (navigator.keyboard && navigator.keyboard.lock) {
+        navigator.keyboard.lock(['Escape', 'Tab', 'MetaLeft', 'MetaRight']).then(() => { keysHeld = true; }).catch(() => {});
+      }
       return true;
     } catch (e) {
       return false;
@@ -123,6 +130,7 @@
   }
   function exitFullscreen() {
     if (navigator.keyboard && navigator.keyboard.unlock) navigator.keyboard.unlock();
+    keysHeld = false;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
 
@@ -449,7 +457,12 @@
     // zooms the page in to read it still passes.
     const avail = window.screen && window.screen.availWidth;
     const desktop = window.matchMedia('(pointer: fine)').matches && (!avail || !window.outerWidth || window.outerWidth >= avail * 0.9);
+    // Extensions: one that fakes "this page is in front" has to go. Anything else that adds to the page
+    // is only pointed out, since some students need theirs (a screen reader toolbar, say).
+    const page = BQ.pageCheck();
     return [
+      { label: 'Browser extension', ok: !page.spoofed.length, note: page.spoofed.length ? 'An extension is changing this page. Turn your extensions off, then reload.' : null },
+      { label: 'Extensions', ok: !page.added.length, soft: true, note: page.added.length ? 'Turn off any you don\'t need. Your teacher sees which are on.' : null },
       { label: 'One display', ok: ext !== true, note: ext === true ? 'Unplug the second monitor, then reload this page.' : null },
       { label: 'Fullscreen works', ok: !!document.fullscreenEnabled, note: document.fullscreenEnabled ? null : 'Open this page in Edge or Chrome.' },
       { label: 'Desktop computer', ok: desktop, note: desktop ? null : window.matchMedia('(pointer: fine)').matches ? 'Maximize this window.' : 'Take the quiz on a lab computer with a mouse.' },
@@ -486,10 +499,10 @@
     // Re-check when the window changes size or a display is plugged in or out.
     function renderChecks() {
       const checks = prechecks();
-      blocked = !cfg.demo && !S.run.seb && checks.some((c) => !c.ok); // SEB locks the screen itself
+      blocked = !cfg.demo && !S.run.seb && checks.some((c) => !c.ok && !c.soft); // SEB locks the screen itself
       checkList.hidden = !checks.some((c) => !c.ok);
       checkList.replaceChildren(...checks.filter((c) => !c.ok).map((c) => h('li', {},
-        h('span', { class: 'check-mark ' + (c.ok ? 'ok' : 'bad'), text: c.ok ? 'OK' : 'Fix' }),
+        h('span', { class: 'check-mark ' + (c.ok ? 'ok' : c.soft ? 'soft' : 'bad'), text: c.ok ? 'OK' : c.soft ? 'Note' : 'Fix' }),
         c.label,
         c.note ? h('span', { class: 'check-note', text: c.note }) : null)));
       if (btn.textContent === 'Start quiz') btn.disabled = !agree.checked || blocked;
@@ -555,6 +568,7 @@
     S.monitor = new BQ.Monitor(api, {
       integrity: !practice,
       fullscreen: fsOk,
+      keysHeld: () => keysHeld && !!document.fullscreenElement,
       getAnswers: serializeAnswers,
       onFullscreenLost: showFsOverlay,
       onFullscreenBack: hideFsOverlay,

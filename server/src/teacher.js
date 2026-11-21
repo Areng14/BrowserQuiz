@@ -112,6 +112,8 @@ function liveRow(student, a, quiz) {
     name: student.name,
     attempt: {
       id: a.id, status: a.status, integrity: a.integrity, strikes: a.strikes, warnings: a.warnings,
+      awayMs: (a.awayMs || 0) + store.awayNow(a, Date.now()), awayNow: store.awayNow(a, Date.now()) || null,
+      leftAgain: a.integrity === 'restored' && a.restoreStrikes != null ? Math.max(0, a.strikes - a.restoreStrikes) : 0,
       reason: a.reason, invalidatedAt: a.invalidatedAt, lastBeatAgo: a.status === 'active' && a.lastBeat ? Date.now() - a.lastBeat : null,
       answered, total: quiz.questions.length, deadline: a.deadline,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
@@ -748,7 +750,7 @@ module.exports = function teacherRoutes(r) {
     const quiz = store.getQuiz(run.quiz_id);
     const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const iso = (t) => (t ? new Date(t).toISOString() : '');
-    const head = ['name', 'status', 'integrity', 'reason', 'strikes', 'warnings', 'raw_score', 'final_score', 'max',
+    const head = ['name', 'status', 'integrity', 'reason', 'strikes', 'warnings', 'away_seconds', 'raw_score', 'final_score', 'max',
       'grading_pending', 'grading_failed', 'needs_review', 'started_at', 'submitted_at', ...quiz.questions.map((qq, i) => `q${i + 1}_${qq.id}`)];
     const lines = [head.join(',')];
     for (const s of rosterStudentsForRun(run)) {
@@ -760,7 +762,7 @@ module.exports = function teacherRoutes(r) {
         const sc = questionScore(qq, a.result, a.answers);
         return sc.state === 'done' ? sc.points : sc.state;
       });
-      lines.push([s.name, a ? a.status : 'not started', a ? a.integrity : '', a ? a.reason : '', a ? a.strikes : '', a ? a.warnings : '',
+      lines.push([s.name, a ? a.status : 'not started', a ? a.integrity : '', a ? a.reason : '', a ? a.strikes : '', a ? a.warnings : '', a ? Math.round((a.awayMs || 0) / 1000) : '',
         t ? t.score : '', t ? (a.integrity === 'invalidated' ? 0 : t.score) : '', t ? t.max : '', t ? t.pending : '', t ? t.failed : '', t ? t.review : '',
         a ? iso(a.startedAt) : '', a ? iso(a.submittedAt) : '', ...perQ].map(esc).join(','));
     }
@@ -780,7 +782,8 @@ module.exports = function teacherRoutes(r) {
     for (const m of q('SELECT points FROM mouse WHERE attempt_id = ? ORDER BY rowid DESC LIMIT 60').all(a.id).reverse()) mouse.push(...JSON.parse(m.points));
     json(res, 200, {
       id: a.id, name: student ? student.name : '?', status: a.status, integrity: a.integrity, reason: a.reason,
-      invalidatedAt: a.invalidatedAt, strikes: a.strikes, warnings: a.warnings, startedAt: a.startedAt, submittedAt: a.submittedAt,
+      invalidatedAt: a.invalidatedAt, strikes: a.strikes, warnings: a.warnings,
+      awayMs: (a.awayMs || 0) + store.awayNow(a, Date.now()), awayMax: Math.max(a.awayMax || 0, store.awayNow(a, Date.now())), startedAt: a.startedAt, submittedAt: a.submittedAt,
       deadline: a.deadline, timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
       totals: totals(a.result, quiz, a.answers), answers: answerReport(quiz, a), events,
       quiz: reportQuiz(quiz, run.quiz_id), report: studentReport(quiz, a, student ? student.name : ''), mouse: mouse.slice(-3000), ip: a.ip, userAgent: a.userAgent,
@@ -823,7 +826,7 @@ module.exports = function teacherRoutes(r) {
     if (p.action === 'admit') {
       if (a.status === 'waiting') { a.status = 'admitted'; store.logEvent(a, 'admit', 'info', null); store.save(a); }
     } else if (p.action === 'restore') {
-      if (a.integrity === 'invalidated') { a.integrity = 'restored'; store.logEvent(a, 'restore', 'info', note || null); store.save(a); }
+      if (a.integrity === 'invalidated') { a.integrity = 'restored'; a.restoreStrikes = a.strikes; store.logEvent(a, 'restore', 'info', note || null); store.save(a); }
     } else if (p.action === 'invalidate') {
       if (a.integrity !== 'invalidated') { a.integrity = 'invalidated'; a.reason = 'teacher'; a.invalidatedAt = Date.now(); store.logEvent(a, 'invalidate', 'info', note || null); store.save(a); }
     } else if (p.action === 'end') {

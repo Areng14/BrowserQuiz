@@ -13,6 +13,8 @@
     resume: 'Continued on a new computer', 'let-in': 'Let back in by teacher', extend: 'Extra time', grade: 'Graded by teacher',
     'extended-display': 'Second display', 'bulk-insert': 'Large insert in editor', 'inhuman-typing': 'Typing faster than a person',
     'late-submit': 'Submitted late', exit: 'Exited the quiz', 'other-network': 'Request from another network', 'other-device': 'Request from another browser',
+    extension: 'Extension on the page', 'spoofed-checks': 'Extension hides leaving the window', 'no-frames': 'Quiz not on screen, no leave reported',
+    'scripted-input': 'Typed by a script', viewport: 'Side panel or DevTools open', setup: 'Computer',
   };
   let pollTimer = 0;
   let selected = null;
@@ -621,7 +623,8 @@
   function integrityCell(a) {
     if (!a) return h('td');
     if (a.integrity === 'invalidated') return h('td', { class: 'st-bad', text: `Invalidated (${LABEL[a.reason] || a.reason})` });
-    if (a.integrity === 'restored') return h('td', { class: 'st-waiting', text: 'Restored' });
+    // Restoring doesn't re-arm the strikes, so say when a restored student has left again.
+    if (a.integrity === 'restored') return h('td', { class: a.leftAgain ? 'st-bad' : 'st-waiting', text: a.leftAgain ? `Restored, left ${a.leftAgain} more` : 'Restored' });
     return h('td', { class: 'st-good', text: 'Clean' });
   }
 
@@ -690,7 +693,7 @@
       const failed = data.students.filter((x) => x.attempt && x.attempt.failed).length;
       failedBox.replaceChildren(failed ? h('p', { class: 't-error' }, `Code grading failed for ${plural(failed, 'student')}. `,
         h('button', { class: 'btn small', type: 'button', text: 'Retry now', onclick: () => act(`/api/t/runs/${runId}/regrade-failed`) })) : '');
-      const order = (s) => (s.attempt ? (s.attempt.integrity === 'invalidated' ? 0 : s.attempt.status === 'waiting' ? 1 : 2) : 3);
+      const order = (s) => (s.attempt ? (s.attempt.integrity === 'invalidated' || s.attempt.leftAgain ? 0 : s.attempt.status === 'waiting' ? 1 : 2) : 3);
       const rows = data.students.slice().sort((x, y) => order(x) - order(y) || x.name.localeCompare(y.name));
       const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
       tbody.replaceChildren(...rows.map((s) => {
@@ -719,7 +722,9 @@
         return h('tr', { class: selected === (a && a.id) ? 'sel' : null },
           h('td', { role: 'rowheader', class: 't-rowhead' }, a ? h('button', { class: 't-link', type: 'button', text: s.name, 'data-key': `${a.id}:name`, 'aria-expanded': String(selected === a.id), onclick: () => { selected = a.id; lastDetail = ''; showDetail(a.id); refresh(); } }) : s.name),
           statusCell(s), integrityCell(a),
-          h('td', { class: 'num', text: a ? String(a.strikes) : '' }), h('td', { class: 'num', text: a ? String(a.warnings) : '' }),
+          h('td', { class: 'num', text: a ? String(a.strikes) : '' }),
+          h('td', { class: 'num' + (a && a.awayNow ? ' st-bad' : ''), text: a && a.awayMs ? (a.awayNow ? 'Now, ' : '') + mmss(a.awayMs) : '' }),
+          h('td', { class: 'num', text: a ? String(a.warnings) : '' }),
           h('td', { class: 'num', text: a && a.status !== 'waiting' ? `${a.answered}/${a.total}` : '' }),
           h('td', { class: 'num' + (beat != null && beat > 6 ? ' t-late' : ''), text: beat != null ? `${beat}s ago` : '' }),
           h('td', { class: 'num', text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }),
@@ -743,7 +748,7 @@
       try { d = await api(`/api/t/attempts/${id}`); } catch (e) { return; }
       if (selected !== id) return;
       // The poll re-renders every 2s: don't wipe what the teacher is typing, selecting or reading.
-      const snapshot = JSON.stringify(Object.assign({}, d, { timeLeft: null }));
+      const snapshot = JSON.stringify(Object.assign({}, d, { timeLeft: null, awayMs: null, awayMax: null })); // clocks that tick: not a reason to redraw
       const typing = detail.contains(document.activeElement) && document.activeElement.matches('input, textarea, select');
       if (quiet && (snapshot === lastDetail || typing || String(window.getSelection() || '') !== '')) return;
       lastDetail = snapshot;
@@ -783,6 +788,7 @@
             refresh().then(() => { const n = tbody.querySelector(`[data-key="${CSS.escape(id)}:name"]`); if (n) n.focus({ preventScroll: true }); });
           } })),
         d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}` }) : null,
+        d.strikes ? h('p', { class: 't-small t-away', text: `Left ${d.strikes === 1 ? 'once' : d.strikes + ' times'}. Away ${mmss(d.awayMs)} in all${d.strikes > 1 ? `, ${mmss(d.awayMax)} at the longest` : ''}.` }) : null,
         h('div', { class: 't-detail-grid' },
           h('div', { class: 't-section' }, h('h3', { text: 'Activity' }),
             h('ul', { class: 't-events' }, d.events.map((e) => h('li', { class: e.severity }, h('time', { text: clock(e.t) }), h('span', {}, h('b', { text: LABEL[e.type] || e.type }), e.detail ? h('span', { class: 't-muted', text: ` ${e.detail}` }) : null))))),
@@ -835,7 +841,7 @@
           h('div', { class: 't-row' }, admitAll, toggle, lockBtn, sebLinks, exportLink, classReport),
           failedBox, summary),
         h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
-          h('thead', {}, h('tr', {}, ['Student', 'Status', 'Integrity', 'Strikes', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score'].map((x) => h('th', { text: x })), actionsHead())),
+          h('thead', {}, h('tr', {}, ['Student', 'Status', 'Integrity', 'Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score'].map((x) => h('th', { text: x })), actionsHead())),
           tbody)),
         detail));
     await refresh();

@@ -124,7 +124,9 @@ domain with HTTPS:
 
 Caddy gets the certificate on its own. Why bother: over plain HTTP, the teacher
 password and student IDs cross the network unencrypted. Also, school filters often
-block bare IPs, and some browser features only work on HTTPS pages.
+block bare IPs. And exam mode is stronger on HTTPS: browsers only let an HTTPS page check
+for a second display, hold Alt+Tab and the Windows key during the quiz, and keep the screen
+from locking.
 
 Where to host:
 

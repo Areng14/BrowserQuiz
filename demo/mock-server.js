@@ -82,6 +82,7 @@
     'mouse-left': 'warning', 'copy': 'warning', 'paste': 'warning', 'contextmenu': 'warning', 'blocked-key': 'warning',
     'print-screen': 'warning', 'resize': 'warning', 'bulk-insert': 'warning', 'inhuman-typing': 'warning',
     'return': 'info', 'exit': 'violation',
+    'extension': 'warning', 'spoofed-checks': 'warning', 'no-frames': 'warning', 'scripted-input': 'warning', 'viewport': 'warning', 'setup': 'info',
   };
   const SERVER_ONLY = new Set(['start', 'submit', 'admit', 'run', 'restore', 'join', 'reload']);
   const VIOLATION_MERGE_MS = 2000;
