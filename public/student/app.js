@@ -252,7 +252,7 @@
     const showSeb = (c) => {
       const href = `${location.protocol === 'https:' ? 'sebs' : 'seb'}://${location.host}/api/seb/${c}.seb`;
       seb.replaceChildren(h('a', { class: 'btn primary', href, text: 'Open Safe Exam Browser' }),
-        h('p', { class: 'hint', text: "Nothing happens? Safe Exam Browser isn't installed on this computer." }));
+        h('p', { class: 'hint' }, 'Nothing happens? ', h('a', { href: 'https://safeexambrowser.org/download_en.html', target: '_blank', rel: 'noopener', text: 'Get Safe Exam Browser' })));
       seb.hidden = false;
     };
     const form = h('form', { class: 'panel', novalidate: true },
@@ -371,12 +371,18 @@
     name.focus();
   }
 
+  // Who's signed in, so a student who picked the wrong name sees it.
+  function whoCard() {
+    const icon = svgEl('svg', { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    icon.append(svgEl('circle', { cx: 12, cy: 8, r: 4 }), svgEl('path', { d: 'M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1' }));
+    return h('div', { class: 'who-card' }, icon, h('div', {}, h('span', { class: 'who-label', text: 'Signed in as' }), h('b', { class: 'who-name', text: S.me.name })));
+  }
+
   function screenWait() {
     mount(entry(h('div', { class: 'panel', role: 'status' },
       h('p', { class: 'eyebrow', text: S.run.title }),
-      h('div', { class: 'heading' },
-        h('h1', { text: 'Waiting for your teacher' }),
-        h('p', { text: `Signed in as ${S.me.name}.` })),
+      h('h1', { text: 'Waiting for your teacher' }),
+      whoCard(),
       demoHint('Demo: click ', h('b', { text: 'Admit' }), ' in the teacher view.'))));
     clearInterval(S.poll);
     const check = async () => {
@@ -636,11 +642,12 @@
       if (S.idx === S.quiz.questions.length - 1) return openSubmit();
       go(S.idx + 1);
     });
-    const scratchBtn = h('button', { class: 'btn small ghost', type: 'button', text: 'Scratchpad', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() });
+    const scratchBtn = h('button', { class: 'btn small ghost scratch-btn', type: 'button', text: 'Scratchpad', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() });
     const scratch = h('aside', { class: 'scratch', id: 'scratch', 'aria-label': 'Scratchpad' });
     scratch.hidden = true;
     const wrap = h('div', { class: 'quiz' },
-      h('header', { class: 'qbar' }, h('span', { class: 'qbar-name', text: S.quiz.title }), save, timer, scratchBtn, themeButton(),
+      h('header', { class: 'qbar' }, h('span', { class: 'qbar-name' }, h('span', { class: 'qbar-title', text: S.quiz.title }),
+        S.me && S.me.name && !cfg.preview ? h('span', { class: 'qbar-who', title: 'Signed in as', text: S.me.name }) : null), save, timer, scratchBtn, themeButton(),
         cfg.preview ? null : h('button', { class: 'btn small ghost', type: 'button', text: 'Exit', onclick: () => openExit() })),
       conn,
       main,
