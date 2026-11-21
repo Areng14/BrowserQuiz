@@ -777,7 +777,24 @@ module.exports = function teacherRoutes(r) {
       for (const a of touched) store.save(a);
       audit(me, 'ai-paste', run.id, `${applied} answers`);
     }
-    json(res, 200, { rows, found: grades.size, waiting: work.length, skipped: skipped.slice(0, 20), applied });
+    // Before applying: what each grade would be, by student and question (names are for the teacher only).
+    let preview;
+    if (body.apply !== true) {
+      const names = new Map();
+      const nameOf = (a) => {
+        if (!names.has(a.studentId)) { const st = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId); names.set(a.studentId, st ? st.name : '?'); }
+        return names.get(a.studentId);
+      };
+      preview = [...grades].slice(0, 300).map(([id, g]) => {
+        const { a, qq, job } = answers.get(id);
+        const n = quiz.questions.indexOf(qq) + 1;
+        if (!job.items.length) return { name: nameOf(a), n, qname: qq.name || '', got: g.points, of: qq.points, items: [] };
+        const of = job.items.reduce((t, r) => t + r.points, 0);
+        const got = job.items.reduce((t, r) => t + (g.items[r.id].met ? r.points : 0), 0);
+        return { name: nameOf(a), n, qname: qq.name || '', got, of, items: job.items.map((r) => ({ text: r.text, met: g.items[r.id].met })) };
+      }).sort((x, y) => x.name.localeCompare(y.name) || x.n - y.n);
+    }
+    json(res, 200, { rows, found: grades.size, waiting: work.length, skipped: skipped.slice(0, 20), applied, preview });
   });
 
   r.post('/api/t/runs/:id/ai-grade', (req, res, p) => {

@@ -661,62 +661,93 @@
   }
   const phone = () => matchMedia('(max-width: 820px)').matches;
 
-  // Grade with AI (server: aicsv.js, aigrade.js). Copy a prompt into any AI chat, paste its CSV back.
-  // With an Anthropic key on the server, Claude can also do it right here. attemptId: one student only.
+  // Grade with AI (server: aicsv.js, aigrade.js), in three steps: copy a prompt, paste it into any AI chat,
+  // paste the reply back. Before anything applies, a table shows each student's grade. With an
+  // Anthropic key on the server, Claude can also grade right here. attemptId: one student only.
+  const CHATS = [['ChatGPT', 'https://chatgpt.com/'], ['Claude', 'https://claude.ai/new'], ['Gemini', 'https://gemini.google.com/app']];
   async function aiDialog(runId, attemptId, apiOn, done) {
     const qs = attemptId ? `?attempt=${encodeURIComponent(attemptId)}` : '';
     let p;
     try { p = await api(`/api/t/runs/${runId}/ai-prompt${qs}`); } catch (e) { alert(e.message); return; }
     if (!p.answers) { alert('Nothing is waiting for you to grade.'); return; }
-    const dlg = h('dialog', { class: 't-dialog', 'aria-labelledby': 't-ai-title' });
-    const close = () => { dlg.close(); dlg.remove(); };
-    const promptBox = h('textarea', { class: 'input qe-mono t-ai-prompt', readonly: true, rows: 3, 'aria-label': 'The prompt' });
-    promptBox.value = p.prompt;
-    const copied = h('span', { class: 't-small t-muted', role: 'status' });
-    const copyBtn = h('button', { class: 'btn primary', type: 'button', text: 'Copy prompt', onclick: async () => {
-      try { await navigator.clipboard.writeText(p.prompt); } catch (e) { promptBox.focus(); promptBox.select(); document.execCommand('copy'); }
-      copied.textContent = 'Copied';
-    } });
-    const csvBox = h('textarea', { class: 'input qe-mono', rows: 6, placeholder: 'answer,item,met,points,reason', 'aria-label': 'The CSV from the AI', spellcheck: 'false' });
-    const status = h('p', { class: 't-small', role: 'status' });
-    const skipped = h('ul', { class: 't-small t-muted t-ai-skipped' });
+    const dlg = h('dialog', { class: 't-dialog t-ai-dialog', 'aria-labelledby': 't-ai-title' });
+    const close = () => { dlg.close(); };
+    // a step: its number (a check once done), a title, and what's in it
+    const step = (n, title, ...body) => {
+      const num = h('span', { class: 't-step-n', 'aria-hidden': 'true', text: String(n) });
+      const li = h('li', { class: 't-step' }, num, h('div', { class: 't-step-body' }, h('h3', { text: title }), ...body));
+      li.done = (on) => { li.classList.toggle('done', on); num.replaceChildren(on ? icon(['M20 6L9 17l-5-5'], 14) : String(n)); };
+      return li;
+    };
+
+    const copyBtn = h('button', { class: 'btn primary', type: 'button', text: 'Copy prompt' });
+    const promptView = h('details', { class: 't-ai-see' }, h('summary', { text: 'See it' }), h('pre', { class: 't-ai-prompt', text: p.prompt }));
+    const s1 = step(1, 'Copy the prompt', h('p', { class: 't-step-text', text: 'The questions, rubrics and answers. No names: each answer goes by a short code.' }), h('div', { class: 't-row t-step-row' }, copyBtn, promptView));
+    copyBtn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(p.prompt); } catch (e) {
+        const ta = h('textarea', { class: 'sr-only' }); ta.value = p.prompt; dlg.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
+      }
+      copyBtn.textContent = 'Copied';
+      s1.done(true);
+    });
+
+    const s2 = step(2, 'Paste it into an AI chat', h('p', { class: 't-step-text', text: 'Any one works. Paste, send, and wait for its table.' }),
+      h('div', { class: 't-ai-chats' }, CHATS.map(([name, url]) => h('a', { class: 't-chip', href: url, target: '_blank', rel: 'noopener noreferrer', text: name, onclick: () => s2.done(true) }))));
+
+    const replyBox = h('textarea', { class: 'input t-ai-reply', rows: 4, placeholder: "Paste the AI's whole reply. The grades are found in it.", 'aria-label': "The AI's reply", spellcheck: 'false' });
+    const preview = h('div', { class: 't-ai-preview', 'aria-live': 'polite' });
+    const s3 = step(3, 'Paste its reply here', replyBox, preview);
+
+    const status = h('span', { class: 't-small t-muted t-ai-count' });
     const applyBtn = h('button', { class: 'btn primary', type: 'button', text: 'Apply grades', disabled: true });
     let timer = 0;
     let seq = 0;
     const check = async () => {
       const n = ++seq;
-      if (!csvBox.value.trim()) { status.textContent = ''; skipped.replaceChildren(); applyBtn.disabled = true; return; }
+      const text = replyBox.value;
+      if (!text.trim()) { preview.replaceChildren(); applyBtn.disabled = true; applyBtn.textContent = 'Apply grades'; status.textContent = ''; s3.done(false); return; }
       let r;
-      try { r = await post(`/api/t/runs/${runId}/ai-csv`, { csv: csvBox.value, attempt: attemptId || undefined }); } catch (e) { status.textContent = e.message; return; }
+      try { r = await post(`/api/t/runs/${runId}/ai-csv`, { csv: text, attempt: attemptId || undefined }); } catch (e) { preview.replaceChildren(h('p', { class: 't-error t-small', text: e.message })); return; }
       if (n !== seq) return;
-      status.className = r.found ? 't-small' : 't-small t-error';
-      status.textContent = r.found ? `Grades for ${plural(r.found, 'answer')} of ${r.waiting}.` : (r.skipped[0] || 'No grades found in that.');
-      skipped.replaceChildren(...(r.found ? r.skipped : r.skipped.slice(1)).map((x) => h('li', { text: x })));
+      const rows = (r.preview || []).map((x) => h('tr', {},
+        h('td', { text: x.name }),
+        h('td', {}, `Q${x.n}`, x.qname ? h('span', { class: 't-muted', text: ` ${x.qname}` }) : null,
+          x.items.length ? h('span', { class: 't-ai-items' }, x.items.map((it) => h('span', { class: it.met ? 'met' : 'unmet', title: it.met ? 'Met' : 'Not met' }, it.met ? '✓ ' : '✗ ', it.text))) : null),
+        h('td', { class: 'num' }, h('b', { text: `${x.got}/${x.of}` }))));
+      const problems = r.found ? r.skipped : r.skipped;
+      preview.replaceChildren(
+        rows.length ? h('div', { class: 't-ai-table' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Student' }), h('th', { text: 'Question' }), h('th', { class: 'num', text: "AI's grade" }))), h('tbody', {}, rows))) : null,
+        problems.length ? h('div', { class: 't-ai-warn', role: 'note' }, h('b', { text: r.found ? 'Left for you' : "Couldn't read that" }),
+          h('ul', {}, problems.map((x) => h('li', { text: x })))) : null);
       applyBtn.disabled = !r.found;
+      applyBtn.textContent = r.found ? `Apply ${plural(r.found, 'grade')}` : 'Apply grades';
+      status.textContent = r.found ? `${r.found} of ${r.waiting} answers` : '';
+      s3.done(!!r.found);
     };
-    csvBox.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(check, 300); });
+    replyBox.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(check, 250); });
     applyBtn.addEventListener('click', async () => {
       applyBtn.disabled = true;
       try {
-        const r = await post(`/api/t/runs/${runId}/ai-csv`, { csv: csvBox.value, attempt: attemptId || undefined, apply: true });
+        const r = await post(`/api/t/runs/${runId}/ai-csv`, { csv: replyBox.value, attempt: attemptId || undefined, apply: true });
         close();
         done(`AI grades applied to ${plural(r.applied, 'answer')}. They're labeled on each student, and you can change any.`);
       } catch (e) { status.textContent = e.message; applyBtn.disabled = false; }
     });
+
     const here = apiOn ? h('div', { class: 't-ai-here' },
-      h('p', { class: 't-small t-muted', text: 'Or let Claude grade them here, with the key this server has.' }),
-      h('button', { class: 'btn', type: 'button', text: 'Grade here', onclick: async () => {
+      h('span', { class: 't-small t-muted', text: 'This server has an Anthropic key, so Claude can grade them here instead.' }),
+      h('button', { class: 'btn small', type: 'button', text: 'Grade here', onclick: async () => {
         try { await post(attemptId ? `/api/t/attempts/${attemptId}/ai-grade` : `/api/t/runs/${runId}/ai-grade`); close(); done(''); } catch (e) { status.textContent = e.message; }
       } })) : null;
+    const x = h('button', { class: 'btn small ghost t-dialog-x', type: 'button', 'aria-label': 'Close', onclick: close }, icon(ICONS.x, 18));
     dlg.append(
-      h('h2', { id: 't-ai-title', text: 'Grade with AI' }),
-      h('ol', { class: 't-ai-steps' },
-        h('li', {}, h('p', { text: `Copy the prompt: ${plural(p.answers, 'answer')}${attemptId ? '' : ` from ${plural(p.students, 'student')}`}, with no names.` }),
-          h('div', { class: 't-row' }, copyBtn, copied), promptBox),
-        h('li', {}, h('p', { text: 'Paste it into an AI chat (ChatGPT, Claude, Gemini…). It answers with a CSV.' })),
-        h('li', {}, h('p', { text: 'Paste the CSV here.' }), csvBox, status, skipped)),
+      h('header', { class: 't-dialog-head' },
+        h('div', {}, h('h2', { id: 't-ai-title', text: 'Grade with AI' }),
+          h('p', { class: 't-muted t-small', text: attemptId ? `${plural(p.answers, 'answer')} waiting for you.` : `${plural(p.answers, 'answer')} from ${plural(p.students, 'student')} waiting for you.` })),
+        x),
+      h('ol', { class: 't-steps' }, s1, s2, s3),
       ...(here ? [here] : []),
-      h('div', { class: 't-row t-dialog-acts' }, applyBtn, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: close })));
+      h('footer', { class: 't-dialog-foot' }, status, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: close }), applyBtn));
     dlg.addEventListener('close', () => dlg.remove());
     root.append(dlg); // inside the dashboard, for its fonts and sizing
     dlg.showModal();
