@@ -527,8 +527,8 @@
   // The teacher's own directions for the whole quiz, if they wrote any.
   function quizDirections(text, heading) {
     if (!text) return null;
-    return h('section', { class: 'quiz-directions', 'aria-label': heading },
-      h('h2', { text: heading }), h('div', { class: 'prompt' }, BQ.md.render(text, {})));
+    return h('div', { class: 'directions quiz-directions' },
+      h('strong', { text: heading }), h('div', { class: 'prompt' }, BQ.md.render(text, { lang: S.quiz && S.quiz.language })));
   }
 
   function screenPractice(err) {
@@ -542,8 +542,6 @@
         h('h1', { text: 'Practice' }),
         h('p', { text: summaryLine(S.run) }),
         h('p', { text: 'You see the answers when you finish.' })),
-      overview(S.run),
-      quizDirections(S.run.quizDirections, 'Directions'),
       btn, msg)));
     btn.focus();
   }
@@ -579,8 +577,6 @@
       h('div', { class: 'heading' },
         h('h1', { text: 'Before you start' }),
         h('p', { text: summaryLine(S.run) })),
-      overview(S.run),
-      quizDirections(S.run.quizDirections, 'Directions'),
       h('div', { class: 'cheat-rule', role: 'note' },
         h('p', { class: 'cheat-title', text: 'Leaving the quiz counts as cheating.' }),
         h('p', { text: 'That means switching to another window, tab or app, leaving fullscreen, reloading or closing this page, or using Exit when your teacher didn\'t say to. Your teacher sees each time it happens.' })),
@@ -773,6 +769,7 @@
     S.parts = buildParts(S.quiz.questions);
     S.idx = 0;
     S.dirOpen = true;
+    S.introOpen = true; // the first page also shows what's on the quiz and its directions
     const timer = h('span', { class: 'timer', role: 'timer', 'aria-label': 'Time left' });
     const save = h('span', { class: 'save-state' }); // not a live region: it flips with every keystroke
     const live = h('div', { class: 'sr-only', 'aria-live': 'polite', 'aria-atomic': 'true' });
@@ -847,6 +844,7 @@
   function closeDirections() {
     S.partsSeen.add(partOf(S.idx).n);
     S.dirOpen = false;
+    S.introOpen = false;
     renderQuestion();
     S.el.main.focus({ preventScroll: true });
   }
@@ -1131,13 +1129,25 @@
   function directionsView(part) {
     const seen = S.partsSeen.has(part.n);
     const range = part.start === part.end ? `Question ${part.start + 1}` : `Questions ${part.start + 1}–${part.end + 1}`;
-    return h('div', { class: 'qview' },
+    // Right after Start: the quiz's own directions and what's on it, above the first part's.
+    const intro = S.introOpen && part.n === 1;
+    const qs = S.quiz.questions;
+    const run = { questionCount: qs.length, timeLimitMin: S.quiz.timeLimitMin, sections: S.quiz.sections,
+      outline: qs.map((q, i) => ({ type: q.type, points: q.points, name: q.name, n: i + 1 })) }; // the student's own order, so numbers are right
+    return h('div', { class: 'qview' + (intro ? ' intro' : '') },
+      intro ? [
+        h('div', { class: 'meta-row' }, h('span', { text: 'Before you begin' }), h('span', { text: summaryLine(run) })),
+        h('h1', { id: 'q-heading', text: S.quiz.title }),
+        quizDirections(S.quiz.directions && S.quiz.directions.quiz, 'Directions'),
+        h('section', { class: 'intro-ov', 'aria-labelledby': 'ov-head' }, h('h2', { id: 'ov-head', text: "What's on the quiz" }), overview(run)),
+        h('hr', { class: 'intro-rule' }),
+      ] : null,
       h('div', { class: 'meta-row' }, h('span', { text: `Part ${part.n} of ${S.parts.length}` }), h('span', { text: range })),
-      h('h1', { id: 'q-heading', text: part.title }),
+      h(intro ? 'h2' : 'h1', { id: intro ? 'part-heading' : 'q-heading', class: 'part-title', text: part.title }),
       part.md ? h('div', { class: 'directions prompt' }, BQ.md.render(part.md, { lang: S.quiz.language }))
         : part.list ? h('div', { class: 'directions' }, h('strong', { text: 'Directions' }), h('ul', {}, part.list.map(([t, text]) => h('li', {}, h('b', { text: `${t}: ` }), text))))
           : h('p', { class: 'directions' }, h('strong', { text: 'Directions: ' }), part.text),
-      quizDirections(S.quiz.directions && S.quiz.directions.quiz, 'For the whole quiz'),
+      intro ? null : quizDirections(S.quiz.directions && S.quiz.directions.quiz, 'For the whole quiz'),
       h('div', {}, h('button', { class: 'btn primary', type: 'button', text: seen ? 'Back to the question' : 'Start this part', onclick: closeDirections })));
   }
 
