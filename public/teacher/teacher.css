@@ -1,7 +1,7 @@
 /* Teacher dashboard. Uses the student app's tokens (app.css) so both stay plain and match. */
 html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); }
 [hidden] { display: none !important; }
-.t-app { font: 15px/1.5 var(--font); min-height: 100vh; }
+.t-app { font: 15px/1.5 var(--font); min-height: calc(100vh / var(--zoom, 1)); } /* zoom (big screens) scales vh too */
 .t-app *, .t-app *::before, .t-app *::after { box-sizing: border-box; }
 .t-app h1, .t-app h2, .t-app h3, .t-app p { margin: 0; }
 .t-app h1 { font-size: 22px; line-height: 1.25; }
@@ -14,10 +14,10 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-bar .grow { flex: 1; min-width: 0; font-weight: 600; }
 .t-main { max-width: clamp(1200px, 85vw, 1800px); margin: 0 auto; padding: 24px var(--gut-r) 64px var(--gut-l); display: grid; gap: 28px; }
 /* The frame: tabs down the left, the page on the right. */
-.t-shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: 100vh; }
+.t-shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: calc(100vh / var(--zoom, 1)); }
 .t-shell > .t-main { width: 100%; max-width: 1480px; margin: 0 auto; padding: 28px max(36px, env(safe-area-inset-right, 0px)) 64px 36px; align-content: start; }
 .t-shell > .t-main > * { min-width: 0; }
-.t-side { position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px 14px max(12px, env(safe-area-inset-left, 0px)); background: var(--soft); border-right: 1px solid var(--line); }
+.t-side { position: sticky; top: 0; height: calc(100vh / var(--zoom, 1)); overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px 14px max(12px, env(safe-area-inset-left, 0px)); background: var(--soft); border-right: 1px solid var(--line); }
 .t-brand { padding: 0 10px 14px; font-size: 21px; line-height: 27.5px; font-weight: 800; letter-spacing: -0.015em; }
 .t-nav { display: grid; gap: 2px; }
 .t-nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; font-weight: 500; color: var(--ink-2); text-decoration: none; border-radius: 6px; }
@@ -180,7 +180,7 @@ input[type="file"].input { padding: 6px 10px; }
 @media (max-width: 820px) { .t-detail > .t-row:first-child { top: calc(57px + env(safe-area-inset-top, 0px)); } }
 
 /* A dialog (Grade with AI): a header with a close button, the content, and a footer of actions */
-.t-dialog { width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); overflow: hidden; }
+.t-dialog { width: min(680px, calc(100vw / var(--zoom, 1) - 32px)); max-height: calc(100dvh / var(--zoom, 1) - 48px); padding: 0; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); overflow: hidden; }
 .t-dialog[open] { display: flex; flex-direction: column; }
 .t-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
 .t-dialog-head { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
@@ -355,7 +355,7 @@ input[type="file"].input { padding: 6px 10px; }
 .qe-status { color: var(--ink-2); white-space: nowrap; }
 .qe-status.t-error { color: var(--bad); }
 .qe-body { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 28px; align-items: start; }
-.qe-side { position: sticky; top: 60px; max-height: calc(100vh - 60px); overflow: hidden auto; padding: 16px 0 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; }
+.qe-side { position: sticky; top: 60px; max-height: calc(100vh / var(--zoom, 1) - 60px); overflow: hidden auto; padding: 16px 0 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; }
 .qe-pane { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 20px 0 0; min-width: 0; scroll-margin-top: 64px; }
 
 .qe-outline { list-style: none; margin: 0; padding: 0; }
