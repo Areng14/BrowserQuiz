@@ -506,15 +506,11 @@
       g.points += q.points;
     }
     if (!groups.length) return null;
-    // Without any names there's nothing to open, so no room is kept for the arrows.
-    return h('div', { class: 'overview' + (groups.some((g) => g.qs.some((q) => q.name)) ? '' : ' flat') }, groups.map((g) => {
-      const line = h('span', {}, h('b', { text: `${(PARTS[g.type] || { title: 'Questions' }).title}: ` }), `${plural(g.qs.length, 'question')} (${plural(round2(g.points), 'point')})`);
-      if (!g.qs.some((q) => q.name)) return h('p', { class: 'ov-group' }, line);
-      return h('details', { class: 'ov-group' }, h('summary', {}, line),
-        h('ul', { class: 'ov-list' }, g.qs.map((q) => h('li', {},
-          q.n ? `Question ${q.n}${q.name ? `: ${q.name}` : ''}` : q.name || 'Unnamed question',
-          h('span', { class: 'ov-pts', text: ` (${plural(q.points, 'point')})` })))));
-    }));
+    return h('div', { class: 'overview' }, groups.map((g) => h('details', { class: 'ov-group' },
+      h('summary', {}, h('span', {}, h('b', { text: `${(PARTS[g.type] || { title: 'Questions' }).title}: ` }), `${plural(g.qs.length, 'question')} (${plural(round2(g.points), 'point')})`)),
+      h('ul', { class: 'ov-list' }, g.qs.map((q) => h('li', {},
+        q.n ? `Question ${q.n}${q.name ? `: ${q.name}` : ''}` : q.name || 'Unnamed question',
+        h('span', { class: 'ov-pts', text: ` (${plural(q.points, 'point')})` })))))));
   }
 
   function screenPractice(err) {
