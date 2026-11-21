@@ -223,6 +223,9 @@ input[type="file"].input { padding: 6px 10px; }
 .t-ai-items .unmet { color: var(--ink-2); }
 .t-ai-warn { padding: 10px 12px; font-size: 13px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: color-mix(in srgb, var(--warn) 9%, transparent); border-radius: 8px; }
 .t-ai-warn ul { margin: 4px 0 0; padding-left: 18px; color: var(--ink-2); }
+/* Before you admit: the checklist */
+.t-admit { width: min(480px, calc(100vw / var(--zoom, 1) - 32px)); }
+.t-admit-list { display: grid; gap: 12px; padding: 18px 20px 20px; }
 /* The two ways to grade, as a segmented control under the header */
 .t-tabs { display: flex; gap: 4px; margin: 14px 20px 0; padding: 4px; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; }
 .t-tab { flex: 1; min-height: 34px; padding: 0 12px; font: 600 14px var(--font); color: var(--ink-2); background: none; border: 0; border-radius: 7px; cursor: pointer; }

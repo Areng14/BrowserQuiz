@@ -453,11 +453,14 @@
   }
 
   function screenWait() {
-    mount(entry(h('div', { class: 'panel', role: 'status' },
-      h('p', { class: 'eyebrow', text: S.run.title }),
-      h('h1', { text: 'Waiting for your teacher' }),
-      whoCard(),
-      demoHint('Demo: click ', h('b', { text: 'Admit' }), ' in the teacher view.'))));
+    // The status is read out; the game under it (snake.js) isn't, and goes once they're admitted.
+    mount(entry(h('div', { class: 'panel' },
+      h('div', { class: 'wait-status', role: 'status' },
+        h('p', { class: 'eyebrow', text: S.run.title }),
+        h('h1', { text: 'Waiting for your teacher' }),
+        whoCard(),
+        demoHint('Demo: click ', h('b', { text: 'Admit' }), ' in the teacher view.')),
+      BQ.snake ? BQ.snake() : null)));
     clearInterval(S.poll);
     const check = async () => {
       try {

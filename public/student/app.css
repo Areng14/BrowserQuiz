@@ -103,6 +103,13 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .screen.center { display: flex; justify-content: center; align-items: flex-start; }
 .corner { position: absolute; top: 16px; right: var(--gut-r); }
 .panel { width: min(100%, 420px); display: grid; gap: 16px; }
+.wait-status { display: grid; gap: 16px; }
+/* the waiting room's game (snake.js) */
+.snake { display: grid; gap: 8px; margin-top: 8px; }
+.snake-board { display: block; width: 100%; height: auto; aspect-ratio: 16 / 11; border: 1px solid var(--line); border-radius: 8px; touch-action: none; cursor: pointer; }
+.snake-board:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.snake-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; }
+.snake-score { font-size: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .panel.wide { width: min(100%, 560px); }
 .eyebrow { font-size: 14px; font-weight: 600; color: var(--ink-2); }
 .heading { display: grid; gap: 6px; }

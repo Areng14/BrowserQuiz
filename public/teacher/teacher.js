@@ -816,6 +816,28 @@
     dlg.showModal();
     (ks.mine || ks.server ? tKey : copyBtn).focus();
   }
+  // Before letting students in, a checklist, so the teacher looks up from the screen: Admit stays off until
+  // both are ticked. Admit everyone asks every time; one student's Admit asks the first time in a run.
+  const admitChecked = new Set(); // run ids
+  function beforeAdmit(runId, n, name, go) {
+    if (name && admitChecked.has(runId)) { go(); return; }
+    const dlg = h('dialog', { class: 't-dialog t-admit', 'aria-labelledby': 't-admit-title' });
+    const ok = h('button', { class: 'btn primary', type: 'button', text: name ? `Admit ${name}` : `Admit ${plural(n, 'student')}`, disabled: true });
+    const items = ['Each student is who they signed in as', 'Desks are clear: no phones, notes or other screens'];
+    const boxes = items.map((text, i) => h('input', { type: 'checkbox', id: `t-admit-${i}` }));
+    for (const cb of boxes) cb.addEventListener('change', () => { ok.disabled = !boxes.every((x) => x.checked); });
+    ok.addEventListener('click', () => { admitChecked.add(runId); dlg.close(); go(); });
+    const x = h('button', { class: 'btn small ghost t-dialog-x', type: 'button', 'aria-label': 'Close', onclick: () => dlg.close() }, icon(ICONS.x, 18));
+    dlg.append(
+      h('header', { class: 't-dialog-head' }, h('h2', { id: 't-admit-title', text: 'Before you admit' }), x),
+      h('div', { class: 't-admit-list' }, items.map((text, i) => h('label', { class: 't-check', for: `t-admit-${i}` }, boxes[i], h('span', { text })))),
+      h('footer', { class: 't-dialog-foot' }, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => dlg.close() }), ok));
+    dlg.addEventListener('close', () => dlg.remove());
+    root.append(dlg);
+    dlg.showModal();
+    boxes[0].focus();
+  }
+
   // How far along: a bar of what's answered, the count, and where they are right now.
   function progressCell(a) {
     if (!a || a.status === 'waiting') return h('td', { class: 'num', 'data-label': 'Answered' });
@@ -849,7 +871,8 @@
     const sebLinks = h('span', { class: 't-seb-links', hidden: true });
     const failedBox = h('div');
     let lastDetail = '';
-    const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => act(`/api/t/runs/${runId}/admit-all`) });
+    let waitingN = 0;
+    const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => beforeAdmit(runId, waitingN, null, () => act(`/api/t/runs/${runId}/admit-all`)) });
     // AI grading: everything waiting for the teacher in this run, sent to Claude (server: aigrade.js).
     const aiBtn = h('button', { class: 'btn', type: 'button', hidden: true });
     const aiMsg = h('p', { class: 't-small t-muted', role: 'status', hidden: true });
@@ -893,7 +916,8 @@
         [count((a) => a.status === 'submitted'), 'turned in'], [count((a) => a.integrity === 'invalidated'), 'invalidated']]
         .filter(([n]) => n).map(([n, w]) => `${n} ${w}`).join(', ') || 'Nobody has joined yet';
       if (summary.textContent !== said) summary.textContent = said;
-      admitAll.hidden = !count((a) => a.status === 'waiting');
+      waitingN = count((a) => a.status === 'waiting');
+      admitAll.hidden = !waitingN;
       // Grade with AI: shown while there's something waiting for the teacher, or while it runs.
       aiWaiting = data.students.reduce((n, x) => n + (x.attempt && x.attempt.status === 'submitted' ? x.attempt.review || 0 : 0), 0);
       const job = data.ai && data.ai.job;
@@ -943,7 +967,7 @@
         const a = s.attempt;
         const actions = h('td', { class: 't-actions' });
         const btn = (text, key, onclick, extra) => h('button', Object.assign({ class: 'btn small', type: 'button', text, onclick, 'data-key': `${a.id}:${key}`, 'aria-label': `${text} ${s.name}` }, extra || {}));
-        if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => act(`/api/t/attempts/${a.id}/admit`), { class: 'btn small primary' }));
+        if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`)), { class: 'btn small primary' }));
         // Their screen, live, in a new tab (watch.html).
         if (a && a.status === 'active') actions.append(watchLink(a.id, s.name));
         if (a && a.integrity === 'invalidated') actions.append(btn('Restore', 'restore', () => { if (confirm(`Restore ${s.name}?`)) act(`/api/t/attempts/${a.id}/restore`); }));
