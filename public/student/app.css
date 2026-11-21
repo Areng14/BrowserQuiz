@@ -464,8 +464,7 @@ h1[tabindex="-1"]:focus { outline: none; }
 @media (min-width: 2300px) {
   .qbar, .qnav, .qview:not(.wide), .code-left, .results, .editor-bar, .scratch-head, .screen > .panel, .shared-split > .shared, .shared-split > .shared-stack { zoom: 1.3; }
   :root { --quiz-chrome: 245px; }
-  /* the bars' ends come in toward the page instead of the screen's edges; a wider scratchpad */
-  .qbar, .qnav { padding-inline: max(var(--gut-l), calc(50vw / 1.3 - 780px)); }
+  /* a wider scratchpad */
   .quiz.with-scratch { grid-template-columns: minmax(0, 1fr) clamp(420px, 24vw, 760px); }
 }
 
