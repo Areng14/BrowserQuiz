@@ -33,7 +33,7 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `shuffleQuestions` | `true` | Shuffle order per student, within each part (see below) |
 | `shuffleChoices` | `true` | Shuffle multiple choice options per student |
 | `integrity.graceStrikes` | `1` | Times a student can leave the window before the attempt is invalidated (0–10). The default lets one slip go; 0 invalidates on the first. |
-| `directions` | built in | Override the directions text per part: `{ "single": "...", "multi": "...", "text": "...", "code": "..." }` |
+| `directions` | built in | `"quiz"`: your own directions for the whole quiz (Markdown), shown before it starts and with each part's. The type keys replace that part's directions: `{ "quiz": "No calculators.", "single": "...", "code": "..." }` |
 | `shared` | none | Shared material that several questions use (below) |
 | `questions` | required | List of questions |
 

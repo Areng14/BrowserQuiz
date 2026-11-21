@@ -131,6 +131,8 @@ function normalizeQuiz(raw, assetNames) {
     for (const t of PART_TYPES) {
       if (typeof raw.directions[t] === 'string' && raw.directions[t].trim()) quiz.directions[t] = raw.directions[t].trim().slice(0, 2000);
     }
+    // The teacher's own directions for the whole quiz (Markdown): on the start screen and with each part's.
+    if (typeof raw.directions.quiz === 'string' && raw.directions.quiz.trim()) quiz.directions.quiz = raw.directions.quiz.trim().slice(0, 4000);
   }
   // An image on a question or a shared material: a file in assets/, with alt text.
   const imageOf = (where, src, out) => {

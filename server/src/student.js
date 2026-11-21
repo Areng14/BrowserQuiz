@@ -155,6 +155,7 @@ function runInfo(run, quiz) {
   return {
     runId: run.id, title: quiz.title, timeLimitMin: quiz.timeLimitMin,
     questionCount: quiz.questions.length,
+    quizDirections: (quiz.directions && quiz.directions.quiz) || '',
     // What's on the quiz, for the start screen: types, points and names, never prompts. Numbers only when
     // every student gets the same order.
     outline: quiz.questions.map((qq, i) => Object.assign({ type: qq.type, points: qq.points }, qq.name ? { name: qq.name } : {}, quiz.shuffleQuestions ? {} : { n: i + 1 })),

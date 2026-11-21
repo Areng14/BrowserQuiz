@@ -1250,8 +1250,24 @@
         ] : null);
     }
 
+    // The student app's built-in directions for each part (student/app.js PARTS), shown as placeholders.
+    const PART_DIRECTIONS = {
+      single: 'Pick the one best answer. Blank answers earn no credit.',
+      multi: 'Credit only if you select every correct answer and no wrong ones.',
+      text: "Spelling counts. Capital letters and extra spaces don't.",
+      code: 'Assume needed imports are there and inputs match the question. Partial credit is possible.',
+      output: 'Type exactly what the code prints, one line per line of output.',
+      trace: 'Fill in each value as the code runs. Each correct cell earns credit.',
+      fill: 'Fill in each blank so the code works. Partial credit is possible.',
+      essay: 'Your teacher grades these.',
+    };
     function settingsPane() {
       const q = null;
+      // Directions: one box for the whole quiz, and one for each kind of question the quiz has. Empty keeps the default.
+      const setDir = (k, v) => { quiz.directions = quiz.directions || {}; if (v.trim()) quiz.directions[k] = v; else delete quiz.directions[k]; };
+      const dirs = quiz.directions || {};
+      const used = [...new Set(quiz.questions.map((x) => x.type))];
+      const prose = { spellcheck: 'true' };
       const pasteArea = h('textarea', { class: 'input t-textarea', rows: 8, spellcheck: 'false', id: 'paste-json', placeholder: '{ "title": "...", "questions": [ ... ] }' });
       const pasteMsg = h('p', { class: 't-error', role: 'alert' });
       const pasteBtn = h('button', { class: 'btn small', type: 'button', text: 'Load' });
@@ -1274,6 +1290,10 @@
         h('div', { class: 'qe-line' },
           check(q, quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { quiz.shuffleQuestions = v; }),
           check(q, quiz.shuffleChoices !== false, 'Shuffle choices', (v) => { quiz.shuffleChoices = v; })),
+        field('Directions for the whole quiz', area(q, dirs.quiz, (v) => setDir('quiz', v), Object.assign({ rows: 3, placeholder: 'Optional. Students see these before they start, and with each part.' }, prose))),
+        used.length ? h('details', { class: 'qe-paste', open: used.some((t) => dirs[t]) },
+          h('summary', { text: 'Directions for each part' }),
+          used.map((t) => field(TYPES[t], area(q, dirs[t], (v) => setDir(t, v), Object.assign({ rows: 2, placeholder: PART_DIRECTIONS[t] }, prose))))) : null,
         h('details', { class: 'qe-paste' }, h('summary', { text: 'Paste a quiz.json (from an AI)' }),
           h('label', { class: 'field', for: 'paste-json' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteArea),
           h('div', {}, pasteBtn), pasteMsg)];

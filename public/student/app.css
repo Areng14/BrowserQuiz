@@ -250,6 +250,10 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .ov-group[open] > summary::before { transform: rotate(45deg); }
 .ov-list { margin: 6px 0 4px; padding: 0 0 0 20px; list-style: none; display: grid; gap: 3px; font-size: 14px; }
 .ov-pts { color: var(--ink-2); }
+/* the teacher's own directions */
+.quiz-directions { display: grid; gap: 6px; padding: 12px 14px; background: var(--soft); border-radius: 8px; }
+.quiz-directions h2 { margin: 0; font-size: 15px; }
+.quiz-directions .prompt { font-size: 15px; }
 .meta-right { display: inline-flex; align-items: center; gap: 12px; white-space: nowrap; }
 .mark-btn {
   display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; font: 600 13px var(--font); color: var(--ink-2); white-space: nowrap;

@@ -518,6 +518,13 @@
         h('span', { class: 'ov-pts', text: ` (${plural(q.points, 'point')})` })))))));
   }
 
+  // The teacher's own directions for the whole quiz, if they wrote any.
+  function quizDirections(text, heading) {
+    if (!text) return null;
+    return h('section', { class: 'quiz-directions', 'aria-label': heading },
+      h('h2', { text: heading }), h('div', { class: 'prompt' }, BQ.md.render(text, {})));
+  }
+
   function screenPractice(err) {
     if (S.run.hasCode) loadMonaco().catch(() => {});
     const btn = h('button', { class: 'btn primary', type: 'button', text: 'Start' });
@@ -530,6 +537,7 @@
         h('p', { text: summaryLine(S.run) }),
         h('p', { text: 'You see the answers when you finish.' })),
       overview(S.run),
+      quizDirections(S.run.quizDirections, 'Directions'),
       btn, msg)));
     btn.focus();
   }
@@ -566,6 +574,7 @@
         h('h1', { text: 'Before you start' }),
         h('p', { text: summaryLine(S.run) })),
       overview(S.run),
+      quizDirections(S.run.quizDirections, 'Directions'),
       h('div', { class: 'cheat-rule', role: 'note' },
         h('p', { class: 'cheat-title', text: 'Leaving the quiz counts as cheating.' }),
         h('p', { text: 'That means switching to another window, tab or app, leaving fullscreen, reloading or closing this page, or using Exit when your teacher didn\'t say to. Your teacher sees each time it happens.' })),
@@ -1105,6 +1114,7 @@
       h('div', { class: 'meta-row' }, h('span', { text: `Part ${part.n} of ${S.parts.length}` }), h('span', { text: range })),
       h('h1', { id: 'q-heading', text: part.title }),
       h('p', { class: 'directions' }, h('strong', { text: 'Directions: ' }), part.text),
+      quizDirections(S.quiz.directions && S.quiz.directions.quiz, 'For the whole quiz'),
       h('div', {}, h('button', { class: 'btn primary', type: 'button', text: seen ? 'Back to the question' : 'Start this part', onclick: closeDirections })));
   }
 
@@ -2176,7 +2186,7 @@
       return;
     }
     S.quiz = r.quiz;
-    S.run = { title: r.quiz.title, timeLimitMin: r.quiz.timeLimitMin, questionCount: r.quiz.questions.length, outline: r.quiz.questions.map((q, i) => ({ type: q.type, points: q.points, name: q.name, n: i + 1 })), hasCode: r.quiz.questions.some((q) => q.type === 'code') };
+    S.run = { title: r.quiz.title, timeLimitMin: r.quiz.timeLimitMin, questionCount: r.quiz.questions.length, outline: r.quiz.questions.map((q, i) => ({ type: q.type, points: q.points, name: q.name, n: i + 1 })), quizDirections: (r.quiz.directions && r.quiz.directions.quiz) || '', hasCode: r.quiz.questions.some((q) => q.type === 'code') };
     S.deadline = 0;
     S.answers = {};
     loadMarks();
