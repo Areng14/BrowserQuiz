@@ -206,7 +206,8 @@ HTTPS:
 Caddy gets the certificate on its own. Why bother:
 - Over plain HTTP, the teacher password and student IDs cross the network unencrypted.
 - School filters often block bare IPs.
-- Some browser features only work on HTTPS pages.
+- Exam mode is stronger on HTTPS. Browsers only let an HTTPS page check for a second display, hold
+  Alt+Tab and the Windows key during the quiz, and keep the screen from locking.
 
 Where to host:
 

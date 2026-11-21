@@ -123,6 +123,7 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .fs-card p { margin: 0; }
 .checks { list-style: none; margin: 0; padding: 12px 0 0; border-top: 1px solid var(--line); display: grid; gap: 4px; font-size: 14px; }
 .check-mark { display: inline-block; width: 36px; font-weight: 600; }
+.check-mark.soft { color: var(--ink-2); }
 .check-note { display: block; padding-left: 36px; color: var(--ink-2); }
 .ok { color: var(--good); }
 .bad { color: var(--bad); }

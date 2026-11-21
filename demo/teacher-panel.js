@@ -12,6 +12,8 @@
     'blocked-key': 'Blocked key', 'print-screen': 'Print Screen pressed', resize: 'Window resized',
     'unfocused-beat': 'Heartbeat: not focused', 'heartbeat-lost': 'Connection lost', 'extended-display': 'Second display',
     'bulk-insert': 'Large insert in editor', 'inhuman-typing': 'Typing faster than a person',
+    extension: 'Extension on the page', 'spoofed-checks': 'Extension hides leaving the window', 'no-frames': 'Quiz not on screen, no leave reported',
+    'scripted-input': 'Typed by a script', viewport: 'Side panel or DevTools open', setup: 'Computer',
   };
   const STATUS = {
     waiting: ['Waiting to be admitted', 'warn'], admitted: ['Admitted', 'neutral'],

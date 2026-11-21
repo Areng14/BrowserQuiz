@@ -152,6 +152,7 @@ function submit(a, quiz, answers, why) {
   const now = Date.now();
   if (answers && !pastDeadline(a, now)) a.answers = cleanAnswers(quiz, a.layout, answers);
   if (a.deadline && now > a.deadline + 30000 && why === 'student') store.record(a, 'late-submit', Math.round((now - a.deadline) / 1000) + 's late', quiz);
+  store.back(a, now); // turned in while out of the window: the time away stops here
   a.status = 'submitted';
   a.submittedAt = now;
   store.logEvent(a, 'submit', 'info', why === 'student' ? null : why);
@@ -330,7 +331,7 @@ module.exports = function studentRoutes(r) {
       if (body.focused === false || body.visible === false) {
         if (!a.away) store.record(a, 'unfocused-beat', body.visible === false ? 'tab hidden' : 'window not focused', quiz);
       } else {
-        a.away = false;
+        store.back(a, now);
       }
       if (Array.isArray(body.mouse) && body.mouse.length) {
         const pts = body.mouse.slice(0, 400).filter((p) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite))
