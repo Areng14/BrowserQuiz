@@ -87,6 +87,7 @@ function dropQuizzes(me) {
     q('DELETE FROM failed_ids WHERE run_id IN (SELECT id FROM runs WHERE owner_id = ?)').run(me.id);
     q('DELETE FROM runs WHERE owner_id = ?').run(me.id);
     q('DELETE FROM quizzes WHERE owner_id = ?').run(me.id);
+    q('UPDATE teachers SET ai_key = NULL WHERE id = ?').run(me.id); // sealed with the key that's gone
   });
   store.quizCache.clear();
 }
@@ -393,8 +394,9 @@ module.exports = function teacherRoutes(r) {
       teacher: {
         username: me.username, name: me.name, role: me.role, mustChange: !!me.must_change,
         passwordFromEnv: me.role === 'admin' && V.adminPasswordFromEnv(),
-        // After a reset, with the key not in memory: their recovery code keeps their quizzes.
-        needsRecovery: !!me.must_change && !!A.byId(me.id).key_wrap && !V.keyFor(me.id),
+        // After a reset: their recovery code keeps their quizzes (the key in memory doesn't count, or the
+        // temporary password alone would open them).
+        needsRecovery: !!me.must_change && !!A.byId(me.id).key_wrap,
       },
     });
   });
@@ -409,8 +411,9 @@ module.exports = function teacherRoutes(r) {
     const t = A.byId(me.id);
     if (!(await A.checkPassword(String(body.current || ''), t.pw_hash))) throw new HttpError(400, 'bad_password', 'The current password is wrong.');
     // The quiz key moves to the new password. It's in memory, or the old password or the recovery code
-    // opens it; "start over" drops quizzes nobody can open any more.
-    let key = V.keyFor(me.id);
+    // opens it; "start over" drops quizzes nobody can open any more. After an admin reset (must_change),
+    // the key in memory doesn't count: whoever has the temporary password needs the recovery code too.
+    let key = t.must_change ? null : V.keyFor(me.id);
     if (!key && t.key_wrap) key = await V.unwrapKey(t.key_wrap, String(body.current || ''));
     if (!key && t.key_wrap && body.recoveryCode) key = await V.unwrapKey(t.rec_wrap, V.normCode(body.recoveryCode));
     if (!key && t.key_wrap && !body.startOver) {
