@@ -183,7 +183,13 @@
       this.on(window, 'dragstart', (e) => { if (!inAnswerField(e.target)) e.preventDefault(); }, true);
       this.on(document, 'selectstart', (e) => { if (!inAnswerField(e.target)) e.preventDefault(); });
 
+      // Only the window changing size counts. Zooming the page (which a student may need to read it) changes
+      // the inner size only.
+      let outer = window.outerWidth + 'x' + window.outerHeight;
       this.on(window, 'resize', () => {
+        const now = window.outerWidth + 'x' + window.outerHeight;
+        if (now === outer) return;
+        outer = now;
         if (Date.now() - this.fsChangedAt > 1500) this.report('resize', window.innerWidth + 'x' + window.innerHeight);
       });
 

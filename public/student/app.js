@@ -74,17 +74,39 @@
     return el;
   }
   const errorText = (e) => ERRORS[e && e.code] || ERRORS.network;
-  const mount = (node) => root.replaceChildren(node);
+  // A new screen: the tab title says what it is, and reading starts at its heading unless the screen
+  // put focus in a field itself.
+  const mount = (node) => {
+    root.replaceChildren(node);
+    const head = node.querySelector && node.querySelector('h1');
+    if (head) document.title = `${head.textContent} – BrowserQuiz`;
+    requestAnimationFrame(() => {
+      const a = document.activeElement;
+      if (!head || !head.isConnected || (a && a !== document.body && root.contains(a))) return;
+      head.tabIndex = -1;
+      head.focus({ preventScroll: true });
+    });
+  };
   const demoHint = (...kids) => (cfg.demo ? h('p', { class: 'demo-hint' }, ...kids) : null);
   const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+  // Screen readers hear it through the quiz's live region, which is always on the page; a status element
+  // added already filled often isn't read.
+  function announce(msg) {
+    const el = S.el && S.el.live;
+    if (!el || !el.isConnected) return false;
+    el.textContent = '';
+    setTimeout(() => { el.textContent = msg; }, 50);
+    return true;
+  }
   function toast(msg, ms) {
     const host = (S.el && S.el.wrap) || root;
     let t = host.querySelector('.toast');
     if (!t) {
-      t = h('div', { class: 'toast', role: 'status' });
+      t = h('div', { class: 'toast' });
       host.append(t);
     }
+    if (!announce(msg)) t.setAttribute('role', 'status');
     t.textContent = msg;
     clearTimeout(toast.timer);
     toast.timer = setTimeout(() => t.remove(), ms || 2600);
@@ -190,13 +212,13 @@
         ];
         m.editor.defineTheme('bq-light', {
           base: 'vs', inherit: true,
-          rules: rules({ keyword: '0033b3', control: '0033b3', string: '067d17', number: '1750eb', comment: '8c8c8c', type: '7a3e9d', fn: '00627a', ident: '16191d' }),
-          colors: { 'editor.background': '#ffffff', 'editor.lineHighlightBackground': '#f4f5f7', 'editorLineNumber.foreground': '#98a1ab' },
+          rules: rules({ keyword: '0033b3', control: '0033b3', string: '067d17', number: '1750eb', comment: '6a6f76', type: '7a3e9d', fn: '00627a', ident: '16191d' }),
+          colors: { 'editor.background': '#ffffff', 'editor.lineHighlightBackground': '#f4f5f7', 'editorLineNumber.foreground': '#6b7480' },
         });
         m.editor.defineTheme('bq-dark', {
           base: 'vs-dark', inherit: true,
           rules: rules({ keyword: '569cd6', control: 'c586c0', string: 'ce9178', number: 'b5cea8', comment: '6a9955', type: '4ec9b0', fn: 'dcdcaa', ident: '9cdcfe' }),
-          colors: { 'editor.background': '#1b1e23', 'editor.lineHighlightBackground': '#22262c', 'editorLineNumber.foreground': '#6e7681' },
+          colors: { 'editor.background': '#1b1e23', 'editor.lineHighlightBackground': '#22262c', 'editorLineNumber.foreground': '#8b949e' },
         });
         m.editor.setTheme(editorTheme());
         resolve(m);
@@ -288,19 +310,32 @@
     let picked = null;
     let seq = 0;
     let timer = 0;
-    const name = h('input', { class: 'input', id: 'student-name', autocomplete: 'off', spellcheck: 'false' });
-    const list = h('div', { class: 'name-list', id: 'name-list', 'aria-label': 'Matching names', hidden: true });
+    const name = h('input', {
+      class: 'input', id: 'student-name', autocomplete: 'off', spellcheck: 'false',
+      role: 'combobox', 'aria-autocomplete': 'list', 'aria-expanded': 'false', 'aria-controls': 'name-list',
+    });
+    const list = h('div', { class: 'name-list', id: 'name-list', role: 'listbox', 'aria-label': 'Matching names', hidden: true });
     const hint = h('p', { class: 'hint', hidden: true });
+    const said = h('p', { class: 'sr-only', 'aria-live': 'polite' });
+    let active = -1;
+    const opts = () => [...list.children];
+    function setActive(i) {
+      active = i;
+      opts().forEach((o, j) => o.classList.toggle('active', j === i));
+      if (i >= 0) name.setAttribute('aria-activedescendant', opts()[i].id); else name.removeAttribute('aria-activedescendant');
+      if (i >= 0) opts()[i].scrollIntoView({ block: 'nearest' });
+    }
     const sid = h('input', { class: 'input mono', id: 'student-id', inputmode: 'numeric', autocomplete: 'off', spellcheck: 'false', maxlength: '20' });
     const msg = h('p', { class: 'error', role: 'alert', text: err || '' });
     const btn = h('button', { class: 'btn primary', type: 'submit', text: 'Continue' });
 
-    function close() { list.hidden = true; hint.hidden = true; }
+    function close() { list.hidden = true; hint.hidden = true; name.setAttribute('aria-expanded', 'false'); setActive(-1); }
     function pick(m) {
       picked = m;
       name.value = m.name;
       name.classList.add('picked');
       close();
+      said.textContent = `${m.name} picked`;
       sid.focus();
     }
     async function search() {
@@ -310,22 +345,31 @@
       let res;
       try { res = await api.findNames({ runId: run.runId, q }); } catch (e) {
         if (mine !== seq) return;
-        list.hidden = true;
+        close();
         hint.hidden = false;
         hint.textContent = e.code === 'too_many' ? 'Busy. Keep typing in a moment.' : errorText(e);
+        said.textContent = hint.textContent;
         return;
       }
       if (mine !== seq || picked) return;
       const matches = (res && res.matches) || [];
       if (!matches.length) {
-        list.hidden = true;
+        close();
         hint.hidden = false;
         hint.textContent = 'No match.';
+        said.textContent = 'No match';
         return;
       }
       hint.hidden = true;
-      list.replaceChildren(...matches.map((m) => h('button', { type: 'button', class: 'name-opt', text: m.name, onclick: () => pick(m) })));
+      list.replaceChildren(...matches.map((m, i) => {
+        const o = h('div', { class: 'name-opt', role: 'option', id: `name-opt-${i}`, 'aria-selected': 'false', text: m.name, onclick: () => pick(m) });
+        o.addEventListener('mousedown', (e) => e.preventDefault()); // keep focus in the box
+        return o;
+      }));
       list.hidden = false;
+      name.setAttribute('aria-expanded', 'true');
+      setActive(-1);
+      said.textContent = plural(matches.length, 'name');
     }
     name.addEventListener('input', () => {
       picked = null;
@@ -333,22 +377,23 @@
       clearTimeout(timer);
       timer = setTimeout(search, 120);
     });
+    // Arrows move through the names while focus stays in the box; Enter picks the highlighted one (or the
+    // only one).
     name.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowDown' && !list.hidden) { e.preventDefault(); list.firstChild.focus(); }
-      if (e.key === 'Enter' && !picked && !list.hidden && list.firstChild) { e.preventDefault(); list.firstChild.click(); }
-    });
-    list.addEventListener('keydown', (e) => {
-      const opts = [...list.children];
-      const i = opts.indexOf(document.activeElement);
-      if (e.key === 'ArrowDown' && i < opts.length - 1) { e.preventDefault(); opts[i + 1].focus(); }
-      if (e.key === 'ArrowUp') { e.preventDefault(); (i > 0 ? opts[i - 1] : name).focus(); }
-      if (e.key === 'Escape') { close(); name.focus(); }
+      const n = list.hidden ? 0 : opts().length;
+      if (e.key === 'ArrowDown' && n) { e.preventDefault(); setActive(Math.min(active + 1, n - 1)); }
+      if (e.key === 'ArrowUp' && n) { e.preventDefault(); setActive(Math.max(active - 1, 0)); }
+      if (e.key === 'Escape' && n) { e.preventDefault(); close(); }
+      if (e.key === 'Enter' && !picked && n) {
+        e.preventDefault();
+        if (active >= 0) opts()[active].click(); else if (n === 1) opts()[0].click(); else setActive(0);
+      }
     });
 
     const form = h('form', { class: 'panel', novalidate: true },
       h('p', { class: 'eyebrow', text: run.title }),
       h('div', { class: 'heading' }, h('h1', { text: 'Who are you?' })),
-      h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'student-name', text: 'Your name' }), name, list, hint),
+      h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'student-name', text: 'Your name' }), name, list, hint, said),
       h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'student-id', text: 'Student ID' }), sid),
       btn, msg,
       demoHint('Demo: type ', h('b', { text: 'Av' }), ', pick Ava Martinez, ID ', h('b', { text: '204511' })));
@@ -400,7 +445,10 @@
 
   function prechecks() {
     const ext = window.screen && 'isExtended' in window.screen ? window.screen.isExtended : null;
-    const desktop = window.matchMedia('(pointer: fine)').matches && window.innerWidth >= 900;
+    // A mouse, and a window about as wide as the screen. Both are measured in screen units, so a student who
+    // zooms the page in to read it still passes.
+    const avail = window.screen && window.screen.availWidth;
+    const desktop = window.matchMedia('(pointer: fine)').matches && (!avail || !window.outerWidth || window.outerWidth >= avail * 0.9);
     return [
       { label: 'One display', ok: ext !== true, note: ext === true ? 'Unplug the second monitor, then reload this page.' : null },
       { label: 'Fullscreen works', ok: !!document.fullscreenEnabled, note: document.fullscreenEnabled ? null : 'Open this page in Edge or Chrome.' },
@@ -525,7 +573,10 @@
   function onBeat(res, info) {
     if (!S.el) return;
     if (res && res.now) S.skew = res.now - Date.now();
-    if (res && res.deadline && res.deadline !== S.deadline) S.deadline = res.deadline; // teacher gave extra time
+    if (res && res.deadline && res.deadline !== S.deadline) { // teacher gave extra time
+      if (S.deadline && res.deadline > S.deadline + 30000) toast('Your teacher gave you more time.', 6000);
+      S.deadline = res.deadline;
+    }
     if (res && res.done && !S.submitting) return endQuiz('mine'); // the teacher ended this student's quiz
     setOnline(true);
     if (info && info.answers && S.saveState === 'saving') setSave('saved');
@@ -544,6 +595,7 @@
   }
   function setSave(state) {
     if (!S.monitor) return; // preview: nothing is saved
+    if (state === S.saveState && S.el && S.el.save && S.el.save.textContent) return;
     S.saveState = state;
     if (!S.el || !S.el.save) return;
     S.el.save.textContent = state === 'saved' ? 'Saved' : state === 'saving' ? 'Saving…' : 'Not saved yet';
@@ -630,10 +682,11 @@
     S.idx = 0;
     S.dirOpen = true;
     const timer = h('span', { class: 'timer', role: 'timer', 'aria-label': 'Time left' });
-    const save = h('span', { class: 'save-state', role: 'status' });
+    const save = h('span', { class: 'save-state' }); // not a live region: it flips with every keystroke
+    const live = h('div', { class: 'sr-only', 'aria-live': 'polite', 'aria-atomic': 'true' });
     const conn = h('div', { class: 'conn-banner', role: 'alert', hidden: true },
       'Offline. Keep working, answers save when you reconnect.');
-    const main = h('main', { class: 'qmain', tabindex: '-1' });
+    const main = h('main', { class: 'qmain', tabindex: '-1', 'aria-labelledby': 'q-heading' });
     const sheet = h('nav', { class: 'sheet', 'aria-label': 'Questions' });
     const prev = h('button', { class: 'btn ghost', type: 'button', text: 'Back', onclick: () => go(S.idx - 1) });
     const next = h('button', { class: 'btn', type: 'button' });
@@ -658,8 +711,9 @@
       conn,
       main,
       scratch,
-      h('footer', { class: 'qnav' }, prev, sheet, next));
-    S.el = { wrap, main, timer, sheet, prev, next, save, conn, scratch, scratchBtn, fsOverlay: null };
+      h('footer', { class: 'qnav' }, prev, sheet, next),
+      live);
+    S.el = { wrap, main, timer, sheet, prev, next, save, conn, scratch, scratchBtn, live, fsOverlay: null };
     if (!keysBound) { document.addEventListener('keydown', quizKeys); keysBound = true; }
     S.saveState = 'saved';
     mount(wrap);
@@ -706,7 +760,9 @@
     // Shared material sits beside the question (above it on narrow screens). Code questions put it in
     // their left column themselves.
     if (!S.dirOpen && q.shared && !view.classList.contains('wide')) view = h('div', { class: 'shared-split' }, sharedBlock(q), view);
-    S.el.main.replaceChildren(view);
+    const where = S.dirOpen ? partOf(S.idx).title : `Question ${S.idx + 1} of ${total}`;
+    document.title = `${where} – ${S.quiz.title}`;
+    S.el.main.replaceChildren(...(S.dirOpen ? [] : [h('h1', { class: 'sr-only', id: 'q-heading', text: where })]), view);
     colorize(view);
     renderSheet();
     renderScratch();
@@ -741,6 +797,7 @@
     S.el.scratchBtn.setAttribute('aria-pressed', String(open));
     if (open) renderScratch();
     if (S.editor) S.editor.layout();
+    if (open) { const first = S.el.scratch.querySelector('.scratch-tool'); if (first) first.focus(); } else S.el.scratchBtn.focus();
   }
   const PAD_ICONS = {
     pen: ['M21.17 6.81a1 1 0 0 0-3.98-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z', 'm15 5 4 4'],
@@ -773,14 +830,30 @@
     let cleared = null; // what Clear took away, until something new goes on the page
     const canvas = h('canvas', { class: 'scratch-canvas', 'aria-hidden': 'true' });
     const notes = h('div', { class: 'scratch-notes' });
-    const board = h('div', { class: 'scratch-board', role: 'application', 'aria-label': `Scratchpad for question ${S.idx + 1}` }, canvas, notes);
+    const board = h('div', { class: 'scratch-board' }, canvas, notes);
     const save = () => { if (items.length) pages[q.id] = items; else delete pages[q.id]; saveScratch(); };
     const btn = (name, label, on) => {
       const b = h('button', { class: 'scratch-tool', type: 'button', title: label, 'aria-label': label, onclick: on });
       b.append(padIcon(name));
       return b;
     };
-    const tools = { pen: btn('pen', 'Pen', () => pick('pen')), text: btn('text', 'Text', () => pick('text')), eraser: btn('eraser', 'Eraser', () => pick('eraser')) };
+    // Text from the keyboard (Enter or Space on the tool) starts a note below the others, since there's
+    // no pointer to place it.
+    const tools = {
+      pen: btn('pen', 'Pen', () => pick('pen')),
+      text: btn('text', 'Text', (e) => { pick('text'); if (e && e.detail === 0) keyboardNote(); }),
+      eraser: btn('eraser', 'Eraser', () => pick('eraser')),
+    };
+    function keyboardNote() {
+      if (!ctx && !size()) return;
+      let y = 0.03;
+      for (const ta of notes.querySelectorAll('.scratch-note')) y = Math.max(y, (ta.offsetTop + ta.offsetHeight + 8) / w);
+      const n = { x: 0.03, y: +y.toFixed(4), s: '' };
+      add(n);
+      const ta = noteEl(n);
+      notes.append(ta);
+      ta.focus();
+    }
     function pick(t) {
       tool = t;
       S.scratch.tool = t;
@@ -835,7 +908,12 @@
       if (!ctx && !size()) return;
       ctx.clearRect(0, 0, w, canvas.height);
       for (const it of items) if (it.p) { style(it); path(it.p, 0); }
+      // Redrawing makes new note boxes: keep the one being typed in focused, cursor and all.
+      const a = document.activeElement;
+      const typing = a && notes.contains(a) && a._note ? { n: a._note, from: a.selectionStart, to: a.selectionEnd } : null;
       notes.replaceChildren(...items.filter((it) => it.s != null).map(noteEl));
+      const again = typing && [...notes.children].find((t) => t._note === typing.n);
+      if (again) { again.focus({ preventScroll: true }); again.setSelectionRange(typing.from, typing.to); }
     }
     // A note is a borderless text box that grows with what's typed, up to the board's right edge.
     let measure = null;
@@ -921,7 +999,7 @@
     close.classList.add('scratch-close');
     const head = h('div', { class: 'scratch-head' },
       h('div', { class: 'scratch-group', role: 'group', 'aria-label': 'Tool' }, tools.pen, tools.text, tools.eraser),
-      h('div', { class: 'scratch-group' }, undo, clear),
+      h('div', { class: 'scratch-group', role: 'group', 'aria-label': 'Edit' }, undo, clear),
       h('span', { class: 'scratch-q', text: `Question ${S.idx + 1}` }),
       close);
     return [head, board];
@@ -932,7 +1010,7 @@
     const range = part.start === part.end ? `Question ${part.start + 1}` : `Questions ${part.start + 1}–${part.end + 1}`;
     return h('div', { class: 'qview' },
       h('div', { class: 'meta-row' }, h('span', { text: `Part ${part.n} of ${S.parts.length}` }), h('span', { text: range })),
-      h('h1', { text: part.title }),
+      h('h1', { id: 'q-heading', text: part.title }),
       h('p', { class: 'directions' }, h('strong', { text: 'Directions: ' }), part.text),
       h('div', {}, h('button', { class: 'btn primary', type: 'button', text: seen ? 'Back to the question' : 'Start this part', onclick: closeDirections })));
   }
@@ -1024,8 +1102,9 @@
         });
         // Crossing out: picking a crossed-out choice brings it back, and crossing out the picked one unpicks it.
         const x = h('button', { class: 'choice-x', type: 'button' });
+        const outNote = h('span', { class: 'sr-only', id: `${id}-out`, text: 'crossed out' });
         const row = h('div', { class: 'choice-row' },
-          h('label', { class: 'choice', for: id }, input, h('span', { class: 'choice-text' }, BQ.md.renderInline(c, { lang: S.quiz.language }))), x);
+          h('label', { class: 'choice', for: id }, input, h('span', { class: 'choice-text' }, BQ.md.renderInline(c, { lang: S.quiz.language })), outNote), x);
         input.addEventListener('change', () => {
           if (input.checked && isCrossed(q, i)) setCrossed(q, i, false);
           if (!multi) setAnswer(q.id, i);
@@ -1051,6 +1130,7 @@
       const paint = () => rows.forEach(({ row, input, x, i }) => {
         const out = isCrossed(q, i);
         row.classList.toggle('crossed', out);
+        if (out) input.setAttribute('aria-describedby', `${input.id}-out`); else input.removeAttribute('aria-describedby');
         input.checked = picked(i);
         x.setAttribute('aria-pressed', String(out));
         x.setAttribute('aria-label', `${out ? 'Undo cross out' : 'Cross out'} choice ${i + 1}`);
@@ -1071,6 +1151,39 @@
   // ---------- predict the output, trace tables, fill in the blanks, written answers ----------
   const codeBlock = (code, lang) => h('pre', { class: 'md-code' }, h('code', { 'data-lang': lang || (S.quiz.language !== 'none' ? S.quiz.language : null), text: code }));
   // A textarea that grows with what's typed; Tab indents when it holds code.
+  // The next (dir 1) or previous (dir -1) thing Tab would reach outside box.
+  function focusBeyond(box, dir) {
+    const all = [...document.querySelectorAll('a[href], button, input, select, textarea, [tabindex]')]
+      .filter((el) => !el.disabled && el.tabIndex >= 0 && !box.contains(el) && !el.closest('[inert]') && el.getClientRects().length);
+    const after = (el) => box.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING;
+    const target = dir > 0 ? all.find(after) : all.filter((el) => !after(el)).pop();
+    if (target) target.focus();
+  }
+  // In code boxes Tab indents, so it can't also move on. Esc, then Tab (or Shift+Tab), leaves the box.
+  // Where Esc would take the page out of fullscreen (a browser that can't hold the key), Ctrl+M does it.
+  const escSafe = () => !document.fullscreenElement || !!(navigator.keyboard && navigator.keyboard.lock);
+  const leaveHint = () => `${escSafe() ? 'Esc' : 'Ctrl+M'}, then Tab, leaves the box`;
+  function tabOut(box) {
+    let armed = false;
+    box.addEventListener('keydown', (e) => {
+      const ctrlM = e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'm';
+      if (ctrlM || (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.metaKey)) {
+        if (ctrlM) { e.preventDefault(); e.stopPropagation(); }
+        armed = true;
+        return;
+      }
+      if (e.key === 'Tab' && armed && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        armed = false;
+        focusBeyond(box, e.shiftKey ? -1 : 1);
+        return;
+      }
+      if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) armed = false;
+    }, true);
+    box.addEventListener('focusout', (e) => { if (!box.contains(e.relatedTarget)) armed = false; });
+  }
+
   function growArea(attrs, value, onChange, codeLike) {
     const ta = h('textarea', Object.assign({ class: 'input long-answer' + (codeLike ? ' mono' : ''), spellcheck: codeLike ? 'false' : 'true', autocomplete: 'off' }, attrs));
     ta.value = value || '';
@@ -1083,6 +1196,11 @@
         ta.setRangeText('    ', ta.selectionStart, ta.selectionEnd, 'end');
         onChange(ta.value);
       });
+      tabOut(ta);
+      const hintId = `${ta.id || 'ta'}-tab-hint`;
+      const note = h('span', { class: 'sr-only', id: hintId, text: `Tab indents. ${leaveHint()}.` });
+      ta.setAttribute('aria-describedby', hintId);
+      requestAnimationFrame(() => { if (ta.isConnected && !note.isConnected) ta.after(note); });
     }
     requestAnimationFrame(grow);
     return ta;
@@ -1097,8 +1215,8 @@
   function traceView(q) {
     const blank = () => q.cells.map((r) => r.map(() => ''));
     const cur = S.answers[q.id] || blank();
-    const table = h('table', { class: 'trace' });
-    table.append(h('thead', {}, h('tr', {}, q.columns.map((c) => h('th', { text: c })))),
+    const table = h('table', { class: 'trace', 'aria-label': 'Trace table' });
+    table.append(h('thead', {}, h('tr', {}, q.columns.map((c) => h('th', { scope: 'col', text: c })))),
       h('tbody', {}, q.cells.map((row, r) => h('tr', {}, row.map((given, c) => {
         if (given != null) return h('td', { class: 'given', text: given });
         const input = h('input', { class: 'trace-cell', autocomplete: 'off', spellcheck: 'false', 'aria-label': `${q.columns[c]}, row ${r + 1}`, 'data-r': r, 'data-c': c });
@@ -1214,7 +1332,7 @@
           metaRow(q, KIND[q.mode] || KIND.method), sharedBlock(q), prompt(q),
           h('h2', { class: 'sub', text: 'Examples' }), samples),
         h('section', { class: 'code-right', 'aria-label': 'Code editor' },
-          h('div', { class: 'editor-bar' }, langCtl, h('span', { class: 'spacer' }), runBtn),
+          h('div', { class: 'editor-bar' }, langCtl, h('span', { class: 'spacer' }), h('span', { class: 'kbd-hint', text: leaveHint() }), runBtn),
           host, results)));
     renderResults(q, results);
     mountEditor(q, host, ans);
@@ -1232,7 +1350,7 @@
       const key = q.id + ':' + lang;
       if (!S.models[key] || S.models[key].isDisposed()) S.models[key] = m.editor.createModel(ans.code[lang], lang);
       const editor = m.editor.create(host, {
-        model: S.models[key], theme: editorTheme(), automaticLayout: true, ariaLabel: 'Code answer',
+        model: S.models[key], theme: editorTheme(), automaticLayout: true, ariaLabel: `Code answer. Tab indents. ${leaveHint()}.`,
         fontFamily: "ui-monospace, 'Cascadia Mono', Consolas, monospace", fontSize: editorFontSize(), lineHeight: Math.round(editorFontSize() * 1.6),
         tabSize: 4, insertSpaces: true, minimap: { enabled: false }, scrollBeyondLastLine: false,
         padding: { top: 12, bottom: 12 }, renderLineHighlight: 'line',
@@ -1245,6 +1363,7 @@
         contextmenu: false, dragAndDrop: false, emptySelectionClipboard: false, links: false,
       });
       S.editor = editor;
+      tabOut(host);
       S.errDecor = [];
       markErrorLines(S.results[q.id + ':' + lang]);
       if (S.monitor) {
@@ -1261,7 +1380,8 @@
       }));
     }).catch(() => {
       if (!host.isConnected) return;
-      const ta = h('textarea', { class: 'code-fallback', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Code answer' });
+      const ta = h('textarea', { class: 'code-fallback', spellcheck: 'false', autocomplete: 'off', 'aria-label': `Code answer. Tab indents. ${leaveHint()}.` });
+      tabOut(ta);
       ta.value = ans.code[lang];
       ta.addEventListener('input', () => { ans.code[lang] = ta.value; setAnswer(q.id, ans); });
       ta.addEventListener('keydown', (e) => {
@@ -1349,7 +1469,7 @@
       const passed = tests.filter((t) => t.pass).length;
       parts.push(h('p', { class: 'res-head ' + (passed === tests.length ? 'good' : 'bad'), text: `${passed} of ${tests.length} examples passed` }));
       parts.push(h('ul', { class: 'res-tests' }, tests.map((t) => h('li', { class: t.pass ? 'ok' : 'bad' },
-        h('span', { class: 'res-mark', text: t.pass ? '✓' : '✗', 'aria-label': t.pass ? 'Passed' : 'Failed' }),
+        h('span', { class: 'res-mark', role: 'img', text: t.pass ? '✓' : '✗', 'aria-label': t.pass ? 'Passed' : 'Failed' }),
         h('div', { class: 'res-body' },
           h('pre', { class: 'res-call' }, h('code', { 'data-lang': lang, text: t.call })),
           t.pass
@@ -1398,6 +1518,28 @@
   }
 
   // ---------- overlays ----------
+  // While a dialog or overlay is up, the quiz behind it can't be reached (inert), Tab stays inside it,
+  // Esc does onEscape (if any), and closing puts focus back where it was. Returns the close function.
+  function holdFocus(layer, onEscape) {
+    const back = document.activeElement;
+    const others = [...S.el.wrap.children].filter((el) => el !== layer && !el.inert);
+    others.forEach((el) => { el.inert = true; });
+    layer.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && onEscape) { e.preventDefault(); onEscape(); return; }
+      if (e.key !== 'Tab') return;
+      const f = [...layer.querySelectorAll('button, a[href], input, select, textarea')].filter((x) => !x.disabled && x.getClientRects().length);
+      e.preventDefault();
+      if (!f.length) return;
+      const i = f.indexOf(document.activeElement);
+      const next = i < 0 ? (e.shiftKey ? f.length - 1 : 0) : (i + (e.shiftKey ? f.length - 1 : 1)) % f.length;
+      f[next].focus();
+    });
+    return (refocus = true) => {
+      others.forEach((el) => { el.inert = false; });
+      if (refocus && back && back.isConnected && back !== document.body && back.focus) back.focus({ preventScroll: true });
+      else if (refocus && S.el && S.el.main) S.el.main.focus({ preventScroll: true });
+    };
+  }
   function showFsOverlay() {
     if (S.done || !S.el || S.el.fsOverlay) return;
     const btn = h('button', { class: 'btn primary', type: 'button', text: 'Return to fullscreen', onclick: () => enterFullscreen() });
@@ -1408,6 +1550,7 @@
         h('div', { class: 'row-actions' }, btn, h('button', { class: 'btn', type: 'button', text: 'Exit', onclick: () => openExit() }))));
     S.el.fsOverlay = ov;
     S.el.wrap.append(ov);
+    S.el.fsRelease = holdFocus(ov);
     btn.focus();
   }
   // Every time a student comes back to the window. It reads the same no matter how many times they left
@@ -1415,7 +1558,8 @@
   function showLeftWarning() {
     if (S.done || !S.el || S.el.fsOverlay || S.el.wrap.querySelector('.modal-backdrop')) return;
     let backdrop;
-    const back = h('button', { class: 'btn primary', type: 'button', text: 'Back to the quiz', onclick: () => { backdrop.remove(); S.el.main.focus({ preventScroll: true }); } });
+    let release = null;
+    const back = h('button', { class: 'btn primary', type: 'button', text: 'Back to the quiz', onclick: () => { backdrop.remove(); release(); } });
     backdrop = h('div', { class: 'modal-backdrop' },
       h('div', { class: 'modal warn-modal', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'left-title', 'aria-describedby': 'left-text' },
         h('h2', { id: 'left-title', text: 'You left the quiz' }),
@@ -1423,35 +1567,34 @@
         h('div', { class: 'modal-actions' }, back)));
     backdrop.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); back.click(); } });
     S.el.wrap.append(backdrop);
+    release = holdFocus(backdrop, () => back.click());
     back.focus();
   }
   function hideFsOverlay() {
-    if (S.el && S.el.fsOverlay) { S.el.fsOverlay.remove(); S.el.fsOverlay = null; }
+    if (S.el && S.el.fsOverlay) {
+      S.el.fsOverlay.remove();
+      S.el.fsOverlay = null;
+      if (S.el.fsRelease) { S.el.fsRelease(); S.el.fsRelease = null; }
+    }
   }
 
   // Students can always get out: turn in now, or leave with answers saved and come back later.
   function openExit() {
     if (S.done || !S.el || S.el.wrap.querySelector('.modal-backdrop')) return;
     let backdrop;
-    const close = () => { backdrop.remove(); };
+    let release = null;
+    const close = () => { backdrop.remove(); release(); };
     const keep = h('button', { class: 'btn', type: 'button', text: 'Keep working', onclick: close });
-    const turnIn = h('button', { class: 'btn', type: 'button', text: 'Turn in', onclick: () => { backdrop.remove(); submitNow(); } });
-    const exit = h('button', { class: 'btn primary', type: 'button', text: 'Exit', onclick: () => { backdrop.remove(); exitQuiz(); } });
+    // Turn in shows the usual check first: unanswered questions, and that answers can't change after.
+    const turnIn = h('button', { class: 'btn', type: 'button', text: 'Turn in', onclick: () => { backdrop.remove(); release(false); openSubmit(); } });
+    const exit = h('button', { class: 'btn primary', type: 'button', text: 'Exit', onclick: () => { backdrop.remove(); release(false); exitQuiz(); } });
     backdrop = h('div', { class: 'modal-backdrop' },
       h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'exit-title' },
         h('h2', { id: 'exit-title', text: 'Exit the quiz?' }),
         h('p', { text: "Exiting counts as leaving the quiz unless your teacher told you to. Your answers are saved." }),
         h('div', { class: 'modal-actions' }, keep, turnIn, exit)));
-    const buttons = [keep, turnIn, exit];
-    backdrop.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') close();
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        const i = buttons.indexOf(document.activeElement);
-        buttons[(i + (e.shiftKey ? buttons.length - 1 : 1)) % buttons.length].focus();
-      }
-    });
     S.el.wrap.append(backdrop);
+    release = holdFocus(backdrop, close);
     keep.focus();
   }
   async function exitQuiz() {
@@ -1488,12 +1631,13 @@
       if (e.key === 'Enter' && !(t && t.closest && t.closest('button'))) { e.preventDefault(); closeDirections(); }
       return;
     }
-    if (!typing && e.shiftKey && /^Digit[1-9]$/.test(e.code) && (q.type === 'single' || q.type === 'multi')) {
+    const onChoices = t === S.el.main || t === document.body || (t && t.closest && t.closest('.choices'));
+    if (!typing && onChoices && e.shiftKey && /^Digit[1-9]$/.test(e.code) && (q.type === 'single' || q.type === 'multi')) {
       const x = S.el.main.querySelectorAll('.choice-x')[Number(e.code.slice(5)) - 1];
       if (x) { e.preventDefault(); x.click(); }
       return;
     }
-    if (!typing && /^[1-9]$/.test(e.key) && (q.type === 'single' || q.type === 'multi')) {
+    if (!typing && onChoices && /^[1-9]$/.test(e.key) && (q.type === 'single' || q.type === 'multi')) {
       const input = S.el.main.querySelectorAll('.choice input')[Number(e.key) - 1];
       if (!input) return;
       e.preventDefault();
@@ -1511,10 +1655,12 @@
   function openSubmit() {
     const missing = S.quiz.questions.map((q, i) => (isAnswered(q) ? null : i + 1)).filter(Boolean);
     const marked = S.quiz.questions.map((q, i) => (isMarked(q) ? i + 1 : null)).filter(Boolean);
+    if (S.done || !S.el || S.el.wrap.querySelector('.modal-backdrop')) return;
     let backdrop;
-    const close = () => { backdrop.remove(); S.el.next.focus(); };
+    let release = null;
+    const close = () => { backdrop.remove(); release(false); S.el.next.focus(); };
     const keep = h('button', { class: 'btn', type: 'button', text: 'Keep working', onclick: close });
-    const submit = h('button', { class: 'btn primary', type: 'button', text: 'Submit', onclick: () => { backdrop.remove(); submitNow(); } });
+    const submit = h('button', { class: 'btn primary', type: 'button', text: 'Submit', onclick: () => { backdrop.remove(); release(false); submitNow(); } });
     backdrop = h('div', { class: 'modal-backdrop' },
       h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'submit-title' },
         h('h2', { id: 'submit-title', text: 'Submit your quiz?' }),
@@ -1522,14 +1668,8 @@
         marked.length ? h('p', { text: `Marked for review: ${marked.length > 1 ? 'questions' : 'question'} ${marked.join(', ')}.` }) : null,
         h('p', { class: 'muted', text: "You can't change answers after this." }),
         h('div', { class: 'modal-actions' }, keep, submit)));
-    backdrop.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') close();
-      if (e.key === 'Tab') { // keep focus inside the dialog
-        e.preventDefault();
-        (document.activeElement === keep ? submit : keep).focus();
-      }
-    });
     S.el.wrap.append(backdrop);
+    release = holdFocus(backdrop, close);
     keep.focus();
   }
 
@@ -1568,6 +1708,7 @@
       h('div', { class: 'modal', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'turnin-title' },
         title, text, h('div', { class: 'modal-actions' }, retry)));
     S.el.wrap.append(backdrop);
+    holdFocus(backdrop);
     return {
       retry,
       failed() {

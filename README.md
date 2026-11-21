@@ -9,6 +9,9 @@ leaves the window gets quietly invalidated (the teacher can restore them).
   LeetCode-style hidden tests, single method or whole class, partial credit)
 - Student code runs in a locked-down runner: its own uid, rlimits, Landlock and
   seccomp, on a Docker network with no internet
+- Works from the keyboard, with screen reader labels (see `docs/accessibility-review-2026-11-21.md`).
+  Assistive tools that open their own window, like dictation or an on-screen keyboard, can count as
+  leaving the quiz: **Restore** on the live page undoes that.
 
 ## Run it
 

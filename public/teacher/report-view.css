@@ -4,7 +4,7 @@
   --st-full: var(--good); --st-partial: var(--warn, #9a5b00); --st-zero: var(--bad); --st-pending: var(--ink-2);
   --tint-good: color-mix(in srgb, var(--good) 12%, transparent); --tint-bad: color-mix(in srgb, var(--bad) 11%, transparent);
   /* code colors (light), overridden for dark below */
-  --tk-keyword: #0033b3; --tk-control: #0033b3; --tk-string: #067d17; --tk-number: #1750eb; --tk-comment: #8c8c8c;
+  --tk-keyword: #0033b3; --tk-control: #0033b3; --tk-string: #067d17; --tk-number: #1750eb; --tk-comment: #6a6f76;
   --tk-type: #7a3e9d; --tk-fn: #00627a; --tk-ident: inherit;
 }
 @media (prefers-color-scheme: dark) {

@@ -7,6 +7,7 @@
   --ink: #16191d;
   --ink-2: #5b6470;
   --line: #d9dde2;
+  --field-line: #868e99; /* borders that show where a field is: 3:1 on the background */
   --accent: #2257d6;
   --accent-ink: #ffffff;
   --good: #1b7f45;
@@ -21,14 +22,14 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #16181d; --soft: #1f2329; --editor: #1b1e23; --ink: #e6e8eb; --ink-2: #9aa3ad; --line: #2e333b;
+    --bg: #16181d; --soft: #1f2329; --editor: #1b1e23; --ink: #e6e8eb; --ink-2: #9aa3ad; --line: #2e333b; --field-line: #6b7480;
     --accent: #7ea3ff; --accent-ink: #0d1424; --good: #5ccb8a; --warn: #e2a64a; --bad: #ff7a70;
     --backdrop: rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #16181d; --soft: #1f2329; --editor: #1b1e23; --ink: #e6e8eb; --ink-2: #9aa3ad; --line: #2e333b;
+  --bg: #16181d; --soft: #1f2329; --editor: #1b1e23; --ink: #e6e8eb; --ink-2: #9aa3ad; --line: #2e333b; --field-line: #6b7480;
   --accent: #7ea3ff; --accent-ink: #0d1424; --good: #5ccb8a; --warn: #e2a64a; --bad: #ff7a70;
   --backdrop: rgba(0, 0, 0, 0.6);
   color-scheme: dark;
@@ -62,13 +63,15 @@
   background: transparent; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
 }
 .theme-btn:hover { background: var(--soft); }
-.link-btn { padding: 0; margin-left: 8px; font: inherit; color: var(--accent); background: none; border: 0; cursor: pointer; }
+.link-btn { min-height: 24px; padding: 0; margin-left: 8px; font: inherit; color: var(--accent); background: none; border: 0; cursor: pointer; }
 .link-btn:hover { text-decoration: underline; }
 
 .input, .select {
   width: 100%; min-height: 40px; padding: 0 10px; font: 16px var(--font); color: var(--ink);
-  background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  background: var(--bg); border: 1px solid var(--field-line); border-radius: 6px;
 }
+/* for screen readers only */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .select { width: auto; min-height: 34px; padding: 0 8px; font-size: 14px; }
 .input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 /* The browser's own "Choose File" button ignores the theme unless styled. */
@@ -102,7 +105,8 @@
   width: 100%; padding: 8px 12px; text-align: left; font: 16px var(--font); color: var(--ink);
   background: transparent; border: 0; cursor: pointer;
 }
-.name-opt:hover, .name-opt:focus-visible { background: var(--soft); outline: none; }
+.name-opt:hover { background: var(--soft); }
+.name-opt.active { background: var(--soft); outline: 2px solid var(--accent); outline-offset: -2px; }
 .hint { font-size: 14px; color: var(--ink-2); }
 
 .rules { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
@@ -148,6 +152,8 @@
 .quiz > .scratch { grid-row: 3; grid-column: 2; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--soft); border-left: 1px solid var(--line); }
 .quiz > .scratch[hidden] { display: none; }
 .qbar .btn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+.kbd-hint { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+@media (max-width: 1100px) { .kbd-hint { display: none; } } /* still in the editor's label */
 .scratch-head { display: flex; align-items: center; gap: 8px; }
 .scratch-group { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
 .scratch-tool { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; color: var(--ink-2); background: none; border: 0; border-radius: 6px; cursor: pointer; }
@@ -163,7 +169,7 @@
 .scratch-notes { position: absolute; inset: 0; pointer-events: none; }
 .scratch-note { position: absolute; margin: 0; padding: 2px 6px; font: 14px/1.45 var(--mono); color: var(--ink); background: transparent; border: 1px dashed transparent; border-radius: 4px; resize: none; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .scratch-board[data-tool="text"] .scratch-note { pointer-events: auto; }
-.scratch-note:focus { outline: none; border-color: var(--accent); background: color-mix(in srgb, var(--bg) 85%, transparent); }
+.scratch-note:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); background: color-mix(in srgb, var(--bg) 85%, transparent); }
 .qbar-progress { font-size: 14px; color: var(--ink-2); }
 /* time left: a pill in the middle of the top bar; red under 5 minutes, solid red under 1 */
 .timer { padding: 2px 12px; font: 600 16px var(--mono); font-variant-numeric: tabular-nums; background: var(--soft); border: 1px solid var(--line); border-radius: 999px; transition: background 0.3s, color 0.3s; }
@@ -216,7 +222,7 @@
 .x-icon { font-size: 13px; text-decoration: line-through; text-decoration-thickness: 2px; }
 .choice-row.crossed .choice { position: relative; }
 .choice-row.crossed .choice::after { content: ''; position: absolute; left: 8px; right: 8px; top: 50%; border-top: 2px solid var(--ink-2); pointer-events: none; }
-.choice-row.crossed .choice-text, .choice-row.crossed .choice input { opacity: 0.45; }
+.choice-row.crossed .choice-text, .choice-row.crossed .choice input { opacity: 0.7; } /* the strike-through shows it's out */
 .choice-row.crossed .choice-x { color: var(--ink); border-color: var(--line); }
 /* mark for review */
 .meta-right { display: inline-flex; align-items: center; gap: 12px; }
@@ -265,7 +271,7 @@
 .editor-host { flex: 1 1 0; min-height: 180px; background: var(--editor); }
 .editor-loading { padding: 16px; color: var(--ink-2); font-size: 14px; }
 .code-fallback { width: 100%; height: 100%; resize: none; border: 0; padding: 12px; font: 14px/22px var(--mono); color: var(--ink); background: var(--editor); tab-size: 4; }
-.code-fallback:focus { outline: none; }
+.code-fallback:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 .results { flex: none; border-top: 1px solid var(--line); padding: 10px 12px; display: grid; gap: 6px; font-size: 14px; max-height: 40%; overflow: auto; }
 .fill-results { max-height: 280px; }
 .results:empty { display: none; }
@@ -292,7 +298,8 @@
   min-width: 32px; height: 32px; padding: 0 6px; font: 600 13px var(--font); color: var(--ink-2);
   background: var(--bg); border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
 }
-.sheet-dot.answered { color: var(--ink); background: var(--soft); }
+/* answered: a bar under the number as well as the fill, so it doesn't rest on color alone */
+.sheet-dot.answered { color: var(--ink); background: var(--soft); box-shadow: inset 0 -3px 0 var(--ink-2); }
 .sheet-dot.current { color: var(--accent); border-color: var(--accent); }
 .sheet-dot { position: relative; }
 .sheet-dot.marked::after {
@@ -328,6 +335,12 @@
   .qnav > :first-child { grid-area: prev; }
   .qnav > .sheet { grid-area: sheet; max-width: none; }
   .qnav > :last-child { grid-area: next; }
+}
+/* Very short windows (or a page zoomed way in): the bars scroll with the question instead of taking
+   most of the screen. */
+@media (max-height: 480px) {
+  .quiz { display: block; overflow: auto; }
+  .quiz > .qmain { overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) {
   .confetti-layer { display: none; }
@@ -380,7 +393,7 @@
 /* Trace tables */
 .trace-wrap { overflow-x: auto; }
 .trace { border-collapse: collapse; font: 14px var(--mono); }
-.trace th, .trace td { border: 1px solid var(--line); padding: 0; text-align: center; min-width: 88px; }
+.trace th, .trace td { border: 1px solid var(--field-line); padding: 0; text-align: center; min-width: 88px; }
 .trace th { padding: 6px 10px; font: 600 13px var(--font); color: var(--ink-2); background: var(--soft); }
 .trace td.given { padding: 6px 10px; color: var(--ink-2); background: var(--soft); }
 .trace-cell { width: 100%; min-width: 88px; padding: 7px 10px; font: inherit; text-align: center; color: var(--ink); background: var(--bg); border: 0; }

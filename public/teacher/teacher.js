@@ -71,7 +71,21 @@
       who && who.role !== 'admin' ? h('button', { class: 'btn small', type: 'button', text: 'Password', onclick: () => showSetPassword(false) }) : null,
       h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } }));
   }
-  function mount(...nodes) { clearInterval(pollTimer); leaveGuard = null; root.replaceChildren(...nodes); }
+  // A new page: the tab title names it, and reading starts at its heading unless the page focused a field.
+  function mount(...nodes) {
+    clearInterval(pollTimer);
+    leaveGuard = null;
+    root.replaceChildren(...nodes);
+    const head = root.querySelector('main h1, h1');
+    document.title = head && head.textContent ? `${head.textContent} – BrowserQuiz` : 'BrowserQuiz (Teacher Panel)';
+    requestAnimationFrame(() => {
+      const a = document.activeElement;
+      if (!head || !head.isConnected || (a && a !== document.body && root.contains(a))) return;
+      head.tabIndex = -1;
+      head.focus({ preventScroll: true });
+    });
+  }
+  const actionsHead = () => h('th', {}, h('span', { class: 'sr-only', text: 'Actions' }));
 
   // ---------- sign in ----------
   function showLogin() {
@@ -90,7 +104,7 @@
       btn.disabled = true; msg.textContent = '';
       try { const r = await post('/api/t/login', { username: user.value.trim(), password: pw.value }); if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else route(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
     });
-    mount(form);
+    mount(h('main', {}, form));
     user.focus();
   }
 
@@ -129,7 +143,7 @@
         if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else showHome();
       } catch (ex) { msg.textContent = ex.message; btn.disabled = false; }
     });
-    mount(form);
+    mount(h('main', {}, form));
     cur.focus();
   }
 
@@ -137,7 +151,7 @@
   function showRecoveryCode(codeText) {
     const copy = h('button', { class: 'btn small', type: 'button', text: 'Copy' });
     copy.addEventListener('click', async () => { if (await copyText(codeText)) copy.textContent = 'Copied'; });
-    mount(h('div', { class: 't-login t-recovery' },
+    mount(h('main', { class: 't-login t-recovery' },
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
       h('h1', { text: 'Save your recovery code' }),
       h('p', { text: 'Your quizzes are encrypted with your password, so only you can open them, not whoever runs this server. If you forget your password, this code is the only way to get them back.' }),
@@ -167,14 +181,14 @@
         } catch (e) { msg.textContent = e.message; }
       };
       list.replaceChildren(h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
-        h('thead', {}, h('tr', {}, ['Name', 'Username', 'Quizzes', 'Classes', 'Status', ''].map((x) => h('th', { text: x })))),
+        h('thead', {}, h('tr', {}, ['Name', 'Username', 'Quizzes', 'Classes', 'Status'].map((x) => h('th', { text: x })), actionsHead())),
         h('tbody', {}, r.teachers.map((x) => h('tr', {},
           h('td', { text: x.name }), h('td', { class: 't-muted', text: x.username }),
           h('td', { class: 'num', text: String(x.quizzes) }), h('td', { class: 'num', text: String(x.classes) }),
           h('td', { class: x.disabled ? 't-muted' : x.pending ? 'st-waiting' : 'st-good', text: x.role === 'admin' ? 'Admin' : x.disabled ? 'Disabled' : x.pending ? 'Not signed in yet' : 'Active' }),
           h('td', { class: 't-actions' }, x.role === 'admin' ? null : [
-            h('button', { class: 'btn small', type: 'button', text: 'Reset password', onclick: () => act(x, 'reset') }),
-            h('button', { class: 'btn small', type: 'button', text: x.disabled ? 'Enable' : 'Disable', onclick: () => act(x, x.disabled ? 'enable' : 'disable') }),
+            h('button', { class: 'btn small', type: 'button', text: 'Reset password', 'aria-label': `Reset password for ${x.name}`, onclick: () => act(x, 'reset') }),
+            h('button', { class: 'btn small', type: 'button', text: x.disabled ? 'Enable' : 'Disable', 'aria-label': `${x.disabled ? 'Enable' : 'Disable'} ${x.name}`, onclick: () => act(x, x.disabled ? 'enable' : 'disable') }),
           ])))))));
     }
     const form = h('form', { class: 't-row' },
@@ -275,13 +289,13 @@
   }
 
   const runsTable = (runs) => h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
-    h('thead', {}, h('tr', {}, ['Code', 'Quiz', 'Class', 'Status', 'Joined', 'Started', ''].map((x) => h('th', { text: x })))),
+    h('thead', {}, h('tr', {}, ['Code', 'Quiz', 'Class', 'Status', 'Joined', 'Started'].map((x) => h('th', { text: x })), actionsHead())),
     h('tbody', {}, runs.map((r) => h('tr', {},
       h('td', {}, h('button', { class: 't-link t-mono', type: 'button', text: r.code, onclick: () => showRun(r.id) })),
       h('td', { text: r.quiz }), h('td', { text: r.roster }),
       h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.practice ? ' (practice)' : r.seb ? ' (SEB)' : ''}` }),
       h('td', { class: 'num', text: String(r.joined) }), h('td', { text: date(r.createdAt) }),
-      h('td', { class: 't-actions' }, h('button', { class: 'btn small', type: 'button', text: 'Delete',
+      h('td', { class: 't-actions' }, h('button', { class: 'btn small', type: 'button', text: 'Delete', 'aria-label': `Delete ${r.code}`,
         onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?${r.status === 'open' ? " It's still open: anyone taking it gets signed out." : ''}`) })))))));
 
   // Start a quiz: what, who, and how it's locked down. Open quizzes are listed under it.
@@ -371,16 +385,17 @@
         copyPromptBtn(),
         h('button', { class: 'btn small primary', type: 'button', text: 'New quiz', onclick: () => openQuiz(null) })),
       data.quizzes.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
+        h('thead', { class: 'sr-only' }, h('tr', {}, ['Quiz', 'Questions', 'Time limit', 'Added'].map((x) => h('th', { text: x })), actionsHead())),
         h('tbody', {}, data.quizzes.map((x) => h('tr', {},
-          h('td', { text: x.title }),
+          h('td', { role: 'rowheader', class: 't-rowhead', text: x.title }),
           h('td', { class: 't-muted', text: plural(x.questions, 'question') }),
           h('td', { class: 't-muted', text: x.timeLimitMin ? `${x.timeLimitMin} min` : 'No time limit' }),
           h('td', { class: 't-muted', text: date(x.createdAt) }),
           h('td', { class: 't-actions' },
-            linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true),
-            h('button', { class: 'btn small', type: 'button', text: 'Edit', onclick: () => openQuiz(x.id) }),
-            linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
-            h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}? Past results stay.`) }))))))) : null,
+            named(linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true), `Preview ${x.title}`),
+            h('button', { class: 'btn small', type: 'button', text: 'Edit', 'aria-label': `Edit ${x.title}`, onclick: () => openQuiz(x.id) }),
+            named(linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`), `Download ${x.title}`),
+            h('button', { class: 'btn small', type: 'button', text: 'Delete', 'aria-label': `Delete ${x.title}`, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}? Past results stay.`) }))))))) : null,
       h('div', { class: 't-row' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizBtn),
       h('details', { class: 't-paste' }, h('summary', { text: 'Paste a quiz.json' }),
         h('label', { class: 'field', for: 'paste-quiz' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteJson), h('div', {}, pasteBtn)),
@@ -402,12 +417,13 @@
       h('div', { class: 't-head' }, h('h1', { text: 'Classes' }),
         h('button', { class: 'btn small primary', type: 'button', text: 'New class', onclick: () => showRoster(null) })),
       data.rosters.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
+        h('thead', { class: 'sr-only' }, h('tr', {}, ['Class', 'Students'].map((x) => h('th', { text: x })), actionsHead())),
         h('tbody', {}, data.rosters.map((x) => h('tr', {},
-          h('td', { text: x.name }),
+          h('td', { role: 'rowheader', class: 't-rowhead', text: x.name }),
           h('td', { class: 't-muted', text: plural(x.students, 'student') }),
           h('td', { class: 't-actions' },
-            h('button', { class: 'btn small', type: 'button', text: 'Edit', onclick: () => showRoster(x.id) }),
-            h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}? Past results stay.`) }))))))) : null,
+            h('button', { class: 'btn small', type: 'button', text: 'Edit', 'aria-label': `Edit ${x.name}`, onclick: () => showRoster(x.id) }),
+            h('button', { class: 'btn small', type: 'button', text: 'Delete', 'aria-label': `Delete ${x.name}`, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}? Past results stay.`) }))))))) : null,
       h('div', { class: 't-row' },
         h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
         h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile),
@@ -415,6 +431,7 @@
       rosterMsg);
   }
 
+  const named = (el, label) => { el.setAttribute('aria-label', label); return el; };
   function linkBtn(text, href, newTab) {
     const a = h('a', { class: 'btn small', href, text, target: newTab ? '_blank' : null, rel: newTab ? 'noopener' : null });
     a.style.cssText = 'display:inline-flex;align-items:center;text-decoration:none';
@@ -431,7 +448,7 @@
     const face = h('span', { class: 'pick-face', id: id + '-value' });
     const btn = h('button', {
       class: 'input pick', type: 'button', id, disabled: !items.length,
-      'aria-haspopup': 'listbox', 'aria-expanded': 'false', 'aria-labelledby': `${id}-label ${id}-value`,
+      'aria-haspopup': 'listbox', 'aria-expanded': 'false', 'aria-controls': id + '-list', 'aria-labelledby': `${id}-label ${id}-value`,
     }, face, h('span', { class: 'pick-caret', 'aria-hidden': 'true' }));
     const list = h('ul', { class: 'pick-list', role: 'listbox', id: id + '-list', tabindex: '-1', 'aria-labelledby': id + '-label' });
     list.hidden = true;
@@ -563,10 +580,10 @@
     const list = roster.students.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
       h('tbody', {}, roster.students.map((st) => {
         const row = h('tr', {});
-        const btn = h('button', { class: 'btn small', type: 'button', text: 'Remove' });
+        const btn = h('button', { class: 'btn small', type: 'button', text: 'Remove', 'aria-label': `Remove ${st.name}` });
         btn.addEventListener('click', () => {
-          if (removing.has(st.id)) { removing.delete(st.id); btn.textContent = 'Remove'; row.classList.remove('t-removed'); }
-          else { removing.add(st.id); btn.textContent = 'Undo'; row.classList.add('t-removed'); }
+          if (removing.has(st.id)) { removing.delete(st.id); btn.textContent = 'Remove'; btn.setAttribute('aria-label', `Remove ${st.name}`); row.classList.remove('t-removed'); }
+          else { removing.add(st.id); btn.textContent = 'Undo'; btn.setAttribute('aria-label', `Undo removing ${st.name}`); row.classList.add('t-removed'); }
         });
         row.append(h('td', { text: st.name }), h('td', { class: 't-actions' }, btn));
         return row;
@@ -624,6 +641,8 @@
     const failedBox = h('div');
     let lastDetail = '';
     const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => act(`/api/t/runs/${runId}/admit-all`) });
+    // Read out when the counts change, not on every 2-second refresh.
+    const summary = h('p', { class: 'sr-only', 'aria-live': 'polite' });
     const exportLink = h('a', { class: 'btn', href: `/api/t/runs/${runId}/export.csv`, download: true, text: 'Export CSV' });
     const classReport = h('a', { class: 'btn', href: `/teacher/report.html?run=${encodeURIComponent(runId)}`, target: '_blank', rel: 'noopener', text: 'Class report' });
     for (const a of [exportLink, classReport]) {
@@ -649,6 +668,12 @@
       try { data = await api(`/api/t/runs/${runId}/live`); } catch (e) { return; }
       const run = data.run;
       code.textContent = run.code;
+      document.title = `${run.code} · ${run.title} – BrowserQuiz`;
+      const count = (f) => data.students.filter((x) => x.attempt && f(x.attempt)).length;
+      const said = [[count((a) => a.status === 'waiting'), 'waiting'], [count((a) => a.status === 'admitted'), 'admitted'], [count((a) => a.status === 'active'), 'working'],
+        [count((a) => a.status === 'submitted'), 'turned in'], [count((a) => a.integrity === 'invalidated'), 'invalidated']]
+        .filter(([n]) => n).map(([n, w]) => `${n} ${w}`).join(', ') || 'Nobody has joined yet';
+      if (summary.textContent !== said) summary.textContent = said;
       title.textContent = run.title;
       meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
       howTo.textContent = run.sebFile ? `Join at ${location.origin}, which opens Safe Exam Browser` : `Join at ${location.origin}`;
@@ -671,7 +696,7 @@
       tbody.replaceChildren(...rows.map((s) => {
         const a = s.attempt;
         const actions = h('td', { class: 't-actions' });
-        const btn = (text, key, onclick, extra) => h('button', Object.assign({ class: 'btn small', type: 'button', text, onclick, 'data-key': `${a.id}:${key}` }, extra || {}));
+        const btn = (text, key, onclick, extra) => h('button', Object.assign({ class: 'btn small', type: 'button', text, onclick, 'data-key': `${a.id}:${key}`, 'aria-label': `${text} ${s.name}` }, extra || {}));
         if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => act(`/api/t/attempts/${a.id}/admit`), { class: 'btn small primary' }));
         if (a && a.integrity === 'invalidated') actions.append(btn('Restore', 'restore', () => { if (confirm(`Restore ${s.name}?`)) act(`/api/t/attempts/${a.id}/restore`); }));
         // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
@@ -692,7 +717,7 @@
           else if (a.review) score += ' (needs review)';
         }
         return h('tr', { class: selected === (a && a.id) ? 'sel' : null },
-          h('td', {}, a ? h('button', { class: 't-link', type: 'button', text: s.name, 'data-key': `${a.id}:name`, onclick: () => { selected = a.id; lastDetail = ''; showDetail(a.id); refresh(); } }) : s.name),
+          h('td', { role: 'rowheader', class: 't-rowhead' }, a ? h('button', { class: 't-link', type: 'button', text: s.name, 'data-key': `${a.id}:name`, 'aria-expanded': String(selected === a.id), onclick: () => { selected = a.id; lastDetail = ''; showDetail(a.id); refresh(); } }) : s.name),
           statusCell(s), integrityCell(a),
           h('td', { class: 'num', text: a ? String(a.strikes) : '' }), h('td', { class: 'num', text: a ? String(a.warnings) : '' }),
           h('td', { class: 'num', text: a && a.status !== 'waiting' ? `${a.answered}/${a.total}` : '' }),
@@ -701,8 +726,15 @@
           h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), text: score }),
           actions);
       }));
-      // Keep keyboard focus on the same button after the redraw, without scrolling the page back to it.
-      if (focusKey) { const again = tbody.querySelector(`[data-key="${CSS.escape(focusKey)}"]`); if (again) again.focus({ preventScroll: true }); }
+      // Keep keyboard focus on the same button after the redraw, without scrolling the page back to it. If
+      // that button is gone (say, Admit after admitting), go to the next Admit, or to the student's name.
+      if (focusKey) {
+        const [fid, what] = focusKey.split(':');
+        const again = tbody.querySelector(`[data-key="${CSS.escape(focusKey)}"]`)
+          || (what === 'admit' && (tbody.querySelector('[data-key$=":admit"]') || (admitAll.isConnected && admitAll)))
+          || tbody.querySelector(`[data-key="${CSS.escape(fid)}:name"]`);
+        if (again) again.focus({ preventScroll: true });
+      }
       if (selected) showDetail(selected, true);
     }
 
@@ -715,6 +747,8 @@
       const typing = detail.contains(document.activeElement) && document.activeElement.matches('input, textarea, select');
       if (quiet && (snapshot === lastDetail || typing || String(window.getSelection() || '') !== '')) return;
       lastDetail = snapshot;
+      const keep = detail.contains(document.activeElement) && document.activeElement.dataset ? document.activeElement.dataset.key : null;
+      const dk = (key) => ({ 'data-key': `detail:${key}` });
       const canvas = h('canvas', { class: 't-trail', width: 640, height: 360, 'aria-label': 'Mouse trail' });
       // Each question as it looked in the quiz, with this student's answer and the correct one,
       // plus what only the teacher sees: grading state, hidden test results, and the grading controls.
@@ -736,14 +770,18 @@
       }));
       detail.replaceChildren(h('section', { class: 't-detail' },
         h('div', { class: 't-row' },
-          h('h2', { style: 'flex:1', text: d.name }),
-          d.status === 'active' ? h('button', { class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }) : null,
-          d.integrity !== 'invalidated' ? h('button', { class: 'btn small', type: 'button', text: 'Invalidate', onclick: () => { const note = prompt('Reason (optional)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } }) : null,
+          h('h2', { style: 'flex:1', tabindex: '-1', class: 't-detail-name', text: d.name }),
+          d.status === 'active' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }, dk('end'))) : null,
+          d.integrity !== 'invalidated' ? h('button', Object.assign(dk('invalidate'), { class: 'btn small', type: 'button', text: 'Invalidate', onclick: () => { const note = prompt('Reason (optional)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } })) : null,
           d.status === 'active' && d.deadline ? h('span', { class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }) : null,
-          d.status === 'active' && d.deadline ? h('button', { class: 'btn small', type: 'button', text: '+5 min', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } }) : null,
+          d.status === 'active' && d.deadline ? h('button', Object.assign({ class: 'btn small', type: 'button', text: '+5 min', 'aria-label': 'Add 5 minutes', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } }, dk('extend'))) : null,
           d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
-          d.status === 'submitted' ? h('button', { class: 'btn small', type: 'button', text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) }) : null,
-          h('button', { class: 'btn small', type: 'button', text: 'Close', onclick: () => { selected = null; detail.replaceChildren(); refresh(); } })),
+          d.status === 'submitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) }, dk('regrade'))) : null,
+          h('button', { class: 'btn small', type: 'button', text: 'Close', onclick: () => {
+            selected = null;
+            detail.replaceChildren();
+            refresh().then(() => { const n = tbody.querySelector(`[data-key="${CSS.escape(id)}:name"]`); if (n) n.focus({ preventScroll: true }); });
+          } })),
         d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}` }) : null,
         h('div', { class: 't-detail-grid' },
           h('div', { class: 't-section' }, h('h3', { text: 'Activity' }),
@@ -754,7 +792,8 @@
         h('div', { class: 't-section' }, h('h3', { text: d.totals ? `Answers (${d.totals.score} / ${d.totals.max}${d.totals.pending ? ', code still grading' : d.totals.failed ? ', grading failed' : d.totals.review ? ', needs review' : ''})` : 'Answers so far' }), answers)));
       drawTrail(canvas, d.mouse);
       window.BQReport.highlight(answers);
-      if (!quiet) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (keep) { const again = detail.querySelector(`[data-key="${CSS.escape(keep)}"]`); if (again) again.focus({ preventScroll: true }); }
+      if (!quiet) { detail.scrollIntoView({ behavior: 'smooth', block: 'start' }); detail.querySelector('.t-detail-name').focus({ preventScroll: true }); }
     }
 
     // Rubric checkboxes and a points override for one answer.
@@ -794,9 +833,9 @@
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
           howTo,
           h('div', { class: 't-row' }, admitAll, toggle, lockBtn, sebLinks, exportLink, classReport),
-          failedBox),
+          failedBox, summary),
         h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
-          h('thead', {}, h('tr', {}, ['Student', 'Status', 'Integrity', 'Strikes', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score', ''].map((x) => h('th', { text: x })))),
+          h('thead', {}, h('tr', {}, ['Student', 'Status', 'Integrity', 'Strikes', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score'].map((x) => h('th', { text: x })), actionsHead())),
           tbody)),
         detail));
     await refresh();

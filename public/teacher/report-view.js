@@ -290,7 +290,7 @@
         scoreBox),
       h('nav', { class: 'r-chips', 'aria-label': 'Questions' }, s.questions.map((q, i) => {
         const [st, words] = status(q);
-        return h('a', { class: `r-chip st-${st}`, href: `#${key}-q${i + 1}`, title: `Question ${i + 1}: ${words}`, text: String(i + 1) });
+        return h('a', { class: `r-chip st-${st}`, href: `#${key}-q${i + 1}`, title: `Question ${i + 1}: ${words}`, 'aria-label': `Question ${i + 1}: ${words}`, text: String(i + 1) });
       })),
       s.questions.map((q, i) => question(quiz, q, i, Object.assign({}, o, { anchor: `${key}-q${i + 1}`, sharedSeen }))));
   }

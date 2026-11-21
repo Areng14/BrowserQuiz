@@ -531,9 +531,14 @@
     el.style.height = `${el.scrollHeight + 2 + (el.scrollWidth > el.clientWidth ? 16 : 0)}px`; // room for a sideways scrollbar
     if (window.scrollY !== y) window.scrollTo(0, y);
   }
-  // Tab indents, Shift+Tab outdents, Enter keeps the indent.
+  // Tab indents, Shift+Tab outdents, Enter keeps the indent. Esc, then Tab (or Shift+Tab), moves on.
   function codeKeys(el) {
+    let leave = false;
+    el.setAttribute('aria-description', 'Tab indents. Esc, then Tab, moves on.');
     el.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { leave = true; return; }
+      if (e.key === 'Tab' && leave) { leave = false; return; } // the browser moves focus as usual
+      if (!['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) leave = false;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const v = el.value;
       const s = el.selectionStart;
@@ -730,13 +735,13 @@
       const multi = q.type === 'multi';
       const full = q.choices.length >= 8;
       const rows = q.choices.map((c, k) => {
-        const mark = h('input', { type: multi ? 'checkbox' : 'radio', name: 'qe-answer', checked: multi ? q.answer.includes(k) : q.answer === k, 'aria-label': 'Correct', title: 'Correct' });
+        const mark = h('input', { type: multi ? 'checkbox' : 'radio', name: 'qe-answer', checked: multi ? q.answer.includes(k) : q.answer === k, 'aria-label': `Choice ${k + 1} is correct`, title: 'Correct' });
         mark.addEventListener('change', () => {
           if (multi) q.answer = mark.checked ? [...new Set([...q.answer, k])].sort((a, b) => a - b) : q.answer.filter((x) => x !== k);
           else q.answer = k;
           touch(q);
         });
-        const text = input(q, c, (v) => { q.choices[k] = v; }, { placeholder: `Choice ${k + 1}` });
+        const text = input(q, c, (v) => { q.choices[k] = v; }, { placeholder: `Choice ${k + 1}`, 'aria-label': `Choice ${k + 1}` });
         text.addEventListener('keydown', (e) => {
           if (e.ctrlKey || e.metaKey || e.altKey) return;
           if (e.key === 'Enter') {
@@ -766,13 +771,25 @@
           });
           focusChoice(Math.min(k + lines.length, q.choices.length - 1));
         });
-        return h('div', { class: 'qe-choice' }, h('span', { class: 'qe-grip', text: '⋮⋮', title: 'Drag to reorder', 'aria-hidden': 'true' }), mark, text,
+        // Drag the grip, or focus it and use the arrow keys.
+        const grip = h('button', { class: 'qe-grip', type: 'button', text: '⋮⋮', title: 'Drag, or use ↑ ↓, to move', 'aria-label': `Move choice ${k + 1}` });
+        grip.addEventListener('keydown', (e) => {
+          const to = e.key === 'ArrowUp' ? k - 1 : e.key === 'ArrowDown' ? k + 1 : -1;
+          if (to < 0 || to >= q.choices.length || e.altKey || e.ctrlKey || e.metaKey) return;
+          e.preventDefault();
+          e.stopPropagation();
+          editChoices(q, (r) => r.splice(to, 0, r.splice(k, 1)[0]));
+          const g = pane.querySelectorAll('.qe-choice .qe-grip')[to];
+          if (g) g.focus();
+        });
+        return h('div', { class: 'qe-choice' }, grip, mark, text,
           xBtn('Remove choice', () => editChoices(q, (r) => r.splice(k, 1)), q.choices.length <= 2));
       });
       sortable(rows, (from, to) => editChoices(q, (r) => r.splice(to, 0, r.splice(from, 1)[0])), (row) => row.firstChild);
       const add = h('button', { class: 'btn small', type: 'button', text: 'Add choice', disabled: full, onclick: () => { editChoices(q, (r) => r.push({ text: '', on: false })); focusChoice(q.choices.length - 1); } });
-      return h('div', { class: 'field' }, h('span', { class: 'field-label', text: multi ? 'Choices, with the correct ones ticked' : 'Choices, with the correct one marked' }),
-        h('div', { class: 'qe-choices' }, rows),
+      const label = h('span', { class: 'field-label', id: `qe-choices-${q._ui ? q._ui.id || 'q' : 'q'}`, text: multi ? 'Choices, with the correct ones ticked' : 'Choices, with the correct one marked' });
+      return h('div', { class: 'field' }, label,
+        h('div', { class: 'qe-choices', role: 'group', 'aria-labelledby': label.id }, rows),
         h('div', { class: 'qe-line' }, add, check(q, q.shuffleChoices === false, 'Keep choices in this order', (v) => { if (v) q.shuffleChoices = false; else delete q.shuffleChoices; })));
     }
 
@@ -813,7 +830,7 @@
       const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp' });
       file.addEventListener('change', () => addImage(q, file.files[0]));
       const fence = () => { const s = ta.value.slice(0, ta.selectionStart); wrap(ta, `${s && !s.endsWith('\n') ? '\n' : ''}\`\`\`${quiz.language === 'none' ? '' : quiz.language}\n`, '\n```\n'); };
-      const tool = (text, title, fn, cls) => h('button', { class: `qe-tool ${cls || ''}`, type: 'button', text, title, tabindex: '-1', onclick: fn });
+      const tool = (text, title, fn, cls) => h('button', { class: `qe-tool ${cls || ''}`, type: 'button', text, title, onclick: fn });
       ta.addEventListener('keydown', (e) => {
         const mod = e.ctrlKey || e.metaKey;
         const k = e.key.toLowerCase();
@@ -983,7 +1000,7 @@
         const el = input(q, name, (v) => { u.cols[c] = v; }, { type: 'text', class: 'qe-gridcell', placeholder: 'Name', 'aria-label': `Column ${c + 1}`, 'data-r': '-1', 'data-c': c, maxlength: '40', autocomplete: 'off', spellcheck: 'false' });
         el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const next = cell(0, c); if (next) next.focus(); } });
         return h('th', {}, h('div', { class: 'qe-cell' }, el,
-          h('button', { class: 'qe-tool', type: 'button', text: '✕', title: 'Remove column', 'aria-label': `Remove column ${c + 1}`, tabindex: '-1', disabled: u.cols.length <= 1,
+          h('button', { class: 'qe-tool', type: 'button', text: '✕', title: 'Remove column', 'aria-label': `Remove column ${c + 1}`, disabled: u.cols.length <= 1,
             onclick: () => edit(() => { u.cols.splice(c, 1); u.cells.forEach((row) => row.splice(c, 1)); }) })));
       }), h('td', { class: 'qe-grid-side' }, h('button', { class: 'btn small', type: 'button', text: 'Add column', disabled: wide,
         onclick: () => edit(() => { u.cols.push(''); u.cells.forEach((row) => row.push({ v: '', given: false })); }, -1, u.cols.length) })));
@@ -1007,11 +1024,11 @@
             line.split('\t').forEach((v, k) => { if (u.cells[r + i][c + k]) u.cells[r + i][c + k].v = v.trim(); });
           }), r, c);
         });
-        const given = h('input', { type: 'checkbox', checked: cl.given, title: 'Given to students', 'aria-label': `Given to students: ${u.cols[c] || `column ${c + 1}`}, row ${r + 1}`, tabindex: '-1' });
+        const given = h('input', { type: 'checkbox', checked: cl.given, title: 'Given to students', 'aria-label': `Given to students: ${u.cols[c] || `column ${c + 1}`}, row ${r + 1}` });
         given.addEventListener('change', () => { cl.given = given.checked; td.classList.toggle('given', cl.given); touch(q); });
         td.append(h('div', { class: 'qe-cell' }, el, given));
         return td;
-      }), h('td', { class: 'qe-grid-side' }, h('button', { class: 'qe-tool', type: 'button', text: '✕', title: 'Remove row', 'aria-label': `Remove row ${r + 1}`, tabindex: '-1', disabled: u.cells.length <= 1,
+      }), h('td', { class: 'qe-grid-side' }, h('button', { class: 'qe-tool', type: 'button', text: '✕', title: 'Remove row', 'aria-label': `Remove row ${r + 1}`, disabled: u.cells.length <= 1,
         onclick: () => edit(() => u.cells.splice(r, 1)) }))));
       return [h('div', { class: 'field' }, codeHead(q, 'Code (optional)'), code),
         h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'Table, with the correct values' }),
@@ -1053,7 +1070,7 @@
       return {
         after: renderBlanks,
         nodes: [
-          h('div', { class: 'field' }, codeHead(q, 'Code', null, h('button', { class: 'qe-tool', type: 'button', text: 'Blank', title: 'Turn the selected code into a blank', tabindex: '-1', onclick: makeBlank })), code, note),
+          h('div', { class: 'field' }, codeHead(q, 'Code', null, h('button', { class: 'qe-tool', type: 'button', text: 'Blank', title: 'Turn the selected code into a blank', onclick: makeBlank })), code, note),
           h('div', { class: 'field' }, label, list),
           run,
           u.run ? h('p', { class: 't-small t-muted', text: 'Any blanks that make the tests pass earn credit. The code has to be the whole class, as students write it in a code question.' }) : null],
@@ -1161,7 +1178,7 @@
         h('button', { class: 'btn small', type: 'button', text: 'Duplicate', onclick: () => duplicate(i) }),
         h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(i) }));
       const probs = h('ul', { class: 't-error qe-problems', role: 'alert' });
-      const view = h('div', { class: 'qe-view' });
+      const view = h('div', { class: 'qe-view', inert: true }); // a picture of the student's screen, not something to use
       const fields = h('div', { class: 'qe-stack' }, sharedEditor(q, i), promptEditor(q));
       if (q.type === 'single' || q.type === 'multi') fields.append(choicesEditor(q));
       if (q.type === 'text') {
@@ -1449,7 +1466,7 @@
     const title = h('input', { class: 'input qe-title', value: quiz.title || '', placeholder: 'Quiz title', 'aria-label': 'Title', maxlength: '120' });
     title.addEventListener('input', () => { quiz.title = title.value; touch(); });
     const short = { single: 'Multiple choice', multi: 'Select all', text: 'Short answer', output: 'Output', trace: 'Trace table', fill: 'Fill in blanks', code: 'Code', essay: 'Written' };
-    const keys = [[`${MOD}Enter`, 'New question'], [`${ALT}↑ ↓`, 'Previous, next question'], [`${ALT}Shift+↑ ↓`, 'Move question'], ['Enter', 'Next choice'], [`${MOD}S`, 'Save']];
+    const keys = [[`${MOD}Enter`, 'New question'], [`${ALT}↑ ↓`, 'Previous, next question'], [`${ALT}Shift+↑ ↓`, 'Move question'], ['Enter', 'Next choice'], ['Esc, then Tab', 'Leave a code box'], [`${MOD}S`, 'Save']];
     const root = h('div', { class: 'qe' },
       h('div', { class: 'qe-bar' }, title, h('span', { class: 'qe-grow' }), status, previewBtn, saveBtn),
       globalMsg,
