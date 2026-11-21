@@ -70,7 +70,7 @@
   function bar(...left) {
     return h('header', { class: 't-bar' }, h('span', { class: 'grow' }, ...left),
       who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null, themeButton(),
-      who && who.role !== 'admin' ? h('button', { class: 'btn small', type: 'button', text: 'Password', onclick: () => showSetPassword(false) }) : null,
+      who && !who.passwordFromEnv ? h('button', { class: 'btn small', type: 'button', text: 'Password', onclick: () => showSetPassword(false) }) : null,
       h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } }));
   }
   // A new page: the tab title names it, and reading starts at its heading unless the page focused a field.
@@ -267,7 +267,7 @@
         h('div', { class: 't-side-foot' },
           who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null,
           h('div', { class: 't-side-btns' }, themeButton(),
-            who && who.role !== 'admin' ? h('button', { class: 'btn small', type: 'button', text: 'Password', onclick: () => showSetPassword(false) }) : null,
+            who && !who.passwordFromEnv ? h('button', { class: 'btn small', type: 'button', text: 'Password', onclick: () => showSetPassword(false) }) : null,
             h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } })))),
       h('main', { class: 't-main' }, ...content));
   }

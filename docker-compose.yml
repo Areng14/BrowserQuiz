@@ -12,7 +12,8 @@ services:
       dockerfile: server/Dockerfile
     restart: unless-stopped
     environment:
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_RESET: ${ADMIN_RESET:-}
       ID_PEPPER: ${ID_PEPPER:?set ID_PEPPER in .env}
       RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}
       RUNNER_URL: http://runner:8080

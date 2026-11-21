@@ -63,12 +63,19 @@ function recoveryCode() {
 }
 const normCode = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-function setAdmin(id) {
+// Admin's quiz key comes from ID_PEPPER while admin's password comes from .env (fromEnv). Otherwise
+// admin is like any teacher: a key only their own password or recovery code opens.
+const pepperKey = () => Buffer.from(crypto.hkdfSync('sha256', String(process.env.ID_PEPPER || ''), 'browserquiz', 'admin quiz key', 32));
+let adminFromEnv = false;
+function setAdmin(id, fromEnv) {
   adminId = id;
-  adminKey = Buffer.from(crypto.hkdfSync('sha256', String(process.env.ID_PEPPER || ''), 'browserquiz', 'admin quiz key', 32));
+  adminFromEnv = !!fromEnv;
+  adminKey = adminFromEnv ? pepperKey() : null;
 }
+// The key admin's quizzes had while it came from .env, to move them to admin's own key once.
+const legacyAdminKey = (id) => (id && id === adminId ? pepperKey() : null);
 function keyFor(ownerId) {
-  if (ownerId && ownerId === adminId) return adminKey;
+  if (ownerId && ownerId === adminId && adminKey) return adminKey;
   return keyring.get(ownerId) || null;
 }
 // The owner's key, or "locked": students see a wait message, and the teacher signing in unlocks it.
@@ -78,8 +85,9 @@ function needKey(ownerId) {
   return k;
 }
 const isAdmin = (id) => id === adminId;
+const adminPasswordFromEnv = () => adminFromEnv;
 
 module.exports = {
   keyring, seal, open, sealText, openText, quizAad, assetAad, wrapKey, unwrapKey, newKey,
-  recoveryCode, normCode, setAdmin, keyFor, needKey, isAdmin,
+  recoveryCode, normCode, setAdmin, keyFor, needKey, isAdmin, legacyAdminKey, adminPasswordFromEnv,
 };

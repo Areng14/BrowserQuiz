@@ -318,7 +318,7 @@ module.exports = function teacherRoutes(r) {
     all.n = Math.min(all.cap, all.n + 1);
     // Unlock their quiz key. A teacher from before encryption gets one now, with a recovery code to keep.
     let recoveryCode = null;
-    if (teacher.role !== 'admin' && !teacher.must_change) {
+    if (!(teacher.role === 'admin' && V.adminPasswordFromEnv()) && !teacher.must_change) {
       if (teacher.key_wrap) {
         const key = await V.unwrapKey(teacher.key_wrap, body.password);
         if (key) V.keyring.set(teacher.id, key);
@@ -345,6 +345,7 @@ module.exports = function teacherRoutes(r) {
       ok: true, runner: runnerConfigured(), runnerOk: runnerConfigured() ? await runnerHealthy() : false,
       teacher: {
         username: me.username, name: me.name, role: me.role, mustChange: !!me.must_change,
+        passwordFromEnv: me.role === 'admin' && V.adminPasswordFromEnv(),
         // After a reset, with the key not in memory: their recovery code keeps their quizzes.
         needsRecovery: !!me.must_change && !!A.byId(me.id).key_wrap && !V.keyFor(me.id),
       },
@@ -355,7 +356,7 @@ module.exports = function teacherRoutes(r) {
   r.post('/api/t/me/password', async (req, res) => {
     const me = requireTeacher(req, { setup: true });
     const body = await readJson(req, 4096);
-    if (me.role === 'admin') throw new HttpError(400, 'admin_env', 'The admin password is ADMIN_PASSWORD in .env. Change it there and restart.');
+    if (me.role === 'admin' && V.adminPasswordFromEnv()) throw new HttpError(400, 'admin_env', 'The admin password is ADMIN_PASSWORD in .env. Change it there and restart.');
     const next = String(body.next || '');
     if (next.length < A.MIN_PASSWORD) throw new HttpError(400, 'weak', `Use at least ${A.MIN_PASSWORD} characters.`);
     const t = A.byId(me.id);
@@ -411,7 +412,7 @@ module.exports = function teacherRoutes(r) {
     const me = requireAdmin(req);
     const t = A.byId(p.id);
     if (!t) throw new HttpError(404, 'not_found');
-    if (t.role === 'admin') throw new HttpError(400, 'admin_env', 'The admin account is set up from .env.');
+    if (t.role === 'admin') throw new HttpError(400, 'admin_env', 'Admin is reset from the server settings (ADMIN_RESET or ADMIN_PASSWORD).');
     let out = { ok: true };
     if (p.action === 'reset') {
       const temp = A.tempPassword();

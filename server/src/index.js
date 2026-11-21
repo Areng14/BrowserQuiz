@@ -15,9 +15,9 @@ const PUBLIC = path.join(__dirname, '..', '..', 'public');
 // Config problems: say so once. In a container (node is PID 1) stay parked instead of exiting, or Docker
 // restarts the app forever and repeats the same error. The health check reports it as unhealthy.
 const problems = [];
-for (const k of ['ADMIN_PASSWORD', 'ID_PEPPER']) {
-  if (!process.env[k] || process.env[k].length < 12) problems.push(`${k} must be 12+ characters`);
-}
+if (!process.env.ID_PEPPER || process.env.ID_PEPPER.length < 12) problems.push('ID_PEPPER must be 12+ characters');
+// ADMIN_PASSWORD is optional: without it, admin signs in with a one-time code from the log.
+if (process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length < 12) problems.push('ADMIN_PASSWORD must be 12+ characters (or leave it out)');
 if (process.env.RUNNER_URL && (process.env.RUNNER_TOKEN || '').length < 16) problems.push('RUNNER_TOKEN must be 16+ characters');
 if (problems.length) {
   console.error(['BrowserQuiz did not start. Fix .env, then run: docker compose up -d', ...problems.map((x) => '  - ' + x)].join('\n'));
@@ -128,7 +128,7 @@ for (const row of q("SELECT id, run_id FROM attempts WHERE archived = 0 AND stat
   if (quiz) gradeAttempt(a, quiz).catch((e) => console.error('regrade failed', a.id, e.message));
 }
 
-// The admin account follows ADMIN_PASSWORD; start taking requests once it's in place.
+// The admin account is set up (ADMIN_PASSWORD, or a one-time code); start taking requests once it's in place.
 require('./accounts').ensureAdmin()
   .then(() => server.listen(PORT, () => console.log(`BrowserQuiz listening on :${PORT}`)))
   .catch((e) => { console.error('Could not set up the admin account:', e); process.exit(1); });

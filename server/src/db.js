@@ -90,7 +90,8 @@ addColumn('teachers', 'rec_wrap', 'TEXT');
 addColumn('quizzes', 'enc', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('assets', 'enc', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('runs', 'seb_key', 'TEXT'); // Safe Exam Browser Config Key: only SEB with that config can take the quiz
-addColumn('runs', 'seb_config', 'TEXT'); // the .seb file BrowserQuiz made for the run (null: the teacher's own)
+addColumn('runs', 'seb_config', 'TEXT');
+db.exec('CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT)'); // small server-wide facts, e.g. the last ADMIN_RESET used // the .seb file BrowserQuiz made for the run (null: the teacher's own)
 // How long a student was out of the quiz window, for the teacher to weigh a strike: all together, and
 // the longest single time. restore_strikes is the strike count when the teacher restored the attempt.
 addColumn('attempts', 'away_ms', 'INTEGER NOT NULL DEFAULT 0');

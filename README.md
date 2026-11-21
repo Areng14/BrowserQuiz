@@ -96,8 +96,8 @@ The runner checks its own sandbox when it starts, and refuses to run code if any
   - Quiz titles, class lists and results (scores, and which answers were right) stay readable.
   - The server has to read a quiz to grade it, so a host who changes the server's code can get at a
     quiz while it's unlocked.
-  - Admin's quizzes are keyed off `.env`, which the host has anyway, so teachers who want privacy use
-    their own accounts.
+  - When admin's password comes from `.env` (`ADMIN_PASSWORD`), admin's quizzes are keyed off `.env`,
+    which the host has anyway. With the one-time code instead, admin gets their own key too.
 
 ### Private by default
 
@@ -144,14 +144,23 @@ If students can't reach it, open port 8080 in the server's firewall.
 
 ## Teachers
 
-Sign in as `admin` with the teacher password from setup (`ADMIN_PASSWORD` in `.env`; leaving the
-username blank also means admin). To add teachers, open the **Teachers** tab. Each new teacher gets a
-temporary password to pass on, and picks their own the first time they sign in.
+The first account is `admin` (leaving the username blank also means admin). There are two ways to set
+it up:
+
+- **A one-time code (recommended):** leave `ADMIN_PASSWORD` empty. The server prints a code to its log
+  (`docker compose logs app`, or the deploy logs on Railway).
+  - Sign in with it and you pick your own password straight away, then get a recovery code.
+  - Admin's quizzes are then encrypted with admin's own key, like every teacher's.
+  - Forgot the password later? Set `ADMIN_RESET` to any new word and restart. The log shows a new code,
+    once, and your recovery code keeps your quizzes.
+- **A password in `.env`:** set `ADMIN_PASSWORD` (the setup script does this). To change it, edit
+  `.env` and run `docker compose up -d` again. That's also the way back in if you forget it.
+
+To add teachers, open the **Teachers** tab. Each new teacher gets a temporary password to pass on, and
+picks their own the first time they sign in.
 
 - **Reset password** gives a teacher a new temporary password and signs them out.
 - **Disable** stops someone signing in, and keeps their quizzes and results.
-- **The admin password** lives in `.env`. To change it, edit `.env` and run `docker compose up -d`
-  again. That's also the way back in if you forget it.
 
 ## Making quizzes and classes
 
@@ -274,9 +283,10 @@ own domain:
 | Service | Settings |
 | --- | --- |
 | `runner` | Root directory `/runner`. No public domain. Variables: `RUNNER_TOKEN=${{shared.RUNNER_TOKEN}}`, `PORT=8080`. |
-| `app` | Dockerfile `server/Dockerfile`, a volume at `/data`, health check `/healthz`, your domain on port 8080. Variables: `ADMIN_PASSWORD`, `ID_PEPPER` and `RUNNER_TOKEN` as `${{shared.…}}` references, `RUNNER_URL=http://${{runner.RAILWAY_PRIVATE_DOMAIN}}:8080`, `TRUST_PROXY=1`, `PORT=8080`. |
+| `app` | Dockerfile `server/Dockerfile`, a volume at `/data`, health check `/healthz`, your domain on port 8080. Variables: `ID_PEPPER` and `RUNNER_TOKEN` as `${{shared.…}}` references, `RUNNER_URL=http://${{runner.RAILWAY_PRIVATE_DOMAIN}}:8080`, `TRUST_PROXY=1`, `PORT=8080`. |
 
-Put the three secrets in the project's **shared variables**. On Railway the runner's container can
+Put the two secrets in the project's **shared variables**, and get admin's one-time code from the app's
+deploy logs. On Railway the runner's container can
 reach the internet, unlike with Docker Compose. Student code still can't, because the sandbox blocks
 network sockets.
 
