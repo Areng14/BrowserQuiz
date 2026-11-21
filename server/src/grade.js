@@ -243,6 +243,21 @@ function answerReport(quiz, a) {
 // Nothing about integrity goes in here, so a teacher can hand it to the student. Code questions show
 // the reference solution, not the hidden tests.
 // opts.forStudent: the practice review, which shows answers and references but never rubrics.
+// Each hidden test, with what the student's code returned. Teachers only: stored results keep no inputs or
+// expected values (store.storedResult), so those come from the quiz. Long values are cut short.
+function testRows(qq, c, lang) {
+  const hidden = qq.tests && qq.tests.hidden;
+  if (!c || c.status !== 'done' || c.compileError || !Array.isArray(c.tests) || !hidden || c.tests.length !== hidden.length) return null;
+  const cut = (s) => (s == null ? null : String(s).length > 400 ? String(s).slice(0, 400) + '…' : String(s));
+  return c.tests.map((t, i) => ({
+    pass: !!t.pass,
+    call: cut(H.callText(qq, hidden[i], lang)),
+    expected: cut(H.expectedText(qq, hidden[i], lang)),
+    got: cut(t.got),
+    speed: !!hidden[i].speed,
+  }));
+}
+
 function studentReport(quiz, a, name, opts = {}) {
   const t = a.result ? totals(a.result, quiz, a.answers) : null;
   const res = a.result || {};
@@ -287,6 +302,7 @@ function studentReport(quiz, a, name, opts = {}) {
             return { value: got, accepted: acc, ok: normBlank(got) !== '' && acc.some((x) => normBlank(x) === normBlank(got)) };
           }),
           compileError: qq.run && c && c.compileError ? c.compileError : null,
+          tests: qq.run && !opts.forStudent ? testRows(qq, c, qq.language) : null,
         });
       } else if (qq.type === 'essay') {
         const m = (res.manual || {})[qq.id] || {};
@@ -302,6 +318,7 @@ function studentReport(quiz, a, name, opts = {}) {
         row.answer = codeAnswered(qq, ans) ? ans.code : null;
         row.compileError = row.answer && c && c.compileError ? c.compileError : null;
         row.banned = row.answer && c && c.banned ? c.banned : null; // used a method the question doesn't allow: 0
+        row.tests = row.answer && !opts.forStudent ? testRows(qq, c, lang) : null;
         const refs = qq.reference || {};
         row.referenceLanguage = refs[lang] ? lang : Object.keys(refs)[0] || null;
         row.reference = row.referenceLanguage ? refs[row.referenceLanguage] : null;

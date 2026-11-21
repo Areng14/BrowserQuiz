@@ -18,7 +18,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-shell > .t-main { width: 100%; max-width: 1480px; margin: 0; padding: 28px max(36px, env(safe-area-inset-right, 0px)) 64px 36px; align-content: start; }
 .t-shell > .t-main > * { min-width: 0; }
 .t-side { position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 28px 12px 14px max(12px, env(safe-area-inset-left, 0px)); background: var(--soft); border-right: 1px solid var(--line); }
-.t-brand { padding: 0 10px 10px; font-size: 16px; line-height: 27.5px; font-weight: 700; }
+.t-brand { padding: 0 10px 14px; font-size: 21px; line-height: 27.5px; font-weight: 800; letter-spacing: -0.015em; }
 .t-nav { display: grid; gap: 2px; }
 .t-nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; font-weight: 500; color: var(--ink-2); text-decoration: none; border-radius: 6px; }
 .t-nav-item svg { flex: none; }
@@ -71,7 +71,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
   .t-side { position: sticky; top: 0; z-index: 19; height: calc(57px + env(safe-area-inset-top, 0px)); overflow: visible; flex-direction: row; align-items: center; gap: 8px; padding: env(safe-area-inset-top, 0px) var(--gut-r) 0 var(--gut-l); border-right: 0; border-bottom: 1px solid var(--line); }
   /* scrolling to a field or a button keeps it clear of both bars */
   html { scroll-padding-top: calc(66px + env(safe-area-inset-top, 0px)); scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
-  .t-brand { flex: none; padding: 0; }
+  .t-brand { flex: none; padding: 0; font-size: 19px; }
   .t-nav {
     position: fixed; z-index: 20; left: 0; right: 0; bottom: 0;
     display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 2px;
@@ -246,7 +246,7 @@ input[type="file"].input { padding: 6px 10px; }
 .t-ai { display: grid; gap: 4px; padding: 8px 10px; font-size: 13px; background: var(--soft); border-radius: 6px; }
 .t-ai p { margin: 0; }
 .t-check:has(> .t-ai-why) { flex-wrap: wrap; }
-.t-ai-why { flex-basis: 100%; padding-left: 26px; font-size: 12px; color: var(--ink-2); }
+.t-ai-why { flex-basis: 100%; margin: 2px 0 4px 26px; padding: 4px 0 4px 10px; font-size: 14px; line-height: 1.45; color: var(--ink); border-left: 2px solid var(--line); }
 
 /* Progress on the live page: a bar of what's answered, then where they are right now */
 .t-progress { white-space: nowrap; }
@@ -479,7 +479,7 @@ th .qe-gridcell { font: 600 13px var(--font); }
   .qe-side { position: static; max-height: none; border-bottom: 1px solid var(--line); }
   .qe-viewcol { position: static; }
 }
-@media (min-width: 2300px) { .t-app { zoom: 1.2; } }
+@media (min-width: 2300px) { .t-app { zoom: 1.2; --zoom: 1.2; } } /* --zoom: for heights in vh, which zoom scales */
 .t-answers .t-grade, .t-answers .t-adjust { margin-top: 10px; }
 /* Touch screens: 16px fields (iPhones zoom in on smaller ones) and finger-sized links */
 @media (pointer: coarse) {
@@ -487,4 +487,16 @@ th .qe-gridcell { font: 600 13px var(--font); }
   .t-link { min-height: 40px; }
   .t-app summary { padding-block: 9px; }
   .t-switch-row { min-height: 40px; }
+}
+
+/* Grading mode, on wide screens: with a student open, the class sits on the left and their answers on
+   the right, scrolling on their own. The list keeps who, their status, integrity, progress and score. */
+@media (min-width: 1600px) {
+  .t-shell > .t-main:has(.t-grading) { max-width: none; }
+  .t-livegrid.t-grading { display: grid; grid-template-columns: minmax(380px, 34%) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .t-grading .t-detail-host { position: sticky; top: 16px; max-height: calc(100vh / var(--zoom, 1) - 32px); overflow-y: auto; overscroll-behavior: contain; border-radius: 6px; }
+  .t-grading .t-detail > .t-row:first-child { position: sticky; top: 0; z-index: 1; margin: -16px -16px 0; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line); border-radius: 6px 6px 0 0; }
+  .t-grading .t-run :is(th, td):is(:nth-child(4), :nth-child(5), :nth-child(6), :nth-child(8), :nth-child(9)) { display: none; }
+  .t-grading .t-detail.t-done > .t-detail-grid { order: 1; } /* turned in: answers first, activity after */
+  .t-grading .t-run tr.sel td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 }

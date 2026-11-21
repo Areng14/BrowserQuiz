@@ -660,6 +660,8 @@
     return h('td', { class: 'st-good t-clean', text: 'Clean' });
   }
   const phone = () => matchMedia('(max-width: 820px)').matches;
+  // Wide enough to grade side by side: the class on the left, the open student on the right.
+  const grading = () => matchMedia('(min-width: 1600px)').matches;
 
   // Grade with AI (server: aicsv.js, aigrade.js), two ways. Copy & paste, in three steps: copy a prompt,
   // paste it into any AI chat, paste the reply back; a table shows each student's grade before anything
@@ -720,10 +722,11 @@
           x.items.length ? h('span', { class: 't-ai-items' }, x.items.map((it) => h('span', { class: it.met ? 'met' : 'unmet', title: it.met ? 'Met' : 'Not met' }, it.met ? '✓ ' : '✗ ', it.text))) : null),
         h('td', { class: 'num' }, h('b', { text: `${x.got}/${x.of}` }))));
       const problems = r.skipped;
-      preview.replaceChildren(
+      preview.replaceChildren(...[
         rows.length ? h('div', { class: 't-ai-table' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Student' }), h('th', { text: 'Question' }), h('th', { class: 'num', text: "AI's grade" }))), h('tbody', {}, rows))) : null,
         problems.length ? h('div', { class: 't-ai-warn', role: 'note' }, h('b', { text: r.found ? 'Left for you' : "Couldn't read that" }),
-          h('ul', {}, problems.map((x) => h('li', { text: x })))) : null);
+          h('ul', {}, problems.map((x) => h('li', { text: x })))) : null,
+      ].filter(Boolean)); // replaceChildren would print a null
       applyBtn.disabled = !r.found;
       applyBtn.textContent = r.found ? `Apply ${plural(r.found, 'grade')}` : 'Apply grades';
       status.textContent = r.found ? `${r.found} of ${r.waiting} answers` : '';
@@ -1012,14 +1015,12 @@
         else if (x.ai) notes.push('Graded by AI, then changed by you');
         else if (x.override) notes.push('Points set by you');
         if (x.review) notes.push('Needs review');
-        if (x.type === 'code' && x.code && x.code.tests && x.code.tests.length) {
-          notes.push(`Hidden tests passed: ${x.code.tests.filter((t) => t.pass).length} of ${x.code.tests.length}`);
-        }
         if (notes.length) sec.append(h('p', { class: 't-small t-muted', text: notes.join('. ') + '.' }));
         // The AI's reasons, to check before trusting the grade.
-        if (x.ai) {
+        // With a rubric, its reasons sit on each item below; the box only holds a note, if there is one.
+        if (x.ai && (!x.ai.items || x.ai.note)) {
           sec.append(h('div', { class: 't-ai' }, x.ai.items
-            ? h('p', {}, h('b', { text: 'AI: ' }), x.ai.note || '')
+            ? h('p', {}, h('b', { text: 'AI: ' }), x.ai.note)
             : [h('p', {}, h('b', { text: x.ai.changed || x.points == null ? 'AI: ' : `AI gave ${x.points} / ${x.max} points. ` }), x.ai.why || ''),
               x.ai.note ? h('p', { class: 't-muted', text: x.ai.note }) : null]));
         }
@@ -1029,13 +1030,14 @@
       const closeDetail = () => {
         selected = null;
         detail.replaceChildren();
+        detail.parentElement.classList.remove('t-grading');
         document.documentElement.classList.remove('t-sheet-open');
         detail.removeAttribute('role');
         detail.removeAttribute('aria-modal');
         refresh().then(() => { const n = tbody.querySelector(`[data-key="${CSS.escape(id)}:name"]`); if (n) n.focus({ preventScroll: true }); });
       };
       detail.onkeydown = (e) => { if (e.key === 'Escape' && document.documentElement.classList.contains('t-sheet-open')) closeDetail(); };
-      detail.replaceChildren(h('section', { class: 't-detail' },
+      detail.replaceChildren(h('section', { class: d.status === 'submitted' ? 't-detail t-done' : 't-detail' },
         h('div', { class: 't-row t-detail-head' },
           h('h2', { style: 'flex:1', tabindex: '-1', class: 't-detail-name', id: 't-detail-name', text: d.name }),
           h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Close', onclick: closeDetail }, dk('close')))),
@@ -1069,7 +1071,14 @@
         const sheet = phone();
         document.documentElement.classList.toggle('t-sheet-open', sheet);
         if (sheet) { detail.setAttribute('role', 'dialog'); detail.setAttribute('aria-modal', 'true'); } else { detail.removeAttribute('role'); detail.removeAttribute('aria-modal'); }
-        if (!sheet) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Side by side (grading mode, on wide screens) it's already in view; otherwise it's below the list.
+        const grid = detail.parentElement;
+        grid.classList.add('t-grading');
+        if (!sheet && !grading()) detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Side by side: scroll just far enough that the student's side fills the screen (never back up,
+        // so a student picked further down the list stays in view).
+        const gap = grid.getBoundingClientRect().top - 16;
+        if (!sheet && grading() && gap > 0) window.scrollBy({ top: gap, behavior: 'smooth' });
         detail.querySelector('.t-detail-name').focus({ preventScroll: true });
       }
     }
@@ -1080,7 +1089,7 @@
         const cb = h('input', { type: 'checkbox', id: `rb-${x.id}-${r.id}`, checked: r.checked });
         return { r, cb, el: h('label', { class: 't-check', for: cb.id }, cb, h('span', { text: `${r.text} (${plural(r.points, 'point')})` }),
           r.auto ? h('span', { class: 't-auto', text: 'Auto', title: 'Checked by the server. Change it and press Save to grade it yourself.' }) : null,
-          x.ai && x.ai.items && x.ai.items[r.id] ? h('span', { class: 't-ai-why', text: `AI: ${x.ai.items[r.id].why}` }) : null) };
+          x.ai && x.ai.items && x.ai.items[r.id] ? h('span', { class: 't-ai-why' }, h('b', { text: 'AI: ' }), x.ai.items[r.id].why) : null) };
       });
       const over = h('input', { class: 'input t-points', type: 'number', min: '0', max: String(x.max), step: '0.5', id: `ov-${x.id}`, placeholder: 'auto', value: x.overridePoints != null ? String(x.overridePoints) : '' });
       const msg = h('span', { class: 't-small t-muted', role: 'status' });
@@ -1118,10 +1127,10 @@
           howTo, quitPw,
           h('div', { class: 't-row t-run-acts' }, admitAll, aiBtn, moreBtn, extra), aiMsg,
           failedBox, summary),
-        h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },
+        h('div', { class: 't-livegrid' }, h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },
           h('thead', {}, h('tr', {}, heads(['Student', 'Status', 'Integrity', 'Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score'], ['Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score']), actionsHead())),
           tbody)),
-        detail));
+        detail)));
     await refresh();
     pollTimer = setInterval(refresh, 2000);
     tickTimer = setInterval(tick, 1000);

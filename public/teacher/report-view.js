@@ -112,6 +112,7 @@
           b.value ? h('code', { text: b.value }) : h('span', { class: 'r-none', text: 'no answer' }),
           b.ok ? null : h('span', { class: 'r-also' }, ' Correct: ', b.accepted.map((x, k) => [k ? ' or ' : '', h('code', { text: x })]))))),
         q.compileError ? [h('p', { class: 'r-label', text: "Didn't compile" }), h('pre', { class: 'r-err', text: q.compileError })] : null,
+        testTable(q),
       ];
     }
     if (q.type === 'essay') {
@@ -126,8 +127,27 @@
       codeCompare(q, o),
       q.banned ? [h('p', { class: 'r-label', text: 'Not allowed' }), h('p', { class: 'r-err-line' }, 'Uses ', q.banned.map((b, i) => [i ? ', ' : '', h('code', { text: b })]), ', so it scores 0.')] : null,
       q.compileError ? [h('p', { class: 'r-label', text: "Didn't compile" }), h('pre', { class: 'r-err', text: q.compileError })] : null,
+      testTable(q),
       q.rubric.length && !o.teacher ? rubricList(q) : null,
     ];
+  }
+
+  // The hidden tests, for the teacher (the server only sends them to teachers): each call, what it
+  // should return and what it did. Open when any failed.
+  function testTable(q) {
+    if (!q.tests || !q.tests.length) return null;
+    const passed = q.tests.filter((t) => t.pass).length;
+    const d = h('details', { class: 'r-tests' },
+      h('summary', { text: `Hidden tests: ${passed} of ${q.tests.length} passed` }),
+      h('div', { class: 'r-tests-wrap' }, h('table', {},
+        h('thead', {}, h('tr', {}, h('th', { 'aria-label': 'Result' }), h('th', { text: 'Call' }), h('th', { text: 'Expected' }), h('th', { text: 'Got' }))),
+        h('tbody', {}, q.tests.map((t) => h('tr', { class: t.pass ? 'ok' : 'no' },
+          h('td', { class: 'r-mark', 'aria-label': t.pass ? 'Passed' : 'Failed', text: t.pass ? '✓' : '✗' }),
+          h('td', {}, h('code', { text: t.call }), t.speed ? h('span', { class: 'r-speed', text: 'speed' }) : null),
+          h('td', {}, t.expected ? h('code', { text: t.expected }) : null),
+          h('td', {}, t.got == null ? null : h('code', { text: t.got }))))))));
+    if (passed < q.tests.length) d.open = true;
+    return d;
   }
 
   // ---------- code answer vs the reference ----------

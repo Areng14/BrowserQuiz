@@ -179,3 +179,18 @@
 .r-view .md-img { display: inline-block; vertical-align: middle; max-width: 100%; height: auto; margin: 4px 8px 4px 0; }
 .r-view .r-choice-rich { display: grid; gap: 4px; }
 .r-view .r-choice-rich > * { margin: 0; }
+
+/* ---------- hidden tests (teacher only) ---------- */
+.r-view .r-tests { margin: 12px 0 0; }
+.r-view .r-tests summary { cursor: pointer; font-weight: 600; }
+.r-view .r-tests-wrap { margin-top: 6px; overflow-x: auto; }
+.r-view .r-tests table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.r-view .r-tests th { padding: 4px 8px; font-size: 12px; font-weight: 600; text-align: left; color: var(--ink-2); border-bottom: 1px solid var(--line); }
+.r-view .r-tests td { padding: 5px 8px; vertical-align: top; border-bottom: 1px solid var(--line); }
+.r-view .r-tests tr:last-child td { border-bottom: 0; }
+.r-view .r-tests td.r-mark { width: 1.4em; }
+.r-view .r-tests tr.ok .r-mark { color: var(--good); }
+.r-view .r-tests code { color: var(--ink); }
+.r-view .r-tests tr.no .r-mark, .r-view .r-tests tr.no td:last-child code { color: var(--bad); }
+.r-view .r-tests code { white-space: pre-wrap; overflow-wrap: anywhere; background: none; padding: 0; }
+.r-view .r-tests .r-speed { margin-left: 8px; font-size: 12px; color: var(--ink-2); }
