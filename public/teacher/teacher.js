@@ -388,7 +388,7 @@
   function resultsTab(data) {
     return h('section', { class: 't-section' },
       h('h1', { text: 'Results' }),
-      data.runs.length ? runsTable(data.runs) : h('p', { class: 't-muted', text: 'Quizzes you give show up here.' }));
+      data.runs.length ? runsTable(data.runs) : h('p', { class: 't-muted', text: 'None yet.' }));
   }
 
   function quizzesTab(data) {
@@ -687,7 +687,7 @@
 
     const copyBtn = h('button', { class: 'btn primary', type: 'button', text: 'Copy prompt' });
     const promptView = h('details', { class: 't-ai-see' }, h('summary', { text: 'See it' }), h('pre', { class: 't-ai-prompt', text: p.prompt }));
-    const s1 = step(1, 'Copy the prompt', h('p', { class: 't-step-text', text: 'The questions, rubrics and answers. No names: each answer goes by a short code.' }), h('div', { class: 't-row t-step-row' }, copyBtn, promptView));
+    const s1 = step(1, 'Copy the prompt', h('div', { class: 't-row t-step-row' }, copyBtn, promptView));
     copyBtn.addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(p.prompt); } catch (e) {
         const ta = h('textarea', { class: 'sr-only' }); ta.value = p.prompt; dlg.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
@@ -696,10 +696,10 @@
       s1.done(true);
     });
 
-    const s2 = step(2, 'Paste it into an AI chat', h('p', { class: 't-step-text', text: 'Any one works. Paste, send, and wait for its table.' }),
+    const s2 = step(2, 'Paste it into an AI chat',
       h('div', { class: 't-ai-chats' }, CHATS.map(([name, url]) => h('a', { class: 't-chip', href: url, target: '_blank', rel: 'noopener noreferrer', text: name, onclick: () => s2.done(true) }))));
 
-    const replyBox = h('textarea', { class: 'input t-ai-reply', rows: 4, placeholder: "Paste the AI's whole reply. The grades are found in it.", 'aria-label': "The AI's reply", spellcheck: 'false' });
+    const replyBox = h('textarea', { class: 'input t-ai-reply', rows: 4, placeholder: 'The whole reply', 'aria-label': "The AI's reply", spellcheck: 'false' });
     const preview = h('div', { class: 't-ai-preview', 'aria-live': 'polite' });
     const s3 = step(3, 'Paste its reply here', replyBox, preview);
 
@@ -735,7 +735,7 @@
       try {
         const r = await post(`/api/t/runs/${runId}/ai-csv`, { csv: replyBox.value, attempt: attemptId || undefined, apply: true });
         close();
-        done(`AI grades applied to ${plural(r.applied, 'answer')}. They're labeled on each student, and you can change any.`);
+        done(`AI grades applied to ${plural(r.applied, 'answer')}.`);
       } catch (e) { status.textContent = e.message; applyBtn.disabled = false; }
     });
 
@@ -747,11 +747,10 @@
       const has = ks.mine || ks.server;
       gradeBtn.disabled = !has || editing;
       if (has && !editing) {
-        keyPanel.replaceChildren(h('div', { class: 't-ai-ready' },
-          h('p', {}, h('b', { text: `${ks.name} grades ${plural(p.answers, 'answer')} right here.` }), ' It works in the background, and the live page shows how far it has got. A few cents an answer, on the key below.'),
-          h('p', { class: 't-small t-muted' }, ks.mine ? `Your ${ks.company} key ${ks.hint}. ` : `This server's ${ks.server} key. `,
-            linkBtn2(ks.mine ? 'Change' : 'Use my own', () => drawKey(true, true)),
-            ks.mine ? [' · ', linkBtn2('Remove', async () => { try { ks = await post('/api/t/ai-key', { key: null }); } catch (e) { /* stays */ } drawKey(false, true); })] : null)));
+        keyPanel.replaceChildren(h('p', { class: 't-ai-ready' },
+          h('b', { text: ks.name }), ` · ${ks.mine ? `${ks.company} key ${ks.hint}` : `Server's ${ks.server} key`} · `,
+          linkBtn2(ks.mine ? 'Change' : 'Use my own', () => drawKey(true, true)),
+          ks.mine ? [' · ', linkBtn2('Remove', async () => { try { ks = await post('/api/t/ai-key', { key: null }); } catch (e) { /* stays */ } drawKey(false, true); })] : null));
         if (focus) setTimeout(() => gradeBtn.focus(), 0);
         return;
       }
@@ -766,7 +765,6 @@
       keyPanel.replaceChildren(
         h('label', { class: 'field', for: 't-ai-keyin' }, h('span', { class: 'field-label', text: 'Your API key' }), h('div', { class: 't-row t-ai-keyrow' }, input, save)),
         h('div', { class: 't-ai-chats', role: 'group', 'aria-label': 'Make a key' }, KEY_PAGES.map(([name, url]) => h('a', { class: 't-chip', href: url, target: '_blank', rel: 'noopener noreferrer', text: name }))),
-        h('p', { class: 't-small t-muted', text: "Any of the three. It's checked, stored encrypted, and only used to grade your quizzes. Grading costs go to it." }),
         msg);
       if (has) keyPanel.append(linkBtn2('Cancel', () => drawKey(false, true)));
       if (focus) setTimeout(() => input.focus(), 0);
@@ -803,8 +801,7 @@
     const x = h('button', { class: 'btn small ghost t-dialog-x', type: 'button', 'aria-label': 'Close', onclick: close }, icon(ICONS.x, 18));
     dlg.append(
       h('header', { class: 't-dialog-head' },
-        h('div', {}, h('h2', { id: 't-ai-title', text: 'Grade with AI' }),
-          h('p', { class: 't-muted t-small', text: attemptId ? `${plural(p.answers, 'answer')} waiting for you.` : `${plural(p.answers, 'answer')} from ${plural(p.students, 'student')} waiting for you.` })),
+        h('h2', { id: 't-ai-title', text: 'Grade with AI' }),
         x),
       tabs, steps, keyPanel,
       h('footer', { class: 't-dialog-foot' }, status, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: close }), applyBtn, gradeBtn));
@@ -905,7 +902,7 @@
       if (job && !job.running) {
         aiMsg.hidden = false;
         aiMsg.className = job.failed ? 't-small t-error' : 't-small t-muted';
-        aiMsg.textContent = `AI graded ${plural(job.graded, 'answer')}${job.failed ? `; ${job.failed} didn't work: ${job.errors.join(' ')}` : '. Check them on each student.'}`;
+        aiMsg.textContent = `AI graded ${plural(job.graded, 'answer')}${job.failed ? `; ${job.failed} didn't work: ${job.errors.join(' ')}` : '.'}`;
       }
       // This run's place in the Current quiz tab.
       if (openRuns && (run.status === 'open') !== openRuns.some((r) => r.id === runId)) {

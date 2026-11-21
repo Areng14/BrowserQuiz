@@ -111,7 +111,6 @@
           h('span', { class: 'r-blank-n', text: `Blank ${i + 1}` }),
           b.value ? h('code', { text: b.value }) : h('span', { class: 'r-none', text: 'no answer' }),
           b.ok ? null : h('span', { class: 'r-also' }, ' Correct: ', b.accepted.map((x, k) => [k ? ' or ' : '', h('code', { text: x })]))))),
-        q.run ? h('p', { class: 'r-also', text: 'Any answer that makes the code work counts.' }) : null,
         q.compileError ? [h('p', { class: 'r-label', text: "Didn't compile" }), h('pre', { class: 'r-err', text: q.compileError })] : null,
       ];
     }

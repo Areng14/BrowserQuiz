@@ -1153,14 +1153,12 @@
         h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'Table, with the correct values' }),
           h('div', { class: 'qe-grid-wrap' }, h('table', { class: 'qe-grid' }, h('thead', {}, head), h('tbody', {}, body))),
           h('div', { class: 'qe-line' },
-            h('button', { class: 'btn small', type: 'button', text: 'Add row', disabled: tall, onclick: () => addRow(u.cells.length, 0) }),
-            h('span', { class: 't-small t-muted', text: 'Tick a cell to give it to students already filled in.' })))];
+            h('button', { class: 'btn small', type: 'button', text: 'Add row', disabled: tall, onclick: () => addRow(u.cells.length, 0) })))];
     }
 
     function fillEditor(q) {
       const u = q._ui;
       const list = h('div', { class: 'qe-blanks' });
-      const note = h('p', { class: 't-small t-muted' });
       const label = h('span', { class: 'field-label', text: 'Accepted answers for each blank, one per line' });
       function renderBlanks() {
         const lines = [];
@@ -1171,8 +1169,6 @@
         }));
         list.querySelectorAll('textarea').forEach(grow);
         label.hidden = !u.blanks.length;
-        note.hidden = !!u.blanks.length;
-        note.textContent = 'Type ___ where students fill something in, or select the code to hide and press Blank.';
       }
       const code = area(q, q.code, (v) => { u.blanks = realign(q.code || '', v, u.blanks); q.code = v; renderBlanks(); },
         codeAttrs(6, { id: 'qe-code', placeholder: 'int total = ___;\nfor (int n : nums) {\n    total ___ n;\n}' }));
@@ -1189,10 +1185,10 @@
       return {
         after: renderBlanks,
         nodes: [
-          h('div', { class: 'field' }, codeHead(q, 'Code', null, h('button', { class: 'qe-tool', type: 'button', text: 'Blank', title: 'Turn the selected code into a blank', onclick: makeBlank })), code, note),
+          h('div', { class: 'field' }, codeHead(q, 'Code', null, h('button', { class: 'qe-tool', type: 'button', text: 'Blank', title: 'Turn the selected code into a blank', onclick: makeBlank })), code),
           h('div', { class: 'field' }, label, list),
           run,
-          u.run ? h('p', { class: 't-small t-muted', text: 'Any blanks that make the tests pass earn credit. The code has to be the whole class, as students write it in a code question.' }) : null],
+          u.run ? h('p', { class: 't-small t-muted', text: 'The code has to be the whole class.' }) : null],
       };
     }
 
@@ -1240,8 +1236,7 @@
       const bans = fill ? null : field('Not allowed (methods students may not use)', input(q, banList.join(', '), (v) => {
         const list = v.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
         if (list.length) q.ban = list; else delete q.ban;
-      }, { class: 'input qe-mono', placeholder: 'Arrays.sort, Collections.sort, sorted, stream', spellcheck: 'false' }),
-        h('span', { class: 't-small t-muted', text: 'Code that uses one gets 0 on this question. Students see the list.' }));
+      }, { class: 'input qe-mono', placeholder: 'Arrays.sort, Collections.sort, sorted, stream', spellcheck: 'false' }));
 
       const tick = () => {
         const r = readCode(q);
@@ -1308,12 +1303,11 @@
       const probs = h('ul', { class: 't-error qe-problems', role: 'alert' });
       const view = h('div', { class: 'qe-view', inert: true }); // a picture of the student's screen, not something to use
       // Optional. Students see names, types and points before they start, so a name shouldn't give the answer away.
-      const name = field('Name', input(q, q.name || '', (v) => { const t = v.replace(/\s+/g, ' ').trim(); if (t) q.name = t; else delete q.name; renderOutline(); }, { class: 'input qe-name', maxlength: '80', placeholder: 'Optional, shown before the quiz starts' }));
+      const name = field('Name', input(q, q.name || '', (v) => { const t = v.replace(/\s+/g, ' ').trim(); if (t) q.name = t; else delete q.name; renderOutline(); }, { class: 'input qe-name', maxlength: '80', placeholder: 'Optional' }));
       const fields = h('div', { class: 'qe-stack' }, name, sharedEditor(q, i), promptEditor(q));
       if (q.type === 'single' || q.type === 'multi') fields.append(choicesEditor(q));
       if (q.type === 'text') {
-        fields.append(field('Accepted answers, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2 }),
-          h('span', { class: 't-small t-muted', text: 'Numbers match by value (3.5 = 3.50 = 7/2). For many phrasings, write a pattern: /^(binary|bin) search$/' })),
+        fields.append(field('Accepted answers, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: '3.5\n/^(binary|bin) search$/' })),
           check(q, q.caseSensitive, 'Capital letters count', (v) => { if (v) q.caseSensitive = true; else delete q.caseSensitive; }));
       }
       const add = (nodes) => fields.append(...nodes.filter(Boolean));
@@ -1436,7 +1430,7 @@
         h('div', { class: 'qe-line' },
           check(q, quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { quiz.shuffleQuestions = v; }),
           check(q, quiz.shuffleChoices !== false, 'Shuffle choices', (v) => { quiz.shuffleChoices = v; })),
-        field('Directions for the whole quiz', area(q, dirs.quiz, (v) => setDir('quiz', v), Object.assign({ rows: 3, placeholder: 'Optional. Students see these before they start, and with each part.' }, prose))),
+        field('Directions for the whole quiz', area(q, dirs.quiz, (v) => setDir('quiz', v), Object.assign({ rows: 3, placeholder: 'Optional' }, prose))),
         used.length ? h('details', { class: 'qe-paste', open: used.some((t) => dirs[t]) },
           h('summary', { text: 'Directions for each part' }),
           used.map((t) => field(TYPES[t], area(q, dirs[t], (v) => setDir(t, v), Object.assign({ rows: 2, placeholder: PART_DIRECTIONS[t] }, prose))))) : null,
@@ -1465,11 +1459,10 @@
     function dividerPane(k) {
       const d = quiz.sections[k];
       const title = input(null, d.title, (v) => { d.title = v; renderOutline(); }, { id: 'qe-div-title', maxlength: '120', placeholder: `Section ${k + 1}` });
-      const dirs = area(null, d.directions, (v) => { d.directions = v; }, { rows: 4, spellcheck: 'true', placeholder: 'Optional. Students see these when the section starts.' });
+      const dirs = area(null, d.directions, (v) => { d.directions = v; }, { rows: 4, spellcheck: 'true', placeholder: 'Optional' });
       const del = h('button', { class: 'btn small', type: 'button', text: 'Remove section', onclick: () => { quiz.sections.splice(k, 1); touch(); select(d.at); } });
       paneTick = null;
       return [h('div', { class: 'qe-head' }, h('h1', { class: 'qe-n', text: 'Section' }), h('span', { class: 'qe-grow' }), del),
-        h('p', { class: 't-small t-muted', text: `Starts at question ${d.at + 1} and runs to the next section.` }),
         h('div', { class: 'qe-stack' }, field('Title', title), field('Directions', dirs))];
     }
 

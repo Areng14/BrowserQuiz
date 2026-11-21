@@ -26,7 +26,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-nav-item[aria-current="page"] { color: var(--accent); font-weight: 600; background: color-mix(in srgb, var(--accent) 13%, transparent); }
 .t-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .t-nav-label { flex: 1; min-width: 0; }
-.t-badge { min-width: 20px; padding: 0 6px; font-size: 12px; font-weight: 700; line-height: 20px; text-align: center; color: var(--bg); background: var(--good); border-radius: 999px; }
+.t-badge { font-size: 13px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .t-side-foot { margin-top: auto; display: grid; gap: 8px; padding: 12px 10px 0; border-top: 1px solid var(--line); }
 .t-side-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .t-side .t-who { overflow: hidden; text-overflow: ellipsis; }
@@ -81,7 +81,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
   .t-nav-item { position: relative; flex-direction: column; justify-content: center; gap: 3px; min-height: 52px; padding: 6px 2px; font-size: 12px; line-height: 1.2; border-radius: 10px; }
   .t-nav-item svg { width: 22px; height: 22px; }
   .t-nav-label { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .t-badge { position: absolute; top: 2px; left: calc(50% + 9px); min-width: 18px; padding: 0 5px; font-size: 11px; line-height: 18px; }
+  .t-badge { position: absolute; top: 4px; left: calc(50% + 13px); font-size: 11px; line-height: 1; }
   .t-side-foot { flex: 1; min-width: 0; margin: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0; border: 0; }
   .t-side-btns { flex: none; flex-wrap: nowrap; }
   .t-side .t-who { min-width: 0; }
@@ -128,7 +128,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-ok { color: var(--good); font-size: 14px; }
 .t-check { display: flex; align-items: center; gap: 8px; }
 .t-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
-.t-auto { padding: 0 6px; font-size: 11px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; }
+.t-auto { font-size: 12px; color: var(--ink-2); }
 input[type="file"].input { padding: 6px 10px; }
 .t-login { max-width: 360px; margin: 96px auto 0; padding: 0 16px; display: grid; gap: 14px; }
 .t-who { white-space: nowrap; }
@@ -198,7 +198,6 @@ input[type="file"].input { padding: 6px 10px; }
 .t-step.done .t-step-n { color: #fff; background: var(--good); }
 .t-step-body { display: grid; gap: 8px; min-width: 0; padding-top: 3px; }
 .t-step-body h3 { margin: 0; font-size: 15px; font-weight: 600; }
-.t-step-text { margin: 0; font-size: 13px; color: var(--ink-2); }
 .t-step-row { align-items: center; gap: 12px; }
 .t-ai-see summary { cursor: pointer; font-size: 13px; color: var(--accent); }
 .t-ai-see[open] { flex-basis: 100%; }
@@ -229,7 +228,7 @@ input[type="file"].input { padding: 6px 10px; }
 .t-ai-key { display: grid; gap: 10px; padding: 18px 20px 20px; overflow-y: auto; }
 .t-ai-key[hidden] { display: none; }
 .t-ai-key p { margin: 0; }
-.t-ai-ready { display: grid; gap: 8px; padding: 14px 16px; background: color-mix(in srgb, var(--accent) 7%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); border-radius: 10px; }
+.t-ai-ready { margin: 0; }
 .t-ai-keyrow { flex-wrap: nowrap; gap: 8px; align-items: stretch; }
 .t-ai-keyrow .input { flex: 1; min-width: 0; font-family: var(--mono); }
 .t-linkbtn { padding: 0; font: inherit; color: var(--accent); background: none; border: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }

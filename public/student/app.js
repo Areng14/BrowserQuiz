@@ -541,7 +541,7 @@
       h('div', { class: 'heading' },
         h('h1', { text: 'Practice' }),
         h('p', { text: summaryLine(S.run) }),
-        h('p', { text: 'You see the answers when you finish. Your teacher can watch the quiz page live.' })),
+        h('p', { text: 'Your teacher can watch the quiz page live.' })),
       btn, msg)));
     btn.focus();
   }
@@ -1877,7 +1877,7 @@
     const marked = qs.filter(isMarked).length;
     return h('div', { class: 'qview review' },
       h('h1', { id: 'q-heading', tabindex: '-1', text: 'Check your work' }),
-      h('p', { class: 'muted', text: `${done} of ${plural(qs.length, 'question')} answered${marked ? `, ${marked} for review` : ''}. Pick a number to go back to it.` }),
+      h('p', { class: 'muted', text: `${done} of ${plural(qs.length, 'question')} answered${marked ? `, ${marked} for review` : ''}.` }),
       ...questionGrid(go));
   }
   function chevronUp() {
@@ -2248,7 +2248,7 @@
   }
 
   const DONE = {
-    submitted: ['Submitted', 'You can close this page.'],
+    submitted: ['Submitted', null],
     time: ["Time's up", 'Your answers were turned in.'],
     ended: ['Quiz ended', 'Your teacher ended the quiz. Your answers were turned in.'],
     mine: ['Quiz ended', 'Your teacher ended your quiz. Your answers were turned in.'],
@@ -2258,7 +2258,7 @@
     S.el = null;
     const quitSeb = !!(S.run && S.run.sebQuit && !cfg.preview); // in Safe Exam Browser: a button to quit it
     const [title, plain] = DONE[kind] || DONE.submitted;
-    const text = quitSeb && plain === DONE.submitted[1] ? null : plain;
+    const text = plain;
     const r = cfg.preview && S.result && S.result.questions ? S.result : null;
     const screen = entry(h('div', { class: 'panel done-panel' },
       h('p', { class: 'eyebrow', text: S.quiz ? S.quiz.title : S.run ? S.run.title : '' }),

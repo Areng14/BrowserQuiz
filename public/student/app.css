@@ -186,11 +186,11 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .scratch-board[data-tool="text"] .scratch-note { pointer-events: auto; }
 .scratch-note:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); background: color-mix(in srgb, var(--bg) 85%, transparent); }
 .qbar-progress { font-size: 14px; color: var(--ink-2); }
-/* time left: a pill in the middle of the top bar; red under 5 minutes, solid red under 1 */
-.timer { padding: 2px 12px; font: 600 16px var(--mono); font-variant-numeric: tabular-nums; background: var(--soft); border: 1px solid var(--line); border-radius: 999px; transition: background 0.3s, color 0.3s; }
+/* time left, in the middle of the top bar: plain text, red under 5 minutes, bold red under 1 */
+.timer { font: 600 16px var(--mono); font-variant-numeric: tabular-nums; transition: color 0.3s; }
 .timer:empty { display: none; }
-.timer.warn { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, var(--bg)); border-color: color-mix(in srgb, var(--bad) 50%, var(--bg)); }
-.timer.crit { color: var(--bg); background: var(--bad); border-color: var(--bad); }
+.timer.warn { color: var(--bad); }
+.timer.crit { color: var(--bad); font-weight: 800; }
 
 .qmain { overflow: auto; padding: 32px var(--gut-r) 48px var(--gut-l); outline: none; }
 .bq-app .qmain:focus, .bq-app .qmain:focus-visible { outline: none; } /* focus lands here between questions */
@@ -394,7 +394,7 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
   .qbar, .qbar-side { gap: 8px; }
   .qbar-name:has(.qbar-who) .qbar-title { display: none; } /* the name matters more than the title here */
   .qbar-who { flex-shrink: 1; max-width: none; padding-left: 0; border-left: 0; }
-  .timer { padding: 2px 8px; font-size: 15px; }
+  .timer { font-size: 15px; }
   .scratch-btn { padding: 0 10px; }
   .scratch-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .code-right { height: max(280px, 55vh); }
