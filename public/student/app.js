@@ -646,9 +646,15 @@
     const scratch = h('aside', { class: 'scratch', id: 'scratch', 'aria-label': 'Scratchpad' });
     scratch.hidden = true;
     const wrap = h('div', { class: 'quiz' },
-      h('header', { class: 'qbar' }, h('span', { class: 'qbar-name' }, h('span', { class: 'qbar-title', text: S.quiz.title }),
-        S.me && S.me.name && !cfg.preview ? h('span', { class: 'qbar-who', title: 'Signed in as', text: S.me.name }) : null), save, timer, scratchBtn, themeButton(),
-        cfg.preview ? null : h('button', { class: 'btn small ghost', type: 'button', text: 'Exit', onclick: () => openExit() })),
+      // Title, name and save state | timer, centered | tools
+      h('header', { class: 'qbar' },
+        h('div', { class: 'qbar-side' },
+          h('span', { class: 'qbar-name' }, h('span', { class: 'qbar-title', text: S.quiz.title }),
+            S.me && S.me.name && !cfg.preview ? h('span', { class: 'qbar-who', title: 'Signed in as', text: S.me.name }) : null),
+          save),
+        timer,
+        h('div', { class: 'qbar-side qbar-end' }, scratchBtn, themeButton(),
+          cfg.preview ? null : h('button', { class: 'btn small ghost', type: 'button', text: 'Exit', onclick: () => openExit() }))),
       conn,
       main,
       scratch,

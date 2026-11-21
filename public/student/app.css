@@ -126,13 +126,16 @@
 .quiz > .qbar { grid-row: 1; } .quiz > .conn-banner { grid-row: 2; } .quiz > .qmain { grid-row: 3; } .quiz > .qnav { grid-row: 4; }
 .qbar, .qnav { display: flex; align-items: center; gap: 16px; border: 0 solid var(--line); padding: 8px var(--gut-r) 8px var(--gut-l); }
 .qbar { border-bottom-width: 1px; }
+.qbar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.qbar-side { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.qbar-end { justify-content: flex-end; }
 .qnav { gap: 12px; padding-block: 10px; border-top-width: 1px; }
 /* Back | question numbers | Next: equal side columns keep the numbers centered whatever Next says */
 .qnav { display: grid; grid-template-columns: 1fr auto 1fr; }
 .qnav > :first-child { justify-self: start; }
 .qnav > :last-child { justify-self: end; white-space: nowrap; }
 .qnav > .sheet { max-width: max(160px, calc(100vw - 440px)); }
-.qbar-name { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; font-weight: 600; white-space: nowrap; }
+.qbar-name { flex: 0 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 10px; font-weight: 600; white-space: nowrap; }
 .qbar-title, .qbar-who { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .qbar-who { flex: 0 0 auto; max-width: 60%; padding-left: 10px; font-weight: 500; color: var(--ink-2); border-left: 1px solid var(--line); }
 .who-card { display: flex; align-items: center; gap: 12px; padding: 12px 14px; color: var(--ink-2); background: var(--soft); border: 1px solid var(--line); border-radius: 8px; }
@@ -162,9 +165,11 @@
 .scratch-board[data-tool="text"] .scratch-note { pointer-events: auto; }
 .scratch-note:focus { outline: none; border-color: var(--accent); background: color-mix(in srgb, var(--bg) 85%, transparent); }
 .qbar-progress { font-size: 14px; color: var(--ink-2); }
-.timer { font: 600 16px var(--mono); font-variant-numeric: tabular-nums; }
-.timer.warn { color: var(--warn); }
-.timer.crit { color: var(--bad); }
+/* time left: a pill in the middle of the top bar; red under 5 minutes, solid red under 1 */
+.timer { padding: 2px 12px; font: 600 16px var(--mono); font-variant-numeric: tabular-nums; background: var(--soft); border: 1px solid var(--line); border-radius: 999px; transition: background 0.3s, color 0.3s; }
+.timer:empty { display: none; }
+.timer.warn { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, var(--bg)); border-color: color-mix(in srgb, var(--bad) 50%, var(--bg)); }
+.timer.crit { color: var(--bg); background: var(--bad); border-color: var(--bad); }
 
 .qmain { overflow: auto; padding: 32px var(--gut-r) 48px var(--gut-l); outline: none; }
 .bq-app .qmain:focus, .bq-app .qmain:focus-visible { outline: none; } /* focus lands here between questions */
@@ -313,7 +318,10 @@
   .screen { padding-top: 72px; }
   .qbar-progress { display: none; }
   .qnav .btn { padding: 0 10px; }
-  .qbar { gap: 8px; }
+  .qbar, .qbar-side { gap: 8px; }
+  .qbar-name:has(.qbar-who) .qbar-title { display: none; } /* the name matters more than the title here */
+  .qbar-who { flex-shrink: 1; max-width: none; padding-left: 0; border-left: 0; }
+  .timer { padding: 2px 8px; font-size: 15px; }
   .qbar .scratch-btn, .quiz > .scratch { display: none; } /* no room for a side panel */
   .quiz.with-scratch { grid-template-columns: minmax(0, 1fr); }
   .qnav { grid-template-columns: 1fr 1fr; grid-template-areas: "sheet sheet" "prev next"; row-gap: 8px; }
