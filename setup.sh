@@ -40,13 +40,13 @@ put() {
 
 new_password=
 pw=$(get ADMIN_PASSWORD)
-if [ ${#pw} -lt 12 ]; then
+if [ ${#pw} -lt 10 ]; then
   [ -n "$pw" ] && echo "The teacher password in .env is too short."
   pw=
   if [ -t 0 ]; then
-    read -r -s -p "Teacher password (12+ characters, Enter to make one up): " pw; echo
-    while [ -n "$pw" ] && [ ${#pw} -lt 12 ]; do
-      read -r -s -p "Needs 12+ characters. Try again (Enter to make one up): " pw; echo
+    read -r -s -p "Teacher password (10+ characters, Enter to make one up): " pw; echo
+    while [ -n "$pw" ] && [ ${#pw} -lt 10 ]; do
+      read -r -s -p "Needs 10+ characters. Try again (Enter to make one up): " pw; echo
     done
   fi
   if [ -z "$pw" ]; then pw=$(made_up_password); new_password=$pw; fi

@@ -17,7 +17,8 @@ const PUBLIC = path.join(__dirname, '..', '..', 'public');
 const problems = [];
 if (!process.env.ID_PEPPER || process.env.ID_PEPPER.length < 12) problems.push('ID_PEPPER must be 12+ characters');
 // ADMIN_PASSWORD is optional: without it, admin signs in with a one-time code from the log.
-if (process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length < 12) problems.push('ADMIN_PASSWORD must be 12+ characters (or leave it out)');
+// Same minimum as teachers' own passwords (accounts.MIN_PASSWORD). It also guards admin's quiz key.
+if (process.env.ADMIN_PASSWORD && process.env.ADMIN_PASSWORD.length < 10) problems.push('ADMIN_PASSWORD must be 10+ characters (or leave it out)');
 if (process.env.RUNNER_URL && (process.env.RUNNER_TOKEN || '').length < 16) problems.push('RUNNER_TOKEN must be 16+ characters');
 if (problems.length) {
   console.error(['BrowserQuiz did not start. Fix .env, then run: docker compose up -d', ...problems.map((x) => '  - ' + x)].join('\n'));

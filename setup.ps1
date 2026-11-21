@@ -49,14 +49,14 @@ function Set-EnvValue([string]$Key, [string]$Value) {
 
 $newPassword = ''
 $pw = Get-EnvValue 'ADMIN_PASSWORD'
-if ($pw.Length -lt 12) {
+if ($pw.Length -lt 10) {
   if ($pw) { Write-Host 'The teacher password in .env is too short.' }
   $pw = ''
   while ($true) {
-    $secure = Read-Host 'Teacher password (12+ characters, Enter to make one up)' -AsSecureString
+    $secure = Read-Host 'Teacher password (10+ characters, Enter to make one up)' -AsSecureString
     $pw = (New-Object System.Net.NetworkCredential('', $secure)).Password
-    if ($pw.Length -eq 0 -or $pw.Length -ge 12) { break }
-    Write-Host 'Needs 12+ characters.'
+    if ($pw.Length -eq 0 -or $pw.Length -ge 10) { break }
+    Write-Host 'Needs 10+ characters.'
   }
   if ($pw.Length -eq 0) { $pw = New-Password; $newPassword = $pw }
   Set-EnvValue 'ADMIN_PASSWORD' $pw

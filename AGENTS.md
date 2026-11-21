@@ -4,7 +4,7 @@ A self-hosted quiz and CS exam app.
 - Node server in `server/` (no runtime dependencies, SQLite through `node:sqlite`)
 - Student app and teacher dashboard in `public/`
 - Sandboxed Java/Python code runner in `runner/`
-- Everything runs with Docker Compose; see `README.md`
+- Everything runs with Docker Compose; see `docs/setup.md`
 
 ## Making quizzes
 
