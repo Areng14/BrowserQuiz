@@ -321,6 +321,10 @@ slow solution can't finish in time. Method mode only.
   numbers once.
 - In the quiz maker, write `range(0, 2000000, 2)` as an argument and end the line with
   `speed x1000`.
+- With `calls` over 1, every call gets the same arguments, so code can remember its first answer
+  (or build a lookup table on the first call) and answer the rest instantly. A speed test checks
+  that the code is fast enough, not how. To require a particular algorithm, add a rubric item for it
+  or ban the shortcut.
 
 ### Scoring
 

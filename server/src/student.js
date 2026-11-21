@@ -403,7 +403,8 @@ module.exports = function studentRoutes(r) {
       // Mouse samples: [x, y, ms since the last one], and a 4th 1 for a click.
       const pts = (Array.isArray(body.mouse) ? body.mouse.slice(0, 400) : []).filter((p) => Array.isArray(p) && (p.length === 3 || p.length === 4) && p.every(Number.isFinite))
         .map((p) => [Math.max(0, Math.min(1000, p[0] | 0)), Math.max(0, Math.min(1000, p[1] | 0)), Math.max(0, Math.min(60000, p[2] | 0)), p[3] ? 1 : 0]);
-      if (pts.length) {
+      // Stored for exams' reports; practice isn't monitored (watching it uses memory, watch.js).
+      if (pts.length && !a.practice) {
         q('INSERT INTO mouse (attempt_id, t, points) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(pts.map((p) => p.slice(0, 3))));
         // Keep the newest MOUSE_ROWS per attempt (the report shows the last 60), pruned every 50 rows.
         const n = (mouseRows.get(a.id) || 0) + 1;
@@ -427,7 +428,7 @@ module.exports = function studentRoutes(r) {
     const body = await readJson(req, 128 * 1024);
     const { a, quiz } = current(req);
     if (a.status !== 'active') throw new HttpError(403, 'run_closed');
-    if (!runLimit(a.id)) throw new HttpError(429, 'too_many');
+    if (!runLimit(`${a.runId}:${a.studentId}`)) throw new HttpError(429, 'too_many'); // per student, so practice retries don't reset it
     const qq = quiz.questions.find((x) => x.id === body.questionId && isRun(x));
     // Fill-in-the-blank: the server fills its own template; students only send the blanks.
     if (qq && qq.type === 'fill') body.code = Array.isArray(body.blanks) ? fillTemplate(qq.code, body.blanks.map((b) => String(b || '').slice(0, 500))) : null;
