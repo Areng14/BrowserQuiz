@@ -107,8 +107,8 @@ function forget(id) { attempts.delete(id); }
 
 function logEvent(a, type, severity, detail) {
   if (a.eventCount === null) a.eventCount = q('SELECT COUNT(*) AS n FROM events WHERE attempt_id = ?').get(a.id).n;
-  // Violations are always kept; warnings and info stop at the cap so spam can't push evidence out.
-  if (severity !== 'violation' && a.eventCount >= MAX_EVENTS) return false;
+  // Violations are kept past the cap (spam can't push evidence out), up to a much higher one for disk.
+  if (a.eventCount >= (severity === 'violation' ? MAX_EVENTS * 5 : MAX_EVENTS)) return false;
   q('INSERT INTO events (attempt_id, t, type, severity, detail) VALUES (?, ?, ?, ?, ?)').run(
     a.id, Date.now(), type, severity, detail == null ? null : String(detail).slice(0, 200),
   );
@@ -135,7 +135,7 @@ const awayNow = (a, now) => (a.status === 'active' && a.away && a.awaySince ? Ma
 // to the first event of a burst, so leaving every 1.9s still counts every time. `at` is when it happened, for
 // events the client queued while offline: they arrive together but still count one strike per departure.
 function record(a, type, detail, quiz, at) {
-  const severity = CLIENT_EVENTS[type] || SERVER_EVENTS[type];
+  const severity = (Object.hasOwn(CLIENT_EVENTS, type) && CLIENT_EVENTS[type]) || (Object.hasOwn(SERVER_EVENTS, type) && SERVER_EVENTS[type]);
   if (!severity) return;
   if (a.practice && severity !== 'info') return; // practice runs aren't monitored
   const now = Date.now();

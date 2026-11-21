@@ -45,9 +45,15 @@ const isWatched = (runId, now) => now - (watched.get(runId) || 0) < WATCH_MS;
 
 // From a heartbeat. pts are the monitor's [x, y, dt(, 1 for a click)], x and y out of 1000 of the window;
 // mouseEnd is how long before the heartbeat the last one was. Returns what the heartbeat answers with.
+let swept = 0;
 function beat(a, body, pts, now) {
   const v = cleanView(body.view);
   if (v) views.set(a.id, { view: v, at: now });
+  // Views of attempts that stopped beating (turned in, reset, closed) go after 2 hours.
+  if (now - swept > 10 * 60 * 1000) {
+    swept = now;
+    for (const [id, x] of views) if (now - x.at > 2 * 3600 * 1000) { views.delete(id); trails.delete(id); }
+  }
   if (!isWatched(a.runId, now)) { trails.delete(a.id); return {}; }
   if (pts.length) {
     // Back from the last sample to place each one in time.

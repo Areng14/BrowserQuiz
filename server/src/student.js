@@ -199,6 +199,28 @@ function submit(a, quiz, answers, why) {
   gradeAttempt(a, quiz).catch((e) => console.error('grading failed', a.id, e));
 }
 
+// Heartbeats and events draw on one budget per attempt: 20 at once, 4 more a second. The quiz page
+// sends a heartbeat every 1 to 15 seconds and a few events; past the budget a request still answers the
+// same but nothing is stored, so a script can't fill the disk. Idle budgets are swept.
+const BUDGET = 20;
+const REFILL_PER_SEC = 4;
+const MOUSE_ROWS = 200;
+const budgets = new Map(); // attempt id -> { n, t }
+const mouseRows = new Map(); // attempt id -> rows written since start (for pruning)
+function allow(id, now) {
+  let b = budgets.get(id);
+  if (!b) budgets.set(id, b = { n: BUDGET, t: now });
+  b.n = Math.min(BUDGET, b.n + ((now - b.t) * REFILL_PER_SEC) / 1000);
+  b.t = now;
+  if (b.n < 1) return false;
+  b.n -= 1;
+  return true;
+}
+setInterval(() => {
+  const old = Date.now() - 10 * 60 * 1000;
+  for (const [id, b] of budgets) if (b.t < old) { budgets.delete(id); mouseRows.delete(id); }
+}, 60 * 1000).unref();
+
 module.exports = function studentRoutes(r) {
   r.post('/api/join', async (req, res) => {
     const ip = clientIp(req);
@@ -342,7 +364,9 @@ module.exports = function studentRoutes(r) {
     // event and sends it once the quiz unlocks, instead of it being dropped.
     try { ctx = current(req); } catch (e) { if (e.code === 'locked') throw e; return json(res, 200, { ok: true }); }
     const { a, quiz } = ctx;
-    if (a.status === 'active' && store.CLIENT_EVENTS[body.type]) store.record(a, body.type, body.detail, quiz);
+    // Violations always count (spending the budget first mustn't hide one); the rest draw on it.
+    if (a.status === 'active' && Object.hasOwn(store.CLIENT_EVENTS, body.type)
+      && (store.CLIENT_EVENTS[body.type] === 'violation' || allow(a.id, Date.now()))) store.record(a, body.type, body.detail, quiz);
     json(res, 200, { ok: true });
   });
 
@@ -351,14 +375,17 @@ module.exports = function studentRoutes(r) {
     const { a, quiz } = current(req);
     const now = Date.now();
     let live = {};
-    if (a.status === 'active') {
+    if (a.status === 'active' && !allow(a.id, now)) {
+      // Over the budget: answered the same, nothing stored.
+      live = W.isWatched(a.runId, now) ? { beatMs: W.FAST_BEAT_MS } : {};
+    } else if (a.status === 'active') {
       // Events the client couldn't send while offline arrive here, oldest first.
       // Each keeps the time it happened (after the last good heartbeat, in order), so leaving five times
       // while offline is five strikes, not one burst.
       if (Array.isArray(body.late)) {
         let at = Math.min(now, a.lastBeat || 0);
         for (const e of body.late.slice(0, 50)) {
-          if (!Array.isArray(e) || !store.CLIENT_EVENTS[e[0]]) continue;
+          if (!Array.isArray(e) || !Object.hasOwn(store.CLIENT_EVENTS, e[0])) continue;
           const agoMs = Math.max(0, Number(e[2]) || 0);
           at = Math.min(now, Math.max(at, now - agoMs));
           const ago = Math.round(agoMs / 1000);
@@ -376,7 +403,13 @@ module.exports = function studentRoutes(r) {
       // Mouse samples: [x, y, ms since the last one], and a 4th 1 for a click.
       const pts = (Array.isArray(body.mouse) ? body.mouse.slice(0, 400) : []).filter((p) => Array.isArray(p) && (p.length === 3 || p.length === 4) && p.every(Number.isFinite))
         .map((p) => [Math.max(0, Math.min(1000, p[0] | 0)), Math.max(0, Math.min(1000, p[1] | 0)), Math.max(0, Math.min(60000, p[2] | 0)), p[3] ? 1 : 0]);
-      if (pts.length) q('INSERT INTO mouse (attempt_id, t, points) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(pts.map((p) => p.slice(0, 3))));
+      if (pts.length) {
+        q('INSERT INTO mouse (attempt_id, t, points) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(pts.map((p) => p.slice(0, 3))));
+        // Keep the newest MOUSE_ROWS per attempt (the report shows the last 60), pruned every 50 rows.
+        const n = (mouseRows.get(a.id) || 0) + 1;
+        mouseRows.set(a.id, n);
+        if (n % 50 === 0) q('DELETE FROM mouse WHERE attempt_id = ? AND rowid NOT IN (SELECT rowid FROM mouse WHERE attempt_id = ? ORDER BY rowid DESC LIMIT ?)').run(a.id, a.id, MOUSE_ROWS);
+      }
       live = W.beat(a, body, pts, now); // for a teacher watching live (watch.js)
       if (Array.isArray(body.edits) && body.edits.length && a.edits < 20000) {
         const edits = body.edits.slice(0, 300);

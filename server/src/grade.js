@@ -315,7 +315,8 @@ function studentReport(quiz, a, name, opts = {}) {
 }
 const reportQuiz = (quiz, quizId) => ({
   id: quizId, title: quiz.title, language: quiz.language || null,
-  shared: Object.fromEntries((quiz.shared || []).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
+  // only what a question uses, as students get it (student.js publicQuiz)
+  shared: Object.fromEntries((quiz.shared || []).filter((m) => quiz.questions.some((qq) => [].concat(qq.shared || []).includes(m.id))).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
 });
 
 module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, autoMarks, codeAnswered, answerReport, studentReport, reportQuiz, grading: running, isRun, textMatches };
