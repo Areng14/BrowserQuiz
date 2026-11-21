@@ -87,6 +87,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
   .t-side-foot { flex: 1; min-width: 0; margin: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0; border: 0; }
   .t-side-btns { flex: none; flex-wrap: nowrap; }
   .t-side .t-who { min-width: 0; }
+  .t-side .t-gh { display: none; } /* no room in the phone bar */
   .t-modes { grid-template-columns: minmax(0, 1fr); }
   .t-start-form { padding: 14px; }
   .t-row .field { min-width: 0; }
@@ -136,6 +137,10 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-auto { font-size: 12px; color: var(--ink-2); }
 input[type="file"].input { padding: 6px 10px; }
 .t-login { max-width: 360px; margin: 96px auto 0; padding: 0 16px; display: grid; gap: 14px; }
+.t-gh { justify-self: start; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); text-decoration: none; }
+.t-gh svg { flex: none; }
+.t-gh:hover { color: var(--accent); text-decoration: underline; }
+.t-login-foot { max-width: 360px; margin: 28px auto 0; padding: 0 16px; }
 .t-who { white-space: nowrap; }
 .t-recovery { max-width: 460px; }
 .t-recovery p { margin: 0; }
