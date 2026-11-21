@@ -750,6 +750,9 @@
       'Offline. Keep working, answers save when you reconnect.');
     const main = h('main', { class: 'qmain', tabindex: '-1', 'aria-labelledby': 'q-heading' });
     const sheet = h('nav', { class: 'sheet', 'aria-label': 'Questions' });
+    // Too many numbers for one row: a "Question 3 of 20" button that opens all of them instead.
+    const jump = h('button', { class: 'btn q-jump', type: 'button', 'aria-haspopup': 'dialog', onclick: () => openNavigator() });
+    const mid = h('div', { class: 'qnav-mid' }, sheet, jump);
     const prev = h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => go(S.idx - 1) });
     const next = h('button', { class: 'btn', type: 'button' });
     next.addEventListener('click', () => {
@@ -777,9 +780,11 @@
       conn,
       main,
       scratch,
-      h('footer', { class: 'qnav' }, prev, sheet, next),
+      h('footer', { class: 'qnav' }, prev, mid, next),
       live, hlBar.bar);
-    S.el = { wrap, main, timer, sheet, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null };
+    S.el = { wrap, main, timer, sheet, jump, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null };
+    const refit = () => { if (!wrap.isConnected) { window.removeEventListener('resize', refit); return; } fitSheet(); };
+    window.addEventListener('resize', refit);
     wrap.addEventListener('scroll', hlBar.hide, { passive: true }); // a short window scrolls the whole quiz
     if (!keysBound) { document.addEventListener('keydown', quizKeys); keysBound = true; }
     S.saveState = 'saved';
@@ -1687,17 +1692,69 @@
     colorize(el);
   }
 
+  // One question's number: answered, marked for review, current.
+  function sheetDot(q, i, onPick) {
+    const done = isAnswered(q);
+    const marked = isMarked(q);
+    return h('button', {
+      type: 'button', class: 'sheet-dot' + (done ? ' answered' : '') + (i === S.idx ? ' current' : '') + (marked ? ' marked' : ''),
+      'aria-label': `Question ${i + 1}${done ? ', answered' : ''}${marked ? ', marked for review' : ''}`, 'aria-current': i === S.idx ? 'step' : null,
+      text: String(i + 1), onclick: () => onPick(i),
+    });
+  }
   function renderSheet() {
     if (!S.el || !S.quiz) return;
-    S.el.sheet.replaceChildren(...S.quiz.questions.map((q, i) => {
-      const done = isAnswered(q);
-      const marked = isMarked(q);
-      return h('button', {
-        type: 'button', class: 'sheet-dot' + (done ? ' answered' : '') + (i === S.idx ? ' current' : '') + (marked ? ' marked' : ''),
-        'aria-label': `Question ${i + 1}${done ? ', answered' : ''}${marked ? ', marked for review' : ''}`, 'aria-current': i === S.idx ? 'step' : null,
-        text: String(i + 1), onclick: () => go(i),
-      });
-    }));
+    const n = S.quiz.questions.length;
+    S.el.sheet.replaceChildren(...S.quiz.questions.map((q, i) => sheetDot(q, i, go)));
+    S.el.jump.replaceChildren(h('span', {}, h('span', { class: 'q-jump-word', text: 'Question ' }), `${S.idx + 1} of ${n}`), chevronUp());
+    S.el.jump.setAttribute('aria-label', `Question ${S.idx + 1} of ${n}. Show all questions`);
+    fitSheet();
+  }
+  // The numbers show when they fit on one row; otherwise the bar has the "Question x of y" button.
+  function fitSheet() {
+    const bar = S.el && S.el.sheet.parentElement && S.el.sheet.parentElement.parentElement;
+    if (!bar) return;
+    bar.classList.remove('compact');
+    const first = S.el.sheet.firstElementChild;
+    bar.classList.toggle('compact', !!first && S.el.sheet.scrollHeight > first.offsetHeight + 6);
+  }
+  function chevronUp() {
+    const s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    s.append(svgEl('path', { d: 'M6 15l6-6 6 6' }));
+    return s;
+  }
+
+  // Every question, numbered and grouped by part, to jump to any of them.
+  function openNavigator() {
+    if (S.done || !S.el || S.el.wrap.querySelector('.modal-backdrop')) return;
+    let backdrop;
+    let release = null;
+    const close = () => { backdrop.remove(); release(); };
+    const pick = (i) => { backdrop.remove(); release(false); go(i); };
+    const x = h('button', { class: 'btn small ghost nav-close', type: 'button', 'aria-label': 'Close', onclick: close }, closeIcon());
+    const legend = h('p', { class: 'nav-legend', 'aria-hidden': 'true' },
+      h('span', {}, h('span', { class: 'sheet-dot mini answered' }), 'Answered'),
+      h('span', {}, h('span', { class: 'sheet-dot mini marked' }), 'For review'),
+      h('span', {}, h('span', { class: 'sheet-dot mini current' }), 'Current'));
+    const groups = (S.parts && S.parts.length ? S.parts : [{ title: 'Questions', start: 0, end: S.quiz.questions.length - 1 }]).map((p) => {
+      const range = p.start === p.end ? `Question ${p.start + 1}` : `Questions ${p.start + 1}–${p.end + 1}`;
+      return h('section', { class: 'nav-part', 'aria-label': `${p.title}, ${range}` },
+        h('h3', {}, p.title, h('span', { class: 'nav-range', text: ` ${range}` })),
+        h('div', { class: 'nav-grid' }, S.quiz.questions.slice(p.start, p.end + 1).map((q, k) => sheetDot(q, p.start + k, pick))));
+    });
+    backdrop = h('div', { class: 'modal-backdrop' },
+      h('div', { class: 'modal q-navigator', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'nav-title' },
+        h('div', { class: 'nav-head' }, h('h2', { id: 'nav-title', text: `Question ${S.idx + 1} of ${S.quiz.questions.length}` }), x),
+        legend, ...groups));
+    S.el.wrap.append(backdrop);
+    release = holdFocus(backdrop, close);
+    const cur = backdrop.querySelector('.sheet-dot.current:not(.mini)');
+    (cur || x).focus();
+  }
+  function closeIcon() {
+    const s = svgEl('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'aria-hidden': 'true' });
+    s.append(svgEl('path', { d: 'M18 6L6 18M6 6l12 12' }));
+    return s;
   }
 
   function startTimer() {
