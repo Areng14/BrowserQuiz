@@ -1,10 +1,9 @@
 # Harness helper: turns return values into JSON lines tagged with a per-run marker.
 # The server reads these lines and compares them to the expected values, which never enter the sandbox.
+# The marker only lives in main.py's locals (main.py deletes itself first) and in the closure writer()
+# returns, which main.py makes before importing the student's code.
 import json
 import math
-import sys
-
-M = ""
 
 
 def _enc(v):
@@ -19,10 +18,14 @@ def _enc(v):
     return str(v)
 
 
-def _out(o):
-    sys.stdout.flush()
-    sys.stdout.write(M + json.dumps(o) + "\n")
-    sys.stdout.flush()
+def writer(marker, stream):
+    write, flush, dumps = stream.write, stream.flush, json.dumps
+
+    def out(o):
+        flush()
+        write(marker + dumps(o) + "\n")
+        flush()
+    return out
 
 
 def _gen(v):
@@ -39,21 +42,21 @@ def args(s):
     return [_gen(v) for v in json.loads(s)]
 
 
-def timed(i, v, ms):
-    _out({"i": i, "ok": True, "v": _enc(v), "ms": ms})
+def timed(out, i, v, ms):
+    out({"i": i, "ok": True, "v": _enc(v), "ms": ms})
 
 
-def ok(i, v):
-    _out({"i": i, "ok": True, "v": _enc(v)})
+def ok(out, i, v):
+    out({"i": i, "ok": True, "v": _enc(v)})
 
 
-def step(i, s, v):
-    _out({"i": i, "s": s, "v": _enc(v)})
+def step(out, i, s, v):
+    out({"i": i, "s": s, "v": _enc(v)})
 
 
-def done(i):
-    _out({"i": i, "ok": True})
+def done(out, i):
+    out({"i": i, "ok": True})
 
 
-def fail(i, e):
-    _out({"i": i, "ok": False, "err": (type(e).__name__ + ": " + str(e))[:500]})
+def fail(out, i, e):
+    out({"i": i, "ok": False, "err": (type(e).__name__ + ": " + str(e))[:500]})

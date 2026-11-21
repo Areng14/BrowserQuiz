@@ -431,13 +431,9 @@ function normalizeCode(where, q) {
       if (!r.ok) fail(`${where}, rubric item ${i + 1}: the ${name} reference solution ${r.why === 'require' ? "doesn't match \"require\"" : 'matches "forbid"'}.`);
     }
   });
-  // Methods the student may not use (bans.js). The reference solutions have to keep to them too.
+  // Methods the student may not use (bans.js).
   try { const ban = B.normalizeBans(q.ban, languages); if (ban) out.ban = ban; } catch (e) { fail(`${where}: ${e.message}`); }
-  for (const lang of languages) {
-    if (!out.ban || !reference[lang]) continue;
-    const used = B.bannedUse(out.ban, lang, reference[lang]);
-    if (used.length) fail(`${where}: the ${lang === 'python' ? 'Python' : 'Java'} reference solution uses ${used.join(', ')}, which "ban" doesn't allow.`);
-  }
+  // (The reference solutions have to keep to them too: checked when they run, in coderun.checkReferences.)
   const rubricPoints = out.rubric.reduce((s, r) => s + r.points, 0);
   if (rubricPoints >= Number(q.points || 1)) fail(`${where}: rubric points must be less than the question's points, so the tests are worth something.`);
   // starter: "empty" | "stubs" (default) | { java: "...custom...", python: "..." }

@@ -298,12 +298,33 @@ teacher can still adjust points).
 
 - `"Class.method"`: that method of that class, like `"Arrays.sort"`, `"Math.max"` or `"math.sqrt"`
 - `"method"`: a method or function of that name on anything, like `"sort"`, `"stream"`, `"sorted"`
-- `"Name"` (Java, capitalized): a class, anywhere, like `"HashMap"`
+- `"Name"` (Java, capitalized): a library class, like `"HashMap"`
 
-Comments and strings don't count. Full names (`java.util.Arrays.sort`), static imports, method
-references (`Arrays::sort`) and Python aliases (`s = sorted`) do. A question with any ban also bans
-the ways around one: reflection in Java, and `eval`, `exec`, `getattr`, `__import__` and `importlib`
-in Python. The reference solutions must keep to the bans, or the upload is refused.
+The check reads what the compiler saw, not the text: for Java, the compiled classes; for Python,
+Python's own parser and symbol table. It runs before any student code does. So comments, strings,
+spacing, unicode escapes, look-alike letters, full names (`java.util.Arrays.sort`), static
+imports, method references, generics, aliases (`s = sorted`, `import math as m`) and f-strings
+are all covered, and the student's own methods and variables (their own `max`, `self.count`) are
+theirs to use.
+
+A few entries also cover close relatives:
+
+| Entry | Also catches |
+| --- | --- |
+| `"sort"`, `"Arrays.sort"` (Java) | `parallelSort` |
+| `"Math.max"` and other `Math.*` | `StrictMath.max` |
+| `"stream"` | anything in `java.util.stream` (`IntStream.of`, `s.chars()...`) |
+| a class, like `"HashMap"` | its relatives in `java.util` (`LinkedHashMap`) |
+| `"sort"` or `"sorted"` (Python) | each other, and `heapq` and `bisect` |
+| `"math.sqrt"` and other `math.*` | `cmath.sqrt` |
+
+A question with any ban also bans the ways around one: reflection in Java, and `eval`, `exec`,
+`getattr`, `__import__`, `importlib`, `pickle` and friends in Python. The reference solutions
+must keep to the bans, or the upload is refused.
+
+Other library routes to the same answer aren't caught unless you list them. For a sorting
+question, also think about `"PriorityQueue"`, `"TreeSet"`, `"TreeMap"`; for a max, `"Collections.max"`
+is caught by `"max"` but `summaryStatistics` isn't; for a square root, `"Math.pow"`.
 
 For a point off instead of a zero, use a rubric item with `"forbid"` (below).
 

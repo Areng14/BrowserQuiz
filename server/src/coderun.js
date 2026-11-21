@@ -4,7 +4,7 @@
 const H = require('./harness');
 const { checkValue, QuizError, normOutput } = require('./quizfile');
 const { autoRubric } = require('./rubric');
-const { bannedUse } = require('./bans');
+const B = require('./bans');
 
 const MAX_CONCURRENT = Math.max(1, Number(process.env.RUNNER_CONCURRENCY) || 4);
 let active = 0;
@@ -70,14 +70,17 @@ async function runTests(q, lang, code, tests, opts) {
   }));
   const compile = parts.find((p) => p.status === 'compile_error');
   if (compile) return compile;
-  return { status: 'ok', tests: parts.map((p) => (p.status === 'ok' ? p.tests[0] : { pass: false, error: p.message || 'Run failed' })) };
+  const scan = (parts.find((p) => p.scan) || {}).scan || null;
+  return { status: 'ok', scan, tests: parts.map((p) => (p.status === 'ok' ? p.tests[0] : { pass: false, error: p.message || 'Run failed' })) };
 }
 
+// A question with bans but no sample tests still needs a run to get the facts: an empty one does.
 async function runSamples(q, lang, code) {
-  const used = bannedUse(q.ban, lang, code);
-  if (used.length) return { status: 'banned', banned: used, message: `Uses ${used.join(', ')}.` };
-  if (!q.tests.sample.length) return { status: 'ok', tests: [], stdout: '' };
+  const banned = B.bansFor(q.ban, lang).length > 0;
+  if (!q.tests.sample.length && !banned) return { status: 'ok', tests: [], stdout: '' };
   const r = await runTests(q, lang, code, q.tests.sample);
+  const used = r.status === 'ok' || r.status === 'compile_error' ? B.bannedUse(q.ban, lang, r.scan) : [];
+  if (used.length) return { status: 'banned', banned: used, message: `Uses ${used.join(', ')}.` };
   return H.studentView(q, lang, q.tests.sample, r);
 }
 
@@ -89,7 +92,7 @@ async function gradeCode(q, answer) {
   }
   const r = await runTests(q, answer.language, answer.code, tests, { perTest: true });
   // Using a banned method scores 0, whatever the tests say (they still run, for the teacher to see).
-  const used = bannedUse(q.ban, answer.language, answer.code);
+  const used = B.bannedUse(q.ban, answer.language, r.scan);
   const banned = used.length ? { banned: used, note: `Not allowed: ${used.join(', ')}` } : null;
   if (r.status === 'compile_error') {
     return {
@@ -128,6 +131,8 @@ async function checkReferences(quiz) {
         const tests = q.tests[kind];
         if (!tests.length) continue;
         const r = await runTests(q, lang, code, tests);
+        const used = r.status === 'ok' ? B.bannedUse(q.ban, lang, r.scan) : [];
+        if (used.length) { problems.push(`${q.id} (${lang}): the reference solution uses ${used.join(', ')}, which "ban" doesn't allow.`); break; }
         if (r.status !== 'ok') {
           problems.push(`${q.id} (${lang}): the reference solution ${r.status === 'compile_error' ? "doesn't compile" : "couldn't run"}: ${String(r.message || '').slice(0, 300)}`);
           break;
