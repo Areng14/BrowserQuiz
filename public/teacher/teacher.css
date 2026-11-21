@@ -101,6 +101,9 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
   .t-nav-item { padding: 6px 0; font-size: 11px; letter-spacing: -0.01em; }
 }
 .t-section { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-content: start; }
+/* Quizzes: paste a quiz.json */
+.t-paste[open] > summary { margin-bottom: 10px; }
+.t-paste > .field { margin-bottom: 12px; }
 .t-row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .t-row .field { min-width: 200px; flex: 1 1 200px; }
 /* picker: a dropdown with the name on the left and details lined up on the right */
