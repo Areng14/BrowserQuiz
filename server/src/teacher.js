@@ -13,6 +13,7 @@ const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
 const W = require('./watch');
 const AI = require('./aigrade');
+const AICSV = require('./aicsv');
 const G = require('./grade');
 const { fillTemplate: fillT } = require('./quizfile');
 // AI grading in progress, per run: { total, graded, failed, errors, running }. One at a time per run.
@@ -734,6 +735,51 @@ module.exports = function teacherRoutes(r) {
       .catch((e) => Object.assign(job, { running: false, ended: Date.now(), errors: [String(e.message || e)] }));
     return job;
   }
+  // Grading with any AI chat (aicsv.js): the prompt to copy, and the CSV it answers with, pasted back.
+  // ?attempt= narrows both to one student.
+  function pasteWork(run, quiz, attemptId) {
+    const ids = attemptId ? [attemptId] : q('SELECT id FROM attempts WHERE run_id = ? AND archived = 0').all(run.id).map((x) => x.id);
+    const work = [];
+    const Gx = { questionScore: G.questionScore, autoMarks: G.autoMarks, isRun: G.isRun, fillTemplate: fillT };
+    for (const id of ids) {
+      const a = store.getAttempt(id);
+      if (!a || a.runId !== run.id || a.status !== 'submitted' || !a.result) continue;
+      const tok = AICSV.token(run.id, a.id);
+      for (const w of AI.jobsFor(quiz, a, Gx)) work.push({ tok, a, qq: w.qq, job: w.job });
+    }
+    return work;
+  }
+  r.get('/api/t/runs/:id/ai-prompt', (req, res, p) => {
+    const me = requireTeacher(req);
+    const run = getRun(me, p.id);
+    const quiz = store.getQuiz(run.quiz_id);
+    const work = pasteWork(run, quiz, new URL(req.url, 'http://x').searchParams.get('attempt'));
+    json(res, 200, { answers: work.length, students: new Set(work.map((w) => w.tok)).size, prompt: work.length ? AICSV.buildPrompt(work) : '' });
+  });
+  r.post('/api/t/runs/:id/ai-csv', async (req, res, p) => {
+    const me = requireTeacher(req);
+    const run = getRun(me, p.id);
+    const body = await readJson(req, 2 * 1024 * 1024);
+    const quiz = store.getQuiz(run.quiz_id);
+    const work = pasteWork(run, quiz, typeof body.attempt === 'string' ? body.attempt : null);
+    const answers = new Map(work.map((w) => [`${w.tok}.${w.qq.id}`, w]));
+    const { grades, skipped, rows } = AICSV.readCsv(typeof body.csv === 'string' ? body.csv : '', answers);
+    let applied = 0;
+    if (body.apply === true) {
+      const touched = new Set();
+      for (const [id, g] of grades) {
+        const { a, qq, job } = answers.get(id);
+        a.result.manual = Object.assign({}, a.result.manual, { [qq.id]: AICSV.toManual(qq, job, g, job.auto) });
+        store.logEvent(a, 'ai-grade', 'info', `${qq.id} (pasted)`);
+        touched.add(a);
+        applied++;
+      }
+      for (const a of touched) store.save(a);
+      audit(me, 'ai-paste', run.id, `${applied} answers`);
+    }
+    json(res, 200, { rows, found: grades.size, waiting: work.length, skipped: skipped.slice(0, 20), applied });
+  });
+
   r.post('/api/t/runs/:id/ai-grade', (req, res, p) => {
     const me = requireTeacher(req);
     const run = getRun(me, p.id);

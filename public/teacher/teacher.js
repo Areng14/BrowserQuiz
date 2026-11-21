@@ -660,6 +660,68 @@
     return h('td', { class: 'st-good t-clean', text: 'Clean' });
   }
   const phone = () => matchMedia('(max-width: 820px)').matches;
+
+  // Grade with AI (server: aicsv.js, aigrade.js). Copy a prompt into any AI chat, paste its CSV back.
+  // With an Anthropic key on the server, Claude can also do it right here. attemptId: one student only.
+  async function aiDialog(runId, attemptId, apiOn, done) {
+    const qs = attemptId ? `?attempt=${encodeURIComponent(attemptId)}` : '';
+    let p;
+    try { p = await api(`/api/t/runs/${runId}/ai-prompt${qs}`); } catch (e) { alert(e.message); return; }
+    if (!p.answers) { alert('Nothing is waiting for you to grade.'); return; }
+    const dlg = h('dialog', { class: 't-dialog', 'aria-labelledby': 't-ai-title' });
+    const close = () => { dlg.close(); dlg.remove(); };
+    const promptBox = h('textarea', { class: 'input qe-mono t-ai-prompt', readonly: true, rows: 3, 'aria-label': 'The prompt' });
+    promptBox.value = p.prompt;
+    const copied = h('span', { class: 't-small t-muted', role: 'status' });
+    const copyBtn = h('button', { class: 'btn primary', type: 'button', text: 'Copy prompt', onclick: async () => {
+      try { await navigator.clipboard.writeText(p.prompt); } catch (e) { promptBox.focus(); promptBox.select(); document.execCommand('copy'); }
+      copied.textContent = 'Copied';
+    } });
+    const csvBox = h('textarea', { class: 'input qe-mono', rows: 6, placeholder: 'answer,item,met,points,reason', 'aria-label': 'The CSV from the AI', spellcheck: 'false' });
+    const status = h('p', { class: 't-small', role: 'status' });
+    const skipped = h('ul', { class: 't-small t-muted t-ai-skipped' });
+    const applyBtn = h('button', { class: 'btn primary', type: 'button', text: 'Apply grades', disabled: true });
+    let timer = 0;
+    let seq = 0;
+    const check = async () => {
+      const n = ++seq;
+      if (!csvBox.value.trim()) { status.textContent = ''; skipped.replaceChildren(); applyBtn.disabled = true; return; }
+      let r;
+      try { r = await post(`/api/t/runs/${runId}/ai-csv`, { csv: csvBox.value, attempt: attemptId || undefined }); } catch (e) { status.textContent = e.message; return; }
+      if (n !== seq) return;
+      status.className = r.found ? 't-small' : 't-small t-error';
+      status.textContent = r.found ? `Grades for ${plural(r.found, 'answer')} of ${r.waiting}.` : (r.skipped[0] || 'No grades found in that.');
+      skipped.replaceChildren(...(r.found ? r.skipped : r.skipped.slice(1)).map((x) => h('li', { text: x })));
+      applyBtn.disabled = !r.found;
+    };
+    csvBox.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(check, 300); });
+    applyBtn.addEventListener('click', async () => {
+      applyBtn.disabled = true;
+      try {
+        const r = await post(`/api/t/runs/${runId}/ai-csv`, { csv: csvBox.value, attempt: attemptId || undefined, apply: true });
+        close();
+        done(`AI grades applied to ${plural(r.applied, 'answer')}. They're labeled on each student, and you can change any.`);
+      } catch (e) { status.textContent = e.message; applyBtn.disabled = false; }
+    });
+    const here = apiOn ? h('div', { class: 't-ai-here' },
+      h('p', { class: 't-small t-muted', text: 'Or let Claude grade them here, with the key this server has.' }),
+      h('button', { class: 'btn', type: 'button', text: 'Grade here', onclick: async () => {
+        try { await post(attemptId ? `/api/t/attempts/${attemptId}/ai-grade` : `/api/t/runs/${runId}/ai-grade`); close(); done(''); } catch (e) { status.textContent = e.message; }
+      } })) : null;
+    dlg.append(
+      h('h2', { id: 't-ai-title', text: 'Grade with AI' }),
+      h('ol', { class: 't-ai-steps' },
+        h('li', {}, h('p', { text: `Copy the prompt: ${plural(p.answers, 'answer')}${attemptId ? '' : ` from ${plural(p.students, 'student')}`}, with no names.` }),
+          h('div', { class: 't-row' }, copyBtn, copied), promptBox),
+        h('li', {}, h('p', { text: 'Paste it into an AI chat (ChatGPT, Claude, Gemini…). It answers with a CSV.' })),
+        h('li', {}, h('p', { text: 'Paste the CSV here.' }), csvBox, status, skipped)),
+      ...(here ? [here] : []),
+      h('div', { class: 't-row t-dialog-acts' }, applyBtn, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: close })));
+    dlg.addEventListener('close', () => dlg.remove());
+    root.append(dlg); // inside the dashboard, for its fonts and sizing
+    dlg.showModal();
+    copyBtn.focus();
+  }
   // How far along: a bar of what's answered, the count, and where they are right now.
   function progressCell(a) {
     if (!a || a.status === 'waiting') return h('td', { class: 'num', 'data-label': 'Answered' });
@@ -698,12 +760,9 @@
     const aiBtn = h('button', { class: 'btn', type: 'button', hidden: true });
     const aiMsg = h('p', { class: 't-small t-muted', role: 'status', hidden: true });
     let aiWaiting = 0;
-    aiBtn.addEventListener('click', async () => {
-      if (!confirm(`Send ${plural(aiWaiting, 'answer')} to Claude to grade?\n\nIt gets each question, its rubric and model answer, and the student's answer, never names or IDs. Every grade is labeled as the AI's, with its reasons, and you can change any of them.`)) return;
-      aiBtn.disabled = true;
-      try { await post(`/api/t/runs/${runId}/ai-grade`); } catch (e) { aiMsg.hidden = false; aiMsg.className = 't-small t-error'; aiMsg.textContent = e.message; }
-      refresh();
-    });
+    let aiOn = false;
+    const aiDone = (text) => { if (text) { aiMsg.hidden = false; aiMsg.className = 't-small t-muted'; aiMsg.textContent = text; } lastDetail = ''; refresh(); };
+    aiBtn.addEventListener('click', () => aiDialog(runId, null, aiOn, aiDone));
     // On a phone the less-used buttons fold under More, so the students start near the top.
     const extra = h('span', { class: 't-run-extra', id: 't-run-extra' });
     const moreBtn = h('button', { class: 'btn t-run-morebtn', type: 'button', text: 'More', 'aria-expanded': 'false', 'aria-controls': 't-run-extra',
@@ -745,6 +804,7 @@
       // Grade with AI: shown while there's something waiting for the teacher, or while it runs.
       aiWaiting = data.students.reduce((n, x) => n + (x.attempt && x.attempt.status === 'submitted' ? x.attempt.review || 0 : 0), 0);
       const job = data.ai && data.ai.job;
+      aiOn = !!(data.ai && data.ai.on);
       if (job && job.running) {
         aiBtn.hidden = false; aiBtn.disabled = true;
         aiBtn.textContent = `Grading with AI… ${job.graded + job.failed} of ${job.total}`;
@@ -901,7 +961,7 @@
           d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
           d.status === 'submitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) }, dk('regrade'))) : null,
           d.status === 'submitted' && d.totals && d.totals.review ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Grade with AI', title: 'Send the answers waiting for you to Claude. Names and IDs stay here.',
-            onclick: () => { if (confirm(`Send ${d.name}'s ${plural(d.totals.review, 'answer')} waiting for you to Claude to grade? Their name and ID stay here.`)) { lastDetail = ''; act(`/api/t/attempts/${id}/ai-grade`); } } }, dk('ai'))) : null,
+            onclick: () => aiDialog(runId, id, aiOn, aiDone) }, dk('ai'))) : null,
           d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Restore', onclick: () => { if (confirm(`Restore ${d.name}?`)) act(`/api/t/attempts/${id}/restore`); } }, dk('restore'))) : null,
           d.status === 'active' || d.status === 'admitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Let back in', title: 'Crashed computer or new seat: they sign in again and keep their answers and time', onclick: () => act(`/api/t/attempts/${id}/let-in`) }, dk('letin'))) : null,
           h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Reset', title: 'Throw out this attempt and let them start over', onclick: () => { if (confirm(`Reset ${d.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) { closeDetail(); act(`/api/t/attempts/${id}/reset`); } } }, dk('reset')))),
