@@ -307,9 +307,9 @@
           who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null,
           h('div', { class: 't-side-btns' }, themeButton(),
             who && !who.passwordFromEnv ? h('button', { class: 'btn small', type: 'button', text: 'Password', onclick: () => showSetPassword(false) }) : null,
-            h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } })),
-          ghLink())),
-      h('main', { class: 't-main' }, ...content));
+            h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } })))),
+      h('main', { class: 't-main' }, ...content),
+      h('footer', { class: 't-foot' }, ghLink())); // at the bottom of the page, or after it when it's long
   }
 
   async function showHome(next) {
