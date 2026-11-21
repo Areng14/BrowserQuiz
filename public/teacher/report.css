@@ -26,3 +26,4 @@ main { max-width: 920px; margin: 0 auto; padding: 28px 16px 64px; }
   .r-chips a { color: inherit; }
   @page { margin: 14mm 12mm; }
 }
+@media (pointer: coarse) { .r-jump { font-size: 16px; } }

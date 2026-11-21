@@ -95,7 +95,7 @@
 .r-view pre.r-out { margin: 0; }
 
 /* your answer | correct answer */
-.r-view .r-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-top: 10px; }
+.r-view .r-compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 10px; margin-top: 10px; }
 .r-view .r-compare.stacked { grid-template-columns: minmax(0, 1fr); }
 /* differences between a code answer and the reference */
 .r-view .r-diff-row { margin-top: 8px; }

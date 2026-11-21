@@ -161,6 +161,11 @@
     }
     return s;
   }
+  function penIcon() {
+    const s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    s.append(svgEl('path', { d: 'M12 20h9' }), svgEl('path', { d: 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z' }));
+    return s;
+  }
   // A pass/fail mark as a drawn icon, so phones don't swap in their own emoji.
   function markIcon(pass) {
     const s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
@@ -716,7 +721,7 @@
       'Offline. Keep working, answers save when you reconnect.');
     const main = h('main', { class: 'qmain', tabindex: '-1', 'aria-labelledby': 'q-heading' });
     const sheet = h('nav', { class: 'sheet', 'aria-label': 'Questions' });
-    const prev = h('button', { class: 'btn ghost', type: 'button', text: 'Back', onclick: () => go(S.idx - 1) });
+    const prev = h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => go(S.idx - 1) });
     const next = h('button', { class: 'btn', type: 'button' });
     next.addEventListener('click', () => {
       if (S.dirOpen) return closeDirections();
@@ -727,7 +732,7 @@
     main.addEventListener('mouseup', () => setTimeout(hlBar.update, 0));
     main.addEventListener('keyup', (e) => { if (e.shiftKey || e.key === 'Shift') hlBar.update(); });
     main.addEventListener('scroll', hlBar.hide, { passive: true });
-    const scratchBtn = h('button', { class: 'btn small ghost scratch-btn', type: 'button', text: 'Scratchpad', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() });
+    const scratchBtn = h('button', { class: 'btn small ghost scratch-btn', type: 'button', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() }, penIcon(), h('span', { class: 'scratch-label', text: 'Scratchpad' }));
     const scratch = h('aside', { class: 'scratch', id: 'scratch', 'aria-label': 'Scratchpad' });
     scratch.hidden = true;
     const wrap = h('div', { class: 'quiz' },
@@ -746,6 +751,7 @@
       h('footer', { class: 'qnav' }, prev, sheet, next),
       live, hlBar.bar);
     S.el = { wrap, main, timer, sheet, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null };
+    wrap.addEventListener('scroll', hlBar.hide, { passive: true }); // a short window scrolls the whole quiz
     if (!keysBound) { document.addEventListener('keydown', quizKeys); keysBound = true; }
     S.saveState = 'saved';
     mount(wrap);
@@ -1156,12 +1162,22 @@
       bar.hidden = false;
       const at = (sel.isCollapsed ? marks[0] : r).getBoundingClientRect();
       const box = S.el.wrap.getBoundingClientRect();
+      const y = S.el.wrap.scrollTop; // a short window scrolls the whole quiz
       const top = at.top - box.top - bar.offsetHeight - 8;
-      bar.style.top = `${top > 4 ? top : at.bottom - box.top + 8}px`;
+      // On touch screens the phone's own Copy menu sits above the selection, so go below it.
+      bar.style.top = `${top > 4 && !coarse() ? top + y : at.bottom - box.top + 8 + y}px`;
       bar.style.left = `${Math.max(8, Math.min(box.width - bar.offsetWidth - 8, at.left - box.left + at.width / 2 - bar.offsetWidth / 2))}px`;
     }
     return { bar, update, hide };
   }
+  const coarse = () => matchMedia('(pointer: coarse)').matches;
+  // A touch selection never sends mouseup or keyup: follow the selection itself.
+  let selTimer = 0;
+  document.addEventListener('selectionchange', () => {
+    if (!coarse()) return;
+    clearTimeout(selTimer);
+    selTimer = setTimeout(() => { if (S.el && S.el.hlBar && S.el.main.isConnected) S.el.hlBar.update(); }, 250);
+  });
   function textNodesIn(range) {
     const top = range.commonAncestorContainer;
     const root = top.nodeType === 1 ? top : top.parentNode;
@@ -1296,7 +1312,7 @@
       paint();
       view.append(list);
     } else if (q.type === 'text') {
-      const input = h('input', { class: 'input text-answer', id: q.id + '-text', autocomplete: 'off', spellcheck: 'false', maxlength: '500' });
+      const input = h('input', { class: 'input text-answer', id: q.id + '-text', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', maxlength: '500' });
       input.value = S.answers[q.id] || '';
       input.addEventListener('input', () => setAnswer(q.id, input.value.trim() ? input.value : undefined));
       view.append(h('label', { class: 'field', for: q.id + '-text' }, h('span', { class: 'field-label', text: 'Your answer' }), input));
@@ -1341,7 +1357,8 @@
   }
 
   function growArea(attrs, value, onChange, codeLike) {
-    const ta = h('textarea', Object.assign({ class: 'input long-answer' + (codeLike ? ' mono' : ''), spellcheck: codeLike ? 'false' : 'true', autocomplete: 'off' }, attrs));
+    // Phones would capitalize or curl quotes in code-like answers, which changes what gets graded.
+    const ta = h('textarea', Object.assign({ class: 'input long-answer' + (codeLike ? ' mono' : ''), spellcheck: codeLike ? 'false' : 'true', autocomplete: 'off' }, codeLike ? { autocapitalize: 'off', autocorrect: 'off' } : {}, attrs));
     ta.value = value || '';
     const grow = () => { ta.style.height = 'auto'; ta.style.height = Math.max(ta.scrollHeight + 2, 96) + 'px'; };
     ta.addEventListener('input', () => { grow(); onChange(ta.value); });
@@ -1375,7 +1392,7 @@
     table.append(h('thead', {}, h('tr', {}, q.columns.map((c) => h('th', { scope: 'col', text: c })))),
       h('tbody', {}, q.cells.map((row, r) => h('tr', {}, row.map((given, c) => {
         if (given != null) return h('td', { class: 'given', text: given });
-        const input = h('input', { class: 'trace-cell', autocomplete: 'off', spellcheck: 'false', 'aria-label': `${q.columns[c]}, row ${r + 1}`, 'data-r': r, 'data-c': c });
+        const input = h('input', { class: 'trace-cell', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', 'aria-label': `${q.columns[c]}, row ${r + 1}`, 'data-r': r, 'data-c': c });
         input.value = (cur[r] && cur[r][c]) || '';
         input.addEventListener('input', () => {
           const v = (S.answers[q.id] || blank()).map((rr) => rr.slice());
@@ -1403,7 +1420,7 @@
     pieces.forEach((seg, i) => {
       if (seg) pre.append(h('code', { 'data-lang': q.codeLang, text: seg }));
       if (i === pieces.length - 1) return;
-      const input = h('input', { class: 'blank', autocomplete: 'off', spellcheck: 'false', 'aria-label': `Blank ${i + 1}` });
+      const input = h('input', { class: 'blank', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', 'aria-label': `Blank ${i + 1}` });
       input.value = cur[i] || '';
       const size = () => { input.style.width = Math.max(6, input.value.length + 2) + 'ch'; };
       size();
@@ -1499,6 +1516,7 @@
 
   function mountEditor(q, host, ans) {
     const lang = ans.language;
+    if (phoneSized()) { plainEditor(host, ans, lang, q); return; }
     host.append(h('div', { class: 'editor-loading', text: 'Loading editor…' }));
     loadMonaco().then((m) => {
       if (!host.isConnected || S.quiz.questions[S.idx] !== q || ans.language !== lang) return;
@@ -1534,21 +1552,24 @@
         ans.code[lang] = editor.getValue();
         setAnswer(q.id, ans);
       }));
-    }).catch(() => {
-      if (!host.isConnected) return;
-      const ta = h('textarea', { class: 'code-fallback', spellcheck: 'false', autocomplete: 'off', 'aria-label': `Code answer. Tab indents. ${leaveHint()}.` });
-      tabOut(ta);
-      ta.value = ans.code[lang];
-      ta.addEventListener('input', () => { ans.code[lang] = ta.value; setAnswer(q.id, ans); });
-      ta.addEventListener('keydown', (e) => {
-        if (e.key !== 'Tab' || e.shiftKey) return;
-        e.preventDefault();
-        ta.setRangeText('    ', ta.selectionStart, ta.selectionEnd, 'end');
-        ans.code[lang] = ta.value;
-        setAnswer(q.id, ans);
-      });
-      host.replaceChildren(ta);
+    }).catch(() => { if (host.isConnected) plainEditor(host, ans, lang, q); });
+  }
+  // A phone held either way: Monaco there takes over swipes, so the page can't scroll past it.
+  const phoneSized = () => matchMedia('(pointer: coarse) and (max-width: 600px), (pointer: coarse) and (max-height: 480px)').matches;
+  // The code box without Monaco: on phones, and if Monaco fails to load.
+  function plainEditor(host, ans, lang, q) {
+    const ta = h('textarea', { class: 'code-fallback', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', 'aria-label': `Code answer. Tab indents. ${leaveHint()}.` });
+    tabOut(ta);
+    ta.value = ans.code[lang];
+    ta.addEventListener('input', () => { ans.code[lang] = ta.value; setAnswer(q.id, ans); });
+    ta.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab' || e.shiftKey) return;
+      e.preventDefault();
+      ta.setRangeText('    ', ta.selectionStart, ta.selectionEnd, 'end');
+      ans.code[lang] = ta.value;
+      setAnswer(q.id, ans);
     });
+    host.replaceChildren(ta);
   }
 
   async function runCode(q, btn, results) {

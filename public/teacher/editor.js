@@ -1325,6 +1325,8 @@
       const row = outline.querySelector('.sel');
       if (row) row.scrollIntoView({ block: 'nearest' });
       if (focus) { const p = pane.querySelector('#qe-prompt'); if (p) p.focus({ preventScroll: true }); }
+      // Narrow screens put the question under the list: go to it.
+      if (focus && matchMedia('(max-width: 1000px)').matches) pane.scrollIntoView({ block: 'start' });
     }
     // New questions go next to their own kind, so each type stays one part of the quiz.
     function addQuestion(type) {

@@ -21,8 +21,11 @@
 
   try { const t = localStorage.getItem(THEME_KEY); if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; } catch (e) { /* ignore */ }
 
+  // Tables say what they are, so they still read as tables when phones lay their rows out as cards.
+  const ROLES = { table: 'table', thead: 'rowgroup', tbody: 'rowgroup', tr: 'row', th: 'columnheader', td: 'cell' };
   function h(tag, attrs, ...kids) {
     const el = document.createElement(tag);
+    if (ROLES[tag] && !(attrs && attrs.role)) el.setAttribute('role', ROLES[tag]);
     for (const [k, v] of Object.entries(attrs || {})) {
       if (v == null || v === false) continue;
       if (k === 'class') el.className = v;
@@ -88,6 +91,8 @@
     });
   }
   const actionsHead = () => h('th', {}, h('span', { class: 'sr-only', text: 'Actions' }));
+  // Column headers; the ones named in nums sit right, over their right-aligned numbers.
+  const heads = (names, nums = []) => names.map((x) => h('th', { class: nums.includes(x) ? 'num' : null, text: x }));
 
   // ---------- sign in ----------
   function showLogin() {
@@ -183,10 +188,10 @@
         } catch (e) { msg.textContent = e.message; }
       };
       list.replaceChildren(h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
-        h('thead', {}, h('tr', {}, ['Name', 'Username', 'Quizzes', 'Classes', 'Status'].map((x) => h('th', { text: x })), actionsHead())),
+        h('thead', {}, h('tr', {}, heads(['Name', 'Username', 'Quizzes', 'Classes', 'Status'], ['Quizzes', 'Classes']), actionsHead())),
         h('tbody', {}, r.teachers.map((x) => h('tr', {},
           h('td', { text: x.name }), h('td', { class: 't-muted', text: x.username }),
-          h('td', { class: 'num', text: String(x.quizzes) }), h('td', { class: 'num', text: String(x.classes) }),
+          h('td', { class: 'num', 'data-label': 'Quizzes', text: String(x.quizzes) }), h('td', { class: 'num', 'data-label': 'Classes', text: String(x.classes) }),
           h('td', { class: x.disabled ? 't-muted' : x.pending ? 'st-waiting' : 'st-good', text: x.role === 'admin' ? 'Admin' : x.disabled ? 'Disabled' : x.pending ? 'Not signed in yet' : 'Active' }),
           h('td', { class: 't-actions' }, x.role === 'admin' ? null : [
             h('button', { class: 'btn small', type: 'button', text: 'Reset password', 'aria-label': `Reset password for ${x.name}`, onclick: () => act(x, 'reset') }),
@@ -301,12 +306,12 @@
   }
 
   const runsTable = (runs) => h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
-    h('thead', {}, h('tr', {}, ['Code', 'Quiz', 'Class', 'Status', 'Joined', 'Started'].map((x) => h('th', { text: x })), actionsHead())),
+    h('thead', {}, h('tr', {}, heads(['Code', 'Quiz', 'Class', 'Status', 'Joined', 'Started'], ['Joined']), actionsHead())),
     h('tbody', {}, runs.map((r) => h('tr', {},
       h('td', {}, h('button', { class: 't-link t-mono', type: 'button', text: r.code, onclick: () => showRun(r.id) })),
       h('td', { text: r.quiz }), h('td', { text: r.roster }),
       h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.practice ? ' (practice)' : r.seb ? ' (SEB)' : ''}` }),
-      h('td', { class: 'num', text: String(r.joined) }), h('td', { text: date(r.createdAt) }),
+      h('td', { class: 'num', 'data-label': 'Joined', text: String(r.joined) }), h('td', { 'data-label': 'Started', text: date(r.createdAt) }),
       h('td', { class: 't-actions' }, h('button', { class: 'btn small', type: 'button', text: 'Delete', 'aria-label': `Delete ${r.code}`,
         onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?${r.status === 'open' ? " It's still open: anyone taking it gets signed out." : ''}`) })))))));
 
@@ -732,13 +737,13 @@
         return h('tr', { class: selected === (a && a.id) ? 'sel' : null },
           h('td', { role: 'rowheader', class: 't-rowhead' }, a ? h('button', { class: 't-link', type: 'button', text: s.name, 'data-key': `${a.id}:name`, 'aria-expanded': String(selected === a.id), onclick: () => { selected = a.id; lastDetail = ''; showDetail(a.id); refresh(); } }) : s.name),
           statusCell(s), integrityCell(a),
-          h('td', { class: 'num', text: a ? String(a.strikes) : '' }),
-          h('td', { class: 'num' + (a && a.awayNow ? ' st-bad' : ''), text: a && a.awayMs ? (a.awayNow ? 'Now, ' : '') + mmss(a.awayMs) : '' }),
-          h('td', { class: 'num', text: a ? String(a.warnings) : '' }),
-          h('td', { class: 'num', text: a && a.status !== 'waiting' ? `${a.answered}/${a.total}` : '' }),
-          h('td', { class: 'num' + (beat != null && beat > 6 ? ' t-late' : ''), text: beat != null ? `${beat}s ago` : '' }),
-          h('td', { class: 'num', text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }),
-          h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), text: score }),
+          h('td', { class: 'num', 'data-label': 'Strikes', text: a ? String(a.strikes) : '' }),
+          h('td', { class: 'num' + (a && a.awayNow ? ' st-bad' : ''), 'data-label': 'Away', text: a && a.awayMs ? (a.awayNow ? 'Now, ' : '') + mmss(a.awayMs) : '' }),
+          h('td', { class: 'num quiet', 'data-label': 'Warnings', text: a ? String(a.warnings) : '' }),
+          h('td', { class: 'num', 'data-label': 'Answered', text: a && a.status !== 'waiting' ? `${a.answered}/${a.total}` : '' }),
+          h('td', { class: 'num' + (beat != null && beat > 6 ? ' t-late' : ' quiet'), 'data-label': 'Heartbeat', text: beat != null ? `${beat}s ago` : '' }),
+          h('td', { class: 'num', 'data-label': 'Time left', text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }),
+          h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), 'data-label': 'Score', text: score }),
           actions);
       }));
       // Keep keyboard focus on the same button after the redraw, without scrolling the page back to it. If
@@ -850,8 +855,8 @@
           howTo,
           h('div', { class: 't-row' }, admitAll, toggle, lockBtn, sebLinks, exportLink, classReport),
           failedBox, summary),
-        h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
-          h('thead', {}, h('tr', {}, ['Student', 'Status', 'Integrity', 'Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score'].map((x) => h('th', { text: x })), actionsHead())),
+        h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },
+          h('thead', {}, h('tr', {}, heads(['Student', 'Status', 'Integrity', 'Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score'], ['Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score']), actionsHead())),
           tbody)),
         detail));
     await refresh();
