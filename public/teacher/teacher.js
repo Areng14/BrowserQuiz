@@ -214,7 +214,7 @@
 
   // ---------- dashboard: a sidebar of tabs, each with its own address (#give, #run/<id>, ...) ----------
   const TABS = [
-    { id: 'give', label: 'Give a quiz', icon: ['M6 4l14 8-14 8z'] },
+    { id: 'give', label: 'Give a quiz', short: 'Give', icon: ['M6 4l14 8-14 8z'] },
     { id: 'results', label: 'Results', icon: ['M3 3v18h18', 'M18 17V9', 'M13 17V5', 'M8 17v-3'] },
     { id: 'quizzes', label: 'Quizzes', icon: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6', 'M16 13H8', 'M16 17H8'] },
     { id: 'classes', label: 'Classes', icon: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'] },
@@ -262,7 +262,7 @@
       h('nav', { class: 't-side', 'aria-label': 'Dashboard' },
         h('div', { class: 't-brand', text: 'BrowserQuiz' }),
         h('div', { class: 't-nav' }, tabs.map((t) => h('a', { class: 't-nav-item', href: '#' + t.id, 'aria-current': t.id === active ? 'page' : null },
-          icon(t.icon), h('span', { class: 't-nav-label', text: t.label }),
+          icon(t.icon), h('span', { class: 't-nav-label' }, t.short || t.label, t.short ? h('span', { class: 't-nav-more', text: t.label.slice(t.short.length) }) : null),
           t.id === 'give' && live ? h('span', { class: 't-badge', title: `${live} open`, 'aria-label': `${live} open`, text: String(live) }) : null))),
         h('div', { class: 't-side-foot' },
           who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null,
