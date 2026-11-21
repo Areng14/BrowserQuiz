@@ -28,7 +28,7 @@ it against hidden tests, and your data never leaves your machine.
 - Student code runs in a sandbox with no internet.
 - Each teacher's quizzes are encrypted with their own key, so even whoever hosts it can't read them.
 - No CDNs, no trackers. Student IDs are only stored hashed.
-- Checked in 3 security reviews, including a live pentest.
+- Checked in 4 security reviews, including two live pentests.
 
 The details are in [docs/security.md](docs/security.md).
 
