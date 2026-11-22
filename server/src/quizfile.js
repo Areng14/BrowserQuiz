@@ -392,6 +392,15 @@ const LANG_RESERVED = {
 LANG_RESERVED.typescript = LANG_RESERVED.javascript;
 LANG_RESERVED.go = words('break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var main init this nil true false iota');
 LANG_RESERVED.rust = words('as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while abstract become box do final macro override priv typeof unsized virtual yield try union main new bq sol');
+LANG_RESERVED.csharp = words('abstract as base bool break byte case catch char checked class const continue decimal default delegate do double else enum event explicit extern false finally fixed float for foreach goto if implicit in int interface internal is lock long namespace new null object operator out override params private protected public readonly ref return sbyte sealed short sizeof stackalloc static string struct switch this throw true try typeof uint ulong unchecked unsafe ushort using virtual void volatile while var dynamic await async yield value Main BQ BQMain');
+LANG_RESERVED.swift = words('associatedtype class deinit enum extension fileprivate func import init inout internal let open operator private precedencegroup protocol public rethrows static struct subscript typealias var break case catch continue default defer do else fallthrough for guard if in repeat return throw switch where while as Any false is nil self Self super throws true try await async some any main');
+LANG_RESERVED.ruby = words('BEGIN END alias and begin break case class def defined do else elsif end ensure false for if in module next nil not or redo rescue retry return self super then true undef unless until when while yield __FILE__ __LINE__ __method__ initialize puts print p require load exit tests');
+// Types a declared class would hide in Swift, C# and Ruby.
+const OTHER_TAKEN = {
+  swift: words('Array Dictionary Set String Int Double Float Bool Character Optional Error Result Solution'),
+  csharp: words('Console Exception Convert Tuple Array List Dictionary HashSet Queue Stack Math String Object Action Func Task Solution BQ BQMain'),
+  ruby: words('Array Hash String Integer Float Object Kernel Comparable Enumerable Set Struct Range Symbol Proc Method Class Module Time Random Math BQ'),
+};
 // Rust's own types, which a declared class would hide.
 const RUST_TAKEN = words('Vec String Option Box Some None Ok Err Result HashMap HashSet BTreeMap BTreeSet VecDeque BinaryHeap Rc RefCell Self Solution');
 // JavaScript's own classes, which a declared class would hide from the harness.
@@ -404,16 +413,20 @@ function checkLanguages(where, out, languages, D) {
   const names = [];
   if (out.mode === 'method') names.push(out.signature.name, ...out.signature.params.map((p) => p.name));
   else names.push(out.class.name, ...out.class.constructor.map((p) => p.name), ...out.class.methods.flatMap((m) => [m.name, ...m.params.map((p) => p.name)]));
-  for (const [n, fs] of Object.entries(D || {})) names.push(n, ...fs.map((f) => f.name));
+  const fields = [];
+  for (const [n, fs] of Object.entries(D || {})) { names.push(n); fields.push(...fs.map((f) => f.name)); }
   for (const lang of languages) {
-    const bad = names.find((n) => LANG_RESERVED[lang] && LANG_RESERVED[lang].has(n));
+    // (Ruby's given classes take their fields as _next and read them as obj.next, so a field can be called next)
+    const bad = [...names, ...(lang === 'ruby' ? [] : fields)].find((n) => LANG_RESERVED[lang] && LANG_RESERVED[lang].has(n));
     if (bad) fail(`${where}: "${bad}" can't be a name in ${langName(lang)}. Pick another, or leave ${langName(lang)} out.`);
     if (T.isJs(lang)) { const t = Object.keys(D || {}).find((n) => JS_TAKEN.has(n)); if (t) fail(`${where}.types: "${t}" is already a JavaScript class. Pick another name.`); }
     if (lang === 'rust') { const t = Object.keys(D || {}).find((n) => RUST_TAKEN.has(n)) || (out.mode === 'class' && RUST_TAKEN.has(out.class.name) && out.class.name); if (t) fail(`${where}: "${t}" is already a Rust type. Pick another name.`); }
+    if (OTHER_TAKEN[lang]) { const t = Object.keys(D || {}).find((n) => OTHER_TAKEN[lang].has(n)) || (out.mode === 'class' && OTHER_TAKEN[lang].has(out.class.name) && out.class.name); if (t) fail(`${where}: "${t}" is already a ${langName(lang)} type. Pick another name.`); }
   }
   const tests = [...out.tests.sample.map((t, i) => [`tests.sample[${i}]`, t]), ...out.tests.hidden.map((t, i) => [`tests.hidden[${i}]`, t])];
+  const noSpeed = languages.filter((l) => !T.hasSpeed(l));
+  if (noSpeed.length && tests.some(([, t]) => t.speed)) fail(`${where}: speed tests only work in Java, Python, JavaScript and TypeScript, so take them out or leave ${noSpeed.map(langName).join(' and ')} out.`);
   const cc = languages.filter(T.isNative);
-  if (cc.length && tests.some(([, t]) => t.speed)) fail(`${where}: speed tests only work in Java, Python, JavaScript and TypeScript, so take them out or leave ${cc.map(langName).join(' and ')} out.`);
   if (languages.includes('c')) {
     if (out.mode === 'class') fail(`${where}: C has no classes, so a "write a class" question can't include C.`);
     const types = [out.signature.returns, ...out.signature.params.map((p) => p.type)];
@@ -466,9 +479,9 @@ function normalizeCode(where, q) {
         const params = checkParams(`${where}.class.methods[${i}]`, m.params || [], D);
         const key = `${mn}(${params.map((p) => p.type).join(',')})`;
         if (seen.has(key)) fail(`${where}: method ${key} is listed twice.`);
-        const noOverloads = languages.filter((l) => l === 'python' || T.isJs(l) || l === 'go' || l === 'rust');
+        const noOverloads = languages.filter((l) => ['python', 'go', 'rust', 'ruby'].includes(l) || T.isJs(l));
         if ([...seen].some((k) => k.startsWith(mn + '(')) && noOverloads.length) {
-          fail(`${where}: there are two methods named ${mn}. Overloads only work in Java and C++ (${noOverloads.map(langName).join(' and ')} can't have two methods with one name).`);
+          fail(`${where}: there are two methods named ${mn}. Overloads only work in Java, C++, C# and Swift (${noOverloads.map(langName).join(' and ')} can't have two methods with one name).`);
         }
         seen.add(key);
         return { name: mn, params, returns: checkType(`${where}.class.methods[${i}].returns`, m.returns, true, D) };

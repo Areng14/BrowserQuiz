@@ -9,7 +9,7 @@ Topic:
 Difficulty (easy, medium, hard, or mixed):
 Number and kinds of questions:
 Time limit:
-Languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, Go, Rust; one or several):
+Languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust, Swift, Ruby; one or several):
 Rubric points on code questions (graded automatically, by me, or none):
 Anything else:
 
@@ -23,7 +23,7 @@ for my answer:
 2. How hard: easy, medium, hard, or mixed? [medium]
 3. How many questions, and what kinds? [6 multiple choice, 1 select-all, 1 predict the output, 1 code]
 4. Time limit? [worked out from the questions]
-5. Which languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, Go, Rust)? [Java]
+5. Which languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust, Swift, Ruby)? [Java]
 6. Code questions can have rubric points for things tests can't check, like private fields.
    Should those be graded automatically, by you, or left out? [automatically]
 

@@ -6,7 +6,7 @@ at the root (or inside one top-level folder) and an optional `assets/` folder of
 
 <!-- not-in-prompt -->
 Check a quiz before uploading. `--run` also runs the reference solutions, which needs
-`python3`, plus a JDK for Java, gcc/g++ for C and C++, `go` for Go and `rustc` for Rust (JavaScript and TypeScript run on Node):
+`python3`, plus a JDK for Java, gcc/g++ for C and C++, `go`, `rustc`, `swiftc` and `ruby` for those (JavaScript and TypeScript run on Node; C# is only checked on upload):
 
 ```bash
 node scripts/check-quiz.mjs path/to/folder --run
@@ -29,7 +29,7 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `format` | `1` | Format version. Optional |
 | `title` | `"Untitled quiz"` | Shown to students and on reports |
 | `timeLimitMin` | `0` (no limit) | Minutes, up to 600. The quiz turns itself in at 0:00 |
-| `language` | `"java"` | `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"`, `"go"`, `"rust"` or `"none"`: how `inline code` and unlabeled code blocks are highlighted. `"none"` leaves them plain, for quizzes that aren't about code (networking, math); blocks labeled ```` ```java ```` still get colors. Output, trace and fill questions then default to Java |
+| `language` | `"java"` | `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"`, `"csharp"`, `"go"`, `"rust"`, `"swift"`, `"ruby"` or `"none"`: how `inline code` and unlabeled code blocks are highlighted. `"none"` leaves them plain, for quizzes that aren't about code (networking, math); blocks labeled ```` ```java ```` still get colors. Output, trace and fill questions then default to Java |
 | `shuffleQuestions` | `true` | Shuffle order per student, within each part (see below) |
 | `shuffleChoices` | `true` | Shuffle multiple choice options per student |
 | `integrity.graceStrikes` | `1` | Times a student can leave the window before the attempt is invalidated (0–10). The default lets one slip go; 0 invalidates on the first. |
@@ -156,6 +156,9 @@ block, a table or a list.
     also gets `using namespace std`).
   - Go: statements (`fmt`, `math`, `sort`, `strconv` and `strings` are imported), or a full program.
   - Rust: statements, or a full program with `fn main`.
+  - C#: statements (top-level, with `System`, `System.Collections.Generic`, `System.Linq` and
+    `System.Text`), or a full program.
+  - Swift, Ruby: a script.
   - Python, JavaScript, TypeScript: a script.
 - `language`: defaults to the quiz's `language`.
 - `answer` is optional. On upload the code is run and its output becomes the answer. If you
@@ -217,7 +220,7 @@ Grading uses the hidden tests, which students never see.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `languages` | `["java"]` | Any of `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"`, `"go"`, `"rust"` (the student picks). See [Languages](#languages) |
+| `languages` | `["java"]` | Any of `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"`, `"csharp"`, `"go"`, `"rust"`, `"swift"`, `"ruby"` (the student picks). See [Languages](#languages) |
 | `mode` | `"method"` | `"method"`: write one method. `"class"`: write a whole class |
 | `signature` | — | Method mode: `{ "name", "params": [{ "name", "type" }], "returns" }` |
 | `class` | — | Class mode: `{ "name", "constructor": [params], "methods": [{ "name", "params", "returns" }] }` |
@@ -247,14 +250,27 @@ Every parameter and return value uses one of these:
 | `list<int>`, `list<string>`, `list<double>`, ... (any of the first six) | `ArrayList<Integer>`, ... | `list[...]` | arrays | `vector<...>` | like an array | slices | `Vec<...>` | `[1, 2]` |
 | `map<string, V>`, `map<int, V>` | `HashMap<String, V>`, ... | `dict[str, V]`, ... | `Map<string, V>`, ... | `unordered_map<string, V>`, ... | none | `map[string]V`, ... | `HashMap<String, V>`, ... | `{"a": 1}`, `{"3": "c"}` |
 
+And in the other three:
+
+| Type | C# | Swift | Ruby |
+| --- | --- | --- | --- |
+| `int`, `long` | `int`, `long` | `Int` | `Integer` |
+| `double` | `double` | `Double` | `Float` |
+| `boolean` | `bool` | `Bool` | `true` / `false` |
+| `string` | `string` | `String` | `String` |
+| `char` | `char` | `Character` | `String` (one letter) |
+| arrays, `[]` and `[][]` | `int[]`, `int[][]` (jagged) | `[Int]`, `[[Int]]` | `Array` |
+| `list<...>` | `List<int>`, ... | `[Int]`, ... | `Array` |
+| `map<string, V>`, `map<int, V>` | `Dictionary<string, V>`, ... | `[String: V]`, ... | `Hash` |
+
 A map's values (`V`) can be any of the first six types, `list<int>` or `list<string>`. Map keys
 are strings in JSON, so an `int` key is written `"3"`. Maps match when they have the same keys
 and values, in any order. Doubles match within a relative 1e-6. For your own classes as
 parameters and results (a `Point`, a linked list's `Node`), see [Classes](#classes) below.
 
 Class methods can also return `void`. A class can have overloads (two methods with one name and
-different parameters) when its languages are only Java and C++, since the others have no
-overloading. A test step calls the first one listed whose parameters fit its arguments. Names
+different parameters) when its languages are only Java, C++, C# and Swift, since the others have
+no overloading. A test step calls the first one listed whose parameters fit its arguments. Names
 can't be keywords in any of the question's languages.
 
 In the quiz maker, write map values like Python: `{"a": 1}` or `{3: "c"}`.
@@ -285,7 +301,9 @@ not to write.
   numbers, booleans, chars, strings and other classes. **Go** gets a struct with the same field
   names; an object is a pointer (`*Node`, `nil`). **Rust** gets a `pub struct` with `pub` fields and
   `new` taking every field; an object is `Option<Box<Node>>` (`None` for none), like LeetCode's
-  `ListNode`.
+  `ListNode`. **C#** gets public fields and the two constructors, like Java. **Swift** gets a class
+  whose `init` takes every field unlabeled, each with a default (`ListNode(1)`); an object is
+  `ListNode?`. **Ruby** gets `attr_accessor`s and `initialize` taking every field with defaults.
 - In tests, an object is a JSON object of its fields: `{ "x": 1, "y": 2 }`. Fields holding objects,
   arrays, lists or strings can be left out, and are then `null`:
   `{ "val": 1, "next": { "val": 2 } }` is the list 1, 2.
@@ -314,9 +332,15 @@ not to write.
   as an empty one.
 - **Method mode, Rust:** `impl Solution { pub fn <name>(<params>) -> <returns> { ... } }`, like
   LeetCode. The usual collections (`HashMap`, `HashSet`, `VecDeque`, ...) are already in scope.
+- **Method mode, C#:** `public class Solution { public <returns> <name>(<params>) { ... } }`. The
+  usual namespaces are already there, and a `Main` of their own doesn't get in the way.
+- **Method mode, Swift:** `class Solution { func <name>(_ <param>: <Type>, ...) -> <returns> }`,
+  with unlabeled parameters like LeetCode's.
+- **Method mode, Ruby:** a method, `def <name>(<params>)`, with a YARD comment giving the types.
 - **Class mode:** a class named `class.name` with that constructor and those methods. In
   Python the constructor is `__init__`. Go: a struct, a `New<Name>(...) *<Name>` function and
-  methods on `*<Name>`. Rust: a struct with `fn new(...) -> Self` and methods. Not in C.
+  methods on `*<Name>`. Rust: a struct with `fn new(...) -> Self` and methods. Swift: `init(_ ...)`
+  and unlabeled parameters. Ruby: `initialize`. Not in C.
 
 Java gets `java.util.*`, `java.util.function.*` and `java.util.stream.*` imported automatically.
 C++ gets the usual standard headers and `using namespace std`; C gets `stdio.h`, `stdlib.h`,
@@ -328,17 +352,20 @@ Java and Python can do everything here. The others:
 
 - **JavaScript** runs on Node 22. **TypeScript** too, with its types taken out first: it runs,
   but type errors aren't reported (there's no `tsc`).
-- **C++** (g++, C++17) and **C** (gcc, C17) compile with `-O2`, **Go** with its standard compiler
-  and **Rust** (2021 edition) with `rustc`. Each test runs in its own process, so a crash fails only
+- **C++** (g++, C++17) and **C** (gcc, C17) compile with `-O2`, **Go** with its standard compiler,
+  **Rust** (2021 edition) with `rustc` and **Swift** with `swiftc`. **C#** compiles with .NET 10's
+  compiler (latest C#) and **Ruby** is 3.3. Each test runs in its own process, so a crash fails only
   that test, with a plain message (segmentation fault, a panic and its line, stack overflow). In C++
   an index out of range on a `vector` stops the program instead of reading garbage.
 - Bans only work in Java and Python. With other languages in the question, write the ban per
   language (`{ "java": [...] }`).
-- Speed tests don't run in C, C++, Go or Rust (an optimizing compiler times badly).
+- Speed tests only run in Java, Python, JavaScript and TypeScript (an optimizing compiler times badly,
+  and the others can reach into whatever times them).
 - C has no maps, no class questions, and keeps 2D arrays to numbers, booleans and chars.
-- In C, C++ and Go a `char` is one byte, so test values have to be plain ASCII. C++ and Rust have
-  no `null` string, vector or map, and Go no `null` string, so tests can't use one (or leave out
-  such a field of an object).
+- In C, C++ and Go a `char` is one byte, so test values have to be plain ASCII. C++, Rust and Swift
+  have no `null` string, array or map (only an object can be `nil`/`None`), and Go no `null` string,
+  so tests can't use one (or leave out such a field of an object).
+- A C# stack overflow stops the run, so the examples after it say so too.
 
 The upload check says which of these a question runs into.
 

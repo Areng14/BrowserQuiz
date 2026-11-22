@@ -8,7 +8,7 @@
     single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', method: 'Write a method', class: 'Write a class',
     output: 'Predict the output', trace: 'Trace table', fill: 'Fill in the blanks', essay: 'Written answer',
   };
-  const LANG = { java: 'Java', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', c: 'C', cpp: 'C++', go: 'Go', rust: 'Rust' };
+  const LANG = { java: 'Java', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', c: 'C', cpp: 'C++', csharp: 'C#', go: 'Go', rust: 'Rust', swift: 'Swift', ruby: 'Ruby' };
 
   function h(tag, attrs, ...kids) {
     const el = document.createElement(tag);

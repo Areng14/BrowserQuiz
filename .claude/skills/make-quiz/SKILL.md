@@ -1,6 +1,6 @@
 ---
 name: make-quiz
-description: Write BrowserQuiz quizzes (a quiz.json packed into a .quiz) with multiple choice, select-all, short answer, and code questions (Java, Python, JavaScript, TypeScript, C, C++, Go, Rust) with hidden tests and reference solutions. Use when asked to make, write, generate, convert, fix or check a quiz, test or exam for BrowserQuiz.
+description: Write BrowserQuiz quizzes (a quiz.json packed into a .quiz) with multiple choice, select-all, short answer, and code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust, Swift, Ruby) with hidden tests and reference solutions. Use when asked to make, write, generate, convert, fix or check a quiz, test or exam for BrowserQuiz.
 ---
 
 # Make a BrowserQuiz quiz
@@ -79,10 +79,11 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
     `list<...>` and `map<string|int, ...>`, plus classes the question declares in `types`
     (`"types": { "Node": { "val": "int", "next": "Node" } }`, objects in tests as
     `{ "val": 1, "next": { "val": 2 } }`). Don't write those classes in the starter or reference:
-    they're given. Overloads only work when the languages are only Java and C++.
+    they're given. Overloads only work when the languages are only Java, C++, C# and Swift.
   - Other languages than Java and Python have limits (spec, "Languages"): bans only in Java and
-    Python, no speed tests in C, C++, Go or Rust, no maps or class questions in C, ASCII chars in
-    C, C++ and Go, no null strings or arrays in C++ and Rust (no null strings in Go). Write a reference in every language the question offers.
+    Python, speed tests only in Java, Python, JavaScript and TypeScript, no maps or class questions
+    in C, ASCII chars in C, C++ and Go, no null strings or arrays in C++, Rust and Swift (no null
+    strings in Go). Write a reference in every language the question offers.
   - Write 2 simple `sample` tests that students can run, and 5–10 `hidden` tests. Only hidden
     tests are graded, so repeat the sample cases in `hidden` too. Cover:
     - empty input
@@ -120,7 +121,7 @@ node scripts/check-quiz.mjs quizzes/<short-name> --run
 
 This runs the server's validation, warns about likely typos in keys, and runs every reference
 solution against every test. Fix every error and warning, then run it again, until it ends
-with `VALID`. If there's no JDK (or no gcc/g++, go or rustc), those references get skipped and are
+with `VALID`. If there's no JDK (or no gcc/g++, go, rustc, swiftc or ruby; C# always), those references get skipped and are
 checked on upload instead; say so.
 
 ## 4. Pack it

@@ -109,12 +109,14 @@
   const HELP = 'int, long, double, boolean, string, char; any of them with [] or [][]; list<...> of them; map<string or int, ...>; a class from Classes';
 
   // ---------- languages ----------
-  const LANGS = ['java', 'python', 'javascript', 'typescript', 'c', 'cpp', 'go', 'rust'];
-  const LANG_NAMES = { java: 'Java', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', c: 'C', cpp: 'C++', go: 'Go', rust: 'Rust' };
+  const LANGS = ['java', 'python', 'javascript', 'typescript', 'c', 'cpp', 'csharp', 'go', 'rust', 'swift', 'ruby'];
+  const LANG_NAMES = { java: 'Java', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', c: 'C', cpp: 'C++', csharp: 'C#', go: 'Go', rust: 'Rust', swift: 'Swift', ruby: 'Ruby' };
   const isJs = (l) => l === 'javascript' || l === 'typescript';
   const isC = (l) => l === 'c' || l === 'cpp';
   // Compiled to a program of its own: C, C++, Go, Rust (each test in its own process, no speed tests)
-  const isNative = (l) => isC(l) || l === 'go' || l === 'rust';
+  const isNative = (l) => isC(l) || l === 'go' || l === 'rust' || l === 'swift';
+  // Languages with speed tests: the ones whose harness can time code without the code reaching in
+  const hasSpeed = (l) => l === 'java' || l === 'python' || isJs(l);
   const isClassName = (t) => /^[A-Z]\w*$/.test(canon(t));
 
   // JavaScript and TypeScript: numbers are number, chars are one-letter strings, maps are Map.
@@ -192,6 +194,41 @@
     return `Option<Box<${t}>>`;
   }
 
+  // C#: arrays (jagged for [][]), List, Dictionary; an object is a reference (null for none).
+  const CS = { int: 'int', long: 'long', double: 'double', boolean: 'bool', string: 'string', char: 'char', void: 'void' };
+  function csType(t) {
+    t = canon(t);
+    if (CS[t]) return CS[t];
+    if (t.endsWith('[]')) return csType(t.slice(0, -2)) + '[]';
+    const list = /^list<(\w+)>$/.exec(t);
+    if (list) return `List<${csType(list[1])}>`;
+    const kv = mapTypes(t);
+    if (kv) return `Dictionary<${CS[kv[0]]}, ${csType(kv[1])}>`;
+    return t;
+  }
+  // Swift: arrays, dictionaries, and an optional for an object (ListNode?, nil for none), like LeetCode.
+  const SW = { int: 'Int', long: 'Int', double: 'Double', boolean: 'Bool', string: 'String', char: 'Character' };
+  function swiftType(t, inner) {
+    t = canon(t);
+    if (SW[t]) return SW[t];
+    const e = elementType(t);
+    if (e) return `[${swiftType(e, true)}]`;
+    const kv = mapTypes(t);
+    if (kv) return `[${SW[kv[0]]}: ${swiftType(kv[1], true)}]`;
+    return t + '?';
+  }
+  // Ruby: what its YARD comments call them (Integer, Integer[], Hash<String, Integer>).
+  const RB = { int: 'Integer', long: 'Integer', double: 'Float', boolean: 'Boolean', string: 'String', char: 'String', void: 'void' };
+  function rubyType(t) {
+    t = canon(t);
+    if (RB[t]) return RB[t];
+    const e = elementType(t);
+    if (e) return rubyType(e) + '[]';
+    const kv = mapTypes(t);
+    if (kv) return `Hash<${RB[kv[0]]}, ${rubyType(kv[1])}>`;
+    return t;
+  }
+
   // Why a language can't take a type (C has no maps, and keeps 2D arrays to numbers), or null.
   function unsupported(lang, t, D) {
     t = canon(t);
@@ -207,10 +244,12 @@
   function fits(lang, t, v, D, depth) {
     t = canon(t);
     depth = depth || 0;
-    if (!isNative(lang) || depth > MAX_DEPTH) return null;
+    if (!(isNative(lang) || lang === 'csharp') || depth > MAX_DEPTH) return null;
+    if (lang === 'csharp') return null;
     if (v === null || v === undefined) {
       if (isClass(t, D) || lang === 'c') return null;
       if (lang === 'go') return t === 'string' ? 'Go has no null string' : null;
+      if (lang === 'swift') return `Swift has no nil ${swiftType(t)} (only for an object)`;
       return lang === 'rust' ? `Rust has no null ${rustType(t)} (only None for an object)` : `C++ has no null ${cppType(t)}`;
     }
     if (typeof v === 'object' && !Array.isArray(v) && Array.isArray(v.range)) return null;
@@ -223,7 +262,7 @@
       return null;
     }
     if (t === 'char') {
-      if (lang === 'rust') return typeof v === 'string' && !(v.charCodeAt(0) >= 0xd800 && v.charCodeAt(0) < 0xe000) ? null : "that char isn't a Rust char";
+      if (lang === 'rust' || lang === 'swift') return typeof v === 'string' && !(v.charCodeAt(0) >= 0xd800 && v.charCodeAt(0) < 0xe000) ? null : `that char isn't a ${lang === 'rust' ? 'Rust' : 'Swift'} char`;
       return typeof v === 'string' && v.charCodeAt(0) < 128 ? null : `a ${lang === 'go' ? 'Go' : 'C or C++'} char is one byte (plain ASCII only)`;
     }
     if (t === 'string') return lang === 'c' && typeof v === 'string' && v.includes('\0') ? "a C string can't hold \\0" : null;
@@ -244,6 +283,11 @@
     const gp = (ps) => ps.map((p) => `${p.name} ${goType(p.type)}`).join(', ');
     const rp = (ps) => ps.map((p) => `${p.name}: ${rustType(p.type)}`).join(', ');
     const goRet = (t) => (t === 'void' ? '' : ' ' + goType(t));
+    const csp = (ps) => ps.map((p) => `${csType(p.type)} ${p.name}`).join(', ');
+    const swp = (ps) => ps.map((p) => `_ ${p.name}: ${swiftType(p.type)}`).join(', ');
+    const swRet = (t) => (t === 'void' ? '' : ' -> ' + swiftType(t));
+    // YARD, so Ruby students know the types, as LeetCode does: # @param {Integer[]} nums
+    const rbDoc = (ps, ret, ind) => [...ps.map((p) => `${ind}# @param {${rubyType(p.type)}} ${p.name}`), ...(ret ? [`${ind}# @return {${rubyType(ret)}}`] : [])].map((l) => l + '\n').join('');
     const rsRet = (t) => (t === 'void' ? '' : ' -> ' + rustType(t));
     // JSDoc, so JavaScript students know the types: @param {number[]} nums
     const doc = (ps, ret, ind) => (ps.length || ret ? [`${ind}/**`, ...ps.map((p) => `${ind} * @param {${jsType(p.type)}} ${p.name}`),
@@ -256,6 +300,9 @@
       if (lang === 'typescript') return `function ${s.name}(${tp(s.params)}): ${tsType(s.returns)} {\n    \n}\n`;
       if (lang === 'cpp') return `class Solution {\npublic:\n    ${cppType(s.returns)} ${s.name}(${cp(s.params)}) {\n        \n    }\n};\n`;
       if (lang === 'go') return `func ${s.name}(${gp(s.params)}) ${goType(s.returns)} {\n    \n}\n`;
+      if (lang === 'csharp') return `public class Solution {\n    public ${csType(s.returns)} ${s.name}(${csp(s.params)}) {\n        \n    }\n}\n`;
+      if (lang === 'swift') return `class Solution {\n    func ${s.name}(${swp(s.params)}) -> ${swiftType(s.returns)} {\n        \n    }\n}\n`;
+      if (lang === 'ruby') return `${rbDoc(s.params, s.returns, '')}def ${s.name}(${names(s.params)})\n    \nend\n`;
       if (lang === 'rust') return `impl Solution {\n    pub fn ${s.name}(${rp(s.params)}) -> ${rustType(s.returns)} {\n        \n    }\n}\n`;
       const d = cDims(s.returns);
       const note = d === 2 ? '// Return a malloc\'d array of malloc\'d rows. Set *returnSize to the number of rows\n// and *returnColumnSizes to a malloc\'d array of their lengths.\n'
@@ -267,6 +314,7 @@
     if (emptyClass) {
       return {
         java: `public class ${n} {\n    \n}\n`, python: `class ${n}:\n    pass\n`, cpp: `class ${n} {\npublic:\n    \n};\n`, go: `type ${n} struct {\n    \n}\n`, rust: `struct ${n} {\n    \n}\n`,
+        csharp: `public class ${n} {\n    \n}\n`, ruby: `class ${n}\n    \nend\n`,
       }[lang] || `class ${n} {\n    \n}\n`;
     }
     let body;
@@ -286,6 +334,19 @@
     if (lang === 'typescript') {
       body = [`    constructor(${tp(C.constructor)}) {\n    }`].concat(C.methods.map((m) => `    ${m.name}(${tp(m.params)}): ${tsType(m.returns)} {\n    }`));
       return `class ${n} {\n${body.join('\n\n')}\n}\n`;
+    }
+    if (lang === 'csharp') {
+      body = [`    public ${n}(${csp(C.constructor)}) {\n    }`].concat(C.methods.map((m) => `    public ${csType(m.returns)} ${m.name}(${csp(m.params)}) {\n    }`));
+      return `public class ${n} {\n${body.join('\n\n')}\n}\n`;
+    }
+    if (lang === 'swift') {
+      body = [`    init(${swp(C.constructor)}) {\n    }`].concat(C.methods.map((m) => `    func ${m.name}(${swp(m.params)})${swRet(m.returns)} {\n    }`));
+      return `class ${n} {\n${body.join('\n\n')}\n}\n`;
+    }
+    if (lang === 'ruby') {
+      body = [`${rbDoc(C.constructor, null, '    ')}    def initialize(${names(C.constructor)})\n    end`]
+        .concat(C.methods.map((m) => `${rbDoc(m.params, m.returns, '    ')}    def ${m.name}(${names(m.params)})\n    end`));
+      return `class ${n}\n${body.join('\n\n')}\nend\n`;
     }
     if (lang === 'go') {
       // a constructor function and methods on a pointer, the usual Go way: c := NewCounter(5); c.add(3)
@@ -339,6 +400,36 @@
         if (fs.length) L.push(`    ${n}(${fs.map((f) => `${cppType(f.type)} ${f.name}`).join(', ')}) : ${fs.map((f) => `${f.name}(${f.name})`).join(', ')} {}`);
         L.push('};');
         return L.join('\n');
+      }).join('\n\n') + (names.length ? '\n' : '');
+    }
+    if (lang === 'csharp') {
+      // public fields, a constructor taking every field and one taking none
+      return names.map((n) => {
+        const fs = D[n];
+        const L = [`public class ${n} {`, ...fs.map((f) => `    public ${csType(f.type)} ${f.name};`), '', `    public ${n}() {}`];
+        if (fs.length) L.push(`    public ${n}(${fs.map((f) => `${csType(f.type)} ${f.name}`).join(', ')}) {`, ...fs.map((f) => `        this.${f.name} = ${f.name};`), '    }');
+        L.push('}');
+        return L.join('\n');
+      }).join('\n\n') + (names.length ? '\n' : '');
+    }
+    if (lang === 'swift') {
+      // a class (objects are shared, like Java's), its init taking every field, each with a default: ListNode(1)
+      const SWZ = { int: '0', long: '0', double: '0.0', boolean: 'false', char: '" "', string: '""' };
+      const dflt = (f) => SWZ[canon(f.type)] || (isClass(canon(f.type), D) ? 'nil' : '[]');
+      return names.map((n) => {
+        const fs = D[n];
+        return [`class ${n} {`, ...fs.map((f) => `    var ${f.name}: ${swiftType(f.type)}`), '',
+          `    init(${fs.map((f) => `_ ${f.name}: ${swiftType(f.type)} = ${mapTypes(f.type) ? '[:]' : dflt(f)}`).join(', ')}) {`,
+          ...fs.map((f) => `        self.${f.name} = ${f.name}`), '    }', '}'].join('\n');
+      }).join('\n\n') + (names.length ? '\n' : '');
+    }
+    if (lang === 'ruby') {
+      // attr_accessor fields, and initialize taking every field, each with a default (a field can be called next)
+      const RBZ = { int: '0', long: '0', double: '0.0', boolean: 'false', char: "''" };
+      return names.map((n) => {
+        const fs = D[n];
+        return [`class ${n}`, ...(fs.length ? [`    attr_accessor ${fs.map((f) => ':' + f.name).join(', ')}`, ''] : []),
+          `    def initialize(${fs.map((f) => `_${f.name} = ${RBZ[canon(f.type)] || 'nil'}`).join(', ')})`, ...fs.map((f) => `        @${f.name} = _${f.name}`), '    end', 'end'].join('\n');
       }).join('\n\n') + (names.length ? '\n' : '');
     }
     if (lang === 'go') {
@@ -395,6 +486,6 @@
 
   return {
     SCALARS, CLASS, canon, isClass, isValueType, elementType, mapTypes, checkValue, nullable, javaType, pyType, classSource, JAVA_ZERO, HELP, MAX_ITEMS, MAX_DEPTH,
-    LANGS, LANG_NAMES, isJs, isC, isNative, jsType, tsType, cppType, cppParam, cType, cDims, cSignature, goType, rustType, unsupported, fits, starter, JS_ZERO, CPP_ZERO,
+    LANGS, LANG_NAMES, isJs, isC, isNative, hasSpeed, csType, swiftType, rubyType, jsType, tsType, cppType, cppParam, cType, cDims, cSignature, goType, rustType, unsupported, fits, starter, JS_ZERO, CPP_ZERO,
   };
 }));
