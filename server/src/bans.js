@@ -13,7 +13,8 @@
 // and symbol table (harness/bqscan.py); for C, the library functions the student's compiled file calls; for
 // C++, what each of the student's compiled functions calls or refers to in the library; for Go, what Go's
 // own type checker says the student's file uses from other packages; for C#, the library members and types
-// the compiled code refers to (runner.py run_scan, runner/bqscan.go, runner/bqscan.cs). So comments,
+// the compiled code refers to; for Rust, the calls in the compile's MIR (runner.py run_scan, rust_facts,
+// runner/bqscan.go, runner/bqscan.cs). So comments,
 // strings, spacing, macros, imports, aliases, using-declarations, generics, lambdas and method references
 // are all already dealt with, and the student's own methods and variables (their own max, self.count) are
 // theirs. In C and C++ that holds for code that calls library functions in the usual ways; code that works
@@ -30,7 +31,7 @@
 // (and dynamic, expression trees, DllImport), eval, exec, getattr, __import__, importlib, pickle and friends
 // in Python, dlsym and friends in C and C++ (and in C++ inline asm, reopening namespace std, #line and
 // unusual #includes), vm, workers, child_process, the inspector and process.binding in JavaScript,
-// reflect, unsafe, templates and go:linkname in Go.
+// reflect, unsafe, templates and go:linkname in Go, unsafe, include!, #[path] and file modules in Rust.
 
 const T = require('../../public/teacher/types.js');
 
@@ -161,11 +162,182 @@ function pythonHits(entries, facts, D) {
 }
 
 // ---------- the compiled languages: facts from the runner (runner.py run_scan) ----------
-// The runner's text, one fact per line; null means it couldn't read the code.
-function runnerFacts(text) {
+// The runner's text, one fact per line; null means it couldn't read the code. (Rust's is its MIR: rustFacts.)
+function runnerFacts(text, ctx) {
   if (text === null) return { fail: true };
+  if (ctx && ctx.lang === 'rust') return rustFacts(String(text || ''), ctx);
   const lines = String(text || '').split('\n').filter(Boolean);
   return lines.some((l) => l.startsWith('fail')) ? { fail: true } : { lines };
+}
+
+// ---------- Rust: the compile's MIR ----------
+// MIR is the compiler's own form of each function, with every call written out as what it resolved to:
+//   _4 = slice::<impl [i32]>::sort(move _5) -> ...      _9 = <std::slice::Iter<'_, i32> as Iterator>::max(...)
+// So aliases, use-declarations, generics, closures, macros and trait methods are already dealt with. The
+// student's functions are the bodies from their file: an impl's methods say where the impl is
+// (<impl at solution.rs:3:1: 5:2>); a free function has its name only, so the harness's carry the run's marker
+// (harness.js rsMain) and bq.rs's are known. In those bodies, a path that isn't one of their own names (nor
+// the given classes') is the library's: its last name is what's called, the rest what it belongs to.
+let RS_HARNESS = null;
+function rsHarnessNames() {
+  if (!RS_HARNESS) {
+    const src = require('fs').readFileSync(require('path').join(__dirname, 'harness', 'bq.rs'), 'utf8');
+    RS_HARNESS = new Set(['main', ...[...src.matchAll(/^(?:pub\s+)?(?:fn|const|static)\s+(\w+)/gm)].map((m) => m[1])]);
+  }
+  return RS_HARNESS;
+}
+const MIR_WORDS = new Set(['drop', 'discriminant', 'assert', 'switchInt', 'move', 'copy', 'deinit', 'retag', 'assume', 'copy_nonoverlapping', 'const',
+  'return', 'resume', 'unreachable', 'goto', 'bb', 'debug', 'let', 'mut', 'scope', 'in', 'as', 'for', 'fn', 'dyn', 'impl', 'unwind', 'continue', 'terminate',
+  'cleanup', 'otherwise', 'true', 'false']);
+
+// A path's segments, split at :: outside brackets: "slice::<impl [i32]>::sort" -> ["slice", "<impl [i32]>", "sort"].
+function rsSegments(p) {
+  const out = [];
+  let depth = 0;
+  let cur = '';
+  for (let i = 0; i < p.length; i++) {
+    const c = p[i];
+    if (c === '<' || c === '{' || c === '[' || c === '(') depth++;
+    else if (c === '>' || c === '}' || c === ']' || c === ')') depth--;
+    if (depth === 0 && c === ':' && p[i + 1] === ':') { out.push(cur); cur = ''; i++; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  return out.map((x) => x.trim()).filter(Boolean);
+}
+// The paths in a piece of MIR: maximal runs of identifiers and <...>/{...} groups joined by ::, each with
+// whether it's called or used as a value; the insides of <...> are paths too (Vec<BinaryHeap<i32>>).
+function rsPaths(text, out) {
+  let i = 0;
+  const n = text.length;
+  const ident = /[A-Za-z_][A-Za-z0-9_]*/y;
+  const group = (k) => { // the end of a bracketed group starting at k
+    const open = text[k];
+    const close = { '<': '>', '{': '}', '[': ']', '(': ')' }[open];
+    let d = 0;
+    for (let j = k; j < n; j++) {
+      if (text[j] === open) d++;
+      else if (text[j] === close && --d === 0) return j + 1;
+      else if (open === '<' && text[j] === '-' && text[j + 1] === '>') j++; // "->" isn't a bracket
+    }
+    return n;
+  };
+  while (i < n) {
+    const c = text[i];
+    const prev = i ? text[i - 1] : ' ';
+    let start = -1;
+    if (/[A-Za-z_]/.test(c) && !/[A-Za-z0-9_@]/.test(prev)) start = i;
+    else if (c === '<' && /[\s(&*,=]/.test(prev) && /^<(?:impl |[A-Za-z_&*\[(]|dyn )/.test(text.slice(i, i + 6)) && text.slice(group(i), group(i) + 2) === '::') start = i;
+    if (start < 0) { i++; continue; }
+    let j = start;
+    const inner = [];
+    for (;;) {
+      if (text[j] === '<' || text[j] === '{') { const e = group(j); inner.push(text.slice(j + 1, e - 1)); j = e; }
+      else { ident.lastIndex = j; const m = ident.exec(text); if (!m) break; j += m[0].length; if (text[j] === '<') { const e = group(j); inner.push(text.slice(j + 1, e - 1)); j = e; } }
+      if (text[j] === '[' && /^\[\d+\]/.test(text.slice(j, j + 8))) j = group(j); // promoted[0]
+      if (text[j] === ':' && text[j + 1] === ':') { j += 2; continue; }
+      break;
+    }
+    const p = text.slice(start, j);
+    if (/::/.test(p) || text[j] === '(') out.push({ p, call: text[j] === '(' });
+    for (const x of inner) rsPaths(x, out);
+    i = Math.max(j, start + 1);
+  }
+  return out;
+}
+// A type's path, without its generic arguments: "std::slice::Iter<'_, i32>" -> ["std", "slice", "Iter"]; "[i32]" -> ["i32"].
+const rsType = (t) => {
+  const m = /^(?:[A-Za-z_]\w*\s*::\s*)*[A-Za-z_]\w*/.exec(t.replace(/^(impl|dyn)\s+/, '').replace(/^(?:[&*\[(\s]|mut\s|const\s)+/, ''));
+  return m ? m[0].split('::').map((x) => x.trim()) : [];
+};
+
+function rustFacts(text, ctx) {
+  const k = text.indexOf('\n@@mir\n');
+  if (k < 0) return { fail: true };
+  const head = text.slice(0, k).split('\n').filter(Boolean);
+  const mir = text.slice(k + 7);
+  const mark = 'bq_' + ctx.marker;
+  const harness = rsHarnessNames();
+  // their own names, and the given classes' and the harness's modules
+  const local = new Set(['Solution', 'sol', 'bq', 'crate', 'self', 'super', 'Self', ...Object.keys(ctx.D || {}), ...head.filter((l) => l.startsWith('local ')).map((l) => l.slice(6))]);
+  // the bodies: "fn PATH(" / "const PATH: " / "static PATH: " at the start of a line, up to the next
+  const bodies = [];
+  let cur = null;
+  let data = false; // a constant's bytes ("ALLOC0 (size: 19, align: 1) { 0x00 │ 62 2e ... │ b.sort() }"): not code
+  for (const line of mir.split('\n')) {
+    if (/^alloc\d+ \(size/i.test(line)) { data = true; continue; }
+    if (data) { if (/^\}/.test(line)) data = false; continue; }
+    const m = /^(?:fn|const|static(?: mut)?) (.*)$/.exec(line);
+    if (m) {
+      let depth = 0;
+      let end = m[1].length;
+      for (let i = 0; i < m[1].length; i++) {
+        const c = m[1][i];
+        if (c === '<' || c === '{' || c === '[') depth++;
+        else if (c === '>' || c === '}' || c === ']') depth--;
+        else if (depth === 0 && (c === '(' || (c === ':' && m[1][i + 1] !== ':' && m[1][i - 1] !== ':'))) { end = i; break; }
+      }
+      cur = { path: m[1].slice(0, end).trim(), text: [] };
+      bodies.push(cur);
+    } else if (cur) cur.text.push(line);
+  }
+  const theirs = (path) => {
+    const impl = /<impl at ([^:>]+):/.exec(path);
+    if (impl) return impl[1] === 'solution.rs';
+    const segs = rsSegments(path).filter((x) => !/^(\{closure#\d+\}|\{constant#\d+\}|\{synthetic#\d+\}|promoted\[\d+\])$/.test(x));
+    if (!segs.length || segs[0] === 'bq' || path.includes(mark)) return false;
+    return !(segs.length === 1 && harness.has(segs[0]));
+  };
+  const uses = [];
+  for (const b of bodies) {
+    if (!theirs(b.path)) continue;
+    for (const seg of rsSegments(b.path)) if (/^[A-Za-z_]\w*$/.test(seg)) local.add(seg); // their own function names
+  }
+  for (const b of bodies) {
+    if (!theirs(b.path)) continue;
+    // string and char constants aren't code
+    const body = b.text.join('\n').replace(/b?"(?:[^"\\]|\\.)*"/g, '""').replace(/'(?:[^'\\\n]|\\.[^']*)'/g, "' '");
+    for (const { p, call } of rsPaths(body, [])) {
+      const segs = rsSegments(p);
+      const idents = [];
+      let lib = null;
+      for (const sg of segs) {
+        let mm;
+        if ((mm = /^<impl (.*)>$/.exec(sg))) {
+          const h = rsType(mm[1]);
+          idents.push(...h);
+          if (lib === null) lib = !local.has(h[h.length - 1]);
+        } else if ((mm = /^<(.*) as (.*)>$/.exec(sg))) {
+          const h = rsType(mm[1]);
+          const t = rsType(mm[2]);
+          idents.push(...h, ...t);
+          if (lib === null) lib = !local.has(t[t.length - 1]);
+        } else if (/^[A-Za-z_]\w*/.test(sg)) idents.push(/^[A-Za-z_]\w*/.exec(sg)[0]);
+      }
+      if (!idents.length) continue;
+      if (idents.some((x) => x === 'std' || x === 'core' || x === 'alloc')) lib = true;
+      if (lib === null) lib = !local.has(idents[0]);
+      if (segs.length === 1 && (!call || MIR_WORDS.has(idents[0]) || /^[A-Z]/.test(idents[0]) || /^_\d/.test(idents[0]))) continue; // MIR's own words
+      if (lib) uses.push({ name: idents[idents.length - 1], quals: idents.slice(0, -1) });
+    }
+  }
+  return { rust: true, uses, escapes: head.filter((l) => l.startsWith('escape ')).map((l) => l.slice(7)) };
+}
+
+const RS_KIN = { max: ['max', 'max_by', 'max_by_key'], min: ['min', 'min_by', 'min_by_key'], abs: ['abs', 'unsigned_abs', 'abs_diff'] };
+const RS_ALIAS = { Vec: ['Vec', 'slice'], String: ['String', 'str'], array: ['array'] };
+function rustHits(entries, facts) {
+  const nameIs = (a) => (a === 'sort' ? isSort : (n) => (RS_KIN[a] || [a]).includes(n));
+  const hits = entries.filter((entry) => {
+    const [a, b] = entry.split('.');
+    if (b) {
+      const cls = RS_ALIAS[a] || [a];
+      return facts.uses.some((u) => u.quals.some((q) => cls.includes(q)) && nameIs(b)(u.name));
+    }
+    return facts.uses.some((u) => nameIs(a)(u.name) || u.quals.includes(a));
+  });
+  hits.push(...facts.escapes);
+  return hits;
 }
 const lower = (x) => String(x).toLowerCase();
 const fl = (names) => names.flatMap((n) => [n, n + 'f', n + 'l']); // C's sqrt, sqrtf, sqrtl
@@ -332,7 +504,8 @@ function bannedUse(ban, lang, facts, D) {
   if (!entries.length || !facts || facts.syntax) return [];
   if (facts.fail) return ['code the check could not read'];
   const hits = lang === 'python' ? pythonHits(entries, facts, D) : lang === 'c' ? cHits(entries, facts) : lang === 'cpp' ? cppHits(entries, facts, D)
-    : lang === 'go' ? goHits(entries, facts) : lang === 'csharp' ? csHits(entries, facts) : T.isJs(lang) ? jsHits(entries, facts) : javaHits(entries, facts);
+    : lang === 'go' ? goHits(entries, facts) : lang === 'csharp' ? csHits(entries, facts) : T.isJs(lang) ? jsHits(entries, facts)
+      : lang === 'rust' ? rustHits(entries, facts) : javaHits(entries, facts);
   return [...new Set(hits.map((h) => (entries.includes(h) ? shown(h, lang) : h)))];
 }
 
@@ -359,8 +532,7 @@ function timingIntrusions(lang, facts) {
   return [...new Set(used)];
 }
 
-// The languages bans work in. (Not Rust: its library is compiled into the program, generics and all, so what
-// a call ends up as can't be told, and it has no runtime to put tripwires in.)
+// The languages bans work in (all of them now).
 const BAN_LANGS = T.LANGS.filter(T.hasBans);
 
 module.exports = { normalizeBans, bansFor, bannedUse, runnerFacts, timingIntrusions, shown, jsKnows, BAN_LANGS, LIST_QUALIFIED };

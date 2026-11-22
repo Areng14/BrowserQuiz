@@ -56,7 +56,7 @@ async function callRunner(job, timeMs, memoryMb) {
 }
 
 const isJsLang = (lang) => lang === 'javascript' || lang === 'typescript';
-const job0Scans = (q, lang) => B.bansFor(q.ban, lang).length > 0 && ['c', 'cpp', 'go', 'csharp'].includes(lang);
+const job0Scans = (q, lang) => B.bansFor(q.ban, lang).length > 0 && ['c', 'cpp', 'go', 'csharp', 'rust'].includes(lang);
 
 // One job for all tests (Run, reference checks) or one job per test (grading, so a hang only costs one test).
 async function runTests(q, lang, code, tests, opts) {

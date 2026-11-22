@@ -123,7 +123,7 @@ for (const [i, q] of quiz.questions.entries()) {
     if (!tools[lang]) {
       delete q.reference[lang];
       console.log(`skipped: ${q.id} ${lang} reference (${MISSING[lang]} here; the server checks it on upload)`);
-    } else if (['c', 'cpp', 'go'].includes(lang) && bansFor(q.ban, lang).length) {
+    } else if (['c', 'cpp', 'go', 'rust'].includes(lang) && bansFor(q.ban, lang).length) {
       // their ban check is the runner's (runner.py), and this stand-in doesn't have it
       console.log(`skipped: ${q.id} ${lang} ban check (the server checks it on upload)`);
     }

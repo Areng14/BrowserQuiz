@@ -675,8 +675,11 @@ function rsMain(q, tests, marker) {
   L.push('include!("solution.rs");');
   const locals = (params, args, ind) => params.map((p, k) => `${ind}let a${k}: ${T.rustType(p.type)} = ${rsLit(p.type, args[k], D)};`);
   const argNames = (n) => Array.from({ length: n }, (_, k) => 'a' + k).join(', ');
+  // The test functions' names carry the run's marker, so the ban check (bans.js) can tell them from anything
+  // in the student's file.
+  const tn = (i) => `bq_${marker}_t${i}`;
   tests.forEach((t, i) => {
-    L.push(`pub fn bq_t${i}(i: usize) {`);
+    L.push(`pub fn ${tn(i)}(i: usize) {`);
     if (q.mode === 'method') {
       const s = q.signature;
       L.push(...locals(s.params, t.args, '    '), `    let r: ${T.rustType(s.returns)} = Solution::${s.name}(${argNames(s.params.length)});`, '    crate::bq::ok(i, &r);');
@@ -695,8 +698,8 @@ function rsMain(q, tests, marker) {
     }
     L.push('}');
   });
-  L.push('pub fn bq_test(i: usize) {', '    match i {', ...tests.map((_, i) => `        ${i} => bq_t${i}(i),`), '        _ => {}', '    }', '}', '}', '',
-    `fn main() { bq::main(${JSON.stringify(marker)}, ${tests.length}, sol::bq_test, ${ALARM(q)}); }`, '');
+  L.push(`pub fn bq_${marker}_test(i: usize) {`, '    match i {', ...tests.map((_, i) => `        ${i} => ${tn(i)}(i),`), '        _ => {}', '    }', '}', '}', '',
+    `fn main() { bq::main(${JSON.stringify(marker)}, ${tests.length}, sol::bq_${marker}_test, ${ALARM(q)}); }`, '');
   return L.join('\n');
 }
 
@@ -836,7 +839,7 @@ function buildJob(q, lang, code, tests, opts) {
   }
   if (lang === 'rust') {
     Object.assign(files, { 'solution.rs': code, 'bq.rs': BQRS_SRC, 'bqmain.rs': rsMain(q, tests, marker) });
-    return { marker, job: { language: 'rust', files, main: 'main', sources: ['bqmain.rs'] } };
+    return { marker, job: { language: 'rust', files, main: 'main', sources: ['bqmain.rs'], ...scanOf(['solution.rs']) } };
   }
   if (lang === 'c') {
     Object.assign(files, {
@@ -1092,7 +1095,7 @@ function readResults(q, lang, tests, res, marker) {
   const { records, printed } = splitOutput(res.stdout, marker);
   // The ban check's facts: the runner's, read from the compiled code (null: it couldn't read it), or in Java
   // and Python the harness's, written first, before any student code ran.
-  const scan = res.scan !== undefined ? B.runnerFacts(res.scan)
+  const scan = res.scan !== undefined ? B.runnerFacts(res.scan, { lang, marker, D: q.types })
     : isJs(lang) ? (B.bansFor(q.ban, lang).length ? { hits: records.filter((r) => typeof r.ban === 'string').map((r) => r.ban) } : null)
     : records.length && records[0].scan ? records[0].scan : null;
   const compile = records.find((r) => r.compile);

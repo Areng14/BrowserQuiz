@@ -80,16 +80,15 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
     (`"types": { "Node": { "val": "int", "next": "Node" } }`, objects in tests as
     `{ "val": 1, "next": { "val": 2 } }`). Don't write those classes in the starter or reference:
     they're given. Overloads only work when the languages are only Java, C++ and C#.
-  - Other languages than Java and Python have limits (spec, "Languages"): no bans in Rust,
-    speed tests only in Java, Python, JavaScript and TypeScript, no maps or
+  - Other languages than Java and Python have limits (spec, "Languages"): speed tests only in
+    Java, Python, JavaScript and TypeScript, no maps or
     class questions in C, ASCII chars in C, C++ and Go, no null strings or arrays in C++ and Rust
     (no null strings in Go). Write a reference in every language the question offers.
     `"languages": "any"` lets students pick any language that can run the question; write
     references in the languages you know best.
   - Bans: a plain name (`["sort"]`) covers every language. `Class.method` entries are one
     language's, so with several languages give those per language
-    (`{ "java": ["Arrays.sort"], "cpp": ["sort"], "javascript": ["Array.sort"] }`). For Rust use a
-    rubric item with a `forbid` regex instead.
+    (`{ "java": ["Arrays.sort"], "cpp": ["sort"], "javascript": ["Array.sort"] }`).
   - Write 2 simple `sample` tests that students can run, and 5–10 `hidden` tests. Only hidden
     tests are graded, so repeat the sample cases in `hidden` too. Cover:
     - empty input
@@ -128,7 +127,7 @@ node scripts/check-quiz.mjs quizzes/<short-name> --run
 This runs the server's validation, warns about likely typos in keys, and runs every reference
 solution against every test. Fix every error and warning, then run it again, until it ends
 with `VALID`. If there's no JDK (or no gcc/g++, go or rustc; C# always), those references get skipped and are
-checked on upload instead; say so. Bans in C, C++, Go and C# are also only checked on upload.
+checked on upload instead; say so. Bans in C, C++, Go, C# and Rust are also only checked on upload.
 
 ## 4. Pack it
 

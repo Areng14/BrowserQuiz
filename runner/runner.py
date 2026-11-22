@@ -638,6 +638,85 @@ def cpp_source_facts(pre, raw):
     return facts
 
 
+# ---- Rust: the compile's own MIR, every call already resolved to what it is (bans.js reads it), and what
+# the source does that MIR can't show: unsafe code (where a function could be reached by its address),
+# files brought in (include!, #[path], mod name;), and the names the student's code defines.
+MIR_CAP = 16 << 20
+
+
+def rust_facts(job, sources):
+    try:
+        fd = os.open(os.path.join(job, "main.mir"), os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as f:
+            raw = f.read(MIR_CAP + 1)
+    except OSError:
+        return None
+    if len(raw) > MIR_CAP:
+        return None
+    mir = raw.decode("utf-8", "replace")
+    facts = set()
+    for src in sources:
+        code = rust_code_only(src)
+        for m in re.finditer(r"\b(?:struct|enum|trait|type|union|mod|fn|const|static)\s+(?:r#)?([A-Za-z_]\w*)|\bmacro_rules\s*!\s*([A-Za-z_]\w*)", code):
+            facts.add("local " + (m.group(1) or m.group(2)))
+        if re.search(r"\bunsafe\b", code):
+            facts.add("escape unsafe")
+        if re.search(r"\b(?:include|include_str|include_bytes)\s*!", code):
+            facts.add("escape include!")
+        if re.search(r"#\s*!?\s*\[\s*path\b", code):
+            facts.add("escape #[path]")
+        if re.search(r"\bmod\s+(?:r#)?\w+\s*;", code):
+            facts.add("escape mod file")
+    return "\n".join(sorted(facts)) + "\n@@mir\n" + mir
+
+
+def rust_code_only(src):
+    """Rust source with comments (nested ones too), string, byte string, raw string and char literals
+    emptied. A lifetime ('a) stays."""
+    out = []
+    i, n = 0, len(src)
+    while i < n:
+        c = src[i]
+        if src.startswith("//", i):
+            j = src.find("\n", i)
+            i = n if j < 0 else j
+        elif src.startswith("/*", i):
+            depth, j = 1, i + 2
+            while j < n and depth:
+                if src.startswith("/*", j):
+                    depth, j = depth + 1, j + 2
+                elif src.startswith("*/", j):
+                    depth, j = depth - 1, j + 2
+                else:
+                    j += 1
+            out.append(" ")
+            i = j
+        elif c in "rb" and re.match(r"(?:br|r)#*\"", src[i:i + 300]) and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] == "_")):
+            m = re.match(r"(?:br|r)(#*)\"", src[i:])
+            end = '"' + m.group(1)
+            j = src.find(end, i + m.end())
+            i = n if j < 0 else j + len(end)
+            out.append('""')
+        elif c == '"' or (c == "b" and src.startswith('b"', i) and (i == 0 or not (src[i - 1].isalnum() or src[i - 1] == "_"))):
+            j = i + (2 if c == "b" else 1)
+            while j < n and src[j] != '"':
+                j += 2 if src[j] == "\\" else 1
+            i = j + 1
+            out.append('""')
+        elif c == "'":
+            m = re.match(r"'(?:\\(?:u\{[0-9a-fA-F]{1,6}\}|x[0-9a-fA-F]{2}|.)|[^\\'\n])'", src[i:i + 16])
+            if m:
+                out.append("' '")
+                i += m.end()
+            else:  # a lifetime or label
+                out.append(c)
+                i += 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
 def run_job(slot, req):
     uid = UID_BASE + slot
     lang = req.get("language")
@@ -649,7 +728,7 @@ def run_job(slot, req):
     sources = req.get("sources")
     include = req.get("include")
     scan = req.get("scan")
-    if scan is not None and (lang not in ("c", "cpp", "go", "csharp") or not isinstance(scan, list) or not scan
+    if scan is not None and (lang not in ("c", "cpp", "go", "csharp", "rust") or not isinstance(scan, list) or not scan
                              or not all(isinstance(n, str) and n in files for n in scan)):
         return {"status": "error", "message": "bad job"}
     entry = req.get("entry")
@@ -720,7 +799,8 @@ def run_job(slot, req):
                 steps = [[os.path.join(GO, "tool", "compile"), "-p", "main", "-importcfg", os.path.join(GO, "importcfg"), "-pack", "-o", "main.a"] + sources,
                          [os.path.join(GO, "tool", "link"), "-importcfg", os.path.join(GO, "importcfg"), "-o", "main", "main.a"]]
             else:
-                steps = [[shutil.which("rustc")] + RUST_FLAGS + ["-o", "main", sources[0]]]
+                # with a ban, the same compile also writes out its MIR (main.mir): what every call resolved to
+                steps = [[shutil.which("rustc")] + RUST_FLAGS + (["--emit=mir,link"] if scan else []) + ["-o", "main", sources[0]]]
             for argv in steps:
                 st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 2048, 64, env, fsize=64 << 20,
                                                   tools=["rustc", "cc", "as", "ld"] if lang == "rust" else [])
@@ -728,7 +808,10 @@ def run_job(slot, req):
                 if st != "ok" or code != 0:
                     return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                             "exitCode": code, "ms": ms}
-            facts = run_scan(lang, scan, sources, None, None, files, uid, job, env) if scan else None
+            if scan and lang == "rust":
+                facts = rust_facts(job, [files[n] for n in scan])
+            elif scan:
+                facts = run_scan(lang, scan, sources, None, None, files, uid, job, env)
             # Go reserves ~800 MB of address space before it starts; GOMEMLIMIT keeps its heap to the limit.
             run_env = dict(env, GOMEMLIMIT=f"{mem_mb}MiB", GOMAXPROCS="2") if lang == "go" else env
             st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s,

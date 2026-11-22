@@ -73,13 +73,11 @@ use the defaults for the rest and start writing.
    - Write 2 simple sample tests, plus 5–10 hidden tests. The hidden tests repeat the samples
      and cover empty input, one element, negatives, duplicates, boundaries, and a larger case.
    - Always include a reference solution in every allowed language.
-   - To rule out a shortcut (a library sort, streams), use `ban`. It works in every language
-     but Rust. A plain name like `["sort"]` covers every language; `Class.method` entries mean
-     one language's class, so with several languages give those per language
-     (`{ "java": ["Arrays.sort"], "cpp": ["sort"], "javascript": ["sort"] }`). Rust has no bans:
-     leave it out of the ban and add a rubric item with a `forbid` regex for it (`\\.sort\\(`).
-     That only takes the item's points, and it's a text check, so it's easier to get around. Say
-     in the prompt what isn't allowed.
+   - To rule out a shortcut (a library sort, streams), use `ban`. It works in every language.
+     A plain name like `["sort"]` covers every language; `Class.method` entries mean one
+     language's class, so with several languages give those per language
+     (`{ "java": ["Arrays.sort"], "cpp": ["sort"], "rust": ["sort"] }`). Say in the prompt what
+     isn't allowed.
    - Use a rubric only for things tests can't check (1–2 points). How depends on my answer
      about rubric points:
      - **Automatically:** give every rubric item a `require` or `forbid` regex (see "Rubric

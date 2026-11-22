@@ -1058,7 +1058,7 @@
     // On code questions (langs given) an item can grade itself: a regex the code must have, or must not
     // have, one per language. Comments and strings don't count. Otherwise the teacher ticks it.
     const BAN_HINT = { java: 'Arrays.sort, Collections.sort, stream', python: 'sorted, sort', javascript: 'sort, Math.max', typescript: 'sort, Math.max',
-      c: 'qsort', cpp: 'std::sort, max_element', csharp: 'Array.Sort, OrderBy', go: 'sort, slices.Sort' };
+      c: 'qsort', cpp: 'std::sort, max_element', csharp: 'Array.Sort, OrderBy', go: 'sort, slices.Sort', rust: 'sort, BinaryHeap' };
     const PATTERN_HINT = {
       require: { java: 'private\\s+\\w+\\s+\\w+\\s*;', python: 'self\\._\\w+\\s*=', javascript: '\\bconst\\b', typescript: ':\\s*number\\b', c: '\\bfree\\(', cpp: 'private:', go: '\\bfor\\b', rust: '\\bmatch\\b', csharp: 'private\\s+\\w+\\s+\\w+\\s*;' },
       forbid: { java: 'Arrays\\.sort', python: 'sorted\\(', javascript: '\\.sort\\(', typescript: '\\.sort\\(', c: 'qsort\\(', cpp: '\\bsort\\(', go: 'sort\\.', rust: '\\.sort', csharp: '\\.Sort\\(|OrderBy' },
