@@ -715,7 +715,8 @@
     const outline = h('ol', { class: 'qe-outline' });
     const undoRow = h('p', { class: 't-small qe-undo' });
     const pane = h('main', { class: 'qe-pane' });
-    const settingsBtn = h('button', { class: 'qe-settings', type: 'button', text: 'Settings', onclick: () => select(-1) });
+    let wantSettings = false; // Settings asked for, on a quiz with no questions yet
+    const settingsBtn = h('button', { class: 'qe-settings', type: 'button', text: 'Settings', onclick: () => { wantSettings = true; select(-1); } });
 
     function setStatus(text, bad) { status.textContent = text; status.classList.toggle('t-error', !!bad); }
     let queued = false;
@@ -798,6 +799,8 @@
       return h('label', { class: 't-check' }, cb, h('span', { text: label }));
     };
     const field = (label, el, ...more) => h('label', { class: 'field' }, h('span', { class: 'field-label', text: label }), el, ...more);
+    // A part of the open question or settings, in a box of its own
+    const card = (title, ...kids) => h('section', { class: 'qe-card' }, title ? h('h2', { class: 'qe-card-title', text: title }) : null, ...kids.flat(Infinity).filter(Boolean));
     // Settings: how many of each pool's questions a student gets
     const poolSettings = (q) => {
       const sizes = new Map();
@@ -839,6 +842,7 @@
         mark.addEventListener('change', () => {
           if (multi) q.answer = mark.checked ? [...new Set([...q.answer, k])].sort((a, b) => a - b) : q.answer.filter((x) => x !== k);
           else q.answer = k;
+          paint();
           touch(q);
         });
         // A text box, so a choice can hold more than one line (code, a table): Shift+Enter for a new line.
@@ -891,13 +895,16 @@
           const g = pane.querySelectorAll('.qe-choice .qe-grip')[to];
           if (g) g.focus();
         });
-        return h('div', { class: 'qe-choice qe-choice-row' }, grip, mark, text,
+        return h('div', { class: 'qe-choice qe-choice-row' }, grip, h('label', { class: 'qe-mark', title: 'Correct' }, mark, h('span', { class: 'qe-mark-text', text: 'Correct' })), text,
           xBtn('Remove choice', () => editChoices(q, (r) => r.splice(k, 1)), q.choices.length <= 2));
       });
+      // The right answer stands out: its row is marked, and says so
+      const paint = () => rows.forEach((row, k) => row.classList.toggle('right', multi ? q.answer.includes(k) : q.answer === k));
+      paint();
       sortable(rows, (from, to) => editChoices(q, (r) => r.splice(to, 0, r.splice(from, 1)[0])), (row) => row.firstChild);
       const add = h('button', { class: 'btn small', type: 'button', text: 'Add choice', disabled: full, onclick: () => { editChoices(q, (r) => r.push({ text: '', on: false })); focusChoice(q.choices.length - 1); } });
-      const label = h('span', { class: 'field-label', id: `qe-choices-${q._ui ? q._ui.id || 'q' : 'q'}`, text: multi ? 'Choices, with the correct ones ticked' : 'Choices, with the correct one marked' });
-      return h('div', { class: 'field' }, label,
+      const label = h('h2', { class: 'qe-card-title', id: `qe-choices-${q._ui ? q._ui.id || 'q' : 'q'}`, text: multi ? 'Choices, with the correct ones ticked' : 'Choices, with the correct one marked' });
+      return h('div', { class: 'qe-stack qe-tight' }, label,
         h('div', { class: 'qe-choices', role: 'group', 'aria-labelledby': label.id }, rows),
         h('div', { class: 'qe-line' }, add, check(q, q.shuffleChoices === false, 'Keep choices in this order', (v) => { if (v) q.shuffleChoices = false; else delete q.shuffleChoices; }),
           q.type === 'multi' ? check(q, !!q.partialCredit, 'Partial credit', (v) => { if (v) q.partialCredit = true; else delete q.partialCredit; }) : null));
@@ -1225,11 +1232,13 @@
         q.languagesAny = v;
         renderPane();
       });
-      const langs = fill ? null : h('div', { class: 'qe-line' }, anyBox, q.languagesAny ? null : Object.entries(LANGS).map(([l, name]) => check(q, q.languages.includes(l), name, (v) => {
-        q.languages = Object.keys(LANGS).filter((x) => (x === l ? v : q.languages.includes(x)));
-        if (!q.languages.length) q.languages = [l === 'java' ? 'python' : 'java'];
-        renderPane();
-      })));
+      const langBox = (el) => { el.classList.add('qe-lang'); return el; };
+      const langs = fill ? null : h('div', { class: 'qe-langs', role: 'group', 'aria-label': 'Languages' }, langBox(anyBox),
+        q.languagesAny ? null : Object.entries(LANGS).map(([l, name]) => langBox(check(q, q.languages.includes(l), name, (v) => {
+          q.languages = Object.keys(LANGS).filter((x) => (x === l ? v : q.languages.includes(x)));
+          if (!q.languages.length) q.languages = [l === 'java' ? 'python' : 'java'];
+          renderPane();
+        }))));
       const mode = h('select', { class: 'input qe-narrow', 'aria-label': 'What students write' },
         h('option', { value: 'method', text: 'Write a method', selected: !isClass }),
         h('option', { value: 'class', text: 'Write a class', selected: isClass }));
@@ -1246,7 +1255,10 @@
       const tests = (kind, rows, placeholder) => area(q, u[kind], (v) => { u[kind] = v; }, { rows, placeholder, class: 'input qe-area qe-mono qe-code', 'data-tests': kind });
       const starters = [];
       const refLangs = fill ? [] : refLangsOf(q);
-      const refs = refLangs.map((l) => {
+      // One language's reference at a time, with a tab for each
+      if (!refLangs.includes(u.refTab)) u.refTab = refLangs[0];
+      const tabbed = refLangs.length > 1;
+      const panels = refLangs.map((l) => {
         const ta = area(q, (q.reference || {})[l], (v) => { q.reference = Object.assign({}, q.reference, { [l]: v }); }, { rows: 8, class: 'input qe-area qe-mono qe-code' });
         codeKeys(ta);
         const btn = h('button', { class: 'btn small', type: 'button', text: 'Insert the starter code', onclick: () => {
@@ -1256,14 +1268,26 @@
           insert(ta, starterCode(shape, l, false));
         } });
         starters.push({ ta, btn });
-        return h('div', { class: 'qe-ref' }, field(`Reference solution (${LANGS[l]})`, ta), h('div', {}, btn));
+        const label = h('label', { class: 'field' }, h('span', { class: `field-label${tabbed ? ' qe-sr' : ''}`, text: `Reference solution (${LANGS[l]})` }), ta);
+        return h('div', { class: 'qe-ref', id: `qe-ref-${l}`, role: tabbed ? 'tabpanel' : null, hidden: l !== u.refTab }, label, h('div', {}, btn));
       });
+      const tabs = tabbed ? h('div', { class: 't-tabs qe-reftabs', role: 'tablist', 'aria-label': 'Reference solutions' }, refLangs.map((l) => h('button', {
+        class: 't-tab', type: 'button', role: 'tab', 'aria-selected': String(l === u.refTab), 'aria-controls': `qe-ref-${l}`, text: LANGS[l],
+        onclick: (e) => {
+          u.refTab = l;
+          for (const b of e.currentTarget.parentNode.children) b.setAttribute('aria-selected', String(b === e.currentTarget));
+          panels.forEach((p, k) => { p.hidden = refLangs[k] !== l; });
+          const ta = panels[refLangs.indexOf(l)].querySelector('textarea');
+          grow(ta);
+        },
+      }))) : null;
+      const refs = [tabs, ...panels];
       // With "any", a reference in another language is one pick away
       const more = q.languagesAny ? Object.keys(LANGS).filter((l) => !refLangs.includes(l)) : [];
       if (more.length) {
         const add = h('select', { class: 'input qe-narrow', 'aria-label': 'Add a reference solution' },
           h('option', { value: '', text: 'Add a reference in…' }), more.map((l) => h('option', { value: l, text: LANGS[l] })));
-        add.addEventListener('change', () => { if (add.value) { u.refLangs = [...(u.refLangs || refLangs), add.value]; renderPane(); } });
+        add.addEventListener('change', () => { if (add.value) { u.refLangs = [...(u.refLangs || refLangs), add.value]; u.refTab = add.value; renderPane(); } });
         refs.push(h('div', { class: 'qe-line' }, add));
       }
       const rubric = fill ? null : rubricEditor(q, 'Uses private instance variables', refLangs);
@@ -1308,8 +1332,10 @@
         if (rubric) rubric.worth.textContent = q.rubric.some((x) => x.text.trim()) && r.rubric < Number(q.points) ? `Tests are worth ${Number(q.points) - r.rubric} of ${q.points}` : '';
       };
 
+      const emptyClass = isClass && !fill ? check(q, q.starter === 'empty', 'Start with an empty class', (v) => { if (v) q.starter = 'empty'; else delete q.starter; }) : null;
       const shape = [
-        h('div', { class: 'qe-line' }, mode, langs),
+        h('div', { class: 'qe-line' }, mode, emptyClass),
+        langs,
         isClass
           ? [h('div', { class: 'qe-pair' },
             field('Class name', input(q, u.className, (v) => { u.className = v; }, Object.assign({}, mono, { placeholder: 'BankAccount' }))),
@@ -1328,9 +1354,20 @@
       const noRun = check(q, !!q.noRun, "Students can't run their code (like on paper)", (v) => { if (v) q.noRun = true; else delete q.noRun; });
       const stack = (...kids) => h('div', { class: 'qe-stack' }, ...kids);
       // A fill question has no reference field: what students are to write, then the tests.
-      if (fill) return { node: h('div', { class: 'qe-codegrid' }, stack(shape, unordered, noRun), stack(testFields)), tick };
-      return { tick, node: h('div', { class: 'qe-codegrid' }, stack(shape, testFields), stack(refs, bans, rubric.node, h('div', { class: 'qe-line' }, unordered, noRun,
-        isClass ? check(q, q.starter === 'empty', 'Start with an empty class', (v) => { if (v) q.starter = 'empty'; else delete q.starter; }) : null))) };
+      if (fill) return { node: h('div', { class: 'qe-codegrid' }, card('What students write', shape, noRun), card('Tests', testFields, unordered)), tick };
+      // Bans and the rubric are folded away until one is set; folded, the heading says what's there.
+      const said = [];
+      const banned = [...new Set(Array.isArray(q.ban) ? q.ban : Object.values(q.ban || {}).flat())];
+      if (banned.length) said.push(`Not allowed: ${banned.slice(0, 4).join(', ')}${banned.length > 4 ? ', …' : ''}`);
+      const items = q.rubric.filter((x) => x.text.trim()).length;
+      if (items) said.push(plural(items, 'rubric item'));
+      if (q.noRun) said.push("Students can't run their code");
+      const rules = h('details', { class: 'qe-card qe-rules', open: said.length > 0 },
+        h('summary', {}, h('span', { class: 'qe-card-title', text: 'Rules and grading' }), said.length ? h('span', { class: 't-small t-muted qe-rules-said', text: said.join(' · ') }) : null),
+        h('div', { class: 'qe-stack' }, bans, rubric.node, noRun));
+      return { tick, node: h('div', { class: 'qe-codegrid' },
+        stack(card('What students write', shape), card('Tests', testFields, unordered)),
+        stack(card(tabbed ? 'Reference solutions' : 'Reference solution', refs), rules)) };
     }
 
     // ---------- the open question ----------
@@ -1347,13 +1384,14 @@
         renderPane();
       });
       const head = h('div', { class: 'qe-head' },
-        h('h1', { class: 'qe-n', text: `Question ${i + 1}` }), type,
+        h('h1', { class: 'qe-n', text: `Question ${i + 1}` }),
+        h('span', { class: 'qe-type' }, icon(ICONS[q.type], 18), type),
         h('label', { class: 'qe-pts' }, 'Points', input(q, q.points, (v) => { q.points = Number(v); }, { type: 'number', min: '0.5', step: '0.5', class: 'input t-points' })),
         h('span', { class: 'qe-grow' }),
         h('button', { class: 'btn small qe-icon', type: 'button', 'aria-label': 'Move up', title: `Move up (${ALT}Shift+↑)`, disabled: i === 0, onclick: () => moveQuestion(i, i - 1) }, icon(ICONS.up, 16)),
         h('button', { class: 'btn small qe-icon', type: 'button', 'aria-label': 'Move down', title: `Move down (${ALT}Shift+↓)`, disabled: i === n - 1, onclick: () => moveQuestion(i, i + 1) }, icon(ICONS.down, 16)),
-        h('button', { class: 'btn small', type: 'button', text: 'Duplicate', onclick: () => duplicate(i) }),
-        h('button', { class: 'btn small', type: 'button', text: 'Delete', onclick: () => remove(i) }));
+        h('button', { class: 'btn small qe-act', type: 'button', onclick: () => duplicate(i) }, icon(ICONS.copy, 15), 'Duplicate'),
+        h('button', { class: 'btn small qe-act', type: 'button', onclick: () => remove(i) }, icon(ICONS.trash, 15), 'Delete'));
       const probs = h('ul', { class: 't-error qe-problems', role: 'alert' });
       const view = h('div', { class: 'qe-view', inert: true }); // a picture of the student's screen, not something to use
       // Optional. Students see names, types and points before they start, so a name shouldn't give the answer away.
@@ -1363,13 +1401,16 @@
       const pool = field('Question pool', input(q, q.pool || '', (v) => { const t = v.trim(); if (t) q.pool = t; else delete q.pool; renderOutline(); },
         { class: 'input qe-pool', maxlength: '40', placeholder: 'Optional', list: 'qe-pool-names', autocomplete: 'off', spellcheck: 'false' }),
       h('datalist', { id: 'qe-pool-names' }, poolNames.map((p) => h('option', { value: p }))));
-      const fields = h('div', { class: 'qe-stack' }, h('div', { class: 'qe-line qe-name-row' }, name, pool), sharedEditor(q, i), promptEditor(q));
-      if (q.type === 'single' || q.type === 'multi') fields.append(choicesEditor(q));
+      // What's to be answered, by type (a code question's parts come under the columns)
+      const answer = [];
+      const add = (nodes) => answer.push(...nodes.filter(Boolean));
+      let answerTitle = null;
+      if (q.type === 'single' || q.type === 'multi') { answer.push(choicesEditor(q)); answerTitle = null; }
       if (q.type === 'text') {
-        fields.append(field('Accepted answers, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: '3.5\n/^(binary|bin) search$/' })),
+        answerTitle = 'Accepted answers';
+        answer.push(field('One per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: '3.5\n/^(binary|bin) search$/' })),
           check(q, q.caseSensitive, 'Capital letters count', (v) => { if (v) q.caseSensitive = true; else delete q.caseSensitive; }));
       }
-      const add = (nodes) => fields.append(...nodes.filter(Boolean));
       let fillParts = null;
       if (q.type === 'output') add(outputEditor(q));
       if (q.type === 'trace') add(traceEditor(q));
@@ -1380,8 +1421,16 @@
         add([h('div', { class: 'qe-line' }, field('Students write', kind)), rubricEditor(q, 'Says == compares references').node]);
       }
       // Why the answer is right: with the answer in a practice quiz's review, in reports, and for AI grading
-      fields.append(field('Explanation', area(q, q.explanation || '', (v) => { if (v.trim()) q.explanation = v; else delete q.explanation; },
-        { rows: 2, spellcheck: 'true', placeholder: 'Optional. Shown with the answer after a practice quiz.' })));
+      const explanation = field('Explanation', area(q, q.explanation || '', (v) => { if (v.trim()) q.explanation = v; else delete q.explanation; },
+        { rows: 2, spellcheck: 'true', placeholder: 'Optional. Shown with the answer after a practice quiz.' }));
+      // Pools and shared material: most questions have neither, so they're folded away until used
+      const more = h('details', { class: 'qe-more', open: !!(q.pool || q.shared) }, h('summary', { text: 'More options' }),
+        h('div', { class: 'qe-stack' }, pool, sharedEditor(q, i)));
+      const main = h('div', { class: 'qe-stack' },
+        card(null, name, promptEditor(q)),
+        answer.length ? card(answerTitle, ...answer) : null,
+        card(null, explanation),
+        more);
       const code = q.type === 'code' || (q.type === 'fill' && q._ui.run) ? codeEditor(q) : null;
       paneTick = () => {
         view.replaceChildren(...studentView(q));
@@ -1391,7 +1440,7 @@
         if (code) code.tick();
       };
       return [head, probs,
-        h('div', { class: 'qe-cols' }, fields, h('div', { class: 'qe-viewcol' }, h('span', { class: 'field-label', text: 'Students see' }), view)),
+        h('div', { class: 'qe-cols' }, main, h('div', { class: 'qe-viewcol' }, h('span', { class: 'field-label', text: 'Students see' }), view)),
         code && code.node];
     }
 
@@ -1484,22 +1533,26 @@
       const langSel = h('select', { class: 'input' }, Object.entries(Object.assign({}, LANGS, { none: 'None' })).map(([v, t]) => h('option', { value: v, text: t, selected: quiz.language === v })));
       langSel.addEventListener('change', () => { quiz.language = langSel.value; touch(); });
       paneTick = null;
+      const pools = poolSettings(q);
       return [h('div', { class: 'qe-head' }, h('h1', { class: 'qe-n', text: 'Settings' })),
-        h('div', { class: 'qe-settings-grid' },
-          field('Time limit (minutes, 0 = none)', input(q, quiz.timeLimitMin, (v) => { quiz.timeLimitMin = Number(v) || 0; }, { type: 'number', min: '0', max: '600' })),
-          field('Window exits allowed before invalidating', input(q, (quiz.integrity || {}).graceStrikes ?? 1, (v) => { quiz.integrity = { graceStrikes: Number(v) || 0 }; }, { type: 'number', min: '0', max: '10' })),
-          field('Code highlighting', langSel)),
-        h('div', { class: 'qe-line' },
-          check(q, quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { quiz.shuffleQuestions = v; }),
-          check(q, quiz.shuffleChoices !== false, 'Shuffle choices', (v) => { quiz.shuffleChoices = v; })),
-        poolSettings(q),
-        field('Directions for the whole quiz', area(q, dirs.quiz, (v) => setDir('quiz', v), Object.assign({ rows: 3, placeholder: 'Optional' }, prose))),
-        used.length ? h('details', { class: 'qe-paste', open: used.some((t) => dirs[t]) },
-          h('summary', { text: 'Directions for each part' }),
-          used.map((t) => field(TYPES[t], area(q, dirs[t], (v) => setDir(t, v), Object.assign({ rows: 2, placeholder: PART_DIRECTIONS[t] }, prose))))) : null,
-        h('details', { class: 'qe-paste' }, h('summary', { text: 'Paste a quiz.json (from an AI)' }),
-          h('label', { class: 'field', for: 'paste-json' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteArea),
-          h('div', {}, pasteBtn), pasteMsg)];
+        h('div', { class: 'qe-settings-cards' },
+          card('Quiz',
+            h('div', { class: 'qe-settings-grid' },
+              field('Time limit (minutes, 0 = none)', input(q, quiz.timeLimitMin, (v) => { quiz.timeLimitMin = Number(v) || 0; }, { type: 'number', min: '0', max: '600' })),
+              field('Window exits allowed before invalidating', input(q, (quiz.integrity || {}).graceStrikes ?? 1, (v) => { quiz.integrity = { graceStrikes: Number(v) || 0 }; }, { type: 'number', min: '0', max: '10' })),
+              field('Code highlighting', langSel)),
+            h('div', { class: 'qe-line' },
+              check(q, quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { quiz.shuffleQuestions = v; }),
+              check(q, quiz.shuffleChoices !== false, 'Shuffle choices', (v) => { quiz.shuffleChoices = v; }))),
+          pools ? card('Question pools', pools) : null,
+          card('Directions',
+            field('For the whole quiz', area(q, dirs.quiz, (v) => setDir('quiz', v), Object.assign({ rows: 3, placeholder: 'Optional' }, prose))),
+            used.length ? h('details', { class: 'qe-paste', open: used.some((t) => dirs[t]) },
+              h('summary', { text: 'For each part' }),
+              used.map((t) => field(TYPES[t], area(q, dirs[t], (v) => setDir(t, v), Object.assign({ rows: 2, placeholder: PART_DIRECTIONS[t] }, prose))))) : null),
+          h('details', { class: 'qe-card qe-paste qe-paste-json' }, h('summary', {}, h('span', { class: 'qe-card-title', text: 'Paste a quiz.json (from an AI)' })),
+            h('label', { class: 'field', for: 'paste-json' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteArea),
+            h('div', {}, pasteBtn), pasteMsg))];
     }
 
     function selectDivider(k) {
@@ -1507,7 +1560,7 @@
       renderPane();
       const t = pane.querySelector('#qe-div-title');
       if (t) t.focus({ preventScroll: true });
-      if (matchMedia('(max-width: 1000px)').matches) pane.scrollIntoView({ block: 'start' }); // as select does
+      if (matchMedia('(max-width: 1000px)').matches) { side.classList.remove('open'); sideToggle.setAttribute('aria-expanded', 'false'); } // as select does
     }
     // A divider goes before the open question (the first one from Settings).
     function addDivider() {
@@ -1530,10 +1583,26 @@
         h('div', { class: 'qe-stack' }, field('Title', title), field('Directions', dirs))];
     }
 
+    // A quiz with no questions yet opens on the kinds of question to start with
+    const HINTS = { single: 'One right answer', multi: 'Several right answers', text: 'A word or a number', output: 'What code prints',
+      trace: 'Track variables by hand', fill: 'Complete the code', code: 'Write code that\'s tested', essay: 'Graded by you' };
+    function startPane() {
+      paneTick = null;
+      return [h('div', { class: 'qe-head' }, h('h1', { class: 'qe-n', text: 'Add a question' })),
+        h('div', { class: 'qe-tiles' }, Object.keys(TYPES).map((t) => h('button', { class: 'qe-tile', type: 'button', 'data-add': t, onclick: () => addQuestion(t) },
+          icon(ICONS[t], 22), h('span', { class: 'qe-tile-name', text: TYPES[t] }), h('span', { class: 'qe-tile-hint', text: HINTS[t] })))),
+        h('p', { class: 't-muted' }, 'Or ', h('button', { class: 't-link', type: 'button', text: 'paste a quiz.json', onclick: () => {
+          wantSettings = true;
+          select(-1);
+          const d = pane.querySelector('.qe-paste-json');
+          if (d) { d.open = true; d.querySelector('textarea').focus(); }
+        } }), ' an AI wrote.')];
+    }
+
     function renderPane() {
       const q = quiz.questions[sel];
       const div = selDiv != null ? quiz.sections[selDiv] : null;
-      pane.replaceChildren(...(div ? dividerPane(selDiv) : q ? questionPane(q, sel) : settingsPane()).flat(Infinity).filter(Boolean));
+      pane.replaceChildren(...(div ? dividerPane(selDiv) : q ? questionPane(q, sel) : !quiz.questions.length && !wantSettings ? startPane() : settingsPane()).flat(Infinity).filter(Boolean));
       pane.querySelectorAll('textarea.qe-area').forEach(grow);
       if (paneTick) paneTick();
       renderOutline();
@@ -1583,6 +1652,8 @@
       total.textContent = !quiz.questions.length ? '' : pooled.size
         ? `${plural(quiz.questions.length, 'question')}, ${each.n} each, ${plural(pts, 'point')}`
         : `${plural(quiz.questions.length, 'question')}, ${plural(pts, 'point')}`;
+      const here = selDiv != null ? (quiz.sections[selDiv].title || 'Section') : sel >= 0 ? `Question ${sel + 1} of ${quiz.questions.length}` : 'Settings';
+      sideToggle.firstChild.textContent = here;
       undoRow.replaceChildren(...(removed ? [`Deleted question ${removed.at + 1}. `, h('button', { class: 't-link', type: 'button', text: 'Undo', onclick: () => {
         const r = removed;
         removed = null;
@@ -1602,8 +1673,8 @@
       const row = outline.querySelector('.sel');
       if (row) row.scrollIntoView({ block: 'nearest' });
       if (focus) { const p = pane.querySelector('#qe-prompt'); if (p) p.focus({ preventScroll: true }); }
-      // Narrow screens put the question under the list: go to it.
-      if (focus && matchMedia('(max-width: 1000px)').matches) pane.scrollIntoView({ block: 'start' });
+      // Narrow screens fold the list up over the question
+      if (matchMedia('(max-width: 1000px)').matches) { side.classList.remove('open'); sideToggle.setAttribute('aria-expanded', 'false'); }
     }
     // New questions go next to their own kind, so each type stays one part of the quiz.
     function addQuestion(type) {
@@ -1758,20 +1829,48 @@
 
     const title = h('input', { class: 'input qe-title', value: quiz.title || '', placeholder: 'Quiz title', 'aria-label': 'Title', maxlength: '120' });
     title.addEventListener('input', () => { quiz.title = title.value; touch(); });
-    const short = { single: 'Multiple choice', multi: 'Select all', text: 'Short answer', output: 'Output', trace: 'Trace table', fill: 'Fill in blanks', code: 'Code', essay: 'Written' };
     const keys = [[`${MOD}Enter`, 'New question'], [`${ALT}↑ ↓`, 'Previous, next question'], [`${ALT}Shift+↑ ↓`, 'Move question'], ['Enter', 'Next choice'], ['Esc, then Tab', 'Leave a code box'], [`${MOD}S`, 'Save']];
+    // Adding: one button, and the kinds of question in a menu under it
+    const addBtn = h('button', { class: 'btn qe-add-btn', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, icon(ICONS.plus, 16), 'Add question');
+    const addMenu = h('div', { class: 'qe-add-menu', role: 'menu', 'aria-label': 'Add question', hidden: true },
+      Object.keys(TYPES).map((t) => h('button', { class: 'qe-add-item', type: 'button', role: 'menuitem', 'data-add': t, onclick: () => { closeAdd(); addQuestion(t); } }, icon(ICONS[t], 16), h('span', { text: TYPES[t] }))),
+      h('button', { class: 'qe-add-item qe-add-section', type: 'button', role: 'menuitem', 'data-add': 'section', title: 'Starts a section at the open question', disabled: !quiz.questions.length,
+        onclick: () => { closeAdd(); addDivider(); } }, icon(ICONS.section, 16), h('span', { text: 'Section divider' })));
+    const items = () => [...addMenu.querySelectorAll('.qe-add-item:not(:disabled)')];
+    function closeAdd(refocus) { addMenu.hidden = true; addBtn.setAttribute('aria-expanded', 'false'); if (refocus) addBtn.focus(); }
+    addBtn.addEventListener('click', () => {
+      const open = addMenu.hidden;
+      addMenu.hidden = !open;
+      addBtn.setAttribute('aria-expanded', String(open));
+      addMenu.querySelector('.qe-add-section').disabled = !quiz.questions.length;
+      if (open) items()[0].focus();
+    });
+    addMenu.addEventListener('keydown', (e) => {
+      const list = items();
+      const k = list.indexOf(document.activeElement);
+      if (e.key === 'Escape') { e.preventDefault(); closeAdd(true); } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        list[(k + (e.key === 'ArrowDown' ? 1 : list.length - 1)) % list.length].focus();
+      } else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); list[e.key === 'Home' ? 0 : list.length - 1].focus(); }
+    });
+    document.addEventListener('click', function outside(e) {
+      if (!root.isConnected) { document.removeEventListener('click', outside); return; }
+      if (!addMenu.hidden && !addMenu.contains(e.target) && !addBtn.contains(e.target)) closeAdd();
+    });
+    // On a phone the list folds up over the open question: a bar says how many there are
+    const sideBody = h('div', { class: 'qe-side-body' }, settingsBtn, total, outline, undoRow,
+      h('div', { class: 'qe-add' }, addBtn, addMenu),
+      h('details', { class: 'qe-keys t-small' }, h('summary', { text: 'Shortcuts' }),
+        h('dl', {}, keys.map(([k, what]) => [h('dt', { text: k }), h('dd', { text: what })]))));
+    const sideToggle = h('button', { class: 'qe-side-toggle', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'qe-side-body' },
+      h('span', { class: 'qe-side-toggle-text', text: 'Questions' }), icon(ICONS.chevron, 18));
+    sideBody.id = 'qe-side-body';
+    const side = h('nav', { class: 'qe-side', 'aria-label': 'Questions' }, sideToggle, sideBody);
+    sideToggle.addEventListener('click', () => { const open = !side.classList.contains('open'); side.classList.toggle('open', open); sideToggle.setAttribute('aria-expanded', String(open)); });
     const root = h('div', { class: 'qe' },
       h('div', { class: 'qe-bar' }, title, h('span', { class: 'qe-grow' }), status, previewBtn, saveBtn),
       globalMsg,
-      h('div', { class: 'qe-body' },
-        h('nav', { class: 'qe-side', 'aria-label': 'Questions' },
-          settingsBtn, total, outline, undoRow,
-          h('div', { class: 'qe-add' }, h('span', { class: 'field-label', text: 'Add' }),
-            h('div', { class: 'qe-add-btns' }, Object.keys(TYPES).map((t) => h('button', { class: 'btn small', type: 'button', text: short[t], 'data-add': t, onclick: () => addQuestion(t) })),
-              h('button', { class: 'btn small qe-add-section', type: 'button', text: 'Section divider', title: 'Starts a section at the open question', onclick: addDivider }))),
-          h('details', { class: 'qe-keys t-small' }, h('summary', { text: 'Shortcuts' }),
-            h('dl', {}, keys.map(([k, what]) => [h('dt', { text: k }), h('dd', { text: what })])))),
-        pane));
+      h('div', { class: 'qe-body' }, side, pane));
 
     function onKey(e) {
       if (!root.isConnected) { document.removeEventListener('keydown', onKey); return; }

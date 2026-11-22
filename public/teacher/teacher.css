@@ -404,8 +404,65 @@ button.t-joincode:hover { background: var(--soft); }
 .qe-status { color: var(--ink-2); white-space: nowrap; }
 .qe-status.t-error { color: var(--bad); }
 .qe-body { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 28px; align-items: start; }
-.qe-side { position: sticky; top: 60px; max-height: calc(100vh / var(--zoom, 1) - 60px); overflow: hidden auto; padding: 16px 0 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; }
-.qe-pane { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 20px 0 0; min-width: 0; scroll-margin-top: 64px; }
+.qe-side { position: sticky; top: 60px; max-height: calc(100vh / var(--zoom, 1) - 60px); overflow: hidden auto; padding: 16px 0 24px; }
+.qe-side-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; align-content: start; }
+.qe-side-toggle { display: none; }
+.qe-pane { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 20px 0 0; min-width: 0; scroll-margin-top: 64px; }
+
+/* The open question's parts, each in a box of its own; the rarely used ones folded away */
+.qe-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; padding: 16px 18px 18px; border: 1px solid var(--line); border-radius: 10px; }
+.t-app .qe-card-title { font-size: 15px; font-weight: 600; line-height: 1.35; }
+details.qe-card > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; cursor: pointer; list-style: none; }
+details.qe-card > summary::-webkit-details-marker { display: none; }
+details.qe-card > summary::before, .qe-more > summary::before { content: ''; flex: none; width: 7px; height: 7px; margin: 0 2px 2px 2px; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(-45deg); transition: transform 0.15s; }
+details.qe-card[open] > summary::before, .qe-more[open] > summary::before { transform: rotate(45deg); margin-bottom: 4px; }
+details.qe-card:not([open]) { padding-bottom: 16px; }
+.qe-rules[open] .qe-rules-said { display: none; }
+.qe-more > summary { display: flex; align-items: center; gap: 8px; width: max-content; padding: 4px 0; font-weight: 500; color: var(--accent); cursor: pointer; list-style: none; }
+.qe-more > summary::-webkit-details-marker { display: none; }
+.qe-more > summary::before { border-color: var(--accent); }
+.qe-more[open] > .qe-stack { margin-top: 10px; padding: 16px 18px 18px; border: 1px solid var(--line); border-radius: 10px; }
+.qe-settings-cards { display: grid; gap: 16px; max-width: 920px; }
+.qe-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Adding a question: one button, the kinds in a menu under it; a new quiz starts on the kinds as tiles */
+.btn.qe-add-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; }
+.qe-add-menu { display: grid; gap: 2px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08); }
+.qe-add-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; font: 500 14px var(--font); color: var(--ink); text-align: left; background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.qe-add-item svg { flex: none; color: var(--ink-2); }
+.qe-add-item:hover:not(:disabled), .qe-add-item:focus-visible { background: var(--soft); outline: none; }
+.qe-add-item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.qe-add-item:disabled { color: var(--ink-2); cursor: default; }
+.qe-add-item.qe-add-section { position: relative; margin-top: 7px; }
+.qe-add-item.qe-add-section::before { content: ''; position: absolute; top: -5px; left: 4px; right: 4px; border-top: 1px solid var(--line); }
+.qe-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.qe-tile { display: grid; justify-items: start; align-content: start; gap: 3px; padding: 16px 16px 15px; font: inherit; color: var(--ink); text-align: left; background: none; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.qe-tile svg { margin-bottom: 8px; color: var(--accent); }
+.qe-tile:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.qe-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.qe-tile-name { font-weight: 600; }
+.qe-tile-hint { font-size: 13px; color: var(--ink-2); }
+
+/* The open question's head: its number, kind and points, then moving, copying and deleting it */
+.qe-type { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); }
+.btn.qe-act { display: inline-flex; align-items: center; gap: 6px; }
+.btn.qe-act svg { color: var(--ink-2); }
+
+/* Choices: the right one says so */
+.qe-choice-row { position: relative; }
+.qe-mark { display: inline-flex; align-items: center; flex: none; min-width: 22px; min-height: 40px; cursor: pointer; }
+/* "Correct" sits inside the right one's box, at its end, so the boxes stay lined up */
+.qe-mark-text { display: none; position: absolute; top: 10px; right: 58px; font-size: 13px; font-weight: 600; line-height: 20px; color: var(--good); pointer-events: none; }
+.qe-choice.right .qe-mark-text { display: block; }
+.qe-choice.right .qe-choice-text { padding-right: 76px; border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+
+/* A code question: its languages as toggles, its reference solutions in tabs */
+.qe-langs { display: flex; flex-wrap: wrap; gap: 6px; }
+.t-check.qe-lang { min-height: 34px; padding: 0 11px 0 10px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.t-check.qe-lang:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.t-check.qe-lang:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.t-tabs.qe-reftabs { flex-wrap: wrap; margin: 0; }
+.qe-reftabs .t-tab { flex: 0 1 auto; min-width: 72px; }
 
 .qe-outline { list-style: none; margin: 0; padding: 0; }
 .qe-total { padding: 0 8px; }
@@ -430,10 +487,6 @@ button.t-joincode:hover { background: var(--soft); }
 .qe-drop-before { box-shadow: 0 -2px 0 var(--accent); }
 .qe-drop-after { box-shadow: 0 2px 0 var(--accent); }
 .qe-add { display: grid; gap: 6px; padding: 12px 0 0; border-top: 1px solid var(--line); }
-.qe-add > .field-label { padding-left: 8px; }
-.qe-add-btns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
-.qe-add-btns .btn { padding: 0 6px; }
-.qe-add-btns .qe-add-section { grid-column: 1 / -1; }
 /* a section divider in the question list: a heading row */
 .qe-divider { margin-top: 8px; border-top: 2px solid var(--line); }
 .qe-divider .qe-row-btn { font-weight: 700; padding-block: 8px; }
@@ -450,7 +503,7 @@ button.t-joincode:hover { background: var(--soft); }
 .qe-pts { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink-2); }
 .qe-problems { margin: 0; padding: 10px 12px 10px 30px; border: 1px solid var(--bad); border-radius: 6px; }
 .qe-cols, .qe-codegrid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
-.qe-codegrid { padding-top: 18px; border-top: 1px solid var(--line); }
+.qe-codegrid { gap: 16px 28px; }
 .qe-stack { display: grid; gap: 14px; min-width: 0; }
 .qe-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .qe-name { max-width: 460px; }
@@ -502,7 +555,7 @@ button.t-joincode:hover { background: var(--soft); }
 
 .qe-viewcol { position: sticky; top: 76px; display: grid; gap: 6px; min-width: 0; }
 .qe-viewcol .field-label { color: var(--ink-2); }
-.qe-view { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; }
+.qe-view { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
 .qe-view :is(input, textarea, select, button, label, a) { pointer-events: none; } /* to look at, not to use; long lines scroll */
 .qe-view .prompt { font-size: 16px; overflow-wrap: anywhere; }
 .qe-view code { padding: 0 4px; background: var(--soft); border-radius: 3px; }
@@ -532,8 +585,21 @@ th .qe-gridcell { font: 600 13px var(--font); }
 
 @media (max-width: 1000px) {
   .qe-body, .qe-cols, .qe-codegrid { grid-template-columns: minmax(0, 1fr); }
-  .qe-side { position: static; max-height: none; border-bottom: 1px solid var(--line); }
+  /* the list folds up into a bar under the top one, saying which question is open */
+  .qe-side { z-index: 4; padding: 0; background: var(--bg); border-bottom: 1px solid var(--line); }
+  .qe-side.open { padding-bottom: 16px; }
+  .qe-side:not(.open) .qe-side-body { display: none; }
+  .qe-side-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 46px; padding: 0 2px; font: 600 15px var(--font); color: var(--ink); background: none; border: 0; cursor: pointer; }
+  .qe-side-toggle svg { flex: none; color: var(--ink-2); transition: transform 0.15s; }
+  .qe-side.open .qe-side-toggle svg { transform: rotate(180deg); }
+  .qe-side-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .qe-viewcol { position: static; }
+  .btn.qe-act { padding-inline: 10px; }
+}
+@media (max-width: 560px) {
+  .btn.qe-act { width: 34px; padding: 0; justify-content: center; font-size: 0; } /* icons only; aria still has their names */
+  .btn.qe-act svg { width: 16px; height: 16px; }
+  .qe-card { padding: 14px 14px 16px; }
 }
 @media (min-width: 2300px) { .t-app { zoom: 1.2; --zoom: 1.2; } } /* --zoom: for heights in vh, which zoom scales */
 .t-answers .t-grade, .t-answers .t-adjust { margin-top: 10px; }

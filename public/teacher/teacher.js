@@ -284,6 +284,20 @@
     down: ['M12 5v14', 'M19 12l-7 7-7-7'],
     back: ['M19 12H5', 'M12 19l-7-7 7-7'],
     grip: ['M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01'],
+    plus: ['M12 5v14', 'M5 12h14'],
+    copy: ['M9 9h11v11H9z', 'M5 15H4V4h11v1'],
+    trash: ['M3 6h18', 'M8 6V4h8v2', 'M19 6l-1 14H6L5 6', 'M10 11v6', 'M14 11v6'],
+    chevron: ['M6 9l6 6 6-6'],
+    // question types (the quiz maker)
+    single: ['M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z'],
+    multi: ['M4 4h16v16H4z', 'M8 12l3 3 5-6'],
+    text: ['M4 7V5h16v2', 'M9 19h6', 'M12 5v14'],
+    output: ['M4 17l6-5-6-5', 'M12 19h8'],
+    trace: ['M3 4h18v16H3z', 'M3 10h18', 'M3 15h18', 'M10 4v16'],
+    fill: ['M3 6h18v12H3z', 'M8 14h8'],
+    code: ['M16 18l6-6-6-6', 'M8 6l-6 6 6 6'],
+    essay: ['M4 6h16', 'M4 10h16', 'M4 14h16', 'M4 18h10'],
+    section: ['M3 12h18', 'M8 6h8', 'M8 18h8'],
   };
   function icon(paths, size = 18) {
     const ns = 'http://www.w3.org/2000/svg';
