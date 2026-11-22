@@ -84,7 +84,8 @@ own, with its own code. Students join it like any quiz.
   A missed question from a question pool swaps for one from the pool they haven't seen.
 - Answers still waiting for you (ungraded essays) aren't in it. Grade first if they should be.
 - It's practice: no lockdown, no clock, no flags, so students can ask around.
-- **A fixed answer earns back** half, all, or none of the points it lost, on top of the exam score.
+- **A fixed answer earns back** a percentage of the points it lost (50% to start), on top of the exam
+  score.
   The live page shows each student's total, and the CSV adds `exam_score`, `earned_back` and
   `with_corrections`. An invalidated exam stays at 0. Students don't see their total, so they can't
   tell.

@@ -91,7 +91,7 @@ addColumn('teachers', 'rec_wrap', 'TEXT');
 addColumn('teachers', 'ai_key', 'TEXT');
 addColumn('quizzes', 'enc', 'INTEGER NOT NULL DEFAULT 0');
 // Corrections (corrections.js): a practice run for redoing an exam's missed questions. corrects: the exam
-// run; earn_back: the share of lost points a right answer earns back; ask_why: a "What went wrong?" box.
+// run; earn_back: the share of lost points a right answer earns back (0 to 1); ask_why: a "What went wrong?" box.
 addColumn('runs', 'corrects', 'TEXT');
 addColumn('runs', 'earn_back', 'REAL NOT NULL DEFAULT 0');
 addColumn('runs', 'ask_why', 'INTEGER NOT NULL DEFAULT 0');

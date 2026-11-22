@@ -3,7 +3,7 @@
 // its own (no lockdown, no flags: students can ask around). Their answers from the exam are filled in. A
 // missed question from a pool swaps for one from the same pool they haven't seen, when there is one, so
 // they have to know it rather than remember what came back. Getting it right earns back a share of the
-// points they lost (the run's earn_back: 0, 0.5 or 1), on top of the exam score. Only the teacher sees the
+// points they lost (the run's earn_back, 0 to 1: the teacher's percentage), on top of the exam score. Only the teacher sees the
 // exam score and the total: an invalidated exam stays at 0, and the student can't tell.
 
 const crypto = require('node:crypto');

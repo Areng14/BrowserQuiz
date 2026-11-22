@@ -124,7 +124,7 @@
       btn.disabled = true; msg.textContent = '';
       try { const r = await post('/api/t/login', { username: user.value.trim(), password: pw.value }); if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else route(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
     });
-    mount(h('main', {}, form, h('p', { class: 't-login-foot' }, ghLink())));
+    mount(h('main', { class: 't-login-page' }, form, h('p', { class: 't-login-foot' }, ghLink())));
     user.focus();
   }
 
@@ -163,7 +163,7 @@
         if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else showHome();
       } catch (ex) { msg.textContent = ex.message; btn.disabled = false; }
     });
-    mount(h('main', {}, form));
+    mount(h('main', { class: 't-login-page' }, form));
     cur.focus();
   }
 
@@ -867,15 +867,16 @@
   // missed. The teacher picks how much a fixed answer earns back, and whether to ask what went wrong.
   function correctionsDialog(runId, run) {
     const dlg = h('dialog', { class: 't-dialog t-admit', 'aria-labelledby': 't-corr-title' });
-    const earn = h('select', { class: 'input', id: 't-corr-earn' },
-      [['0.5', 'Half of what they missed'], ['1', 'All of what they missed'], ['0', 'Nothing']].map(([v, t]) => h('option', { value: v, text: t })));
+    const earn = h('input', { class: 'input t-points', id: 't-corr-earn', type: 'number', min: '0', max: '100', step: '5', value: '50', inputmode: 'numeric' });
     const why = h('input', { type: 'checkbox', id: 't-corr-why', checked: true });
     const msg = h('p', { class: 't-error t-small', role: 'alert' });
     const ok = h('button', { class: 'btn primary', type: 'button', text: 'Start corrections' });
     ok.addEventListener('click', async () => {
+      const pct = Number(earn.value);
+      if (earn.value.trim() === '' || !(pct >= 0 && pct <= 100)) { msg.textContent = 'Earn back is a percentage from 0 to 100.'; earn.focus(); return; }
       ok.disabled = true;
       try {
-        const r = await post(`/api/t/runs/${runId}/corrections`, { earnBack: Number(earn.value), why: why.checked });
+        const r = await post(`/api/t/runs/${runId}/corrections`, { earnBack: pct / 100, why: why.checked });
         dlg.close();
         showRun(r.id);
       } catch (e) { msg.textContent = e.message; ok.disabled = false; }
@@ -884,7 +885,8 @@
     dlg.append(
       h('header', { class: 't-dialog-head' }, h('h2', { id: 't-corr-title', text: 'Corrections' }), x),
       h('div', { class: 't-admit-list' },
-        h('label', { class: 'field', for: 't-corr-earn' }, h('span', { class: 'field-label', text: 'A fixed answer earns back' }), earn),
+        h('label', { class: 'field', for: 't-corr-earn' }, h('span', { class: 'field-label', text: 'A fixed answer earns back' }),
+          h('span', { class: 't-corr-pct' }, earn, h('span', { text: '% of what it lost' }))),
         h('label', { class: 't-check', for: 't-corr-why' }, why, h('span', { text: 'Ask what went wrong' })),
         run && run.waiting ? h('p', { class: 't-small', text: `${plural(run.waiting, 'answer')} still ${run.waiting === 1 ? 'needs' : 'need'} grading, so ${run.waiting === 1 ? "it isn't" : "they aren't"} in corrections.` }) : null,
         msg),
@@ -1007,7 +1009,7 @@
         }).catch(() => {});
       }
       title.textContent = run.title;
-      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.corrections ? `, corrections, earning back ${({ 0: 'nothing', 0.5: 'half', 1: 'all' })[run.corrections.earnBack]}` : run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
+      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.corrections ? `, corrections, earning back ${Math.round(run.corrections.earnBack * 100)}%` : run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
       howTo.textContent = run.sebFile ? `Join at ${location.origin}, which opens Safe Exam Browser` : `Join at ${location.origin}`;
       quitPw.hidden = !run.sebQuit || run.status !== 'open';
       if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp', text: run.sebQuit }));

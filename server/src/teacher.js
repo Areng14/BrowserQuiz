@@ -895,7 +895,10 @@ module.exports = function teacherRoutes(r) {
     const exam = getRun(me, p.id);
     if (exam.mode === 'practice' || exam.corrects) throw new HttpError(400, 'not_an_exam', 'Corrections are for a quiz given as an exam.');
     const body = await readJson(req, 4096);
-    const earnBack = [0, 0.5, 1].includes(Number(body.earnBack)) ? Number(body.earnBack) : 0.5;
+    // the share of lost points a fixed answer earns back, 0 to 1, in whole percents
+    const eb = Number(body.earnBack);
+    if (body.earnBack != null && body.earnBack !== '' && !(Number.isFinite(eb) && eb >= 0 && eb <= 1)) throw new HttpError(400, 'bad_earn_back', 'Earn back is a percentage from 0 to 100.');
+    const earnBack = body.earnBack == null || body.earnBack === '' ? 0.5 : Math.round(eb * 100) / 100;
     const id = crypto.randomUUID();
     const code = newJoinCode();
     q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at, owner_id, corrects, earn_back, ask_why) VALUES (?, ?, ?, ?, 'open', NULL, 'practice', ?, ?, ?, ?, ?)")
