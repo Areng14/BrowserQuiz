@@ -10,6 +10,7 @@ const W = require('./watch');
 const { runSamples } = require('./coderun');
 const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } = require('./grade');
 const { fillTemplate } = require('./quizfile');
+const C = require('./corrections');
 const { HttpError, clientIp, sameNetwork, isHttps, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
 
 const PEPPER = process.env.ID_PEPPER || '';
@@ -117,6 +118,8 @@ function publicQuiz(quiz, layout) {
     language: quiz.language,
     directions: quiz.directions,
     sections: sectionStarts(quiz, layout),
+    // corrections: how each went on the exam (or that it's a new one from its pool), and the "What went wrong?" box
+    corrections: layout.fix ? { why: !!layout.why, fix: Object.fromEntries(Object.entries(layout.fix).map(([id, f]) => [id, { points: f.old, max: f.max, fresh: !!f.fresh }])) } : undefined,
     shared: Object.fromEntries((quiz.shared || []).filter((m) => used.has(m.id)).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
     questions: layout.order.map((id) => {
       const qq = byId.get(id);
@@ -176,7 +179,11 @@ function sectionStarts(quiz, layout) {
   return out;
 }
 
-function runInfo(run, quiz) {
+function runInfo(run, quiz, studentId) {
+  const corr = run.corrects ? Object.assign({ corrections: true, timeLimitMin: 0 }, studentId ? C.preview(run, quiz, studentId) : { questionCount: null, points: null }) : null;
+  return Object.assign(runInfoBase(run, quiz), corr || {});
+}
+function runInfoBase(run, quiz) {
   return {
     runId: run.id, title: quiz.title, timeLimitMin: quiz.timeLimitMin,
     // Totals only, for the start screen. What's on the quiz (types, names, sections, directions) comes with
@@ -268,7 +275,7 @@ module.exports = function studentRoutes(r) {
     const { a, run, quiz } = ctx;
     if (run.status !== 'open' && a.status !== 'active' && a.status !== 'submitted') return json(res, 200, { status: null });
     const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
-    json(res, 200, { status: a.status, run: runInfo(run, quiz), name: student ? student.name : '' });
+    json(res, 200, { status: a.status, run: runInfo(run, quiz, a.studentId), name: student ? student.name : '' });
   });
 
   // Typeahead: only names matching what was typed come back, never the whole roster.
@@ -309,7 +316,7 @@ module.exports = function studentRoutes(r) {
     const existing = existingRow ? store.getAttempt(existingRow.id) : null;
     const token = newToken();
     if (existing) {
-      if (mine && mine.id === existing.id) return json(res, 200, { ok: true });
+      if (mine && mine.id === existing.id) return json(res, 200, { ok: true, run: run.corrects ? runInfo(run, store.getQuiz(run.quiz_id), student.id) : undefined });
       // A student who lost their cookie before starting can sign in again. After that, only if the teacher
       // pressed "Let back in" (crashed PC, new seat): they pick up the same attempt, answers and clock.
       // Practice runs aren't monitored, so signing in again anywhere is fine.
@@ -330,7 +337,7 @@ module.exports = function studentRoutes(r) {
       store.logEvent(store.getAttempt(id), 'join', 'info', student.name);
     }
     setCookie(req, res, ATT, token, 12 * 3600);
-    json(res, 200, { ok: true });
+    json(res, 200, { ok: true, run: run.corrects ? runInfo(run, store.getQuiz(run.quiz_id), student.id) : undefined });
   });
 
   r.post('/api/admit-status', async (req, res) => {
@@ -344,10 +351,15 @@ module.exports = function studentRoutes(r) {
     if (a.status === 'submitted') throw new HttpError(403, 'run_closed');
     const now = Date.now();
     if (a.status === 'admitted') {
-      a.layout = store.makeLayout(quiz);
+      if (run.corrects) {
+        const p = C.plan(quiz, C.examAttemptFor(run, a.studentId), !!run.ask_why);
+        if (!p) throw new HttpError(409, 'nothing_to_correct');
+        a.layout = p.layout;
+        a.answers = p.answers;
+      } else a.layout = store.makeLayout(quiz);
       a.status = 'active';
       a.startedAt = now;
-      a.deadline = quiz.timeLimitMin ? now + quiz.timeLimitMin * 60000 : null;
+      a.deadline = quiz.timeLimitMin && !run.corrects ? now + quiz.timeLimitMin * 60000 : null;
       a.lastBeat = now;
       store.logEvent(a, 'start', 'info', null);
       store.save(a);
@@ -361,7 +373,6 @@ module.exports = function studentRoutes(r) {
       a.lastBeat = now;
       a.beatLost = false;
     }
-    void run;
     // Saved answers go back in the student's own positional order.
     json(res, 200, { quiz: publicQuiz(quiz, a.layout), deadline: a.deadline, now, saved: a.answers || {} });
   });
@@ -469,7 +480,7 @@ module.exports = function studentRoutes(r) {
   // Practice only: start over with a fresh attempt.
   r.post('/api/practice-retry', async (req, res) => {
     const { a, run } = current(req);
-    if (!a.practice) throw new HttpError(404, 'not_found');
+    if (!a.practice || run.corrects) throw new HttpError(404, 'not_found'); // corrections: once, then the answers
     a.archived = true;
     store.save(a);
     store.forget(a.id);

@@ -13,6 +13,7 @@ const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
 const W = require('./watch');
 const { similarCode } = require('./similar');
+const C = require('./corrections');
 const AI = require('./aigrade');
 const AICSV = require('./aicsv');
 const G = require('./grade');
@@ -141,10 +142,10 @@ function parseCsv(text) {
   return rows.filter((r) => r.some((x) => x.trim()));
 }
 
-function liveRow(student, a, quiz) {
+function liveRow(student, a, quiz, run) {
   if (!a) return { rosterId: student.id, name: student.name, attempt: null };
   const t = totals(a.result, quiz, a.answers, a.layout);
-  const answered = a.answers ? Object.keys(a.answers).length : 0;
+  const answered = a.answers ? Object.keys(a.answers).filter((k) => !k.includes('~')).length : 0; // not corrections' notes
   // Where they are right now (watch.js has their last heartbeat's screen): question 4 in their own order,
   // the review page, or a part's directions.
   const v = a.status === 'active' ? W.where(a.id) : null;
@@ -163,6 +164,8 @@ function liveRow(student, a, quiz) {
       letIn: !!(a.letIn && Date.now() - a.letIn < LET_IN_MS),
       score: t ? (a.integrity === 'invalidated' ? 0 : t.score) : null, rawScore: t ? t.score : null, max: t ? t.max : null,
       pending: t ? t.pending : 0, failed: t ? t.failed : 0, review: t ? t.review : 0,
+      // corrections: the exam score, what corrections add, and the total (the teacher's view only)
+      corrections: run && run.corrects && a.status === 'submitted' ? C.standing(quiz, run, a) : undefined,
     },
   };
 }
@@ -497,7 +500,7 @@ module.exports = function teacherRoutes(r) {
     const runs = q(`SELECT runs.*, quizzes.title AS quiz_title, rosters.name AS roster_name,
         (SELECT COUNT(*) FROM attempts WHERE attempts.run_id = runs.id AND archived = 0) AS joined
       FROM runs JOIN quizzes ON quizzes.id = runs.quiz_id JOIN rosters ON rosters.id = runs.roster_id WHERE runs.owner_id = ? ORDER BY runs.created_at DESC LIMIT 50`).all(me.id)
-      .map((x) => ({ id: x.id, code: x.code, status: x.status, quiz: x.quiz_title, roster: x.roster_name, joined: x.joined, ipLock: !!x.ip_lock, practice: x.mode === 'practice', seb: !!x.seb_key, createdAt: x.created_at }));
+      .map((x) => ({ id: x.id, code: x.code, status: x.status, quiz: x.quiz_title, roster: x.roster_name, joined: x.joined, ipLock: !!x.ip_lock, practice: x.mode === 'practice', corrections: !!x.corrects, seb: !!x.seb_key, createdAt: x.created_at }));
     json(res, 200, { quizzes, rosters, runs });
   });
 
@@ -886,6 +889,21 @@ module.exports = function teacherRoutes(r) {
     json(res, 200, { ok: true, job });
   });
 
+  // Corrections for an exam: a new practice run (no lockdown) where each student redoes what they missed.
+  r.post('/api/t/runs/:id/corrections', async (req, res, p) => {
+    const me = requireTeacher(req);
+    const exam = getRun(me, p.id);
+    if (exam.mode === 'practice' || exam.corrects) throw new HttpError(400, 'not_an_exam', 'Corrections are for a quiz given as an exam.');
+    const body = await readJson(req, 4096);
+    const earnBack = [0, 0.5, 1].includes(Number(body.earnBack)) ? Number(body.earnBack) : 0.5;
+    const id = crypto.randomUUID();
+    const code = newJoinCode();
+    q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at, owner_id, corrects, earn_back, ask_why) VALUES (?, ?, ?, ?, 'open', NULL, 'practice', ?, ?, ?, ?, ?)")
+      .run(id, exam.quiz_id, exam.roster_id, code, Date.now(), me.id, exam.id, earnBack, body.why ? 1 : 0);
+    audit(me, 'open-corrections', exam.id, code);
+    json(res, 200, { id, code });
+  });
+
   r.post('/api/t/runs/:id/:action', async (req, res, p) => {
     const me = requireTeacher(req);
     const run = getRun(me, p.id);
@@ -931,8 +949,11 @@ module.exports = function teacherRoutes(r) {
     const roster = rosterStudentsForRun(run);
     const byStudent = new Map(q('SELECT id, student_id FROM attempts WHERE run_id = ? AND archived = 0').all(run.id).map((x) => [x.student_id, store.getAttempt(x.id)]));
     json(res, 200, {
-      run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, sebQuit: run.seb_quit || null, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin },
-      students: roster.map((s) => liveRow(s, byStudent.get(s.id), quiz)),
+      run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, sebQuit: run.seb_quit || null, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin,
+        corrections: run.corrects ? { earnBack: run.earn_back, why: !!run.ask_why } : null,
+        // an exam's answers still waiting for the teacher: corrections leave those out
+        waiting: !run.corrects && run.mode !== 'practice' ? roster.reduce((n, s) => { const a = byStudent.get(s.id); const t = a && a.status === 'submitted' ? totals(a.result, quiz, a.answers, a.layout) : null; return n + (t ? t.pending + t.review : 0); }, 0) : 0 },
+      students: roster.map((s) => liveRow(s, byStudent.get(s.id), quiz, run)),
       ai: { on: !!aiKeyOf(me), job: aiJobs.get(run.id) || null },
     });
   });
@@ -945,7 +966,8 @@ module.exports = function teacherRoutes(r) {
     const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const iso = (t) => (t ? new Date(t).toISOString() : '');
     const head = ['name', 'status', 'integrity', 'reason', 'strikes', 'warnings', 'away_seconds', 'raw_score', 'final_score', 'max',
-      'grading_pending', 'grading_failed', 'needs_review', 'started_at', 'submitted_at', ...quiz.questions.map((qq, i) => `q${i + 1}_${qq.id}`)];
+      'grading_pending', 'grading_failed', 'needs_review', 'started_at', 'submitted_at', ...quiz.questions.map((qq, i) => `q${i + 1}_${qq.id}`),
+      ...(run.corrects ? ['exam_score', 'earned_back', 'with_corrections'] : [])];
     const lines = [head.join(',')];
     for (const s of rosterStudentsForRun(run)) {
       const row = q('SELECT id FROM attempts WHERE run_id = ? AND student_id = ? AND archived = 0').get(run.id, s.id);
@@ -959,7 +981,8 @@ module.exports = function teacherRoutes(r) {
       });
       lines.push([s.name, a ? a.status : 'not started', a ? a.integrity : '', a ? a.reason : '', a ? a.strikes : '', a ? a.warnings : '', a ? Math.round((a.awayMs || 0) / 1000) : '',
         t ? t.score : '', t ? (a.integrity === 'invalidated' ? 0 : t.score) : '', t ? t.max : '', t ? t.pending : '', t ? t.failed : '', t ? t.review : '',
-        a ? iso(a.startedAt) : '', a ? iso(a.submittedAt) : '', ...perQ].map(esc).join(','));
+        a ? iso(a.startedAt) : '', a ? iso(a.submittedAt) : '', ...perQ,
+        ...(run.corrects ? (() => { const c = a && a.status === 'submitted' ? C.standing(quiz, run, a) : null; return c ? [c.exam, c.bonus, c.final] : ['', '', '']; })() : [])].map(esc).join(','));
     }
     send(res, 200, lines.join('\n') + '\n', {
       'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store',

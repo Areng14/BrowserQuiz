@@ -335,7 +335,7 @@
     h('tbody', {}, runs.map((r) => h('tr', {},
       h('td', {}, h('button', { class: 't-link t-mono', type: 'button', text: r.code, onclick: () => showRun(r.id) })),
       h('td', { text: r.quiz }), h('td', { text: r.roster }),
-      h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.practice ? ' (practice)' : r.seb ? ' (SEB)' : ''}` }),
+      h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.corrections ? ' (corrections)' : r.practice ? ' (practice)' : r.seb ? ' (SEB)' : ''}` }),
       h('td', { class: 'num', 'data-label': 'Joined', text: String(r.joined) }), h('td', { 'data-label': 'Started', text: date(r.createdAt) }),
       h('td', { class: 't-actions' }, h('button', { class: 'btn small', type: 'button', text: 'Delete', 'aria-label': `Delete ${r.code}`,
         onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?${r.status === 'open' ? " It's still open: anyone taking it gets signed out." : ''}`) })))))));
@@ -863,6 +863,38 @@
     boxes[0].focus();
   }
 
+  // Corrections (server: corrections.js): a practice run of its own where each student redoes what they
+  // missed. The teacher picks how much a fixed answer earns back, and whether to ask what went wrong.
+  function correctionsDialog(runId, run) {
+    const dlg = h('dialog', { class: 't-dialog t-admit', 'aria-labelledby': 't-corr-title' });
+    const earn = h('select', { class: 'input', id: 't-corr-earn' },
+      [['0.5', 'Half of what they missed'], ['1', 'All of what they missed'], ['0', 'Nothing']].map(([v, t]) => h('option', { value: v, text: t })));
+    const why = h('input', { type: 'checkbox', id: 't-corr-why', checked: true });
+    const msg = h('p', { class: 't-error t-small', role: 'alert' });
+    const ok = h('button', { class: 'btn primary', type: 'button', text: 'Start corrections' });
+    ok.addEventListener('click', async () => {
+      ok.disabled = true;
+      try {
+        const r = await post(`/api/t/runs/${runId}/corrections`, { earnBack: Number(earn.value), why: why.checked });
+        dlg.close();
+        showRun(r.id);
+      } catch (e) { msg.textContent = e.message; ok.disabled = false; }
+    });
+    const x = h('button', { class: 'btn small ghost t-dialog-x', type: 'button', 'aria-label': 'Close', onclick: () => dlg.close() }, icon(ICONS.x, 18));
+    dlg.append(
+      h('header', { class: 't-dialog-head' }, h('h2', { id: 't-corr-title', text: 'Corrections' }), x),
+      h('div', { class: 't-admit-list' },
+        h('label', { class: 'field', for: 't-corr-earn' }, h('span', { class: 'field-label', text: 'A fixed answer earns back' }), earn),
+        h('label', { class: 't-check', for: 't-corr-why' }, why, h('span', { text: 'Ask what went wrong' })),
+        run && run.waiting ? h('p', { class: 't-small', text: `${plural(run.waiting, 'answer')} still ${run.waiting === 1 ? 'needs' : 'need'} grading, so ${run.waiting === 1 ? "it isn't" : "they aren't"} in corrections.` }) : null,
+        msg),
+      h('footer', { class: 't-dialog-foot' }, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => dlg.close() }), ok));
+    dlg.addEventListener('close', () => dlg.remove());
+    root.append(dlg);
+    dlg.showModal();
+    earn.focus();
+  }
+
   // How far along: a bar of what's answered, the count, and where they are right now.
   function progressCell(a) {
     if (!a || a.status === 'waiting') return h('td', { class: 'num', 'data-label': 'Answered' });
@@ -896,6 +928,7 @@
     const sebLinks = h('span', { class: 't-seb-links', hidden: true });
     const failedBox = h('div');
     let lastDetail = '';
+    let lastRun = null; // the run as of the last refresh (for Corrections)
     let waitingIds = [];
     // only the students waiting when the checklist opens: anyone who joins while it's up waits for the next round
     const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => {
@@ -938,6 +971,8 @@
       let data;
       try { data = await api(`/api/t/runs/${runId}/live`); } catch (e) { return; }
       const run = data.run;
+      lastRun = run;
+      corrBtn.hidden = run.practice || !!run.corrections; // an exam's, once
       code.textContent = run.code;
       document.title = `${run.code} · ${run.title} – BrowserQuiz`;
       const count = (f) => data.students.filter((x) => x.attempt && f(x.attempt)).length;
@@ -972,7 +1007,7 @@
         }).catch(() => {});
       }
       title.textContent = run.title;
-      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
+      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.corrections ? `, corrections, earning back ${({ 0: 'nothing', 0.5: 'half', 1: 'all' })[run.corrections.earnBack]}` : run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
       howTo.textContent = run.sebFile ? `Join at ${location.origin}, which opens Safe Exam Browser` : `Join at ${location.origin}`;
       quitPw.hidden = !run.sebQuit || run.status !== 'open';
       if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp', text: run.sebQuit }));
@@ -1019,6 +1054,7 @@
           if (a.pending) score += ' (grading)';
           else if (a.failed) score += ' (grading failed)';
           else if (a.review) score += ' (needs review)';
+          if (a.corrections) score += `, total ${a.corrections.final} / ${a.corrections.max}`; // exam, plus what corrections earned back
         }
         const open = () => { selected = a.id; lastDetail = ''; showDetail(a.id); refresh(); };
         return h('tr', { class: selected === (a && a.id) ? 'sel' : null, onclick: a ? (e) => { if (!e.target.closest('a, button, input') && phone()) open(); } : null },
@@ -1171,7 +1207,8 @@
         pointsRow);
     }
 
-    extra.append(toggle, lockBtn, sebLinks, exportLink, classReport);
+    const corrBtn = h('button', { class: 'btn', type: 'button', text: 'Corrections', hidden: true, onclick: () => correctionsDialog(runId, lastRun) });
+    extra.append(toggle, lockBtn, sebLinks, exportLink, classReport, corrBtn);
     detail.className = 't-detail-host';
     detail.setAttribute('aria-labelledby', 't-detail-name');
     if (openRuns === null) { try { noteRuns((await api('/api/t/overview')).runs); } catch (e) { /* the tab can wait */ } }

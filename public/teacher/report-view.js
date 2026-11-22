@@ -314,9 +314,11 @@
         q.review || st === 'pending' ? h('span', { class: 'r-waiting', text: words }) : null,
         h('span', { class: 'pts', text: pts })),
       sharedEl,
+      q.was ? h('p', { class: 'r-was', text: q.was.fresh ? 'A new question like the one missed' : `On the quiz: ${fmtPts(q.was.points)} / ${fmtPts(q.was.max)}` }) : null, // corrections
       md(q.prompt, quiz.language, img),
       q.image ? h('img', { class: 'r-img', src: o.assetUrl ? o.assetUrl(q.image) : `/api/t/quizzes/${encodeURIComponent(quiz.id)}/asset?path=${encodeURIComponent(q.image)}`, alt: q.imageAlt || '' }) : null,
       body(quiz, q, o),
+      q.why ? h('div', { class: 'r-side' }, h('p', { class: 'r-label', text: 'What went wrong' }), h('p', { class: 'r-essay', text: q.why })) : null,
       q.explanation ? h('div', { class: 'r-explain' }, h('p', { class: 'r-label', text: 'Explanation' }), md(q.explanation, quiz.language, img)) : null);
   }
 

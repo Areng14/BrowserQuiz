@@ -39,6 +39,9 @@ function cleanAnswers(quiz, layout, answers) {
   const out = {};
   if (!answers || typeof answers !== 'object') return out;
   for (const qq of store.quizFor(quiz, layout).questions) { // with pools, only the student's own questions
+    // corrections: what the student says went wrong, beside their answer
+    const why = layout && layout.why ? answers[qq.id + '~why'] : null;
+    if (typeof why === 'string' && why.trim()) out[qq.id + '~why'] = why.slice(0, 2000);
     const v = answers[qq.id];
     if (v == null) continue;
     const n = qq.choices ? qq.choices.length : 0;
@@ -279,6 +282,10 @@ function studentReport(fullQuiz, a, name, opts = {}) {
       };
       // Why the answer is right: teachers' reports, and a student's own practice review once it's turned in
       if (qq.explanation) row.explanation = qq.explanation;
+      // Corrections: how it went on the exam, and what the student says went wrong
+      const fx = a.layout && a.layout.fix ? a.layout.fix[qq.id] : null;
+      if (fx) row.was = { points: fx.old, max: fx.max, fresh: !!fx.fresh };
+      if (a.answers && typeof a.answers[qq.id + '~why'] === 'string') row.why = a.answers[qq.id + '~why'];
       // For the teacher's class report: where it is in the whole quiz, and its pool
       if (!opts.forStudent) { row.qn = at.get(qq.id); if (qq.pool) row.pool = qq.pool; }
       if (qq.type === 'single' || qq.type === 'multi') {

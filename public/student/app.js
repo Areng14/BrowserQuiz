@@ -24,6 +24,7 @@
     essay: { title: 'Written answers', text: 'Your teacher grades these.' },
   };
   const ERRORS = {
+    nothing_to_correct: 'Nothing to correct.',
     bad_code: 'No open quiz with that code.',
     run_closed: 'This quiz is closed.',
     wrong_network: 'This quiz only opens from the school network.',
@@ -443,7 +444,8 @@
       if (!sid.value.trim()) { msg.textContent = 'Type your student ID.'; sid.focus(); return; }
       btn.disabled = true; btn.textContent = 'Checking…'; msg.textContent = '';
       try {
-        await api.attempt({ runId: run.runId, rosterId: picked.id, studentId: sid.value.trim() });
+        const got = await api.attempt({ runId: run.runId, rosterId: picked.id, studentId: sid.value.trim() });
+        if (got && got.run) Object.assign(S.run, got.run); // corrections: what this student has to correct
         S.me = { name: picked.name };
         if (run.practice) screenRules(); else screenWait();
       } catch (ex) {
@@ -546,6 +548,7 @@
   }
 
   function screenPractice(err) {
+    if (S.run.corrections) return screenCorrections(err);
     if (S.run.hasCode) loadMonaco().catch(() => {});
     const btn = h('button', { class: 'btn primary', type: 'button', text: 'Start' });
     const msg = h('p', { class: 'error', role: 'alert', text: err || '' });
@@ -556,6 +559,28 @@
         h('h1', { text: 'Practice' }),
         h('p', { text: summaryLine(S.run) }),
         h('p', { text: 'Your teacher can watch the quiz page live.' })),
+      btn, msg)));
+    btn.focus();
+  }
+
+  // Corrections: the questions they missed on the quiz, their answers filled in. Practice: no lockdown.
+  function screenCorrections(err) {
+    const n = S.run.questionCount || 0;
+    if (!n) {
+      mount(entry(h('div', { class: 'panel', role: 'status' },
+        h('p', { class: 'eyebrow', text: S.run.title }),
+        h('div', { class: 'heading' }, h('h1', { text: 'Nothing to correct' })))));
+      return;
+    }
+    if (S.run.hasCode) loadMonaco().catch(() => {});
+    const btn = h('button', { class: 'btn primary', type: 'button', text: 'Start' });
+    const msg = h('p', { class: 'error', role: 'alert', text: err || '' });
+    btn.addEventListener('click', () => beginQuiz(btn, msg, 'Start'));
+    mount(entry(h('div', { class: 'panel' },
+      h('p', { class: 'eyebrow', text: S.run.title }),
+      h('div', { class: 'heading' },
+        h('h1', { text: 'Corrections' }),
+        h('p', { text: `${plural(n, 'question')} to fix${S.run.points ? ` (${plural(S.run.points, 'point')})` : ''}. Your answers from the quiz are filled in.` })),
       btn, msg)));
     btn.focus();
   }
@@ -743,6 +768,7 @@
   function restoreAnswers(saved) {
     const out = {};
     for (const q of S.quiz.questions) {
+      if (typeof saved[q.id + '~why'] === 'string') out[q.id + '~why'] = saved[q.id + '~why'];
       const v = saved[q.id];
       if (v == null) continue;
       if (q.type === 'code') {
@@ -759,6 +785,7 @@
   function serializeAnswers() {
     const out = {};
     for (const q of S.quiz.questions) {
+      if (S.answers[q.id + '~why'] != null) out[q.id + '~why'] = S.answers[q.id + '~why']; // corrections: what went wrong
       const a = S.answers[q.id];
       if (a == null) continue;
       out[q.id] = q.type === 'code' ? { language: a.language, code: a.code[a.language] } : a;
@@ -934,6 +961,8 @@
     S.el.next.className = 'btn' + (last && !S.dirOpen ? ' primary' : '');
     const views = { code: codeView, output: outputView, trace: traceView, fill: fillView, essay: essayView };
     let view = S.dirOpen ? directionsView(partOf(S.idx)) : (views[q.type] || basicView)(q);
+    // Corrections: a "What went wrong?" box under the answer (in a code question's left column)
+    if (!S.dirOpen && S.quiz.corrections && S.quiz.corrections.why && S.quiz.corrections.fix[q.id]) (view.querySelector('.code-left') || view).append(whyBox(q));
     // Shared material sits beside the question (above it on narrow screens). Code questions put it in
     // their left column themselves.
     if (!S.dirOpen && q.shared && !view.classList.contains('wide')) view = h('div', { class: 'shared-split' }, sharedBlock(q), view);
@@ -1296,7 +1325,9 @@
   }
 
   function prompt(q) {
+    const fix = S.quiz.corrections && S.quiz.corrections.fix[q.id];
     return [
+      fix ? h('p', { class: 'fix-note', text: fix.fresh ? 'A new question like the one you missed' : `On the quiz: ${fix.points} / ${plural(fix.max, 'point')}` }) : null,
       kept('prompt:' + q.id, () => h('div', { class: 'prompt hl-root' }, BQ.md.render(q.prompt, mdOpts()))),
       q.image ? h('img', { class: 'qimg', src: api.assetUrl(q.image), alt: q.imageAlt || '' }) : null,
     ];
@@ -1530,6 +1561,11 @@
     box.addEventListener('focusout', (e) => { if (!box.contains(e.relatedTarget)) armed = false; });
   }
 
+  function whyBox(q) {
+    const id = q.id + '-why';
+    const ta = growArea({ id, rows: 3 }, S.answers[q.id + '~why'], (v) => setAnswer(q.id + '~why', v.trim() ? v : undefined));
+    return h('div', { class: 'why-box' }, h('label', { class: 'sub', for: id, text: 'What went wrong?' }), ta);
+  }
   function growArea(attrs, value, onChange, codeLike) {
     // Phones would capitalize or curl quotes in code-like answers, which changes what gets graded.
     const ta = h('textarea', Object.assign({ class: 'input long-answer' + (codeLike ? ' mono' : ''), spellcheck: codeLike ? 'false' : 'true', autocomplete: 'off' }, codeLike ? { autocapitalize: 'off', autocorrect: 'off' } : {}, attrs));
@@ -2321,6 +2357,7 @@
         h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Start over', onclick: () => location.reload() }))) : null,
       cfg.demo ? h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Start the demo over', onclick: () => BQ.app.restart() })) : null));
     if (S.run && S.run.practice && !cfg.preview) {
+      const retry = !S.run.corrections; // corrections: once, then the answers
       const again = h('button', { class: 'btn', type: 'button', text: 'Try again' });
       again.addEventListener('click', async () => {
         again.disabled = true;
@@ -2335,7 +2372,7 @@
         } catch (e) { again.disabled = false; }
       });
       const see = h('a', { class: 'btn primary', href: '/teacher/report.html?practice=1', target: '_blank', rel: 'noopener', text: 'See answers' });
-      screen.querySelector('.panel').append(h('div', { class: 'row-actions' }, see, again));
+      screen.querySelector('.panel').append(h('div', { class: 'row-actions' }, see, retry ? again : null));
     }
     if (quitSeb) {
       screen.querySelector('.panel').append(h('div', {}, h('a', { class: 'btn primary', href: '/seb-quit.html', text: 'Quit Safe Exam Browser' })));

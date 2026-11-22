@@ -90,6 +90,11 @@ addColumn('teachers', 'rec_wrap', 'TEXT');
 // A teacher's own Anthropic API key for AI grading (aigrade.js), sealed with their quiz key.
 addColumn('teachers', 'ai_key', 'TEXT');
 addColumn('quizzes', 'enc', 'INTEGER NOT NULL DEFAULT 0');
+// Corrections (corrections.js): a practice run for redoing an exam's missed questions. corrects: the exam
+// run; earn_back: the share of lost points a right answer earns back; ask_why: a "What went wrong?" box.
+addColumn('runs', 'corrects', 'TEXT');
+addColumn('runs', 'earn_back', 'REAL NOT NULL DEFAULT 0');
+addColumn('runs', 'ask_why', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('assets', 'enc', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('runs', 'seb_key', 'TEXT'); // Safe Exam Browser Config Key: only SEB with that config can take the quiz
 addColumn('runs', 'seb_config', 'TEXT');

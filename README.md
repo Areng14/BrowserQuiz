@@ -25,6 +25,8 @@ the Monaco editor, with insane question customizability.
   variables renamed and the formatting changed, and shows both side by side.
 - **Question pools.** Each student gets a random few questions from a pool, so a neighbor's screen
   won't help.
+- **Corrections.** After an exam, students redo just what they missed, with their answers filled in,
+  and earn back points. No lockdown, so they can ask around. Explanations show once they turn it in.
 - **Exam lockdown.** Full screen, leaving the window gets flagged quietly, and if that isn't safe
   enough, Safe Exam Browser is an option.
 - **Student tools.** Scratchpad, highlighting, mark for review, cross out choices, dark mode. Bluebook

@@ -225,9 +225,10 @@ function makeLayout(quiz) {
 }
 
 // What one student was given. With question pools their layout picks some of each pool's questions, and
-// the rest aren't theirs to answer, grade or report. Without pools (or before they start): the whole quiz.
+// the rest aren't theirs to answer, grade or report; corrections give them only what they missed.
+// Otherwise (or before they start): the whole quiz.
 function quizFor(quiz, layout) {
-  if (!quiz || !quiz.pools || !layout || !Array.isArray(layout.order)) return quiz;
+  if (!quiz || !layout || !Array.isArray(layout.order) || (!quiz.pools && !layout.subset)) return quiz; // subset: corrections
   const mine = new Set(layout.order);
   return Object.assign({}, quiz, { questions: quiz.questions.filter((qq) => mine.has(qq.id)) });
 }

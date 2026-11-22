@@ -76,6 +76,21 @@ To try the example, zip `examples/ap-csa-unit4` and upload it along with `exampl
 node scripts/check-quiz.mjs examples/ap-csa-unit4 --run
 ```
 
+## Corrections
+
+After an exam, **Corrections** (on its live page, under More on a phone) starts a practice run of its
+own, with its own code. Students join it like any quiz.
+- Each student gets only the questions they lost points on, with their answers from the exam filled in.
+  A missed question from a question pool swaps for one from the pool they haven't seen.
+- Answers still waiting for you (ungraded essays) aren't in it. Grade first if they should be.
+- It's practice: no lockdown, no clock, no flags, so students can ask around.
+- **A fixed answer earns back** half, all, or none of the points it lost, on top of the exam score.
+  The live page shows each student's total, and the CSV adds `exam_score`, `earned_back` and
+  `with_corrections`. An invalidated exam stays at 0. Students don't see their total, so they can't
+  tell.
+- **Ask what went wrong** adds a box under each question. You read the answers in the reports.
+- After turning in, students see the right answers and explanations. Corrections can't be retried.
+
 ## Safe Exam Browser (optional)
 
 [Safe Exam Browser](https://safeexambrowser.org) (SEB) is a free lockdown browser that keeps students

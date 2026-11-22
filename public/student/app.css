@@ -284,6 +284,9 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .mark-btn[aria-pressed="true"] .mark-icon { fill: currentColor; }
 .choice-text code { background: none; padding: 0; font-size: 15px; }
 .text-answer { max-width: 480px; }
+/* Corrections: how the question went on the quiz, and the "What went wrong?" box */
+.fix-note { margin: 0; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.why-box { display: grid; gap: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 
 /* shared material: beside the question on wide screens, above it otherwise */
 .shared { display: grid; gap: 10px; align-content: start; padding: 16px 18px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; }

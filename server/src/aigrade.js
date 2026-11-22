@@ -258,7 +258,7 @@ function jobsFor(quiz, a, G) {
   const res = a.result || {};
   const jobs = [];
   // with question pools, only what this student was given (as store.quizFor)
-  const given = quiz.pools && a.layout && Array.isArray(a.layout.order) ? new Set(a.layout.order) : null;
+  const given = (quiz.pools || (a.layout && a.layout.subset)) && a.layout && Array.isArray(a.layout.order) ? new Set(a.layout.order) : null; // pools, corrections
   for (const qq of quiz.questions) {
     if (given && !given.has(qq.id)) continue;
     const sc = G.questionScore(qq, res, a.answers);
