@@ -15,6 +15,7 @@ const TIMEOUT_MS = 100;
 function stripCode(code, lang) {
   const s = String(code || '');
   const py = lang === 'python';
+  const js = lang === 'javascript' || lang === 'typescript';
   const n = s.length;
   let out = '';
   let i = 0;
@@ -32,15 +33,16 @@ function stripCode(code, lang) {
       i = stop;
       continue;
     }
-    if (c === '"' || c === "'") {
-      // Python: '''...''' and """...""". Java: """ text blocks.
-      const triple = (py || c === '"') && s.startsWith(c + c + c, i);
+    if (c === '"' || c === "'" || (js && c === '`')) {
+      // Python: '''...''' and """...""". Java: """ text blocks. JavaScript: `template strings` (several lines).
+      const triple = (py || (c === '"' && lang === 'java')) && s.startsWith(c + c + c, i);
       const q = triple ? c + c + c : c;
+      const multi = triple || c === '`';
       let j = i + q.length;
       while (j < n) {
         if (s[j] === '\\') { j += 2; continue; }
         if (s.startsWith(q, j)) { j += q.length; break; }
-        if (!triple && s[j] === '\n') break;
+        if (!multi && s[j] === '\n') break;
         j++;
       }
       out += c + c + s.slice(i, Math.min(j, n)).replace(/[^\n]/g, '');

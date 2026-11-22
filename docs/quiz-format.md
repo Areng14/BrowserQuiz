@@ -6,7 +6,7 @@ at the root (or inside one top-level folder) and an optional `assets/` folder of
 
 <!-- not-in-prompt -->
 Check a quiz before uploading. `--run` also runs the reference solutions, which needs
-`python3`, plus a JDK for Java:
+`python3`, plus a JDK for Java and gcc/g++ for C and C++ (JavaScript and TypeScript run on Node):
 
 ```bash
 node scripts/check-quiz.mjs path/to/folder --run
@@ -29,7 +29,7 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `format` | `1` | Format version. Optional |
 | `title` | `"Untitled quiz"` | Shown to students and on reports |
 | `timeLimitMin` | `0` (no limit) | Minutes, up to 600. The quiz turns itself in at 0:00 |
-| `language` | `"java"` | `"java"`, `"python"` or `"none"`: how `inline code` and unlabeled code blocks are highlighted. `"none"` leaves them plain, for quizzes that aren't about code (networking, math); blocks labeled ```` ```java ```` still get colors. Output, trace and fill questions then default to Java |
+| `language` | `"java"` | `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"` or `"none"`: how `inline code` and unlabeled code blocks are highlighted. `"none"` leaves them plain, for quizzes that aren't about code (networking, math); blocks labeled ```` ```java ```` still get colors. Output, trace and fill questions then default to Java |
 | `shuffleQuestions` | `true` | Shuffle order per student, within each part (see below) |
 | `shuffleChoices` | `true` | Shuffle multiple choice options per student |
 | `integrity.graceStrikes` | `1` | Times a student can leave the window before the attempt is invalidated (0–10). The default lets one slip go; 0 invalidates on the first. |
@@ -152,7 +152,9 @@ block, a table or a list.
 
 - `code`: the snippet students read.
   - Java: statements, or a full class with `main`.
-  - Python: a script.
+  - C and C++: statements, or a full program with `main`. The usual headers are included (C++
+    also gets `using namespace std`).
+  - Python, JavaScript, TypeScript: a script.
 - `language`: defaults to the quiz's `language`.
 - `answer` is optional. On upload the code is run and its output becomes the answer. If you
   write an `answer` yourself, it has to match what the code prints.
@@ -203,7 +205,7 @@ block, a table or a list.
 ```
 
 - The teacher grades it, with the rubric checkboxes or by typing points.
-- `"language": "java"` (or `"python"`) gives students a code box instead of a text box. Use it
+- `"language": "java"` (or any code language) gives students a code box instead of a text box. Use it
   for AP-style free response graded by rubric.
 
 ## code
@@ -213,35 +215,35 @@ Grading uses the hidden tests, which students never see.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `languages` | `["java"]` | `["java"]`, `["python"]` or both (the student picks) |
+| `languages` | `["java"]` | Any of `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"` (the student picks). See [Languages](#languages) |
 | `mode` | `"method"` | `"method"`: write one method. `"class"`: write a whole class |
 | `signature` | — | Method mode: `{ "name", "params": [{ "name", "type" }], "returns" }` |
 | `class` | — | Class mode: `{ "name", "constructor": [params], "methods": [{ "name", "params", "returns" }] }` |
 | `tests` | — | `{ "sample": [...], "hidden": [...] }`: up to 10 sample, 1 to 100 hidden |
 | `reference` | none | `{ "java": "...", "python": "..." }` correct solutions. Strongly recommended |
 | `rubric` | none | `[{ "id", "text", "points", "require", "forbid" }]` points for things tests can't see. See [Rubric checks](#rubric-checks) |
-| `ban` | none | Methods students may not use: `["Arrays.sort", "Collections.sort", "stream"]`, or `{ "java": [...], "python": [...] }`. Code that uses one scores 0 on the question. See [Banned methods](#banned-methods) |
+| `ban` | none | Methods students may not use: `["Arrays.sort", "Collections.sort", "stream"]`, or `{ "java": [...], "python": [...] }`. Code that uses one scores 0 on the question. Java and Python only. See [Banned methods](#banned-methods) |
 | `noRun` | `false` | `true`: written without running, like on paper. No **Run examples**; grading still runs the tests |
 | `compare` | `"ordered"` | `"unordered"`: array/list results can come back in any order |
 | `starter` | `"stubs"` | `"stubs"` (generated signatures), `"empty"` (class mode: bare class), or `{ "java": "...", "python": "..." }` |
 | `types` | none | Classes for parameters and results: `{ "Point": { "x": "int", "y": "int" } }`. See [Classes](#classes) |
-| `support` | none | `{ "java": "...", "python": "..." }` extra code compiled with the student's (helper classes) |
+| `support` | none | `{ "java": "...", "python": "..." }` extra code compiled with the student's (helper classes). In JavaScript and TypeScript it runs first as a script, so its functions and classes are globals |
 | `limits` | 2000 ms, 256 MB | `{ "timeMs": 200–5000, "memoryMb": 64–512 }` per test |
 
 ### Types
 
 Every parameter and return value uses one of these:
 
-| Type | Java | Python | JSON value |
-| --- | --- | --- | --- |
-| `int`, `long` | `int`, `long` | `int` | `3` |
-| `double` | `double` | `float` | `2.5` |
-| `boolean` | `boolean` | `bool` | `true` |
-| `string` | `String` | `str` | `"hi"` |
-| `char` | `char` | `str` (one letter) | `"a"` |
-| any of those with `[]` or `[][]`, like `char[]`, `string[][]` | arrays | `list[...]` | `[1, 2]`, `[[1], [2, 3]]` |
-| `list<int>`, `list<string>`, `list<double>`, ... (any of the first six) | `ArrayList<Integer>`, ... | `list[...]` | `[1, 2]` |
-| `map<string, V>`, `map<int, V>` | `HashMap<String, V>`, ... | `dict[str, V]`, ... | `{"a": 1}`, `{"3": "c"}` |
+| Type | Java | Python | JavaScript, TypeScript | C++ | C | JSON value |
+| --- | --- | --- | --- | --- | --- | --- |
+| `int`, `long` | `int`, `long` | `int` | `number` | `int`, `long long` | `int`, `long long` | `3` |
+| `double` | `double` | `float` | `number` | `double` | `double` | `2.5` |
+| `boolean` | `boolean` | `bool` | `boolean` | `bool` | `bool` | `true` |
+| `string` | `String` | `str` | `string` | `string` | `char*` | `"hi"` |
+| `char` | `char` | `str` (one letter) | `string` (one letter) | `char` | `char` | `"a"` |
+| any of those with `[]` or `[][]`, like `char[]`, `string[][]` | arrays | `list[...]` | arrays | `vector<...>` | `int* nums, int numsSize` (see below) | `[1, 2]`, `[[1], [2, 3]]` |
+| `list<int>`, `list<string>`, `list<double>`, ... (any of the first six) | `ArrayList<Integer>`, ... | `list[...]` | arrays | `vector<...>` | like an array | `[1, 2]` |
+| `map<string, V>`, `map<int, V>` | `HashMap<String, V>`, ... | `dict[str, V]`, ... | `Map<string, V>`, ... | `unordered_map<string, V>`, ... | none | `{"a": 1}`, `{"3": "c"}` |
 
 A map's values (`V`) can be any of the first six types, `list<int>` or `list<string>`. Map keys
 are strings in JSON, so an `int` key is written `"3"`. Maps match when they have the same keys
@@ -249,16 +251,17 @@ and values, in any order. Doubles match within a relative 1e-6. For your own cla
 parameters and results (a `Point`, a linked list's `Node`), see [Classes](#classes) below.
 
 Class methods can also return `void`. A class can have overloads (two methods with one name and
-different parameters) when the question is Java only, since Python has no overloading. A test
-step calls the first one listed whose parameters fit its arguments. Names can't be keywords in
-either language.
+different parameters) when its languages are only Java and C++, since the others have no
+overloading. A test step calls the first one listed whose parameters fit its arguments. Names
+can't be keywords in any of the question's languages.
 
 In the quiz maker, write map values like Python: `{"a": 1}` or `{3: "c"}`.
 
 ### Classes
 
-`"types"` declares classes the question uses, field by field. BrowserQuiz writes them in Java and
-Python, and students see them above the examples as given code: theirs to use, not to write.
+`"types"` declares classes the question uses, field by field. BrowserQuiz writes them in each of
+the question's languages, and students see them above the examples as given code: theirs to use,
+not to write.
 
 ```json
 "types": {
@@ -273,24 +276,59 @@ Python, and students see them above the examples as given code: theirs to use, n
 - Fields can be any type, other declared classes and the class itself included.
 - **Java** gets public fields (`p.x`), a constructor taking every field in order, one taking
   none, getters (`getX()`, `isActive()` for a boolean) and `toString`. **Python** gets the same
-  fields, each with a default, so `Node(3)` works.
+  fields, each with a default, so `Node(3)` works. **JavaScript and TypeScript** get a class whose
+  constructor takes every field, each with a default. **C++** gets a struct with a constructor
+  taking every field and one taking none; an object is a pointer (`Node*`, `nullptr` for none).
+  **C** gets a `typedef struct`, objects are pointers (`Node*`, `NULL`), and its fields can only be
+  numbers, booleans, chars, strings and other classes.
 - In tests, an object is a JSON object of its fields: `{ "x": 1, "y": 2 }`. Fields holding objects,
   arrays, lists or strings can be left out, and are then `null`:
   `{ "val": 1, "next": { "val": 2 } }` is the list 1, 2.
 - Results compare field by field. A subclass with extra fields still matches.
 - In the quiz maker, write classes one per line, like `Node(val: int, next: Node)`, and objects in
   tests like `Point(1, 2)` or `Node(1, Node(2))`.
-- Names can't clash with Java's or Python's own classes (`String`, `List`, ...), the question's
-  class, or each other. At most 10 classes of 20 fields.
+- Names can't clash with Java's or Python's own classes (`String`, `List`, ...), JavaScript's
+  (`Map`, `Date`, ...) when it's one of the languages, the question's class, or each other. At
+  most 10 classes of 20 fields.
 
 ### What students write
 
 - **Method mode, Java:** `class Solution { public <returns> <name>(<params>) { ... } }`
 - **Method mode, Python:** `class Solution:` with `def <name>(self, <params>):`
+- **Method mode, JavaScript and TypeScript:** a function, `function <name>(<params>) { ... }`
+  (JavaScript's starter has a JSDoc comment with the types).
+- **Method mode, C++:** `class Solution { public: <returns> <name>(<params>) { ... } };` with
+  vectors and maps by reference (`vector<int>& nums`), like LeetCode.
+- **Method mode, C:** a function. An array parameter comes with its length after it
+  (`int* nums, int numsSize`), and a 2D one with its rows' lengths too (`int** grid, int gridSize,
+  int* gridColSize`). A function that returns an array also takes `int* returnSize` and sets it
+  (and `int** returnColumnSizes` for 2D). Arguments are on the heap, so code can change or free
+  them. Returning `NULL` with `*returnSize` 0 counts as an empty array.
 - **Class mode:** a class named `class.name` with that constructor and those methods. In
-  Python the constructor is `__init__`.
+  Python the constructor is `__init__`. Not in C.
 
 Java gets `java.util.*`, `java.util.function.*` and `java.util.stream.*` imported automatically.
+C++ gets the usual standard headers and `using namespace std`; C gets `stdio.h`, `stdlib.h`,
+`string.h`, `stdbool.h`, `math.h`, `limits.h`, `ctype.h` and `stdint.h`.
+
+### Languages
+
+Java and Python can do everything here. The others:
+
+- **JavaScript** runs on Node 22. **TypeScript** too, with its types taken out first: it runs,
+  but type errors aren't reported (there's no `tsc`).
+- **C++** (g++, C++17) and **C** (gcc, C17) compile with `-O2`. Each test runs in its own
+  process, so a crash fails only that test, with a plain message (segmentation fault, abort,
+  division by zero). In C++ an index out of range on a `vector` stops the program instead of
+  reading garbage.
+- Bans only work in Java and Python. With other languages in the question, write the ban per
+  language (`{ "java": [...] }`).
+- Speed tests don't run in C or C++ (an optimizing compiler times badly).
+- C has no maps, no class questions, and keeps 2D arrays to numbers, booleans and chars.
+- In C and C++ a `char` is one byte, so test values have to be plain ASCII. C++ has no `null`
+  string, vector or map, so tests can't use one (or leave out such a field of an object).
+
+The upload check says which of these a question runs into.
 
 ### Tests
 

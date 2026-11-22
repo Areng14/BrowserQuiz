@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """BrowserQuiz code runner.
 
-Compiles and runs student Java/Python inside "jail-lite", a sandbox built only from unprivileged
+Compiles and runs student Java, Python, JavaScript, TypeScript, C and C++ inside "jail-lite", a sandbox built only from unprivileged
 kernel features (it works on hosts like Railway that don't allow privileged containers):
 
   * a separate uid per worker slot; everything that uid owns is killed after every job
   * rlimits: CPU, address space, processes, file size, open files, no core dumps
-  * Landlock: read-only access to the runtimes, read-write to the job dir only, all TCP denied,
+  * Landlock: read-only access to the runtimes, read-write to the job dir only (and running a program from
+    it only for a compiled C/C++ job's own binary), all TCP denied,
     signals and abstract unix sockets scoped to the job (ABI 6+)
   * seccomp: x32 syscalls kill the process; sockets, io_uring, SysV IPC, ptrace, bpf, keyctl,
     namespaces and friends are denied
@@ -133,19 +134,26 @@ def fs_handled():
     return m
 
 
-def build_rules(job):
-    java = os.path.realpath(shutil.which("java") or "")
-    javac = os.path.realpath(shutil.which("javac") or "")
-    python = os.path.realpath(shutil.which("python3") or "")
+def _real(name):
+    p = shutil.which(name)
+    return os.path.realpath(p) if p else ""
+
+
+def build_rules(job, run_here=False):
+    java, javac, python = _real("java"), _real("javac"), _real("python3")
     java_home = os.path.dirname(os.path.dirname(java)) if java else ""
-    read_dirs = ["/usr", "/lib", "/lib64", "/etc/alternatives", "/etc/ssl", java_home, "/proc/self", "/sys/devices/system/cpu"]
+    # (the job's own /proc/self is added in the child, where it names the job and not this process)
+    read_dirs = ["/usr", "/lib", "/lib64", "/etc/alternatives", "/etc/ssl", java_home, "/sys/devices/system/cpu", "/opt/bq"]
     read_dirs += [os.path.join("/etc", n) for n in os.listdir("/etc") if n.startswith("java")]
     read_files = ["/etc/ld.so.cache", "/etc/localtime", "/etc/timezone", "/proc/meminfo", "/proc/cpuinfo", "/proc/stat",
                   "/dev/urandom", "/dev/random", "/dev/zero"]
-    exec_dirs = ["/lib", "/lib64", "/usr/lib", "/usr/lib64"]  # the dynamic loader and shared libraries
-    exec_files = [p for p in (java, javac, python) if p]
+    # the dynamic loader and shared libraries, and gcc's own programs (cc1, collect2)
+    exec_dirs = ["/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/libexec/gcc"]
+    tools = [java, javac, python] + [_real(n) for n in ("node", "gcc", "g++", "as", "ld")]
+    exec_files = sorted(set(p for p in tools if p))
+    # Files in the job dir can only be run as programs by a C or C++ job's run step (its compiled main).
     return dict(read_dirs=read_dirs, read_files=read_files, exec_dirs=exec_dirs, exec_files=exec_files,
-                rw_dirs=[job], rw_files=["/dev/null"])
+                rw_dirs=[job], rw_files=["/dev/null"], run_here=run_here)
 
 
 def prepare_landlock(rules):
@@ -186,7 +194,7 @@ def prepare_landlock(rules):
         for f in rules["exec_files"]:
             add(f, FS_EXECUTE | FS_READ_FILE)
         for d in rules["rw_dirs"]:
-            add(d, handled)
+            add(d, handled if rules.get("run_here") else handled & ~FS_EXECUTE)
         for f in rules["rw_files"]:
             add(f, FS_READ_FILE | FS_WRITE_FILE)
     except Exception:
@@ -196,12 +204,12 @@ def prepare_landlock(rules):
 
 
 # ---------------------------------------------------------------- running
-def make_preexec(uid, ruleset_fd, cpu_s, mem_mb, nproc):
+def make_preexec(uid, ruleset_fd, cpu_s, mem_mb, nproc, fsize):
     def pre():
         os.setsid()
         resource.setrlimit(resource.RLIMIT_CPU, (cpu_s, cpu_s + 1))
         resource.setrlimit(resource.RLIMIT_AS, (mem_mb << 20, mem_mb << 20))
-        resource.setrlimit(resource.RLIMIT_FSIZE, (FILE_CAP, FILE_CAP))
+        resource.setrlimit(resource.RLIMIT_FSIZE, (fsize, fsize))
         resource.setrlimit(resource.RLIMIT_NOFILE, (128, 128))
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
         resource.setrlimit(resource.RLIMIT_MEMLOCK, (0, 0))
@@ -211,6 +219,13 @@ def make_preexec(uid, ruleset_fd, cpu_s, mem_mb, nproc):
         resource.setrlimit(resource.RLIMIT_NPROC, (nproc, nproc))  # counted per uid, so this is the slot's cap
         if libc.prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0:
             raise OSError(ctypes.get_errno(), "no_new_privs")
+        # Its own /proc/self (the path, opened here, is this process: a rule made in the parent would be the runner's).
+        pfd = os.open("/proc/self", os.O_PATH | os.O_CLOEXEC)
+        rule = ctypes.create_string_buffer(struct.pack("=Qi", (FS_READ_FILE | FS_READ_DIR) & fs_handled(), pfd))
+        added = libc.syscall(NR["landlock_add_rule"], ctypes.c_int(ruleset_fd), ctypes.c_int(1), rule, ctypes.c_uint32(0))
+        os.close(pfd)
+        if added < 0:
+            raise OSError(ctypes.get_errno(), "landlock_add_rule /proc/self")
         if libc.syscall(NR["landlock_restrict_self"], ctypes.c_int(ruleset_fd), ctypes.c_uint32(0)) < 0:
             raise OSError(ctypes.get_errno(), "landlock_restrict_self")
         apply_seccomp()
@@ -231,18 +246,47 @@ def kill_uid(uid):
             os._exit(0)
         os.waitpid(pid, 0)
         time.sleep(0.02)
+    reap_uid(uid)
 
 
-def run_step(argv, uid, job, cpu_s, wall_s, mem_mb, nproc, env):
+def reap_uid(uid):
+    """Collect the slot's orphans. A job's processes whose parent died come to this process (PID 1 in the
+    container), and as zombies they'd count against the slot's process limit for good. Only this slot's
+    thread uses its uid, and its own child was already waited for, so any child left with that uid is one."""
+    me = os.getpid()
+    for _ in range(50):
+        left = 0
+        for name in os.listdir("/proc"):
+            if not name.isdigit():
+                continue
+            try:
+                with open(f"/proc/{name}/status") as f:
+                    st = f.read()
+            except OSError:
+                continue
+            fields = dict(line.split(":", 1) for line in st.splitlines() if ":" in line)
+            if fields.get("PPid", "").strip() != str(me) or fields.get("Uid", "").split()[:1] != [str(uid)]:
+                continue
+            try:
+                if os.waitpid(int(name), os.WNOHANG)[0] == 0:
+                    left += 1
+            except ChildProcessError:
+                pass
+        if not left:
+            return
+        time.sleep(0.02)
+
+
+def run_step(argv, uid, job, cpu_s, wall_s, mem_mb, nproc, env, fsize=FILE_CAP, run_here=False):
     out = tempfile.TemporaryFile(dir=JOBS)
     err = tempfile.TemporaryFile(dir=JOBS)
-    ruleset = prepare_landlock(build_rules(job))
+    ruleset = prepare_landlock(build_rules(job, run_here))
     t0 = time.time()
     status = "ok"
     try:
         try:
             p = subprocess.Popen(argv, cwd=job, stdin=subprocess.DEVNULL, stdout=out, stderr=err, env=env, close_fds=True,
-                                 preexec_fn=make_preexec(uid, ruleset, cpu_s, mem_mb, nproc))
+                                 preexec_fn=make_preexec(uid, ruleset, cpu_s, mem_mb, nproc, fsize))
         finally:
             os.close(ruleset)
         try:
@@ -268,14 +312,35 @@ JAVA_RUN_FLAGS = ["-XX:ActiveProcessorCount=1", "-XX:+UseSerialGC", "-XX:TieredS
                   "-XX:MaxMetaspaceSize=128m", "-XX:CompressedClassSpaceSize=64m", "-Xss8m", "-Xshare:auto"]
 
 
+# Node: V8 needs ~700 MB of address space before any code runs, and WebAssembly's usual 10 GB reservation
+# won't fit under RLIMIT_AS, so it's switched to bounds checks (TypeScript's type stripping is WebAssembly).
+NODE_FLAGS = ["--disable-wasm-trap-handler", "--experimental-transform-types", "--no-warnings", "--stack-size=4000"]
+CC_FLAGS = {
+    "c": ["-std=gnu17", "-O2", "-pipe", "-w", "-fmax-errors=20", "-fdiagnostics-color=never"],
+    # -D_GLIBCXX_ASSERTIONS: an index out of range on a vector stops the program instead of reading garbage.
+    # These flags must match the ones bqpre.hpp.gch was built with (Dockerfile).
+    "cpp": ["-std=gnu++17", "-O2", "-pipe", "-w", "-fmax-errors=20", "-fdiagnostics-color=never", "-D_GLIBCXX_ASSERTIONS", "-I/opt/bq/cpp"],
+}
+LANGS = ("java", "python", "javascript", "typescript", "c", "cpp")
+
+
 def run_job(slot, req):
     uid = UID_BASE + slot
     lang = req.get("language")
     files = req.get("files") or {}
     time_ms = max(200, min(10000, int(req.get("timeMs") or 2000)))
     mem_mb = max(64, min(512, int(req.get("memoryMb") or 256)))
-    if lang not in ("java", "python") or not isinstance(files, dict) or not files or len(files) > 20:
+    if lang not in LANGS or not isinstance(files, dict) or not files or len(files) > 20:
         return {"status": "error", "message": "bad job"}
+    sources = req.get("sources")
+    include = req.get("include")
+    if lang in ("c", "cpp"):
+        if sources is None:
+            sources = sorted(n for n in files if n.endswith(".cpp" if lang == "cpp" else ".c"))
+        if not isinstance(sources, list) or not sources or not all(isinstance(n, str) and n in files for n in sources):
+            return {"status": "error", "message": "bad job"}
+        if include not in (None, "bqpre.h", "bqpre.hpp"):
+            return {"status": "error", "message": "bad job"}
     total = 0
     for name, body in files.items():
         if not isinstance(name, str) or not isinstance(body, str) or not name or len(name) > 64 \
@@ -309,6 +374,18 @@ def run_job(slot, req):
                         "exitCode": code, "ms": ms}
             argv = [shutil.which("java"), f"-Xmx{mem_mb}m"] + JAVA_RUN_FLAGS + ["-cp", ".", req.get("main") or "BQMain"]
             st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1536, 256, env)
+        elif lang in ("c", "cpp"):
+            cc = shutil.which("g++" if lang == "cpp" else "gcc")
+            argv = [cc] + CC_FLAGS[lang] + (["-include", include] if include else []) + ["-o", "main"] + sources + (["-lm"] if lang == "c" else [])
+            st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 2048, 64, env, fsize=32 << 20)
+            kill_uid(uid)
+            if st != "ok" or code != 0:
+                return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
+                        "exitCode": code, "ms": ms}
+            st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s, mem_mb + 64, 64, env, run_here=True)
+        elif lang in ("javascript", "typescript"):
+            argv = [shutil.which("node"), f"--max-old-space-size={mem_mb}"] + NODE_FLAGS + [req.get("main") or "main.cjs"]
+            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1024, 64, env)
         else:
             argv = [shutil.which("python3"), "-E", "-s", "-B", "-X", "utf8", req.get("main") or "main.py"]
             st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 128, 64, env)
@@ -401,6 +478,30 @@ def self_test():
     return problems
 
 
+def language_test():
+    """The other languages, run once at start. A problem here is reported, not fatal: Java and Python still work."""
+    notes = []
+    probes = [
+        ("javascript", {"main.js": "console.log('ok' + (1 + 1))"}, "main.js", None),
+        ("typescript", {"main.ts": "const n: number = 2;\nconsole.log('ok' + n)"}, "main.ts", None),
+        ("c", {"main.c": "#include <stdio.h>\nint main(void) { printf(\"ok%d\\n\", 1 + 1); return 0; }"}, "main", ["main.c"]),
+        ("cpp", {"main.cpp": "int main() { vector<int> v{1, 1}; cout << \"ok\" << v[0] + v[1] << endl; }"}, "main", ["main.cpp"]),
+    ]
+    for lang, files, main, sources in probes:
+        if not shutil.which({"javascript": "node", "typescript": "node", "c": "gcc", "cpp": "g++"}[lang]):
+            notes.append(f"{lang}: not installed")
+            continue
+        req = {"language": lang, "files": files, "main": main, "timeMs": 3000}
+        if sources:
+            req["sources"] = sources
+        if lang == "cpp":
+            req["include"] = "bqpre.hpp"
+        res = run_job(0, req)
+        if "ok2" not in res.get("stdout", ""):
+            notes.append(f"{lang}: self-test failed: {json.dumps(res)[:400]}")
+    return notes
+
+
 if __name__ == "__main__":
     os.makedirs(JOBS, exist_ok=True)
     os.chmod(JOBS, 0o711)
@@ -417,6 +518,8 @@ if __name__ == "__main__":
             while True:
                 signal.pause()
         sys.exit(1)
+    for note in language_test():
+        print("runner: warning:", note, flush=True)
     extras = [f"landlock ABI {ABI}", "network blocked by seccomp" + (" and landlock" if ABI >= 4 else "")]
     if ABI >= 6:
         extras.append("signal scoping on")

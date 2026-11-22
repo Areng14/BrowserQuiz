@@ -1,13 +1,18 @@
-# BrowserQuiz code runner: Java 21 + Python 3 inside the jail-lite sandbox.
-# It runs as root inside the container only so it can drop each job to its own uid.
+# BrowserQuiz code runner: Java 21, Python 3, Node 22 (JavaScript and TypeScript), gcc and g++ (C and C++),
+# inside the jail-lite sandbox. It runs as root inside the container only so it can drop each job to its own uid.
+FROM node:22-bookworm-slim AS node
 FROM eclipse-temurin:21-jdk
 # Only behind a TLS-intercepting proxy: its CA certificate (public), as in server/Dockerfile.
 #   docker build --build-arg EXTRA_CA="$(cat /path/to/ca.crt)" -t browserquiz-runner runner
 ARG EXTRA_CA=""
 RUN if [ -n "$EXTRA_CA" ]; then printf '%s\n' "$EXTRA_CA" > /tmp/extra-ca.crt; echo 'Acquire::https::CaInfo "/tmp/extra-ca.crt";' > /etc/apt/apt.conf.d/99ca; fi; \
     apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 gcc g++ libc6-dev \
  && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99ca /tmp/extra-ca.crt
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+# The C++ prelude, precompiled with the same flags runner.py compiles with, so a compile is fast.
+COPY bqpre.hpp /opt/bq/cpp/bqpre.hpp
+RUN g++ -std=gnu++17 -O2 -D_GLIBCXX_ASSERTIONS -w -x c++-header /opt/bq/cpp/bqpre.hpp -o /opt/bq/cpp/bqpre.hpp.gch
 COPY runner.py /runner/runner.py
 ENV JOBS_DIR=/jobs PORT=8080 PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8080

@@ -14,6 +14,7 @@
 // Plain fetch to each API: the server has no runtime dependencies (see AGENTS.md).
 
 const crypto = require('node:crypto');
+const T = require('../../public/teacher/types.js');
 
 const baseUrl = (env, def) => (process.env[env] || def).replace(/\/$/, '');
 const API = baseUrl('ANTHROPIC_BASE_URL', 'https://api.anthropic.com') + '/v1/messages';
@@ -102,7 +103,7 @@ function schemaFor(items) {
 function promptFor(qq, job) {
   const L = [`Question (worth ${qq.points} point${qq.points === 1 ? '' : 's'}):`, '<question>', qq.prompt, '</question>'];
   if (job.code) {
-    L.push('', `This is a code question, answered in ${job.language === 'python' ? 'Python' : 'Java'}.`);
+    L.push('', `This is a code question, answered in ${T.LANG_NAMES[job.language] || job.language}.`);
     if (job.tests) L.push(`Its tests are graded separately (it passed ${job.tests.passed} of ${job.tests.total}). Grade only the rubric.`);
   }
   if (job.reference) L.push('', `The teacher's reference solution:`, '<reference>', job.reference, '</reference>');

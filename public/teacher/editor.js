@@ -13,7 +13,7 @@
   const BLANK = /_{3,}/g;
   const countBlanks = (code) => (String(code || '').match(BLANK) || []).length;
   const BT = window.BQTypes; // value types, shared with the server (types.js)
-  const LANGS = { java: 'Java', python: 'Python' };
+  const LANGS = BT.LANG_NAMES;
 
   // ---------- text formats ----------
   const fmt = (v) => JSON.stringify(v);
@@ -338,28 +338,8 @@
     });
   }
 
-  // ---------- what students start with (the server builds the same) ----------
-  const PY_TYPE = new Proxy({}, { get: (_, t) => BT.pyType(t) });
-  function starterCode(shape, lang, emptyClass) {
-    const jt = (t) => BT.javaType(t);
-    const jp = (ps) => ps.map((p) => `${jt(p.type)} ${p.name}`).join(', ');
-    const pp = (ps) => ps.map((p) => `, ${p.name}: ${PY_TYPE[p.type]}`).join('');
-    if (shape.signature) {
-      const s = shape.signature;
-      if (lang === 'java') return `class Solution {\n    public ${jt(s.returns)} ${s.name}(${jp(s.params)}) {\n        \n    }\n}\n`;
-      return `class Solution:\n    def ${s.name}(self${pp(s.params)}) -> ${PY_TYPE[s.returns]}:\n        pass\n`;
-    }
-    const C = shape.class;
-    if (emptyClass) return lang === 'java' ? `public class ${C.name} {\n    \n}\n` : `class ${C.name}:\n    pass\n`;
-    if (lang === 'java') {
-      const body = [`    public ${C.name}(${jp(C.constructor)}) {\n    }`]
-        .concat(C.methods.map((m) => `    public ${jt(m.returns)} ${m.name}(${jp(m.params)}) {\n    }`));
-      return `public class ${C.name} {\n${body.join('\n\n')}\n}\n`;
-    }
-    const body = [`    def __init__(self${pp(C.constructor)}):\n        pass`]
-      .concat(C.methods.map((m) => `    def ${m.name}(self${pp(m.params)}) -> ${PY_TYPE[m.returns]}:\n        pass`));
-    return `class ${C.name}:\n${body.join('\n\n')}\n`;
-  }
+  // ---------- what students start with (types.js, as the server) ----------
+  const starterCode = (shape, lang, emptyClass) => BT.starter(shape, lang, emptyClass);
 
   // ---------- questions ----------
   function blank(type, keep) {
@@ -452,15 +432,15 @@
         if (!/^[A-Z]\w*$/.test(name)) throw new Error('Class name: one word that starts with a capital letter');
         let ctor;
         try { ctor = parseSig(u.ctor.trim() ? u.ctor : '()').params; } catch (e) { throw new Error(`Constructor: ${e.message.replace('countVowels(s: string): int', '(owner: string, balance: double)')}`); }
-        // Two methods can share a name (overloads) when the question is Java only.
+        // Two methods can share a name (overloads) only in Java and C++.
         const seen = new Set();
-        const javaOnly = q.languages.length === 1 && q.languages[0] === 'java';
+        const noOverloads = q.languages.filter((l) => l === 'python' || BT.isJs(l));
         const methods = u.methods.split('\n').filter((l) => l.trim()).map((l, i) => {
           let m;
           try { m = fullSig(l, true); } catch (e) { throw new Error(`Methods, line ${i + 1}: ${e.message}`); }
           const key = `${m.name}(${m.params.map((x) => x.type).join(',')})`;
           if (seen.has(key)) throw new Error(`Methods: ${key} is listed twice`);
-          if ([...seen].some((k) => k.startsWith(m.name + '(')) && !javaOnly) throw new Error(`Methods: two methods are named ${m.name}. That only works when the question is Java only`);
+          if ([...seen].some((k) => k.startsWith(m.name + '(')) && noOverloads.length) throw new Error(`Methods: two methods are named ${m.name}. ${noOverloads.map((l) => LANGS[l]).join(' and ')} can't have that`);
           seen.add(key);
           return m;
         });
@@ -1066,8 +1046,8 @@
     // On code questions (langs given) an item can grade itself: a regex the code must have, or must not
     // have, one per language. Comments and strings don't count. Otherwise the teacher ticks it.
     const PATTERN_HINT = {
-      require: { java: 'private\\s+\\w+\\s+\\w+\\s*;', python: 'self\\._\\w+\\s*=' },
-      forbid: { java: 'Arrays\\.sort', python: 'sorted\\(' },
+      require: { java: 'private\\s+\\w+\\s+\\w+\\s*;', python: 'self\\._\\w+\\s*=', javascript: '\\bconst\\b', typescript: ':\\s*number\\b', c: '\\bfree\\(', cpp: 'private:' },
+      forbid: { java: 'Arrays\\.sort', python: 'sorted\\(', javascript: '\\.sort\\(', typescript: '\\.sort\\(', c: 'qsort\\(', cpp: '\\bsort\\(' },
     };
     function rubricEditor(q, placeholder, langs) {
       q.rubric = q.rubric || [];
@@ -1123,11 +1103,15 @@
         codeAttrs(2, { 'data-out': '', placeholder: 'Leave empty. Saving runs the code and fills this in' }));
       // An output the server worked out goes stale when the code changes; one typed here stays, as a check.
       const stale = () => { if (q.answer != null && q.answer === u.auto) { delete q.answer; out.value = ''; grow(out); } };
-      const code = area(q, q.code, (v) => { q.code = v; stale(); }, codeAttrs(5, { id: 'qe-code', placeholder: (q.language || quiz.language) === 'python' ? 'x = 7\nprint(x // 2)' : 'int x = 7;\nSystem.out.println(x / 2);' }));
+      const code = area(q, q.code, (v) => { q.code = v; stale(); }, codeAttrs(5, { id: 'qe-code', placeholder: OUTPUT_HINT[q.language || quiz.language] || OUTPUT_HINT.java }));
       codeKeys(code);
       return [h('div', { class: 'field' }, codeHead(q, 'Code', stale), code), field('Output', out)];
     }
 
+    const OUTPUT_HINT = {
+      java: 'int x = 7;\nSystem.out.println(x / 2);', python: 'x = 7\nprint(x // 2)', javascript: 'const x = 7;\nconsole.log(Math.floor(x / 2));',
+      typescript: 'const x: number = 7;\nconsole.log(Math.floor(x / 2));', c: 'int x = 7;\nprintf("%d\\n", x / 2);', cpp: 'int x = 7;\ncout << x / 2 << endl;',
+    };
     function traceEditor(q) {
       const u = q._ui;
       const code = area(q, q.code, (v) => { q.code = v; }, codeAttrs(4, { id: 'qe-code' }));
@@ -1343,7 +1327,7 @@
       if (q.type === 'trace') add(traceEditor(q));
       if (q.type === 'fill') { fillParts = fillEditor(q); add(fillParts.nodes); fillParts.after(); }
       if (q.type === 'essay') {
-        const kind = h('select', { class: 'input qe-narrow' }, [['', 'Text'], ['java', 'Java code'], ['python', 'Python code']].map(([v, t]) => h('option', { value: v, text: t, selected: (q.language || '') === v })));
+        const kind = h('select', { class: 'input qe-narrow' }, [['', 'Text'], ...Object.entries(LANGS).map(([l, n]) => [l, `${n} code`])].map(([v, t]) => h('option', { value: v, text: t, selected: (q.language || '') === v })));
         kind.addEventListener('change', () => { if (kind.value) q.language = kind.value; else delete q.language; touch(q); });
         add([h('div', { class: 'qe-line' }, field('Students write', kind)), rubricEditor(q, 'Says == compares references').node]);
       }

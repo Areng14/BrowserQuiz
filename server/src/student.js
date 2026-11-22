@@ -455,7 +455,7 @@ module.exports = function studentRoutes(r) {
     if (qq && qq.type === 'fill') body.code = Array.isArray(body.blanks) ? fillTemplate(qq.code, body.blanks.map((b) => String(b || '').slice(0, 500))) : null;
     if (!qq || !qq.languages.includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
     if (qq.noRun) throw new HttpError(403, 'run_off'); // this question is written without running
-    store.logEvent(a, 'run', 'info', `${qq.id} (${body.language === 'python' ? 'Python' : 'Java'})`);
+    store.logEvent(a, 'run', 'info', `${qq.id} (${T.LANG_NAMES[body.language] || body.language})`);
     let out;
     try {
       out = await runSamples(qq, body.language, body.code.slice(0, 50000));

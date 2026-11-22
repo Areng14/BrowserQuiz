@@ -3,6 +3,9 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/edcore.main.js';
 import { conf as javaConf, language as javaLang } from 'monaco-editor/esm/vs/basic-languages/java/java.js';
 import { conf as pyConf, language as pyLang } from 'monaco-editor/esm/vs/basic-languages/python/python.js';
+import { conf as jsConf, language as jsLang } from 'monaco-editor/esm/vs/basic-languages/javascript/javascript.js';
+import { conf as tsConf, language as tsLang } from 'monaco-editor/esm/vs/basic-languages/typescript/typescript.js';
+import { conf as cppConf, language as cppLang } from 'monaco-editor/esm/vs/basic-languages/cpp/cpp.js';
 
 // Monaco's basic grammars color keywords, strings and numbers but leave every name plain. Split names
 // into types (Capitalized), calls (followed by "(") and variables, so code reads like it does in VS Code.
@@ -17,7 +20,10 @@ function richer(lang) {
     [re, { cases: { '@keywords': kw, '[A-Z][\\w$]*': 'type.identifier', '@default': 'identifier' } }]);
   return { ...lang, tokenizer: { ...lang.tokenizer, root } };
 }
-for (const [id, ext, conf, lang] of [['java', '.java', javaConf, javaLang], ['python', '.py', pyConf, pyLang]]) {
+// Coloring only (Monaco's basic grammars): no language service, so no type hints or completions on an exam.
+const LANGS = [['java', '.java', javaConf, javaLang], ['python', '.py', pyConf, pyLang], ['javascript', '.js', jsConf, jsLang],
+  ['typescript', '.ts', tsConf, tsLang], ['c', '.c', cppConf, cppLang], ['cpp', '.cpp', cppConf, cppLang]];
+for (const [id, ext, conf, lang] of LANGS) {
   monaco.languages.register({ id, extensions: [ext] });
   monaco.languages.setLanguageConfiguration(id, conf);
   monaco.languages.setMonarchTokensProvider(id, richer(lang));

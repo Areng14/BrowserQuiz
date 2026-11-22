@@ -48,7 +48,8 @@ services:
       RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}
       RUNNER_SLOTS: ${RUNNER_SLOTS:-4}
     tmpfs:
-      - /jobs:size=256m,mode=0711
+      # exec: compiled C and C++ answers run from here (Landlock lets only those jobs run a program from it)
+      - /jobs:size=256m,mode=0711,exec
     cap_drop: [ALL]
     cap_add: [CHOWN, SETUID, SETGID, KILL, DAC_OVERRIDE, FOWNER]
     mem_limit: ${RUNNER_MEMORY:-2g}

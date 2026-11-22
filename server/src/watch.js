@@ -6,6 +6,7 @@
 // While any teacher watches anyone in a run, every student in that run is asked for heartbeats every
 // second instead of every three. Asking all of them alike means no student can tell they're the one being
 // watched.
+const T = require('../../public/teacher/types.js');
 
 const KEEP_MS = 30000;
 const WATCH_MS = 15000; // a run counts as watched this long after the watch page last asked
@@ -90,7 +91,7 @@ function cleanView(v) {
     q: id(v.q), review: v.review === true, dir: v.dir === true, intro: v.intro === true,
     scroll: num(v.scroll, 0, 1e6) || 0, wscroll: num(v.wscroll, 0, 1e6) || 0,
     w: num(v.w, 200, 8000) || 1280, h: num(v.h, 200, 8000) || 800,
-    lang: v.lang === 'java' || v.lang === 'python' ? v.lang : null, nav: v.nav === true,
+    lang: T.LANGS.includes(v.lang) ? v.lang : null, nav: v.nav === true,
     modal: MODALS.includes(v.modal) ? v.modal : v.modal === true,
   };
 }

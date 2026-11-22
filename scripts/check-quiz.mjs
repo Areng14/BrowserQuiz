@@ -2,7 +2,7 @@
 // mistakes (typo'd keys, missing references), and with --run, every reference solution run against
 // its tests on this computer.
 //   node scripts/check-quiz.mjs examples/ap-csa-unit4          a folder, .quiz or .zip
-//   node scripts/check-quiz.mjs examples/ap-csa-unit4 --run    also run references (python3; a JDK for Java)
+//   node scripts/check-quiz.mjs examples/ap-csa-unit4 --run    also run references (python3; a JDK for Java; gcc/g++ for C/C++)
 // Exit code 0 means the server will accept it (with --run: and the references pass).
 import { createRequire } from 'node:module';
 import { readFileSync, readdirSync, statSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
@@ -112,14 +112,15 @@ if (!run) {
   process.exit(0);
 }
 const has = (cmd) => spawnSync(cmd, ['--version'], { stdio: 'ignore' }).status === 0;
-const tools = { java: has('javac') && has('java'), python: has('python3') };
+const tools = { java: has('javac') && has('java'), python: has('python3'), javascript: true, typescript: true, c: has('gcc'), cpp: has('g++') };
+const MISSING = { java: 'no JDK', python: 'no python3', c: 'no gcc', cpp: 'no g++' };
 const outputsSkipped = [];
 for (const [i, q] of quiz.questions.entries()) {
-  if (q.type === 'output' && !tools[q.language]) { outputsSkipped.push(i); console.log(`skipped: question ${i + 1} output (${q.language === 'java' ? 'no JDK' : 'no python3'} here; the server runs it on upload)`); }
+  if (q.type === 'output' && !tools[q.language]) { outputsSkipped.push(i); console.log(`skipped: question ${i + 1} output (${MISSING[q.language]} here; the server runs it on upload)`); }
   for (const lang of Object.keys(q.reference || {})) {
     if (!tools[lang]) {
       delete q.reference[lang];
-      console.log(`skipped: ${q.id} ${lang} reference (${lang === 'java' ? 'no JDK' : 'no python3'} here; the server checks it on upload)`);
+      console.log(`skipped: ${q.id} ${lang} reference (${MISSING[lang]} here; the server checks it on upload)`);
     }
   }
 }
@@ -139,6 +140,19 @@ function runJob(job) {
       const c = spawnSync('javac', ['-encoding', 'UTF-8', '-nowarn', '-d', '.', ...srcs], opts);
       if (c.status !== 0) return { status: 'compile_error', stdout: c.stdout, stderr: c.stderr || c.stdout };
       const r = spawnSync('java', ['-cp', '.', job.main || 'BQMain'], opts);
+      return { status: r.error && r.error.code === 'ETIMEDOUT' ? 'timeout' : 'ok', stdout: r.stdout || '', stderr: r.stderr || '' };
+    }
+    if (job.language === 'javascript' || job.language === 'typescript') {
+      const r = spawnSync(process.execPath, ['--experimental-transform-types', '--no-warnings', '--stack-size=4000', job.main || 'main.cjs'], opts);
+      return { status: r.error && r.error.code === 'ETIMEDOUT' ? 'timeout' : 'ok', stdout: r.stdout || '', stderr: r.stderr || '' };
+    }
+    if (job.language === 'c' || job.language === 'cpp') {
+      // the C++ prelude is the runner's (precompiled there; plain here)
+      const cpp = job.language === 'cpp';
+      const flags = cpp ? ['-std=gnu++17', '-D_GLIBCXX_ASSERTIONS', '-I' + join(import.meta.dirname, '..', 'runner')] : ['-std=gnu17'];
+      const c = spawnSync(cpp ? 'g++' : 'gcc', [...flags, '-O2', '-w', ...(job.include ? ['-include', job.include] : []), '-o', 'main', ...(job.sources || []), ...(cpp ? [] : ['-lm'])], opts);
+      if (c.status !== 0) return { status: 'compile_error', stdout: c.stdout, stderr: c.stderr || c.stdout };
+      const r = spawnSync(join(dir, 'main'), [], opts);
       return { status: r.error && r.error.code === 'ETIMEDOUT' ? 'timeout' : 'ok', stdout: r.stdout || '', stderr: r.stderr || '' };
     }
     const r = spawnSync('python3', ['-B', job.main || 'main.py'], opts);

@@ -173,4 +173,7 @@ function timingIntrusions(lang, facts) {
   return [...new Set(used)];
 }
 
-module.exports = { normalizeBans, bansFor, bannedUse, timingIntrusions };
+// The languages bans work in: the check reads what the compiler saw, which these two report.
+const BAN_LANGS = ['java', 'python'];
+
+module.exports = { normalizeBans, bansFor, bannedUse, timingIntrusions, BAN_LANGS };

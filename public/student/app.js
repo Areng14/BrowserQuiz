@@ -6,7 +6,7 @@
   const cfg = Object.assign({ demo: false, monacoBase: '/vendor/monaco/' }, window.BQ_CONFIG || {});
 
   const CODE_ALPHABET = /[^ABCDEFGHJKMNPQRSTUVWXYZ23456789]/g;
-  const LANG_NAMES = { java: 'Java', python: 'Python' };
+  const LANG_NAMES = { java: 'Java', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', c: 'C', cpp: 'C++' };
   const THEME_KEY = 'bq-theme';
   const KIND = {
     single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', method: 'Write a method', class: 'Write a class',
@@ -1887,6 +1887,7 @@
     for (const text of texts) {
       for (const hit of text.matchAll(/\b(\w+)\.java:(\d+)/g)) if (!/^(BQMain|BQJ)$/.test(hit[1])) lines.add(Number(hit[2]));
       for (const hit of text.matchAll(/File "(?:solution|support)\.py", line (\d+)/g)) lines.add(Number(hit[1]));
+      for (const hit of text.matchAll(/\bsolution\.(?:js|ts|c|cpp):(\d+)/g)) lines.add(Number(hit[1]));
     }
     const decor = [...lines].filter((n) => n >= 1 && n <= model.getLineCount()).map((n) => ({
       range: new m.Range(n, 1, n, 1),

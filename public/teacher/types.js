@@ -1,4 +1,5 @@
-// Value types for code questions, shared by the server (require) and the quiz maker (window.BQTypes).
+// Value types for code questions, shared by the server (require) and the quiz maker (window.BQTypes),
+// and how each language writes them.
 //   scalars:  int, long, double, boolean, string, char
 //   arrays:   any scalar with [] or [][]          e.g. char[], string[][]
 //   lists:    list<int|long|double|boolean|string|char>
@@ -107,6 +108,149 @@
   }
   const HELP = 'int, long, double, boolean, string, char; any of them with [] or [][]; list<...> of them; map<string or int, ...>; a class from Classes';
 
+  // ---------- languages ----------
+  const LANGS = ['java', 'python', 'javascript', 'typescript', 'c', 'cpp'];
+  const LANG_NAMES = { java: 'Java', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', c: 'C', cpp: 'C++' };
+  const isJs = (l) => l === 'javascript' || l === 'typescript';
+  const isC = (l) => l === 'c' || l === 'cpp';
+  const isClassName = (t) => /^[A-Z]\w*$/.test(canon(t));
+
+  // JavaScript and TypeScript: numbers are number, chars are one-letter strings, maps are Map.
+  const JS = { int: 'number', long: 'number', double: 'number', boolean: 'boolean', string: 'string', char: 'string', void: 'void' };
+  function jsType(t) {
+    t = canon(t);
+    if (JS[t]) return JS[t];
+    if (t.endsWith('[]')) return jsType(t.slice(0, -2)) + '[]';
+    const list = /^list<(\w+)>$/.exec(t);
+    if (list) return jsType(list[1]) + '[]';
+    const kv = mapTypes(t);
+    if (kv) return `Map<${JS[kv[0]]}, ${jsType(kv[1])}>`;
+    return t;
+  }
+  // TypeScript, where an object of a class can be null: ListNode | null.
+  const tsType = (t) => jsType(t) + (isClassName(t) ? ' | null' : '');
+
+  // C++: vector for arrays and lists, unordered_map for maps, a pointer for an object (it can be nullptr).
+  const CPP = { int: 'int', long: 'long long', double: 'double', boolean: 'bool', string: 'string', char: 'char', void: 'void' };
+  function cppType(t) {
+    t = canon(t);
+    if (CPP[t]) return CPP[t];
+    if (t.endsWith('[]')) return `vector<${cppType(t.slice(0, -2))}>`;
+    const list = /^list<(\w+)>$/.exec(t);
+    if (list) return `vector<${cppType(list[1])}>`;
+    const kv = mapTypes(t);
+    if (kv) return `unordered_map<${CPP[kv[0]]}, ${cppType(kv[1])}>`;
+    return t + '*';
+  }
+  // vectors and maps come in by reference, like LeetCode: vector<int>& nums
+  const cppParam = (p) => `${cppType(p.type)}${/^(vector|unordered_map)</.test(cppType(p.type)) ? '&' : ''} ${p.name}`;
+
+  // C: an array comes with its length, LeetCode's way: int* nums, int numsSize (and int* gridColSize for
+  // the rows of a 2D array). An array that's returned sets *returnSize. No maps, no class questions.
+  const CT = { int: 'int', long: 'long long', double: 'double', boolean: 'bool', string: 'char*', char: 'char', void: 'void' };
+  function cType(t) {
+    t = canon(t);
+    if (CT[t]) return CT[t];
+    const e = elementType(t);
+    return e ? cType(e) + '*' : t + '*';
+  }
+  const cDims = (t) => (/\[\]\[\]$/.test(canon(t)) ? 2 : elementType(t) ? 1 : 0);
+  function cSignature(s) {
+    const ps = s.params.map((p) => {
+      const d = cDims(p.type);
+      const base = `${cType(p.type)} ${p.name}`;
+      return d === 2 ? `${base}, int ${p.name}Size, int* ${p.name}ColSize` : d === 1 ? `${base}, int ${p.name}Size` : base;
+    });
+    const d = cDims(s.returns);
+    if (d) ps.push('int* returnSize');
+    if (d === 2) ps.push('int** returnColumnSizes');
+    return `${cType(s.returns)} ${s.name}(${ps.join(', ') || 'void'})`;
+  }
+
+  // Why a language can't take a type (C has no maps, and keeps 2D arrays to numbers), or null.
+  function unsupported(lang, t, D) {
+    t = canon(t);
+    if (lang !== 'c') return null;
+    if (mapTypes(t)) return 'C has no maps';
+    const two = /^(\w+)\[\]\[\]$/.exec(t);
+    if (two && (two[1] === 'string' || isClass(two[1], D))) return 'C can only have 2D arrays of numbers, booleans and chars';
+    return null;
+  }
+
+  // Why a value can't be written in a language, or null. C and C++ chars are one byte; C++ has no null
+  // string, vector or map; C strings end at \0.
+  function fits(lang, t, v, D, depth) {
+    t = canon(t);
+    depth = depth || 0;
+    if (!isC(lang) || depth > MAX_DEPTH) return null;
+    if (v === null || v === undefined) return isClass(t, D) || lang === 'c' ? null : `C++ has no null ${cppType(t)}`;
+    if (typeof v === 'object' && !Array.isArray(v) && Array.isArray(v.range)) return null;
+    if (isClass(t, D)) {
+      for (const f of D[t]) {
+        if (v[f.name] === undefined && !nullable(f.type)) continue;
+        const r = fits(lang, f.type, v[f.name] === undefined ? null : v[f.name], D, depth + 1);
+        if (r) return r;
+      }
+      return null;
+    }
+    if (t === 'char') return typeof v === 'string' && v.charCodeAt(0) < 128 ? null : 'a C or C++ char is one byte (plain ASCII only)';
+    if (t === 'string') return lang === 'c' && typeof v === 'string' && v.includes('\0') ? "a C string can't hold \\0" : null;
+    if (SCALARS.includes(t)) return null;
+    const kv = mapTypes(t);
+    const items = kv ? Object.values(v || {}) : Array.isArray(v) ? v : [];
+    for (const x of items) { const r = fits(lang, kv ? kv[1] : elementType(t), x, D, depth); if (r) return r; }
+    return null;
+  }
+
+  // What students start with, when the quiz doesn't give its own starter code.
+  function starter(shape, lang, emptyClass) {
+    const jp = (ps) => ps.map((p) => `${javaType(p.type)} ${p.name}`).join(', ');
+    const pp = (ps) => ps.map((p) => `, ${p.name}: ${pyType(p.type)}`).join('');
+    const tp = (ps) => ps.map((p) => `${p.name}: ${tsType(p.type)}`).join(', ');
+    const names = (ps) => ps.map((p) => p.name).join(', ');
+    const cp = (ps) => ps.map(cppParam).join(', ');
+    // JSDoc, so JavaScript students know the types: @param {number[]} nums
+    const doc = (ps, ret, ind) => (ps.length || ret ? [`${ind}/**`, ...ps.map((p) => `${ind} * @param {${jsType(p.type)}} ${p.name}`),
+      ...(ret ? [`${ind} * @return {${jsType(ret)}}`] : []), `${ind} */`].join('\n') + '\n' : '');
+    if (shape.signature) {
+      const s = shape.signature;
+      if (lang === 'java') return `class Solution {\n    public ${javaType(s.returns)} ${s.name}(${jp(s.params)}) {\n        \n    }\n}\n`;
+      if (lang === 'python') return `class Solution:\n    def ${s.name}(self${pp(s.params)}) -> ${pyType(s.returns)}:\n        pass\n`;
+      if (lang === 'javascript') return `${doc(s.params, s.returns, '')}function ${s.name}(${names(s.params)}) {\n    \n}\n`;
+      if (lang === 'typescript') return `function ${s.name}(${tp(s.params)}): ${tsType(s.returns)} {\n    \n}\n`;
+      if (lang === 'cpp') return `class Solution {\npublic:\n    ${cppType(s.returns)} ${s.name}(${cp(s.params)}) {\n        \n    }\n};\n`;
+      const d = cDims(s.returns);
+      const note = d === 2 ? '// Return a malloc\'d array of malloc\'d rows. Set *returnSize to the number of rows\n// and *returnColumnSizes to a malloc\'d array of their lengths.\n'
+        : d ? '// Return a malloc\'d array, and set *returnSize to its length.\n' : '';
+      return `${note}${cSignature(s)} {\n    \n}\n`;
+    }
+    const C = shape.class;
+    const n = C.name;
+    if (emptyClass) {
+      return { java: `public class ${n} {\n    \n}\n`, python: `class ${n}:\n    pass\n`, cpp: `class ${n} {\npublic:\n    \n};\n` }[lang] || `class ${n} {\n    \n}\n`;
+    }
+    let body;
+    if (lang === 'java') {
+      body = [`    public ${n}(${jp(C.constructor)}) {\n    }`].concat(C.methods.map((m) => `    public ${javaType(m.returns)} ${m.name}(${jp(m.params)}) {\n    }`));
+      return `public class ${n} {\n${body.join('\n\n')}\n}\n`;
+    }
+    if (lang === 'python') {
+      body = [`    def __init__(self${pp(C.constructor)}):\n        pass`].concat(C.methods.map((m) => `    def ${m.name}(self${pp(m.params)}) -> ${pyType(m.returns)}:\n        pass`));
+      return `class ${n}:\n${body.join('\n\n')}\n`;
+    }
+    if (lang === 'javascript') {
+      body = [`${doc(C.constructor, null, '    ')}    constructor(${names(C.constructor)}) {\n    }`]
+        .concat(C.methods.map((m) => `${doc(m.params, m.returns, '    ')}    ${m.name}(${names(m.params)}) {\n    }`));
+      return `class ${n} {\n${body.join('\n\n')}\n}\n`;
+    }
+    if (lang === 'typescript') {
+      body = [`    constructor(${tp(C.constructor)}) {\n    }`].concat(C.methods.map((m) => `    ${m.name}(${tp(m.params)}): ${tsType(m.returns)} {\n    }`));
+      return `class ${n} {\n${body.join('\n\n')}\n}\n`;
+    }
+    body = [`    ${n}(${cp(C.constructor)}) {\n    }`].concat(C.methods.map((m) => `    ${cppType(m.returns)} ${m.name}(${cp(m.params)}) {\n    }`));
+    return `class ${n} {\npublic:\n${body.join('\n\n')}\n};\n`;
+  }
+
   // The declared classes, written out for the harness. Java: public fields (so p.x works), a constructor
   // taking every field in order, a no-argument one, getters and toString. Python: the same fields, every
   // one with a default, so Node(3) works. `brief` is what students read: the same classes without
@@ -114,8 +258,42 @@
   const JAVA_ZERO = { int: '0', long: '0L', double: '0.0', boolean: 'false', char: "'\\0'" };
   const PY_ZERO = { int: '0', long: '0', double: '0.0', boolean: 'False', char: "''" };
   const cap = (n) => n.charAt(0).toUpperCase() + n.slice(1);
+  const JS_ZERO = { int: '0', long: '0', double: '0', boolean: 'false', char: "''" };
+  const CPP_ZERO = { int: '0', long: '0', double: '0.0', boolean: 'false', char: "'\\0'" };
   function classSource(D, lang, brief) {
     const names = Object.keys(D || {});
+    if (isJs(lang)) {
+      const ts = lang === 'typescript';
+      const dflt = (f) => JS_ZERO[canon(f.type)] || 'null';
+      const tsField = (f) => jsType(f.type) + (JS_ZERO[canon(f.type)] ? '' : ' | null');
+      return names.map((n) => {
+        const fs = D[n];
+        const L = [`class ${n} {`];
+        if (ts) { fs.forEach((f) => L.push(`    ${f.name}: ${tsField(f)};`)); if (fs.length) L.push(''); } else if (brief && fs.length) L.push(`    // ${fs.map((f) => `${f.name}: ${jsType(f.type)}`).join(', ')}`);
+        L.push(`    constructor(${fs.map((f) => (ts ? `${f.name}: ${tsField(f)} = ${dflt(f)}` : `${f.name} = ${dflt(f)}`)).join(', ')}) {`);
+        fs.forEach((f) => L.push(`        this.${f.name} = ${f.name};`));
+        L.push('    }', '}');
+        return L.join('\n');
+      }).join('\n\n') + (names.length ? '\n' : '');
+    }
+    if (lang === 'cpp') {
+      // Objects are pointers (Node* next), so classes can hold each other: declared up front when there are several.
+      const fwd = names.length > 1 ? names.map((n) => `struct ${n};`).join('\n') + '\n\n' : '';
+      return fwd + names.map((n) => {
+        const fs = D[n];
+        const L = [`struct ${n} {`];
+        fs.forEach((f) => L.push(`    ${cppType(f.type)} ${f.name};`));
+        const init = fs.filter((f) => CPP_ZERO[canon(f.type)] || isClass(canon(f.type), D)).map((f) => `${f.name}(${CPP_ZERO[canon(f.type)] || 'nullptr'})`);
+        L.push('', `    ${n}()${init.length ? ' : ' + init.join(', ') : ''} {}`);
+        if (fs.length) L.push(`    ${n}(${fs.map((f) => `${cppType(f.type)} ${f.name}`).join(', ')}) : ${fs.map((f) => `${f.name}(${f.name})`).join(', ')} {}`);
+        L.push('};');
+        return L.join('\n');
+      }).join('\n\n') + (names.length ? '\n' : '');
+    }
+    if (lang === 'c') {
+      return names.map((n) => [`typedef struct ${n} {`,
+        ...D[n].map((f) => `    ${isClass(canon(f.type), D) ? `struct ${canon(f.type)}*` : cType(f.type)} ${f.name};`), `} ${n};`].join('\n')).join('\n\n') + (names.length ? '\n' : '');
+    }
     if (lang === 'java') {
       return names.map((n) => {
         const fs = D[n];
@@ -150,5 +328,8 @@
     }).join(brief ? '\n\n' : '\n\n\n') + '\n';
   }
 
-  return { SCALARS, CLASS, canon, isClass, isValueType, elementType, mapTypes, checkValue, nullable, javaType, pyType, classSource, JAVA_ZERO, HELP, MAX_ITEMS, MAX_DEPTH };
+  return {
+    SCALARS, CLASS, canon, isClass, isValueType, elementType, mapTypes, checkValue, nullable, javaType, pyType, classSource, JAVA_ZERO, HELP, MAX_ITEMS, MAX_DEPTH,
+    LANGS, LANG_NAMES, isJs, isC, jsType, tsType, cppType, cppParam, cType, cDims, cSignature, unsupported, fits, starter, JS_ZERO, CPP_ZERO,
+  };
 }));
