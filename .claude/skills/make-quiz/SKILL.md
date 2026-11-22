@@ -86,9 +86,12 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
     (no null strings in Go). Write a reference in every language the question offers.
     `"languages": "any"` lets students pick any language that can run the question; write
     references in the languages you know best.
-  - Bans: a plain name (`["sort"]`) covers every language. `Class.method` entries are one
-    language's, so with several languages give those per language
-    (`{ "java": ["Arrays.sort"], "cpp": ["sort"], "javascript": ["Array.sort"] }`).
+  - Bans (a banned method scores 0 on the question): a plain name (`["sort"]`) works for every
+    language and covers its relatives there (`sorted`, `toSorted`, `qsort`, `sort_unstable`,
+    `OrderBy`). `Class.method` entries are one language's, so with several languages give those
+    per language (`{ "java": ["Arrays.sort"], "javascript": ["Math.max"], "rust": ["sort"] }`).
+    Other routes to the same answer aren't caught unless listed (`"TreeSet"`, `"PriorityQueue"`,
+    `"BinaryHeap"` for sorting). For a point off instead of a zero, use a rubric `forbid` regex.
   - Write 2 simple `sample` tests that students can run, and 5–10 `hidden` tests. Only hidden
     tests are graded, so repeat the sample cases in `hidden` too. Cover:
     - empty input

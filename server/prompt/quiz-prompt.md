@@ -73,16 +73,22 @@ use the defaults for the rest and start writing.
    - Write 2 simple sample tests, plus 5–10 hidden tests. The hidden tests repeat the samples
      and cover empty input, one element, negatives, duplicates, boundaries, and a larger case.
    - Always include a reference solution in every allowed language.
-   - To rule out a shortcut (a library sort, streams), use `ban`. It works in every language.
-     A plain name like `["sort"]` covers every language; `Class.method` entries mean one
+   - To rule out a shortcut (a library sort, streams), use `ban`: code that uses a banned
+     method scores 0 on the question, in any language. A plain name like `["sort"]` works for
+     every language and covers its relatives there (`sorted`, `toSorted`, `qsort`,
+     `stable_sort`, `sort_unstable`, LINQ's `OrderBy`). `Class.method` entries mean one
      language's class, so with several languages give those per language
-     (`{ "java": ["Arrays.sort"], "cpp": ["sort"], "rust": ["sort"] }`). Say in the prompt what
-     isn't allowed.
+     (`{ "java": ["Arrays.sort"], "javascript": ["Math.max"], "rust": ["sort"] }`).
+     Other library routes to the same answer aren't caught unless you list them: for a sorting
+     question, think of the sorted collections (`"TreeSet"`, `"PriorityQueue"` in Java,
+     `"BinaryHeap"` in Rust). The reference solutions have to keep to the bans. Say in the
+     prompt what isn't allowed. For a point off instead of a zero, use a rubric item with a
+     `forbid` regex instead.
    - Use a rubric only for things tests can't check (1–2 points). How depends on my answer
      about rubric points:
      - **Automatically:** give every rubric item a `require` or `forbid` regex (see "Rubric
-       checks" in the format), like private fields, no library sort, or recursion. Leave out
-       items a pattern can't decide.
+       checks" in the format), like private fields or recursion. Leave out items a pattern
+       can't decide.
      - **By me:** rubric items with no `require` or `forbid`. I tick them on the dashboard.
      - **Left out:** no rubric. The tests are worth all the points.
 
