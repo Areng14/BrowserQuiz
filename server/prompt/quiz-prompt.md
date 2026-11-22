@@ -44,7 +44,8 @@ use the defaults for the rest and start writing.
      real student falls into. Code questions are the size of one AP free-response part.
    - **Hard:** multi-step reasoning, nested loops and 2D arrays, tricky edge cases, longer
      code questions with more hidden tests. Code questions can require an efficient solution
-     (O(log n), O(n)) with a speed test (see "Speed tests" in the format); say so in the prompt.
+     (O(log n), O(n)) with a speed test (see "Speed tests" in the format; Java, Python, JavaScript
+     and TypeScript only); say so in the prompt.
    - **Mixed:** start easy and end hard.
 2. Order the questions by type: single, multi, text, output, trace, fill, code, essay. For AP-style
    "what is printed" questions use `output`, and for tracing loops use `trace`. Use question pools
@@ -67,7 +68,8 @@ use the defaults for the rest and start writing.
 6. Use select-all only when 2+ choices are correct. Use short answer only when there are few
    ways to write the answer, and list all of them.
 7. Code questions:
-   - Use only the types in the format's type table.
+   - Use only the types in the format's type table. For languages other than Java and Python,
+     keep to what the format's "Languages" section allows.
    - Write 2 simple sample tests, plus 5–10 hidden tests. The hidden tests repeat the samples
      and cover empty input, one element, negatives, duplicates, boundaries, and a larger case.
    - Always include a reference solution in every allowed language.
