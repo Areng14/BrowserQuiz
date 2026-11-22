@@ -11,7 +11,9 @@ kernel features (it works on hosts like Railway that don't allow privileged cont
     signals and abstract unix sockets scoped to the job (ABI 6+)
   * seccomp: x32 syscalls kill the process; sockets, io_uring, SysV IPC, ptrace, bpf, keyctl,
     namespaces and friends are denied
-  * a wall-clock timeout, output written to a capped file, job dirs on a size-limited tmpfs
+  * a wall-clock timeout, output written to a capped file the job can't reach, and a per-job disk budget:
+    each slot has its own job area (its own size-limited tmpfs with Docker Compose), and a job that writes
+    more than DISK_CAP_MB is stopped
 
 It refuses to start if the sandbox can't be built (fail closed). The app sends code + inputs only:
 expected answers never reach this service.
@@ -42,6 +44,8 @@ SLOTS = max(1, int(os.environ.get("RUNNER_SLOTS", "4")))
 UID_BASE = int(os.environ.get("RUNNER_UID_BASE", "1234567000"))
 PORT = int(os.environ.get("PORT", "8080"))
 MAX_BODY = 512 * 1024
+OUT_DIR = os.environ.get("RUNNER_OUT_DIR", "/var/tmp/bq-out")  # captured stdout/stderr: the runner's alone
+DISK_CAP = max(8, int(os.environ.get("DISK_CAP_MB", "64"))) << 20
 OUT_CAP = 64 * 1024
 FILE_CAP = 1 << 20
 
@@ -139,8 +143,8 @@ def _real(name):
     return os.path.realpath(p) if p else ""
 
 
-def build_rules(job, run_here=False):
-    java, javac, python = _real("java"), _real("javac"), _real("python3")
+def build_rules(job, tools=(), run_file=None):
+    java = _real("java")
     java_home = os.path.dirname(os.path.dirname(java)) if java else ""
     # (the job's own /proc/self is added in the child, where it names the job and not this process)
     read_dirs = ["/usr", "/lib", "/lib64", "/etc/alternatives", "/etc/ssl", java_home, "/sys/devices/system/cpu", "/opt/bq"]
@@ -149,11 +153,13 @@ def build_rules(job, run_here=False):
                   "/dev/urandom", "/dev/random", "/dev/zero"]
     # the dynamic loader and shared libraries, and gcc's own programs (cc1, collect2)
     exec_dirs = ["/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/libexec/gcc"]
-    tools = [java, javac, python] + [_real(n) for n in ("node", "gcc", "g++", "cc", "as", "ld", "rustc", "dotnet")]
-    exec_files = sorted(set(p for p in tools if p))
-    # Files in the job dir can only be run as programs by a C or C++ job's run step (its compiled main).
+    # Only this step's own tools can be run (javac for Java's compile, gcc and its helpers for C, ...), and from
+    # the job dir only its compiled program, when this is the run step of a compiled language.
+    exec_files = sorted(set(p for p in (_real(t) for t in tools) if p))
+    if run_file:
+        exec_files.append(run_file)
     return dict(read_dirs=read_dirs, read_files=read_files, exec_dirs=exec_dirs, exec_files=exec_files,
-                rw_dirs=[job], rw_files=["/dev/null"], run_here=run_here)
+                rw_dirs=[job], rw_files=["/dev/null"])
 
 
 def prepare_landlock(rules):
@@ -194,7 +200,7 @@ def prepare_landlock(rules):
         for f in rules["exec_files"]:
             add(f, FS_EXECUTE | FS_READ_FILE)
         for d in rules["rw_dirs"]:
-            add(d, handled if rules.get("run_here") else handled & ~FS_EXECUTE)
+            add(d, handled & ~FS_EXECUTE)
         for f in rules["rw_files"]:
             add(f, FS_READ_FILE | FS_WRITE_FILE)
     except Exception:
@@ -277,10 +283,33 @@ def reap_uid(uid):
         time.sleep(0.02)
 
 
-def run_step(argv, uid, job, cpu_s, wall_s, mem_mb, nproc, env, fsize=FILE_CAP, run_here=False):
-    out = tempfile.TemporaryFile(dir=JOBS)
-    err = tempfile.TemporaryFile(dir=JOBS)
-    ruleset = prepare_landlock(build_rules(job, run_here))
+def job_bytes(job):
+    """Bytes the job dir holds (blocks really used, so a sparse file counts what it takes), or None for a tree
+    too big to count, which is over budget anyway."""
+    total, seen, stack = 0, 0, [job]
+    while stack:
+        try:
+            with os.scandir(stack.pop()) as it:
+                for e in it:
+                    seen += 1
+                    if seen > 20000:
+                        return None
+                    try:
+                        st = e.stat(follow_symlinks=False)
+                    except OSError:
+                        continue
+                    total += st.st_blocks * 512
+                    if e.is_dir(follow_symlinks=False):
+                        stack.append(e.path)
+        except OSError:
+            pass
+    return total
+
+
+def run_step(argv, uid, job, cpu_s, wall_s, mem_mb, nproc, env, fsize=FILE_CAP, tools=(), run_file=None):
+    out = tempfile.TemporaryFile(dir=OUT_DIR)
+    err = tempfile.TemporaryFile(dir=OUT_DIR)
+    ruleset = prepare_landlock(build_rules(job, tools, run_file))
     t0 = time.time()
     status = "ok"
     try:
@@ -289,15 +318,24 @@ def run_step(argv, uid, job, cpu_s, wall_s, mem_mb, nproc, env, fsize=FILE_CAP, 
                                  preexec_fn=make_preexec(uid, ruleset, cpu_s, mem_mb, nproc, fsize))
         finally:
             os.close(ruleset)
-        try:
-            code = p.wait(timeout=wall_s)
-        except subprocess.TimeoutExpired:
-            status = "timeout"
-            kill_uid(uid)
-            code = p.wait()
+        # Wait, and keep an eye on how much the job writes: one that fills its disk would starve the others.
+        code = None
+        while code is None:
+            try:
+                code = p.wait(timeout=0.05)
+            except subprocess.TimeoutExpired:
+                used = job_bytes(job)
+                if used is None or used > DISK_CAP:
+                    status = "disk_limit"
+                elif time.time() - t0 > wall_s:
+                    status = "timeout"
+                else:
+                    continue
+                kill_uid(uid)
+                code = p.wait()
         if code in (-signal.SIGXCPU, -signal.SIGKILL) and status == "ok":
             status = "timeout"
-        if code == -signal.SIGXFSZ:
+        if code == -signal.SIGXFSZ and status == "ok":
             status = "output_limit"
         out.seek(0)
         err.seek(0)
@@ -364,7 +402,7 @@ def run_job(slot, req):
     if total > 400 * 1024:
         return {"status": "error", "message": "job too large"}
 
-    job = tempfile.mkdtemp(prefix="job-", dir=JOBS)
+    job = tempfile.mkdtemp(prefix="job-", dir=os.path.join(JOBS, str(slot)))
     try:
         for name, body in files.items():
             with open(os.path.join(job, name), "w", encoding="utf-8") as f:
@@ -381,22 +419,24 @@ def run_job(slot, req):
             st, code, out, err, ms = run_step(
                 [javac, "-J-XX:ActiveProcessorCount=1", "-J-Xmx384m", "-J-XX:+UseSerialGC", "-J-XX:-UsePerfData",
                  "-J-XX:TieredStopAtLevel=1", "-J-XX:-UseContainerSupport", "-encoding", "UTF-8", "-nowarn", "-d", "."] + srcs,
-                uid, job, 20, 40, 3072, 256, env)
+                uid, job, 20, 40, 3072, 256, env, tools=["javac"])
             kill_uid(uid)
             if st != "ok" or code != 0:
                 return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                         "exitCode": code, "ms": ms}
             argv = [shutil.which("java"), f"-Xmx{mem_mb}m"] + JAVA_RUN_FLAGS + ["-cp", ".", req.get("main") or "BQMain"]
-            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1536, 256, env)
+            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1536, 256, env, tools=["java"])
         elif lang in ("c", "cpp"):
             cc = shutil.which("g++" if lang == "cpp" else "gcc")
             argv = [cc] + CC_FLAGS[lang] + (["-include", include] if include else []) + ["-o", "main"] + sources + (["-lm"] if lang == "c" else [])
-            st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 2048, 64, env, fsize=32 << 20)
+            st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 2048, 64, env, fsize=32 << 20,
+                                              tools=["g++" if lang == "cpp" else "gcc", "cc", "as", "ld"])
             kill_uid(uid)
             if st != "ok" or code != 0:
                 return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                         "exitCode": code, "ms": ms}
-            st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s, mem_mb + 64, 64, env, run_here=True)
+            st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s, mem_mb + 64, 64, env,
+                                              run_file=os.path.join(job, "main"))
         elif lang in ("go", "rust"):
             if lang == "go":
                 steps = [[os.path.join(GO, "tool", "compile"), "-p", "main", "-importcfg", os.path.join(GO, "importcfg"), "-pack", "-o", "main.a"] + sources,
@@ -404,7 +444,8 @@ def run_job(slot, req):
             else:
                 steps = [[shutil.which("rustc")] + RUST_FLAGS + ["-o", "main", sources[0]]]
             for argv in steps:
-                st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 2048, 64, env, fsize=64 << 20)
+                st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 2048, 64, env, fsize=64 << 20,
+                                                  tools=["rustc", "cc", "as", "ld"] if lang == "rust" else [])
                 kill_uid(uid)
                 if st != "ok" or code != 0:
                     return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
@@ -412,24 +453,25 @@ def run_job(slot, req):
             # Go reserves ~800 MB of address space before it starts; GOMEMLIMIT keeps its heap to the limit.
             run_env = dict(env, GOMEMLIMIT=f"{mem_mb}MiB", GOMAXPROCS="2") if lang == "go" else env
             st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s,
-                                              mem_mb + (1536 if lang == "go" else 128), 64, run_env, run_here=True)
+                                              mem_mb + (1536 if lang == "go" else 128), 64, run_env,
+                                              run_file=os.path.join(job, "main"))
         elif lang == "csharp":
             argv = [shutil.which("dotnet"), "exec", CS + "/csc.dll"] + CS_FLAGS + (["-main:" + entry] if entry else []) + sources
             cenv = dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(1536 << 20))
-            st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 4096, 64, cenv, fsize=64 << 20)
+            st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 4096, 64, cenv, fsize=64 << 20, tools=["dotnet"])
             kill_uid(uid)
             if st != "ok" or code != 0:
                 return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                         "exitCode": code, "ms": ms}
             st, code, out, err, ms = run_step([shutil.which("dotnet"), "exec", "--runtimeconfig", CS + "/main.runtimeconfig.json", "main.dll"],
                                               uid, job, cpu_s, wall_s, mem_mb + 1792, 64,
-                                              dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(mem_mb << 20)))
+                                              dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(mem_mb << 20)), tools=["dotnet"])
         elif lang in ("javascript", "typescript"):
             argv = [shutil.which("node"), f"--max-old-space-size={mem_mb}"] + NODE_FLAGS + [req.get("main") or "main.cjs"]
-            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1024, 64, env)
+            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1024, 64, env, tools=["node"])
         else:
             argv = [shutil.which("python3"), "-E", "-s", "-B", "-X", "utf8", req.get("main") or "main.py"]
-            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 128, 64, env)
+            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 128, 64, env, tools=["python3"])
         return {"status": st, "stdout": out, "stderr": err, "exitCode": code, "ms": ms}
     finally:
         kill_uid(uid)
@@ -550,6 +592,12 @@ def language_test():
 if __name__ == "__main__":
     os.makedirs(JOBS, exist_ok=True)
     os.chmod(JOBS, 0o711)
+    # Each slot's jobs in a directory of its own (with Docker Compose, a tmpfs of its own: docker-compose.yml)
+    for _s in range(SLOTS):
+        os.makedirs(os.path.join(JOBS, str(_s)), exist_ok=True)
+        os.chmod(os.path.join(JOBS, str(_s)), 0o711)
+    os.makedirs(OUT_DIR, exist_ok=True)
+    os.chmod(OUT_DIR, 0o700)
     # PID 1 ignores SIGTERM unless it asks for it, so docker stop would wait 10s and SIGKILL.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     problems = self_test()

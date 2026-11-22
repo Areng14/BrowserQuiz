@@ -47,9 +47,14 @@ services:
     environment:
       RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}
       RUNNER_SLOTS: ${RUNNER_SLOTS:-4}
+    # Each slot's jobs on a tmpfs of its own, so one job filling its disk can't starve the others' (with more
+    # than 4 RUNNER_SLOTS, the extra slots share the container's disk, with only the runner's per-job budget).
+    # exec: a compiled answer runs from here (Landlock lets only that job's own program run).
     tmpfs:
-      # exec: compiled C and C++ answers run from here (Landlock lets only those jobs run a program from it)
-      - /jobs:size=256m,mode=0711,exec
+      - /jobs/0:size=64m,mode=0711,exec
+      - /jobs/1:size=64m,mode=0711,exec
+      - /jobs/2:size=64m,mode=0711,exec
+      - /jobs/3:size=64m,mode=0711,exec
     cap_drop: [ALL]
     cap_add: [CHOWN, SETUID, SETGID, KILL, DAC_OVERRIDE, FOWNER]
     mem_limit: ${RUNNER_MEMORY:-2g}

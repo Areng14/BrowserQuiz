@@ -1067,7 +1067,7 @@ function readResults(q, lang, tests, res, marker) {
   // A Python speed test only counts when the code keeps out of the harness that times it (bans.js).
   const intrudes = tests.some((t) => t.speed) ? B.timingIntrusions(lang, scan) : [];
   // (.NET can't catch a stack overflow: the program stops, and says so on stderr)
-  const stopped = res.status === 'timeout' ? 'Ran out of time' : res.status === 'output_limit' ? 'Printed too much output'
+  const stopped = res.status === 'timeout' ? 'Ran out of time' : res.status === 'output_limit' ? 'Printed too much output' : res.status === 'disk_limit' ? 'Wrote too much to disk'
     : lang === 'csharp' && /Stack overflow/.test(res.stderr || '') ? 'Stack overflow: recursion too deep' : 'Stopped before finishing';
   const results = tests.map((t, i) => {
     const mine = records.filter((r) => r.i === i);
