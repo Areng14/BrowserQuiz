@@ -102,6 +102,13 @@ if (-not $port) {
 }
 
 # ---------- start ----------
+# This computer's address on the network: the app shows it as where students join, instead of localhost
+$ip = $null
+try {
+  $cfg = Get-NetIPConfiguration -ErrorAction Stop | Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' } | Select-Object -First 1
+  if ($cfg) { $ip = @($cfg.IPv4Address)[0].IPAddress }
+} catch { }
+if ($ip) { $env:HOST_LAN_IP = $ip }
 if ($NoBuild) { docker compose up -d } else { docker compose up -d --build }
 if ($LASTEXITCODE -ne 0) { Write-Host 'docker compose failed (see above).'; exit 1 }
 
@@ -119,11 +126,6 @@ Write-Host ''
 Start-Sleep -Seconds 2
 $runnerLog = @(docker compose logs runner --tail 30 --no-log-prefix 2>$null)
 
-$ip = $null
-try {
-  $cfg = Get-NetIPConfiguration -ErrorAction Stop | Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' } | Select-Object -First 1
-  if ($cfg) { $ip = @($cfg.IPv4Address)[0].IPAddress }
-} catch { }
 if (-not $ip) { $ip = "<this computer's IP>" }
 
 Write-Host ''

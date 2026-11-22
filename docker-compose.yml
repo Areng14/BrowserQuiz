@@ -17,6 +17,10 @@ services:
       ID_PEPPER: ${ID_PEPPER:?set ID_PEPPER in .env}
       RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}
       RUNNER_URL: http://runner:8080
+      # Where students join, shown on the live page and the projector view: this computer's network
+      # address (setup.sh and setup.ps1 pass it in), or STUDENT_URL to set it outright.
+      HOST_LAN_IP: ${HOST_LAN_IP:-}
+      STUDENT_URL: ${STUDENT_URL:-}
       RUNNER_CONCURRENCY: ${RUNNER_SLOTS:-4}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       # Optional: one AI grading key for every teacher (docs/setup.md). Teachers can also add their own.

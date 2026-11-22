@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { q, tx } = require('./db');
 const store = require('./store');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { loadQuizFile, normalizeQuiz, markdownImages, QuizError, ASSET_TYPES } = require('./quizfile');
 const { writeZip } = require('./zip');
@@ -140,6 +141,28 @@ function parseCsv(text) {
   }
   if (field || row.length) { row.push(field); rows.push(row); }
   return rows.filter((r) => r.some((x) => x.trim()));
+}
+
+// Where students join: the teacher's own address, unless it only works on this computer (localhost). Then
+// it's this computer's address on the network, with the same port: HOST_LAN_IP, which setup.sh and
+// setup.ps1 pass in, or one found here when not in Docker (a container only knows its own addresses).
+// STUDENT_URL overrides it all. null: on localhost with no network address known.
+function joinOrigin(req) {
+  const set = String(process.env.STUDENT_URL || '').trim().replace(/\/+$/, '');
+  if (/^https?:\/\/[^\s/]+$/.test(set)) return set;
+  const proto = isHttps(req) ? 'https' : 'http';
+  const host = String(req.headers.host || '');
+  const local = /^(localhost|127(?:\.\d{1,3}){3}|\[::1\])(?::(\d{1,5}))?$/i.exec(host);
+  if (!local) return /^[A-Za-z0-9.-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:.]+\](:\d{1,5})?$/.test(host) ? `${proto}://${host}` : null;
+  const ip = lanIp();
+  return ip ? `${proto}://${ip}${local[2] ? ':' + local[2] : ''}` : null;
+}
+function lanIp() {
+  const given = String(process.env.HOST_LAN_IP || '').trim();
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(given) && !given.startsWith('127.')) return given;
+  if (fs.existsSync('/.dockerenv')) return null;
+  for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) if (a.family === 'IPv4' && !a.internal) return a.address;
+  return null;
 }
 
 function liveRow(student, a, quiz, run) {
@@ -731,10 +754,10 @@ module.exports = function teacherRoutes(r) {
     let sebConfig = null;
     let sebQuit = null;
     if (body.seb && !sebKey) {
-      // SEB opens the quiz at the address the teacher is using now, which students use too.
-      const host = String(req.headers.host || '');
-      if (!/^[A-Za-z0-9.-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:.]+\](:\d{1,5})?$/.test(host)) throw new HttpError(400, 'bad_host', "Open the dashboard at the address students use, then start the quiz again.");
-      const made = makeSebConfig(`${isHttps(req) ? 'https' : 'http'}://${host}`, code);
+      // SEB opens the quiz where students join (on localhost: this computer's network address).
+      const origin = joinOrigin(req);
+      if (!origin) throw new HttpError(400, 'bad_host', "Students can't reach localhost. Start BrowserQuiz with the setup script, or open the dashboard at this computer's network address, then start the quiz again.");
+      const made = makeSebConfig(origin, code);
       sebKey = made.key;
       sebConfig = made.xml;
       sebQuit = made.quitPassword;
@@ -954,6 +977,7 @@ module.exports = function teacherRoutes(r) {
     json(res, 200, {
       run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, sebQuit: run.seb_quit || null, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin,
         corrections: run.corrects ? { earnBack: run.earn_back, why: !!run.ask_why } : null,
+        joinUrl: joinOrigin(req), // where students go (not localhost)
         // an exam's answers still waiting for the teacher: corrections leave those out
         waiting: !run.corrects && run.mode !== 'practice' ? roster.reduce((n, s) => { const a = byStudent.get(s.id); const t = a && a.status === 'submitted' ? totals(a.result, quiz, a.answers, a.layout) : null; return n + (t ? t.pending + t.review : 0); }, 0) : 0 },
       students: roster.map((s) => liveRow(s, byStudent.get(s.id), quiz, run)),

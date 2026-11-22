@@ -556,9 +556,10 @@
 
   // The .seb file BrowserQuiz made for a Safe Exam Browser quiz, and the link that opens SEB with it
   // (to post for students, say). The join page offers the same link.
-  function sebButtons(code) {
+  function sebButtons(code, joinUrl) {
     const file = `/api/seb/${encodeURIComponent(code)}.seb`;
-    const link = `${location.protocol === 'https:' ? 'sebs' : 'seb'}://${location.host}${file}`;
+    const at = new URL(joinUrl || location.origin); // where students go, not this computer's localhost
+    const link = `${at.protocol === 'https:' ? 'sebs' : 'seb'}://${at.host}${file}`;
     const dl = linkBtn('Download .seb', file);
     dl.classList.remove('small');
     dl.setAttribute('download', `${code}.seb`);
@@ -864,11 +865,13 @@
   }
 
   // The join code filling the screen, for a projector: where to go and the code. Esc or a click closes it.
-  function projector(joinCode, quizTitle) {
+  function projector(joinCode, quizTitle, joinUrl) {
+    // http addresses show without the http:// (an IP and port); https ones show their name
+    const where = joinUrl ? joinUrl.replace(/^https?:\/\//, '') : "this computer's network address";
     const dlg = h('dialog', { class: 't-projector', 'aria-label': `Join code ${joinCode}` },
       h('button', { class: 'btn small ghost t-dialog-x', type: 'button', 'aria-label': 'Close', onclick: () => dlg.close() }, icon(ICONS.x, 22)),
       h('p', { class: 't-proj-title', text: quizTitle }),
-      h('p', { class: 't-proj-url', text: `Join at ${location.host}` }),
+      h('p', { class: 't-proj-url', text: `Join at ${where}` }),
       h('p', { class: 't-proj-code', text: joinCode }));
     dlg.addEventListener('click', (e) => { if (e.target === dlg || e.target.classList.contains('t-proj-code')) dlg.close(); });
     const onFs = () => { if (!document.fullscreenElement && dlg.open) dlg.close(); }; // Esc out of fullscreen closes it too
@@ -938,7 +941,7 @@
     selected = null;
     // The join code: click it to show it big, for a projector
     const code = h('button', { class: 't-joincode', type: 'button', title: 'Show it big' });
-    code.addEventListener('click', () => projector(code.textContent, title.textContent));
+    code.addEventListener('click', () => projector(code.textContent, title.textContent, lastRun && lastRun.joinUrl));
     const title = h('h1');
     const meta = h('p', { class: 't-muted' });
     const tbody = h('tbody');
@@ -1035,10 +1038,12 @@
         // each student has their own questions and no clock, so just what it is and what it's worth
         ? `Corrections, ${run.status === 'open' ? 'open' : 'closed'}. Fixed answers earn back ${Math.round(run.corrections.earnBack * 100)}%.`
         : `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
-      howTo.textContent = run.sebFile ? `Join at ${location.origin}, which opens Safe Exam Browser` : `Join at ${location.origin}`;
+      // where students go: on localhost, this computer's network address (server: joinOrigin)
+      const joinAt = run.joinUrl || "this computer's network address, not localhost";
+      howTo.textContent = run.sebFile ? `Join at ${joinAt}, which opens Safe Exam Browser` : `Join at ${joinAt}`;
       quitPw.hidden = !run.sebQuit || run.status !== 'open';
       if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp', text: run.sebQuit }));
-      if (run.sebFile && !sebLinks.childNodes.length) sebLinks.append(...sebButtons(run.code));
+      if (run.sebFile && !sebLinks.childNodes.length) sebLinks.append(...sebButtons(run.code, run.joinUrl));
       sebLinks.hidden = !run.sebFile || run.status !== 'open';
       toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
       toggle.onclick = () => {

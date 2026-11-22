@@ -73,6 +73,9 @@ if [ -z "$port" ]; then
 fi
 
 # ---------- start ----------
+# This computer's address on the network: the app shows it as where students join, instead of localhost
+ip=$( (hostname -I 2>/dev/null || ipconfig getifaddr en0 2>/dev/null || true) | awk '{print $1}')
+export HOST_LAN_IP="$ip"
 docker compose up -d $build
 
 printf 'Waiting for BrowserQuiz to start'
@@ -88,7 +91,6 @@ echo
 sleep 2
 runner=$(docker compose logs runner --tail 30 --no-log-prefix 2>/dev/null || true)
 
-ip=$( (hostname -I 2>/dev/null || ipconfig getifaddr en0 2>/dev/null || true) | awk '{print $1}')
 [ -n "$ip" ] || ip="<this computer's IP>"
 echo
 if [ -z "$up" ]; then

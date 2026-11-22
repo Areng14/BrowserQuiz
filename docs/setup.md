@@ -191,6 +191,12 @@ Where to host:
 | Logs | `docker compose logs -f app` |
 | Wipe everything | `docker compose down -v` (deletes the data volume) |
 
+**Where students join.** A quiz's live page (and its projector view: click the join code) shows the
+address students type. If you opened the dashboard at `localhost`, it shows this computer's address on
+the network instead, which the setup script finds; starting with plain `docker compose up` it can't, so
+use the setup script. To set it yourself (say, two networks), put `STUDENT_URL=http://192.168.1.20:8080`
+in `.env`.
+
 Everything (quizzes, classes, attempts) lives in one SQLite database in the `bq-data` volume. Back it
 up between classes:
 
