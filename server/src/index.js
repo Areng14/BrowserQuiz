@@ -93,7 +93,7 @@ setInterval(() => {
     for (const a of store.attempts.values()) {
       if (a.status !== 'submitted' || a.archived) continue;
       const quiz = quizOf(q('SELECT quiz_id FROM runs WHERE id = ?').get(a.runId));
-      const t = quiz && a.result && totals(a.result, quiz, a.answers);
+      const t = quiz && a.result && totals(a.result, quiz, a.answers, a.layout);
       if (quiz && (!a.result || t.failed || t.pending)) gradeAttempt(a, quiz).catch(() => {});
     }
   }

@@ -142,7 +142,7 @@ function parseCsv(text) {
 
 function liveRow(student, a, quiz) {
   if (!a) return { rosterId: student.id, name: student.name, attempt: null };
-  const t = totals(a.result, quiz, a.answers);
+  const t = totals(a.result, quiz, a.answers, a.layout);
   const answered = a.answers ? Object.keys(a.answers).length : 0;
   // Where they are right now (watch.js has their last heartbeat's screen): question 4 in their own order,
   // the review page, or a part's directions.
@@ -157,7 +157,7 @@ function liveRow(student, a, quiz) {
       awayMs: (a.awayMs || 0) + store.awayNow(a, Date.now()), awayNow: store.awayNow(a, Date.now()) || null,
       leftAgain: a.integrity === 'restored' && a.restoreStrikes != null ? Math.max(0, a.strikes - a.restoreStrikes) : 0,
       reason: a.reason, invalidatedAt: a.invalidatedAt, lastBeatAgo: a.status === 'active' && a.lastBeat ? Date.now() - a.lastBeat : null,
-      answered, total: quiz.questions.length, on, deadline: a.deadline,
+      answered, total: a.layout ? store.quizFor(quiz, a.layout).questions.length : store.perStudent(quiz).count, on, deadline: a.deadline,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
       letIn: !!(a.letIn && Date.now() - a.letIn < LET_IN_MS),
       score: t ? (a.integrity === 'invalidated' ? 0 : t.score) : null, rawScore: t ? t.score : null, max: t ? t.max : null,
@@ -213,9 +213,11 @@ function quizSource(quiz) {
   if (Object.keys(quiz.directions || {}).length) out.directions = quiz.directions;
   if (quiz.shared && quiz.shared.length) out.shared = quiz.shared;
   if (quiz.sections && quiz.sections.length) out.sections = quiz.sections;
+  if (quiz.pools) out.pools = quiz.pools;
   out.questions = quiz.questions.map((qq) => {
     const o = { id: qq.id, type: qq.type, prompt: qq.prompt, points: qq.points };
     if (qq.name) o.name = qq.name;
+    if (qq.pool) o.pool = qq.pool;
     if (qq.shared) o.shared = qq.shared;
     if (qq.image) { o.image = qq.image; if (qq.imageAlt) o.imageAlt = qq.imageAlt; }
     if (qq.type === 'text') { o.answer = qq.answer; if (qq.caseSensitive) o.caseSensitive = true; }
@@ -912,7 +914,7 @@ module.exports = function teacherRoutes(r) {
     } else if (p.action === 'regrade-failed') {
       for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'submitted'").all(run.id)) {
         const a = store.getAttempt(row.id);
-        const t = totals(a.result, quiz, a.answers);
+        const t = totals(a.result, quiz, a.answers, a.layout);
         if (!a.result || (t && t.failed)) gradeAttempt(a, quiz).catch(() => {});
       }
     } else throw new HttpError(404, 'not_found');
@@ -946,9 +948,10 @@ module.exports = function teacherRoutes(r) {
     for (const s of rosterStudentsForRun(run)) {
       const row = q('SELECT id FROM attempts WHERE run_id = ? AND student_id = ? AND archived = 0').get(run.id, s.id);
       const a = row ? store.getAttempt(row.id) : null;
-      const t = a ? totals(a.result, quiz, a.answers) : null;
+      const t = a ? totals(a.result, quiz, a.answers, a.layout) : null;
+      const given = a && a.layout ? new Set(store.quizFor(quiz, a.layout).questions.map((qq) => qq.id)) : null;
       const perQ = quiz.questions.map((qq) => {
-        if (!a || !a.result) return '';
+        if (!a || !a.result || (given && !given.has(qq.id))) return ''; // a pool left it out of their quiz
         const sc = questionScore(qq, a.result, a.answers);
         return sc.state === 'done' ? sc.points : sc.state;
       });
@@ -975,7 +978,7 @@ module.exports = function teacherRoutes(r) {
       invalidatedAt: a.invalidatedAt, strikes: a.strikes, warnings: a.warnings,
       awayMs: (a.awayMs || 0) + store.awayNow(a, Date.now()), awayMax: Math.max(a.awayMax || 0, store.awayNow(a, Date.now())), startedAt: a.startedAt, submittedAt: a.submittedAt,
       deadline: a.deadline, timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
-      totals: totals(a.result, quiz, a.answers), answers: answerReport(quiz, a), events,
+      totals: totals(a.result, quiz, a.answers, a.layout), answers: answerReport(quiz, a), events,
       quiz: reportQuiz(quiz, run.quiz_id), report: studentReport(quiz, a, student ? student.name : ''), mouse: mouse.slice(-3000), ip: a.ip, userAgent: a.userAgent,
     });
   });
@@ -1082,7 +1085,7 @@ module.exports = function teacherRoutes(r) {
       }
     } else if (p.action === 'grade') {
       // Rubric checkboxes and a points override for one question.
-      const qq = quiz.questions.find((x) => x.id === body.questionId);
+      const qq = store.quizFor(quiz, a.layout).questions.find((x) => x.id === body.questionId); // one they were given
       if (!qq || a.status !== 'submitted' || !a.result) throw new HttpError(400, 'bad_request');
       const rubric = {};
       for (const r of qq.rubric || []) if (body.rubric && body.rubric[r.id] === true) rubric[r.id] = true;

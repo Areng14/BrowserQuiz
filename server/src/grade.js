@@ -38,7 +38,7 @@ function textMatches(qq, a) {
 function cleanAnswers(quiz, layout, answers) {
   const out = {};
   if (!answers || typeof answers !== 'object') return out;
-  for (const qq of quiz.questions) {
+  for (const qq of store.quizFor(quiz, layout).questions) { // with pools, only the student's own questions
     const v = answers[qq.id];
     if (v == null) continue;
     const n = qq.choices ? qq.choices.length : 0;
@@ -62,7 +62,7 @@ function gradeAuto(quiz, layout, answers) {
   let score = 0;
   let max = 0;
   const detail = {};
-  for (const qq of quiz.questions) {
+  for (const qq of store.quizFor(quiz, layout).questions) {
     if (isRun(qq)) continue;
     max += qq.points;
     const a = answers[qq.id];
@@ -148,14 +148,15 @@ function questionScore(qq, result, answers) {
   return { points: Math.round(points * 100) / 100, max: qq.points, state, review, override: m.override != null };
 }
 
-function totals(result, quiz, answers) {
+// layout: the attempt's, so a quiz with question pools counts only that student's questions.
+function totals(result, quiz, answers, layout) {
   if (!result) return null;
   let score = 0;
   let max = 0;
   let pending = 0;
   let failed = 0;
   let review = 0;
-  for (const qq of quiz.questions) {
+  for (const qq of store.quizFor(quiz, layout).questions) {
     const s = questionScore(qq, result, answers);
     score += s.points;
     max += s.max;
@@ -174,7 +175,7 @@ async function gradeAttempt(a, quiz) {
     const auto = gradeAuto(quiz, a.layout, a.answers);
     const prev = a.result && a.result.code ? a.result.code : {};
     a.result = { auto, code: {}, manual: (a.result && a.result.manual) || {} };
-    const codeQs = quiz.questions.filter(isRun);
+    const codeQs = store.quizFor(quiz, a.layout).questions.filter(isRun);
     for (const qq of codeQs) {
       a.result.code[qq.id] = prev[qq.id] && prev[qq.id].status === 'done' ? prev[qq.id] : { status: 'pending', max: qq.points - rubricMax(qq) };
     }
@@ -200,7 +201,7 @@ async function gradeAttempt(a, quiz) {
 // What the teacher sees for each answer.
 function answerReport(quiz, a) {
   const res = a.result || {};
-  return quiz.questions.map((qq) => {
+  return store.quizFor(quiz, a.layout).questions.map((qq) => {
     const ans = a.answers ? a.answers[qq.id] : undefined;
     const perm = a.layout && a.layout.perms ? a.layout.perms[qq.id] : null;
     const row = { id: qq.id, type: qq.type, prompt: qq.prompt.slice(0, 200), points: null, max: qq.points };
@@ -258,7 +259,9 @@ function testRows(qq, c, lang) {
   }));
 }
 
-function studentReport(quiz, a, name, opts = {}) {
+function studentReport(fullQuiz, a, name, opts = {}) {
+  const quiz = store.quizFor(fullQuiz, a.layout); // with pools, the questions this student got
+  const at = new Map(fullQuiz.questions.map((qq, i) => [qq.id, i + 1]));
   const t = a.result ? totals(a.result, quiz, a.answers) : null;
   const res = a.result || {};
   return {
@@ -274,6 +277,8 @@ function studentReport(quiz, a, name, opts = {}) {
         id: qq.id, type: qq.type, mode: qq.mode || null, prompt: qq.prompt, image: qq.image || null, imageAlt: qq.imageAlt || '', shared: qq.shared || null,
         points: sc && sc.state === 'done' ? sc.points : null, max: qq.points, review: !!(sc && sc.review),
       };
+      // For the teacher's class report: where it is in the whole quiz, and its pool
+      if (!opts.forStudent) { row.qn = at.get(qq.id); if (qq.pool) row.pool = qq.pool; }
       if (qq.type === 'single' || qq.type === 'multi') {
         const perm = a.layout && a.layout.perms ? a.layout.perms[qq.id] : null;
         row.choices = qq.choices;
@@ -330,10 +335,14 @@ function studentReport(quiz, a, name, opts = {}) {
     }),
   };
 }
-const reportQuiz = (quiz, quizId) => ({
-  id: quizId, title: quiz.title, language: quiz.language || null,
-  // only what a question uses, as students get it (student.js publicQuiz)
-  shared: Object.fromEntries((quiz.shared || []).filter((m) => quiz.questions.some((qq) => [].concat(qq.shared || []).includes(m.id))).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
-});
+// layout: a student's, for their own practice review (with pools, only the shared material their questions use)
+const reportQuiz = (fullQuiz, quizId, layout) => {
+  const quiz = store.quizFor(fullQuiz, layout);
+  return {
+    id: quizId, title: quiz.title, language: quiz.language || null,
+    // only what a question uses, as students get it (student.js publicQuiz)
+    shared: Object.fromEntries((quiz.shared || []).filter((m) => quiz.questions.some((qq) => [].concat(qq.shared || []).includes(m.id))).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
+  };
+};
 
 module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, autoMarks, codeAnswered, answerReport, studentReport, reportQuiz, grading: running, isRun, textMatches };

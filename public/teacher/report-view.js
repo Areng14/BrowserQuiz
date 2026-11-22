@@ -349,11 +349,21 @@
     const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
     const stat = (label, value) => h('div', { class: 'r-stat' }, h('div', { class: 'r-stat-v', text: value }), h('div', { class: 'r-stat-l', text: label }));
     const bar = (p) => h('span', { class: 'r-bar-track' }, h('span', { class: 'r-bar-fill' + (p < 50 ? ' low' : ''), style: `width:${Math.max(0, Math.min(100, p))}%` }));
-    const questions = (students[0] ? students[0].questions : []).map((q0, i) => {
-      const pts = students.map((s) => s.questions[i]).filter((q) => q.points != null && !(q.review && q.type === 'essay'));
-      const avgQ = pts.length ? pts.reduce((a, q) => a + q.points, 0) / pts.length : null;
-      return { n: i + 1, kind: q0.type === 'code' ? KIND[q0.mode] || KIND.method : KIND[q0.type], prompt: q0.prompt, max: q0.max, avg: avgQ };
-    });
+    // By question, over everyone who got it: with question pools, students have different questions.
+    const byId = new Map();
+    for (const s of students) {
+      s.questions.forEach((q, i) => {
+        let e = byId.get(q.id || i);
+        if (!e) {
+          e = { n: q.qn || i + 1, kind: q.type === 'code' ? KIND[q.mode] || KIND.method : KIND[q.type], prompt: q.prompt, max: q.max, pool: q.pool || null, given: 0, pts: [] };
+          byId.set(q.id || i, e);
+        }
+        e.given++;
+        if (q.points != null && !(q.review && q.type === 'essay')) e.pts.push(q.points);
+      });
+    }
+    const questions = [...byId.values()].sort((a, b) => a.n - b.n)
+      .map((e) => Object.assign(e, { avg: e.pts.length ? e.pts.reduce((a, x) => a + x, 0) / e.pts.length : null }));
     const snippet = (p) => {
       const t = String(p).replace(/```[\s\S]*?```/g, ' ').replace(/^\s*(?:[-*]|\d+[.)])\s+/gm, '').replace(/`|\*\*/g, '').replace(/\s+/g, ' ').trim();
       return t.length > 90 ? t.slice(0, t.lastIndexOf(' ', 88) > 40 ? t.lastIndexOf(' ', 88) : 88) + '…' : t;
@@ -383,7 +393,8 @@
           const p = q.avg == null ? 0 : pct(q.avg, q.max);
           return h('tr', {},
             h('td', { class: 'num', text: String(q.n) }),
-            h('td', {}, h('span', { class: 'r-qkind', text: q.kind }), ' ', snippet(q.prompt)),
+            h('td', {}, h('span', { class: 'r-qkind', text: q.kind }), ' ', snippet(q.prompt),
+              q.pool ? h('span', { class: 'r-qpool', text: ` ${q.given} of ${students.length} students` }) : null),
             h('td', { class: 'num', text: q.avg == null ? 'Not graded' : `${fmtPts(q.avg)} / ${fmtPts(q.max)}` }),
             h('td', { class: 'r-bar-cell' }, bar(p), h('span', { class: 'r-bar-pct', text: q.avg == null ? '' : `${p}%` })));
         }))));

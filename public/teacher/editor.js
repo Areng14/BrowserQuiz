@@ -801,6 +801,19 @@
       return h('label', { class: 't-check' }, cb, h('span', { text: label }));
     };
     const field = (label, el, ...more) => h('label', { class: 'field' }, h('span', { class: 'field-label', text: label }), el, ...more);
+    // Settings: how many of each pool's questions a student gets
+    const poolSettings = (q) => {
+      const sizes = new Map();
+      for (const x of quiz.questions) if (x.pool) sizes.set(x.pool, (sizes.get(x.pool) || 0) + 1);
+      if (!sizes.size) return null;
+      return h('div', { class: 'qe-settings-grid' }, [...sizes].map(([name, count]) => field(`Pool "${name}": questions each student gets`,
+        h('span', { class: 'qe-line' },
+          input(q, Math.min(count, (quiz.pools || {})[name] || 1), (v) => {
+            quiz.pools = Object.assign({}, quiz.pools, { [name]: Math.max(1, Math.min(count, Math.round(Number(v)) || 1)) });
+            renderOutline(); // the total under the outline: what each student gets
+          }, { type: 'number', min: '1', max: String(count), class: 'input t-points' }),
+          h('span', { class: 't-muted', text: `of ${count}` })))));
+    };
     const xBtn = (label, onclick, disabled) => h('button', { class: 'btn small qe-x', type: 'button', 'aria-label': label, title: label, disabled, onclick }, icon(ICONS.x, 16));
 
     // ---------- choices ----------
@@ -1304,7 +1317,12 @@
       const view = h('div', { class: 'qe-view', inert: true }); // a picture of the student's screen, not something to use
       // Optional. Students see names, types and points before they start, so a name shouldn't give the answer away.
       const name = field('Name', input(q, q.name || '', (v) => { const t = v.replace(/\s+/g, ' ').trim(); if (t) q.name = t; else delete q.name; renderOutline(); }, { class: 'input qe-name', maxlength: '80', placeholder: 'Optional' }));
-      const fields = h('div', { class: 'qe-stack' }, name, sharedEditor(q, i), promptEditor(q));
+      // A question pool: each student gets some of a pool's questions, picked at random (how many: Settings).
+      const poolNames = [...new Set(quiz.questions.map((x) => x.pool).filter(Boolean))];
+      const pool = field('Question pool', input(q, q.pool || '', (v) => { const t = v.trim(); if (t) q.pool = t; else delete q.pool; renderOutline(); },
+        { class: 'input qe-pool', maxlength: '40', placeholder: 'Optional', list: 'qe-pool-names', autocomplete: 'off', spellcheck: 'false' }),
+      h('datalist', { id: 'qe-pool-names' }, poolNames.map((p) => h('option', { value: p }))));
+      const fields = h('div', { class: 'qe-stack' }, h('div', { class: 'qe-line qe-name-row' }, name, pool), sharedEditor(q, i), promptEditor(q));
       if (q.type === 'single' || q.type === 'multi') fields.append(choicesEditor(q));
       if (q.type === 'text') {
         fields.append(field('Accepted answers, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: '3.5\n/^(binary|bin) search$/' })),
@@ -1430,6 +1448,7 @@
         h('div', { class: 'qe-line' },
           check(q, quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { quiz.shuffleQuestions = v; }),
           check(q, quiz.shuffleChoices !== false, 'Shuffle choices', (v) => { quiz.shuffleChoices = v; })),
+        poolSettings(q),
         field('Directions for the whole quiz', area(q, dirs.quiz, (v) => setDir('quiz', v), Object.assign({ rows: 3, placeholder: 'Optional' }, prose))),
         used.length ? h('details', { class: 'qe-paste', open: used.some((t) => dirs[t]) },
           h('summary', { text: 'Directions for each part' }),
@@ -1496,6 +1515,7 @@
           h('button', { class: 'qe-row-btn', type: 'button', 'aria-current': here ? 'true' : null, onclick: () => select(i, true) },
             h('span', { class: 'qe-row-n', text: String(i + 1) }),
             h('span', { class: `qe-row-text${text ? '' : ' t-muted'}`, text: text || 'No prompt yet' }),
+            q.pool ? h('span', { class: 'qe-row-pool', text: q.pool, title: 'Question pool' }) : null,
             problems[i].length ? h('span', { class: 'qe-dot', title: problems[i].join('\n'), role: 'img', 'aria-label': bad ? 'Has problems' : 'Not finished' }) : null,
             h('span', { class: 'qe-row-pts', text: String(Number(q.points) || 0), title: 'Points' })));
         rows.push(row);
@@ -1504,8 +1524,20 @@
       sortable(rows, moveQuestion);
       outline.replaceChildren(...kids);
       settingsBtn.classList.toggle('sel', sel < 0 && selDiv == null);
-      const pts = Math.round(quiz.questions.reduce((s, q) => s + (Number(q.points) || 0), 0) * 100) / 100;
-      total.textContent = quiz.questions.length ? `${plural(quiz.questions.length, 'question')}, ${plural(pts, 'point')}` : '';
+      // What each student gets: with pools, that's fewer questions than are written
+      const each = { n: 0, pts: 0 };
+      const pooled = new Map();
+      for (const x of quiz.questions) {
+        if (!x.pool) { each.n++; each.pts += Number(x.points) || 0; continue; }
+        const p = pooled.get(x.pool) || { n: 0, pts: Number(x.points) || 0 };
+        p.n++;
+        pooled.set(x.pool, p);
+      }
+      for (const [name, p] of pooled) { const k = Math.min(p.n, (quiz.pools || {})[name] || 1); each.n += k; each.pts += k * p.pts; }
+      const pts = Math.round(each.pts * 100) / 100;
+      total.textContent = !quiz.questions.length ? '' : pooled.size
+        ? `${plural(quiz.questions.length, 'question')}, ${each.n} each, ${plural(pts, 'point')}`
+        : `${plural(quiz.questions.length, 'question')}, ${plural(pts, 'point')}`;
       undoRow.replaceChildren(...(removed ? [`Deleted question ${removed.at + 1}. `, h('button', { class: 't-link', type: 'button', text: 'Undo', onclick: () => {
         const r = removed;
         removed = null;

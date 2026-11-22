@@ -257,7 +257,10 @@ function toManual(qq, job, out, model, auto) {
 function jobsFor(quiz, a, G) {
   const res = a.result || {};
   const jobs = [];
+  // with question pools, only what this student was given (as store.quizFor)
+  const given = quiz.pools && a.layout && Array.isArray(a.layout.order) ? new Set(a.layout.order) : null;
   for (const qq of quiz.questions) {
+    if (given && !given.has(qq.id)) continue;
     const sc = G.questionScore(qq, res, a.answers);
     if (!sc.review) continue;
     const ans = a.answers ? a.answers[qq.id] : undefined;

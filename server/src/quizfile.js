@@ -186,6 +186,12 @@ function normalizeQuiz(raw, assetNames) {
       if (sids.length) out.shared = sids.length === 1 ? sids[0] : sids;
     }
     imageOf(where, q, out);
+    // A question pool: each student gets some of its questions, picked at random (quiz.pools says how many).
+    if (q.pool != null && q.pool !== '') {
+      const pool = String(q.pool);
+      if (!QID.test(pool) || ['__proto__', 'constructor', 'prototype'].includes(pool)) fail(`${where}: pool "${pool}" can only use letters, digits, - and _.`);
+      out.pool = pool;
+    }
     if (type === 'text') {
       const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
       if (!ans.length || ans.some((a) => typeof a !== 'string' || !a.trim())) fail(`${where}: answer must be a string or a list of strings.`);
@@ -216,6 +222,20 @@ function normalizeQuiz(raw, assetNames) {
     }
     quiz.questions.push(out);
   });
+  // Question pools: how many of each pool's questions a student gets (1 unless the quiz says), and every
+  // question in a pool worth the same, so everyone's quiz is out of the same points.
+  const poolQs = new Map();
+  for (const qq of quiz.questions) if (qq.pool) { if (!poolQs.has(qq.pool)) poolQs.set(qq.pool, []); poolQs.get(qq.pool).push(qq); }
+  if (raw.pools != null && (typeof raw.pools !== 'object' || Array.isArray(raw.pools))) fail('"pools" must be an object, like { "loops": 2 }.');
+  if (poolQs.size) {
+    quiz.pools = {};
+    for (const [name, qs] of poolQs) {
+      const want = raw.pools && raw.pools[name] != null ? Number(raw.pools[name]) : 1;
+      if (!Number.isInteger(want) || want < 1) fail(`pools.${name} must be a whole number, 1 or more.`);
+      if (qs.some((qq) => qq.points !== qs[0].points)) fail(`Pool "${name}": its questions must all be worth the same, so every student's quiz is out of the same points.`);
+      quiz.pools[name] = Math.min(want, qs.length);
+    }
+  }
   // Section dividers the teacher put in: each starts at a question, with its own title and directions.
   // Questions before the first one are grouped by type, as without any.
   if (raw.sections != null) {

@@ -110,13 +110,13 @@ function current(req, { mustBeOpen = true } = {}) {
 
 function publicQuiz(quiz, layout) {
   const byId = new Map(quiz.questions.map((qq) => [qq.id, qq]));
-  const used = new Set(quiz.questions.flatMap((qq) => [].concat(qq.shared || [])));
+  const used = new Set(layout.order.flatMap((id) => [].concat(byId.get(id).shared || []))); // shared material their questions use
   return {
     title: quiz.title,
     timeLimitMin: quiz.timeLimitMin,
     language: quiz.language,
     directions: quiz.directions,
-    sections: sectionStarts(quiz),
+    sections: sectionStarts(quiz, layout),
     shared: Object.fromEntries((quiz.shared || []).filter((m) => used.has(m.id)).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
     questions: layout.order.map((id) => {
       const qq = byId.get(id);
@@ -159,12 +159,21 @@ function publicQuiz(quiz, layout) {
   };
 }
 
-// Where each section the teacher made starts, by position. Shuffling stays inside sections (store.makeLayout),
-// so a position is the same for every student.
-function sectionStarts(quiz) {
+// Where each section the teacher made starts, by position in this student's order. Shuffling stays inside
+// sections (store.makeLayout). A pool can leave out the question a section starts on: it then starts on
+// the student's first question after that point.
+function sectionStarts(quiz, layout) {
   const at = new Map(quiz.questions.map((qq, i) => [qq.id, i]));
-  return (quiz.sections || []).filter((sec) => at.has(sec.before))
-    .map((sec) => ({ start: at.get(sec.before), title: sec.title, directions: sec.directions }));
+  const order = layout ? layout.order : quiz.questions.map((qq) => qq.id);
+  const out = [];
+  for (const sec of quiz.sections || []) {
+    if (!at.has(sec.before)) continue;
+    const start = order.findIndex((id) => at.get(id) >= at.get(sec.before));
+    if (start < 0) continue;
+    if (out.length && out[out.length - 1].start === start) out.pop(); // a section this student has nothing in
+    out.push({ start, title: sec.title, directions: sec.directions });
+  }
+  return out;
 }
 
 function runInfo(run, quiz) {
@@ -172,8 +181,8 @@ function runInfo(run, quiz) {
     runId: run.id, title: quiz.title, timeLimitMin: quiz.timeLimitMin,
     // Totals only, for the start screen. What's on the quiz (types, names, sections, directions) comes with
     // the questions once the quiz starts.
-    questionCount: quiz.questions.length,
-    points: Math.round(quiz.questions.reduce((t, qq) => t + qq.points, 0) * 100) / 100,
+    questionCount: store.perStudent(quiz).count, // with pools, what each student gets
+    points: store.perStudent(quiz).points,
     hasCode: quiz.questions.some((qq) => qq.type !== 'single' && qq.type !== 'multi' && qq.type !== 'text'),
     practice: run.mode === 'practice',
     seb: !!run.seb_key, // SEB keeps the window locked full screen itself
@@ -430,7 +439,7 @@ module.exports = function studentRoutes(r) {
     const { a, quiz } = current(req);
     if (a.status !== 'active') throw new HttpError(403, 'run_closed');
     if (!runLimit(`${a.runId}:${a.studentId}`)) throw new HttpError(429, 'too_many'); // per student, so practice retries don't reset it
-    const qq = quiz.questions.find((x) => x.id === body.questionId && isRun(x));
+    const qq = store.quizFor(quiz, a.layout).questions.find((x) => x.id === body.questionId && isRun(x)); // one of theirs
     // Fill-in-the-blank: the server fills its own template; students only send the blanks.
     if (qq && qq.type === 'fill') body.code = Array.isArray(body.blanks) ? fillTemplate(qq.code, body.blanks.map((b) => String(b || '').slice(0, 500))) : null;
     if (!qq || !qq.languages.includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
@@ -452,9 +461,9 @@ module.exports = function studentRoutes(r) {
     if (!a.practice) throw new HttpError(404, 'not_found');
     if (a.status !== 'submitted') throw new HttpError(409, 'not_submitted');
     const until = Date.now() + 30000;
-    while (Date.now() < until && (!a.result || totals(a.result, quiz, a.answers).pending)) await sleep(500);
+    while (Date.now() < until && (!a.result || totals(a.result, quiz, a.answers, a.layout).pending)) await sleep(500);
     const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
-    json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: [studentReport(quiz, a, student ? student.name : '', { forStudent: true })] });
+    json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id, a.layout), students: [studentReport(quiz, a, student ? student.name : '', { forStudent: true })] });
   });
 
   // Practice only: start over with a fresh attempt.
@@ -494,7 +503,7 @@ function seesAsset(a, run, quiz, rel) {
   if (!shown) { shown = JSON.stringify(publicQuiz(quiz, a.layout)); shownAssets.set(a, shown); }
   if (shown.includes(rel)) return true;
   if (!a.practice || a.status !== 'submitted') return false;
-  return JSON.stringify([reportQuiz(quiz, run.quiz_id), studentReport(quiz, a, '', { forStudent: true })]).includes(rel);
+  return JSON.stringify([reportQuiz(quiz, run.quiz_id, a.layout), studentReport(quiz, a, '', { forStudent: true })]).includes(rel);
 }
 module.exports.serveAsset = function serveAsset(req, res, rel) {
   const { a, run, quiz } = current(req, { mustBeOpen: false });

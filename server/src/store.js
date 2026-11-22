@@ -177,8 +177,18 @@ function shuffle(arr) {
   return a;
 }
 // Shuffle questions only within each part (same-type run) so the directions still line up. Questions
-// next to each other that use the same shared material move together, in their order.
+// next to each other that use the same shared material move together, in their order. With question
+// pools, each pool's picks are made first: the questions left out aren't in this student's quiz at all.
 function makeLayout(quiz) {
+  const skip = new Set();
+  if (quiz.pools) {
+    const byPool = new Map();
+    for (const qq of quiz.questions) if (qq.pool) { if (!byPool.has(qq.pool)) byPool.set(qq.pool, []); byPool.get(qq.pool).push(qq.id); }
+    for (const [name, ids] of byPool) {
+      const keep = new Set(shuffle(ids).slice(0, quiz.pools[name] || 1));
+      for (const id of ids) if (!keep.has(id)) skip.add(id);
+    }
+  }
   const order = [];
   let run = [];
   // Questions that use the same shared material (all of it, in order) stay together when shuffled.
@@ -194,10 +204,16 @@ function makeLayout(quiz) {
     run = [];
   };
   const sectionStart = new Set((quiz.sections || []).map((sec) => sec.before));
-  quiz.questions.forEach((qq, i) => {
-    if (run.length && (quiz.questions[i - 1].type !== qq.type || sectionStart.has(qq.id))) flush(); // shuffling stays inside a section
+  let prev = null; // the last question this student has
+  let newSection = false; // a section started since it (maybe on a question a pool left out)
+  for (const qq of quiz.questions) {
+    if (sectionStart.has(qq.id)) newSection = true;
+    if (skip.has(qq.id)) continue;
+    if (run.length && (prev.type !== qq.type || newSection)) flush(); // shuffling stays inside a section
     run.push(qq.id);
-  });
+    prev = qq;
+    newSection = false;
+  }
   flush();
   const perms = {};
   for (const qq of quiz.questions) {
@@ -208,7 +224,29 @@ function makeLayout(quiz) {
   return { order, perms };
 }
 
+// What one student was given. With question pools their layout picks some of each pool's questions, and
+// the rest aren't theirs to answer, grade or report. Without pools (or before they start): the whole quiz.
+function quizFor(quiz, layout) {
+  if (!quiz || !quiz.pools || !layout || !Array.isArray(layout.order)) return quiz;
+  const mine = new Set(layout.order);
+  return Object.assign({}, quiz, { questions: quiz.questions.filter((qq) => mine.has(qq.id)) });
+}
+// How many questions, and points, each student gets: all of them, less what the pools leave out.
+function perStudent(quiz) {
+  let count = 0;
+  let points = 0;
+  const pools = new Map();
+  for (const qq of quiz.questions) {
+    if (!qq.pool || !quiz.pools) { count++; points += qq.points; continue; }
+    const p = pools.get(qq.pool) || { n: 0, points: qq.points };
+    p.n++;
+    pools.set(qq.pool, p);
+  }
+  for (const [name, p] of pools) { const k = Math.min(p.n, quiz.pools[name] || 1); count += k; points += k * p.points; }
+  return { count, points: Math.round(points * 100) / 100 };
+}
+
 module.exports = {
-  getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, back, awayNow, logEvent, makeLayout, attempts,
+  getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, back, awayNow, logEvent, makeLayout, quizFor, perStudent, attempts,
   CLIENT_EVENTS, SERVER_EVENTS, quizCache,
 };

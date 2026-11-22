@@ -35,6 +35,7 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `integrity.graceStrikes` | `1` | Times a student can leave the window before the attempt is invalidated (0–10). The default lets one slip go; 0 invalidates on the first. |
 | `directions` | built in | `"quiz"`: your own directions for the whole quiz (Markdown), shown before it starts and with each part's. The type keys replace that part's directions: `{ "quiz": "No calculators.", "single": "...", "code": "..." }` |
 | `shared` | none | Shared material that several questions use (below) |
+| `pools` | none | How many questions each student gets from each question pool: `{ "loops": 2 }` (below). A pool not listed gives 1 |
 | `sections` | none | Your own section dividers: `[{ "before": "q5", "title": "Part B: Strings", "directions": "..." }]`. Each starts at the question named in `before` and runs to the next one, whatever the questions' types, with its own title and directions (Markdown). Questions before the first are grouped by type. Shuffling stays inside a section |
 | `questions` | required | List of questions |
 
@@ -61,6 +62,23 @@ in `shared` once, instead of being copied into each prompt:
 directions page, and shuffling never moves a question out of its part. Keep same-type
 questions together.
 
+**Question pools.** Give questions the same `"pool"` and each student gets only some of them,
+picked at random, so a neighbor's screen doesn't help:
+
+```json
+"pools": { "loops": 2 },
+"questions": [
+  { "id": "l1", "type": "code", "pool": "loops", "points": 6, ... },
+  { "id": "l2", "type": "code", "pool": "loops", "points": 6, ... },
+  { "id": "l3", "type": "code", "pool": "loops", "points": 6, ... }
+]
+```
+
+- Each student gets 2 of l1, l2 and l3. The ones they get stay where the pool's questions are.
+- Every question in a pool is worth the same, so everyone's quiz is out of the same points.
+- Write a pool's questions next to each other, of one type and about as hard as each other.
+- Reports and the CSV show each student only the questions they got.
+
 ## Every question
 
 | Key | Default | Meaning |
@@ -73,6 +91,7 @@ questions together.
 | `image` | none | `"assets/diagram.png"`, must exist in the zip |
 | `imageAlt` | `""` | Alt text for the image |
 | `shared` | none | The `id` of a shared material this question uses, or a list of up to 3 (`["s1", "s2"]`), shown in that order |
+| `pool` | none | A question pool's name (letters, digits, `-`, `_`): each student gets some of the pool's questions (see Question pools) |
 
 **Prompts** (and shared material) use Markdown:
 - paragraphs (blank line between)

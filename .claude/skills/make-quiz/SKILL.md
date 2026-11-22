@@ -45,6 +45,9 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
 - **Prompts** say exactly what's asked, including edge cases ("return 0 for an empty array").
   No flavor text, no hints, nothing that gives away the answer. Put code in backticks or
   fenced blocks.
+- **Question pools:** only when asked ("each student gets 2 of these 5"). Give those questions the same
+  `"pool"`, set `"pools": { "<name>": 2 }`, and make them worth the same, of one type, next to each
+  other and about as hard as each other.
 - **Shared material:** when several questions use the same case, passage or code, write it
   once in top-level `shared` and give each question `"shared": "<id>"`. Keep the set's
   questions next to each other.

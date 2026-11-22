@@ -393,6 +393,8 @@ input[type="file"].input { padding: 6px 10px; }
 .qe-row.sel .qe-row-btn, .qe-settings.sel { background: var(--soft); font-weight: 600; }
 .qe-row-n { flex: none; width: 1.5em; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .qe-row-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qe-row-pool { flex: none; max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 400; color: var(--ink-2); }
+.qe-name-row > .field { flex: 1 1 200px; min-width: 0; }
 .qe-row-pts { flex: none; min-width: 1.2em; text-align: right; font-size: 13px; font-weight: 400; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .qe-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid var(--ink-2); }
 .qe-row.bad .qe-dot { background: var(--bad); border-color: var(--bad); }
