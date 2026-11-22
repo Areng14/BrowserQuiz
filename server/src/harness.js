@@ -901,20 +901,20 @@ function explainHarnessErrors(text) {
   return [...new Set(notes.filter(Boolean))].join('\n');
 }
 function cleanJava(s) {
-  const text = String(s || '').replace(/\/jobs\/[^/\s]+\//g, '').replace(/\r/g, '').trim();
+  const text = String(s || '').replace(/\/jobs\/(?:\d+\/)?[^/\s]+\//g, '').replace(/\r/g, '').trim();
   if (!/^BQMain\.java:/m.test(text)) return text.slice(0, 4000);
   const own = text.split(/(?=^\w+\.java:\d+: error: )/m).filter((b) => /^\w+\.java/.test(b) && !b.startsWith('BQMain.java')).join('').trim();
   return [own, explainHarnessErrors(text)].filter(Boolean).join('\n').slice(0, 4000);
 }
 const cleanPy = (s) => String(s || '').replace(/File "\/jobs\/[^"]+\/(\w+\.py)"/g, 'File "$1"').trim().slice(0, 4000);
-const cleanJs = (s) => String(s || '').replace(/(?:file:\/\/)?\/jobs\/[^/\s]+\//g, '').replace(/\bsolution\.cjs\b/g, 'solution.js').replace(/\bsolution\.cts\b/g, 'solution.ts').trim().slice(0, 4000);
+const cleanJs = (s) => String(s || '').replace(/(?:file:\/\/)?\/jobs\/(?:\d+\/)?[^/\s]+\//g, '').replace(/\bsolution\.cjs\b/g, 'solution.js').replace(/\bsolution\.cts\b/g, 'solution.ts').trim().slice(0, 4000);
 
 // gcc's errors, cut to the ones in the student's file. Errors in the generated test file mean their code
 // doesn't have what the question asks for; those are said in plain words, like Java's (explainHarnessErrors).
 function cleanCc(text, lang, q) {
   const own = lang === 'cpp' ? 'solution.cpp' : 'solution.c';
   // (gcc quotes with ‘ ’ in a UTF-8 locale)
-  const lines = String(text || '').replace(/\/jobs\/[^/\s]+\//g, '').replace(/[\u2018\u2019]/g, "'").replace(/\r/g, '').split('\n');
+  const lines = String(text || '').replace(/\/jobs\/(?:\d+\/)?[^/\s]+\//g, '').replace(/[\u2018\u2019]/g, "'").replace(/\r/g, '').split('\n');
   const blocks = []; // the student's own diagnostics, each with its source lines and carets
   const known = []; // what the generated file's errors mean
   const other = [];
@@ -963,7 +963,7 @@ function cleanCc(text, lang, q) {
 // Go's errors: one line each ("solution.go:3:5: ..."), with indented details. Theirs as they are; the test file's
 // in plain words.
 function cleanGo(text, q) {
-  const lines = String(text || '').replace(/\/jobs\/[^/\s]+\//g, '').replace(/\r/g, '').split('\n');
+  const lines = String(text || '').replace(/\/jobs\/(?:\d+\/)?[^/\s]+\//g, '').replace(/\r/g, '').split('\n');
   const keep = [];
   const known = [];
   let mine = false;
@@ -997,7 +997,7 @@ function cleanGo(text, q) {
 
 // rustc's errors: blocks that start "error[E0308]: ..." and say where with " --> file:line:col".
 function cleanRust(text, q) {
-  const blocks = String(text || '').replace(/\/jobs\/[^/\s]+\//g, '').replace(/\r/g, '').split(/\n(?=(?:error|warning)(?:\[E\d+\])?: )/);
+  const blocks = String(text || '').replace(/\/jobs\/(?:\d+\/)?[^/\s]+\//g, '').replace(/\r/g, '').split(/\n(?=(?:error|warning)(?:\[E\d+\])?: )/);
   const mine = [];
   const known = [];
   const sig = (name) => {
@@ -1023,7 +1023,7 @@ function cleanRust(text, q) {
 
 // csc's errors: "solution.cs(3,9): error CS1002: ; expected", one per line.
 function cleanCs(text, q) {
-  const lines = String(text || '').replace(/\/jobs\/[^/\s]+\//g, '').replace(/\r/g, '').split('\n');
+  const lines = String(text || '').replace(/\/jobs\/(?:\d+\/)?[^/\s]+\//g, '').replace(/\r/g, '').split('\n');
   const mine = [];
   const known = [];
   const sig = (name) => {

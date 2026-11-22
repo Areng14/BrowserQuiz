@@ -182,7 +182,7 @@ async function checkOutputs(quiz) {
     if (q.type !== 'output') continue;
     const label = `Question ${i + 1}`;
     const res = await callRunner(H.buildSnippetJob(q.language, q.code), 5000, 256);
-    const err = String(res.stderr || res.stdout || '').replace(/\/jobs\/[^/\s]+\//g, '').trim().slice(0, 400);
+    const err = String(res.stderr || res.stdout || '').replace(/\/jobs\/(?:\d+\/)?[^/\s]+\//g, '').trim().slice(0, 400);
     if (res.status === 'compile_error') { problems.push(`${label}: the code doesn't compile: ${err}`); continue; }
     if (res.status === 'timeout') { problems.push(`${label}: the code ran out of time.`); continue; }
     if (res.status !== 'ok' || res.exitCode) { problems.push(`${label}: the code crashed: ${err}`); continue; }
