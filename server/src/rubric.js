@@ -15,7 +15,7 @@ const TIMEOUT_MS = 100;
 function stripCode(code, lang) {
   const s = String(code || '');
   const py = lang === 'python';
-  const js = lang === 'javascript' || lang === 'typescript';
+  const js = lang === 'javascript' || lang === 'typescript' || lang === 'go'; // `...` strings
   const n = s.length;
   let out = '';
   let i = 0;

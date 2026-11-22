@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """BrowserQuiz code runner.
 
-Compiles and runs student Java, Python, JavaScript, TypeScript, C and C++ inside "jail-lite", a sandbox built only from unprivileged
+Compiles and runs student Java, Python, JavaScript, TypeScript, C, C++, Go and Rust inside "jail-lite", a sandbox built only from unprivileged
 kernel features (it works on hosts like Railway that don't allow privileged containers):
 
   * a separate uid per worker slot; everything that uid owns is killed after every job
@@ -149,7 +149,7 @@ def build_rules(job, run_here=False):
                   "/dev/urandom", "/dev/random", "/dev/zero"]
     # the dynamic loader and shared libraries, and gcc's own programs (cc1, collect2)
     exec_dirs = ["/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/libexec/gcc"]
-    tools = [java, javac, python] + [_real(n) for n in ("node", "gcc", "g++", "as", "ld")]
+    tools = [java, javac, python] + [_real(n) for n in ("node", "gcc", "g++", "cc", "as", "ld", "rustc")]
     exec_files = sorted(set(p for p in tools if p))
     # Files in the job dir can only be run as programs by a C or C++ job's run step (its compiled main).
     return dict(read_dirs=read_dirs, read_files=read_files, exec_dirs=exec_dirs, exec_files=exec_files,
@@ -321,7 +321,11 @@ CC_FLAGS = {
     # These flags must match the ones bqpre.hpp.gch was built with (Dockerfile).
     "cpp": ["-std=gnu++17", "-O2", "-pipe", "-w", "-fmax-errors=20", "-fdiagnostics-color=never", "-D_GLIBCXX_ASSERTIONS", "-I/opt/bq/cpp"],
 }
-LANGS = ("java", "python", "javascript", "typescript", "c", "cpp")
+LANGS = ("java", "python", "javascript", "typescript", "c", "cpp", "go", "rust")
+GO = "/opt/bq/go"  # the standard library, compiled when the image was built (Dockerfile)
+# The linker by its full path: with a bare name, Rust's process spawning (rustc changes PATH for the linker)
+# takes a route that needs socketpair, which the sandbox denies.
+RUST_FLAGS = ["--edition", "2021", "-C", "opt-level=1", "-C", "debuginfo=0", "-C", "linker=/usr/bin/cc", "--color", "never", "-A", "warnings"]
 
 
 def run_job(slot, req):
@@ -334,9 +338,9 @@ def run_job(slot, req):
         return {"status": "error", "message": "bad job"}
     sources = req.get("sources")
     include = req.get("include")
-    if lang in ("c", "cpp"):
+    if lang in ("c", "cpp", "go", "rust"):
         if sources is None:
-            sources = sorted(n for n in files if n.endswith(".cpp" if lang == "cpp" else ".c"))
+            sources = sorted(n for n in files if n.endswith({"c": ".c", "cpp": ".cpp", "go": ".go", "rust": ".rs"}[lang]))
         if not isinstance(sources, list) or not sources or not all(isinstance(n, str) and n in files for n in sources):
             return {"status": "error", "message": "bad job"}
         if include not in (None, "bqpre.h", "bqpre.hpp"):
@@ -383,6 +387,22 @@ def run_job(slot, req):
                 return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                         "exitCode": code, "ms": ms}
             st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s, mem_mb + 64, 64, env, run_here=True)
+        elif lang in ("go", "rust"):
+            if lang == "go":
+                steps = [[os.path.join(GO, "tool", "compile"), "-p", "main", "-importcfg", os.path.join(GO, "importcfg"), "-pack", "-o", "main.a"] + sources,
+                         [os.path.join(GO, "tool", "link"), "-importcfg", os.path.join(GO, "importcfg"), "-o", "main", "main.a"]]
+            else:
+                steps = [[shutil.which("rustc")] + RUST_FLAGS + ["-o", "main", sources[0]]]
+            for argv in steps:
+                st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 2048, 64, env, fsize=64 << 20)
+                kill_uid(uid)
+                if st != "ok" or code != 0:
+                    return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
+                            "exitCode": code, "ms": ms}
+            # Go reserves ~800 MB of address space before it starts; GOMEMLIMIT keeps its heap to the limit.
+            run_env = dict(env, GOMEMLIMIT=f"{mem_mb}MiB", GOMAXPROCS="2") if lang == "go" else env
+            st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s,
+                                              mem_mb + (1536 if lang == "go" else 128), 64, run_env, run_here=True)
         elif lang in ("javascript", "typescript"):
             argv = [shutil.which("node"), f"--max-old-space-size={mem_mb}"] + NODE_FLAGS + [req.get("main") or "main.cjs"]
             st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1024, 64, env)
@@ -486,9 +506,12 @@ def language_test():
         ("typescript", {"main.ts": "const n: number = 2;\nconsole.log('ok' + n)"}, "main.ts", None),
         ("c", {"main.c": "#include <stdio.h>\nint main(void) { printf(\"ok%d\\n\", 1 + 1); return 0; }"}, "main", ["main.c"]),
         ("cpp", {"main.cpp": "int main() { vector<int> v{1, 1}; cout << \"ok\" << v[0] + v[1] << endl; }"}, "main", ["main.cpp"]),
+        ("go", {"main.go": "package main\nimport \"fmt\"\nfunc main() { fmt.Printf(\"ok%d\\n\", 1+1) }"}, "main", ["main.go"]),
+        ("rust", {"main.rs": "fn main() { let v = vec![1, 1]; println!(\"ok{}\", v[0] + v[1]); }"}, "main", ["main.rs"]),
     ]
     for lang, files, main, sources in probes:
-        if not shutil.which({"javascript": "node", "typescript": "node", "c": "gcc", "cpp": "g++"}[lang]):
+        need = {"javascript": "node", "typescript": "node", "c": "gcc", "cpp": "g++", "go": None, "rust": "rustc"}[lang]
+        if (need and not shutil.which(need)) or (lang == "go" and not os.path.exists(os.path.join(GO, "importcfg"))):
             notes.append(f"{lang}: not installed")
             continue
         req = {"language": lang, "files": files, "main": main, "timeMs": 3000}

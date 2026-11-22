@@ -2,7 +2,7 @@
 // mistakes (typo'd keys, missing references), and with --run, every reference solution run against
 // its tests on this computer.
 //   node scripts/check-quiz.mjs examples/ap-csa-unit4          a folder, .quiz or .zip
-//   node scripts/check-quiz.mjs examples/ap-csa-unit4 --run    also run references (python3; a JDK for Java; gcc/g++ for C/C++)
+//   node scripts/check-quiz.mjs examples/ap-csa-unit4 --run    also run references (python3; a JDK for Java; gcc/g++ for C/C++; go; rustc)
 // Exit code 0 means the server will accept it (with --run: and the references pass).
 import { createRequire } from 'node:module';
 import { readFileSync, readdirSync, statSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
@@ -112,8 +112,8 @@ if (!run) {
   process.exit(0);
 }
 const has = (cmd) => spawnSync(cmd, ['--version'], { stdio: 'ignore' }).status === 0;
-const tools = { java: has('javac') && has('java'), python: has('python3'), javascript: true, typescript: true, c: has('gcc'), cpp: has('g++') };
-const MISSING = { java: 'no JDK', python: 'no python3', c: 'no gcc', cpp: 'no g++' };
+const tools = { java: has('javac') && has('java'), python: has('python3'), javascript: true, typescript: true, c: has('gcc'), cpp: has('g++'), go: spawnSync('go', ['version'], { stdio: 'ignore' }).status === 0, rust: has('rustc') };
+const MISSING = { java: 'no JDK', python: 'no python3', c: 'no gcc', cpp: 'no g++', go: 'no go', rust: 'no rustc' };
 const outputsSkipped = [];
 for (const [i, q] of quiz.questions.entries()) {
   if (q.type === 'output' && !tools[q.language]) { outputsSkipped.push(i); console.log(`skipped: question ${i + 1} output (${MISSING[q.language]} here; the server runs it on upload)`); }
@@ -151,6 +151,14 @@ function runJob(job) {
       const cpp = job.language === 'cpp';
       const flags = cpp ? ['-std=gnu++17', '-D_GLIBCXX_ASSERTIONS', '-I' + join(import.meta.dirname, '..', 'runner')] : ['-std=gnu17'];
       const c = spawnSync(cpp ? 'g++' : 'gcc', [...flags, '-O2', '-w', ...(job.include ? ['-include', job.include] : []), '-o', 'main', ...(job.sources || []), ...(cpp ? [] : ['-lm'])], opts);
+      if (c.status !== 0) return { status: 'compile_error', stdout: c.stdout, stderr: c.stderr || c.stdout };
+      const r = spawnSync(join(dir, 'main'), [], opts);
+      return { status: r.error && r.error.code === 'ETIMEDOUT' ? 'timeout' : 'ok', stdout: r.stdout || '', stderr: r.stderr || '' };
+    }
+    if (job.language === 'go' || job.language === 'rust') {
+      const c = job.language === 'go'
+        ? spawnSync('go', ['build', '-o', 'main', ...job.sources], { ...opts, env: { ...env, GO111MODULE: 'off', GOFLAGS: '' } })
+        : spawnSync('rustc', ['--edition', '2021', '-C', 'opt-level=1', '-A', 'warnings', '-o', 'main', job.sources[0]], opts);
       if (c.status !== 0) return { status: 'compile_error', stdout: c.stdout, stderr: c.stderr || c.stdout };
       const r = spawnSync(join(dir, 'main'), [], opts);
       return { status: r.error && r.error.code === 'ETIMEDOUT' ? 'timeout' : 'ok', stdout: r.stdout || '', stderr: r.stderr || '' };

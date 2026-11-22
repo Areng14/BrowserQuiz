@@ -109,10 +109,12 @@
   const HELP = 'int, long, double, boolean, string, char; any of them with [] or [][]; list<...> of them; map<string or int, ...>; a class from Classes';
 
   // ---------- languages ----------
-  const LANGS = ['java', 'python', 'javascript', 'typescript', 'c', 'cpp'];
-  const LANG_NAMES = { java: 'Java', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', c: 'C', cpp: 'C++' };
+  const LANGS = ['java', 'python', 'javascript', 'typescript', 'c', 'cpp', 'go', 'rust'];
+  const LANG_NAMES = { java: 'Java', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', c: 'C', cpp: 'C++', go: 'Go', rust: 'Rust' };
   const isJs = (l) => l === 'javascript' || l === 'typescript';
   const isC = (l) => l === 'c' || l === 'cpp';
+  // Compiled to a program of its own: C, C++, Go, Rust (each test in its own process, no speed tests)
+  const isNative = (l) => isC(l) || l === 'go' || l === 'rust';
   const isClassName = (t) => /^[A-Z]\w*$/.test(canon(t));
 
   // JavaScript and TypeScript: numbers are number, chars are one-letter strings, maps are Map.
@@ -167,6 +169,29 @@
     return `${cType(s.returns)} ${s.name}(${ps.join(', ') || 'void'})`;
   }
 
+  // Go: slices, maps, and a pointer for an object (nil for none). A char is a byte, like Go's s[i].
+  const GO = { int: 'int', long: 'int64', double: 'float64', boolean: 'bool', string: 'string', char: 'byte' };
+  function goType(t) {
+    t = canon(t);
+    if (GO[t]) return GO[t];
+    const e = elementType(t);
+    if (e) return '[]' + goType(e);
+    const kv = mapTypes(t);
+    if (kv) return `map[${GO[kv[0]]}]${goType(kv[1])}`;
+    return '*' + t;
+  }
+  // Rust: Vec, HashMap, and Option<Box<...>> for an object (None for none), like LeetCode's ListNode.
+  const RS = { int: 'i32', long: 'i64', double: 'f64', boolean: 'bool', string: 'String', char: 'char' };
+  function rustType(t) {
+    t = canon(t);
+    if (RS[t]) return RS[t];
+    const e = elementType(t);
+    if (e) return `Vec<${rustType(e)}>`;
+    const kv = mapTypes(t);
+    if (kv) return `HashMap<${RS[kv[0]]}, ${rustType(kv[1])}>`;
+    return `Option<Box<${t}>>`;
+  }
+
   // Why a language can't take a type (C has no maps, and keeps 2D arrays to numbers), or null.
   function unsupported(lang, t, D) {
     t = canon(t);
@@ -182,8 +207,12 @@
   function fits(lang, t, v, D, depth) {
     t = canon(t);
     depth = depth || 0;
-    if (!isC(lang) || depth > MAX_DEPTH) return null;
-    if (v === null || v === undefined) return isClass(t, D) || lang === 'c' ? null : `C++ has no null ${cppType(t)}`;
+    if (!isNative(lang) || depth > MAX_DEPTH) return null;
+    if (v === null || v === undefined) {
+      if (isClass(t, D) || lang === 'c') return null;
+      if (lang === 'go') return t === 'string' ? 'Go has no null string' : null;
+      return lang === 'rust' ? `Rust has no null ${rustType(t)} (only None for an object)` : `C++ has no null ${cppType(t)}`;
+    }
     if (typeof v === 'object' && !Array.isArray(v) && Array.isArray(v.range)) return null;
     if (isClass(t, D)) {
       for (const f of D[t]) {
@@ -193,7 +222,10 @@
       }
       return null;
     }
-    if (t === 'char') return typeof v === 'string' && v.charCodeAt(0) < 128 ? null : 'a C or C++ char is one byte (plain ASCII only)';
+    if (t === 'char') {
+      if (lang === 'rust') return typeof v === 'string' && !(v.charCodeAt(0) >= 0xd800 && v.charCodeAt(0) < 0xe000) ? null : "that char isn't a Rust char";
+      return typeof v === 'string' && v.charCodeAt(0) < 128 ? null : `a ${lang === 'go' ? 'Go' : 'C or C++'} char is one byte (plain ASCII only)`;
+    }
     if (t === 'string') return lang === 'c' && typeof v === 'string' && v.includes('\0') ? "a C string can't hold \\0" : null;
     if (SCALARS.includes(t)) return null;
     const kv = mapTypes(t);
@@ -209,6 +241,10 @@
     const tp = (ps) => ps.map((p) => `${p.name}: ${tsType(p.type)}`).join(', ');
     const names = (ps) => ps.map((p) => p.name).join(', ');
     const cp = (ps) => ps.map(cppParam).join(', ');
+    const gp = (ps) => ps.map((p) => `${p.name} ${goType(p.type)}`).join(', ');
+    const rp = (ps) => ps.map((p) => `${p.name}: ${rustType(p.type)}`).join(', ');
+    const goRet = (t) => (t === 'void' ? '' : ' ' + goType(t));
+    const rsRet = (t) => (t === 'void' ? '' : ' -> ' + rustType(t));
     // JSDoc, so JavaScript students know the types: @param {number[]} nums
     const doc = (ps, ret, ind) => (ps.length || ret ? [`${ind}/**`, ...ps.map((p) => `${ind} * @param {${jsType(p.type)}} ${p.name}`),
       ...(ret ? [`${ind} * @return {${jsType(ret)}}`] : []), `${ind} */`].join('\n') + '\n' : '');
@@ -219,6 +255,8 @@
       if (lang === 'javascript') return `${doc(s.params, s.returns, '')}function ${s.name}(${names(s.params)}) {\n    \n}\n`;
       if (lang === 'typescript') return `function ${s.name}(${tp(s.params)}): ${tsType(s.returns)} {\n    \n}\n`;
       if (lang === 'cpp') return `class Solution {\npublic:\n    ${cppType(s.returns)} ${s.name}(${cp(s.params)}) {\n        \n    }\n};\n`;
+      if (lang === 'go') return `func ${s.name}(${gp(s.params)}) ${goType(s.returns)} {\n    \n}\n`;
+      if (lang === 'rust') return `impl Solution {\n    pub fn ${s.name}(${rp(s.params)}) -> ${rustType(s.returns)} {\n        \n    }\n}\n`;
       const d = cDims(s.returns);
       const note = d === 2 ? '// Return a malloc\'d array of malloc\'d rows. Set *returnSize to the number of rows\n// and *returnColumnSizes to a malloc\'d array of their lengths.\n'
         : d ? '// Return a malloc\'d array, and set *returnSize to its length.\n' : '';
@@ -227,7 +265,9 @@
     const C = shape.class;
     const n = C.name;
     if (emptyClass) {
-      return { java: `public class ${n} {\n    \n}\n`, python: `class ${n}:\n    pass\n`, cpp: `class ${n} {\npublic:\n    \n};\n` }[lang] || `class ${n} {\n    \n}\n`;
+      return {
+        java: `public class ${n} {\n    \n}\n`, python: `class ${n}:\n    pass\n`, cpp: `class ${n} {\npublic:\n    \n};\n`, go: `type ${n} struct {\n    \n}\n`, rust: `struct ${n} {\n    \n}\n`,
+      }[lang] || `class ${n} {\n    \n}\n`;
     }
     let body;
     if (lang === 'java') {
@@ -246,6 +286,17 @@
     if (lang === 'typescript') {
       body = [`    constructor(${tp(C.constructor)}) {\n    }`].concat(C.methods.map((m) => `    ${m.name}(${tp(m.params)}): ${tsType(m.returns)} {\n    }`));
       return `class ${n} {\n${body.join('\n\n')}\n}\n`;
+    }
+    if (lang === 'go') {
+      // a constructor function and methods on a pointer, the usual Go way: c := NewCounter(5); c.add(3)
+      body = [`type ${n} struct {\n    \n}`, `func New${n}(${gp(C.constructor)}) *${n} {\n    return &${n}{}\n}`]
+        .concat(C.methods.map((m) => `func (this *${n}) ${m.name}(${gp(m.params)})${goRet(m.returns)} {\n    \n}`));
+      return body.join('\n\n') + '\n';
+    }
+    if (lang === 'rust') {
+      body = [`    pub fn new(${rp(C.constructor)}) -> Self {\n        ${n} {}\n    }`]
+        .concat(C.methods.map((m) => `    pub fn ${m.name}(&mut self${m.params.map((p) => `, ${p.name}: ${rustType(p.type)}`).join('')})${rsRet(m.returns)} {\n        \n    }`));
+      return `struct ${n} {\n    \n}\n\nimpl ${n} {\n${body.join('\n\n')}\n}\n`;
     }
     body = [`    ${n}(${cp(C.constructor)}) {\n    }`].concat(C.methods.map((m) => `    ${cppType(m.returns)} ${m.name}(${cp(m.params)}) {\n    }`));
     return `class ${n} {\npublic:\n${body.join('\n\n')}\n};\n`;
@@ -290,6 +341,20 @@
         return L.join('\n');
       }).join('\n\n') + (names.length ? '\n' : '');
     }
+    if (lang === 'go') {
+      const w = Math.max(0, ...names.flatMap((n) => D[n].map((f) => f.name.length)));
+      return names.map((n) => [`type ${n} struct {`, ...D[n].map((f) => `    ${f.name.padEnd(w)} ${goType(f.type)}`), '}'].join('\n')).join('\n\n') + (names.length ? '\n' : '');
+    }
+    if (lang === 'rust') {
+      return names.map((n) => {
+        const fs = D[n];
+        const L = ['#[derive(Debug, Clone, PartialEq)]', `pub struct ${n} {`, ...fs.map((f) => `    pub ${f.name}: ${rustType(f.type)},`), '}'];
+        if (!brief) {
+          L.push('', `impl ${n} {`, `    pub fn new(${fs.map((f) => `${f.name}: ${rustType(f.type)}`).join(', ')}) -> Self {`, `        ${n} { ${fs.map((f) => f.name).join(', ')} }`, '    }', '}');
+        }
+        return L.join('\n');
+      }).join('\n\n') + (names.length ? '\n' : '');
+    }
     if (lang === 'c') {
       return names.map((n) => [`typedef struct ${n} {`,
         ...D[n].map((f) => `    ${isClass(canon(f.type), D) ? `struct ${canon(f.type)}*` : cType(f.type)} ${f.name};`), `} ${n};`].join('\n')).join('\n\n') + (names.length ? '\n' : '');
@@ -330,6 +395,6 @@
 
   return {
     SCALARS, CLASS, canon, isClass, isValueType, elementType, mapTypes, checkValue, nullable, javaType, pyType, classSource, JAVA_ZERO, HELP, MAX_ITEMS, MAX_DEPTH,
-    LANGS, LANG_NAMES, isJs, isC, jsType, tsType, cppType, cppParam, cType, cDims, cSignature, unsupported, fits, starter, JS_ZERO, CPP_ZERO,
+    LANGS, LANG_NAMES, isJs, isC, isNative, jsType, tsType, cppType, cppParam, cType, cDims, cSignature, goType, rustType, unsupported, fits, starter, JS_ZERO, CPP_ZERO,
   };
 }));

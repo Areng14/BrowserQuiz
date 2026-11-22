@@ -390,12 +390,16 @@ const LANG_RESERVED = {
   cpp: words(C_WORDS + ' alignas alignof and and_eq asm bitand bitor catch char8_t char16_t char32_t class compl concept consteval constexpr constinit const_cast co_await co_return co_yield decltype delete dynamic_cast explicit export friend mutable namespace new noexcept not not_eq nullptr operator or or_eq private protected public reinterpret_cast requires static_assert static_cast template this thread_local throw try typeid typename using virtual wchar_t xor xor_eq std'),
 };
 LANG_RESERVED.typescript = LANG_RESERVED.javascript;
+LANG_RESERVED.go = words('break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var main init this nil true false iota');
+LANG_RESERVED.rust = words('as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while abstract become box do final macro override priv typeof unsized virtual yield try union main new bq sol');
+// Rust's own types, which a declared class would hide.
+const RUST_TAKEN = words('Vec String Option Box Some None Ok Err Result HashMap HashSet BTreeMap BTreeSet VecDeque BinaryHeap Rc RefCell Self Solution');
 // JavaScript's own classes, which a declared class would hide from the harness.
 const JS_TAKEN = words('Array Map Set WeakMap WeakSet Object Function Promise Error Date JSON Math Number String Boolean Symbol RegExp BigInt Reflect Proxy Buffer Intl Atomics');
 
 // What the question's languages other than Java and Python can't do: C has no classes to write or maps,
-// C and C++ have no speed tests (an optimizing compiler times them badly), and some values don't exist
-// (a C++ null string, a C or C++ char that isn't ASCII).
+// C, C++, Go and Rust have no speed tests (an optimizing compiler times them badly), and some values don't
+// exist (a null string in C++, Go or Rust, a C, C++ or Go char that isn't ASCII).
 function checkLanguages(where, out, languages, D) {
   const names = [];
   if (out.mode === 'method') names.push(out.signature.name, ...out.signature.params.map((p) => p.name));
@@ -405,9 +409,10 @@ function checkLanguages(where, out, languages, D) {
     const bad = names.find((n) => LANG_RESERVED[lang] && LANG_RESERVED[lang].has(n));
     if (bad) fail(`${where}: "${bad}" can't be a name in ${langName(lang)}. Pick another, or leave ${langName(lang)} out.`);
     if (T.isJs(lang)) { const t = Object.keys(D || {}).find((n) => JS_TAKEN.has(n)); if (t) fail(`${where}.types: "${t}" is already a JavaScript class. Pick another name.`); }
+    if (lang === 'rust') { const t = Object.keys(D || {}).find((n) => RUST_TAKEN.has(n)) || (out.mode === 'class' && RUST_TAKEN.has(out.class.name) && out.class.name); if (t) fail(`${where}: "${t}" is already a Rust type. Pick another name.`); }
   }
   const tests = [...out.tests.sample.map((t, i) => [`tests.sample[${i}]`, t]), ...out.tests.hidden.map((t, i) => [`tests.hidden[${i}]`, t])];
-  const cc = languages.filter(T.isC);
+  const cc = languages.filter(T.isNative);
   if (cc.length && tests.some(([, t]) => t.speed)) fail(`${where}: speed tests only work in Java, Python, JavaScript and TypeScript, so take them out or leave ${cc.map(langName).join(' and ')} out.`);
   if (languages.includes('c')) {
     if (out.mode === 'class') fail(`${where}: C has no classes, so a "write a class" question can't include C.`);
@@ -461,7 +466,7 @@ function normalizeCode(where, q) {
         const params = checkParams(`${where}.class.methods[${i}]`, m.params || [], D);
         const key = `${mn}(${params.map((p) => p.type).join(',')})`;
         if (seen.has(key)) fail(`${where}: method ${key} is listed twice.`);
-        const noOverloads = languages.filter((l) => l === 'python' || T.isJs(l));
+        const noOverloads = languages.filter((l) => l === 'python' || T.isJs(l) || l === 'go' || l === 'rust');
         if ([...seen].some((k) => k.startsWith(mn + '(')) && noOverloads.length) {
           fail(`${where}: there are two methods named ${mn}. Overloads only work in Java and C++ (${noOverloads.map(langName).join(' and ')} can't have two methods with one name).`);
         }

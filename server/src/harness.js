@@ -15,10 +15,12 @@ const BQJS_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bqh.cjs'), 'ut
 const BQRT_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bqrt.c'), 'utf8');
 const BQC_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bqc.h'), 'utf8');
 const BQCPP_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bq.hpp'), 'utf8');
+const BQGO_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bqh.go'), 'utf8');
+const BQRS_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bq.rs'), 'utf8');
 // What every C answer gets without asking (C++'s is in the runner image, precompiled: runner/bqpre.hpp).
 const C_PRELUDE = ['stdio.h', 'stdlib.h', 'string.h', 'stdbool.h', 'math.h', 'limits.h', 'ctype.h', 'stdint.h'].map((x) => `#include <${x}>`).join('\n') + '\n';
 const { isJs, isC } = T;
-const NULL_WORD = { python: 'None', cpp: 'nullptr', c: 'NULL' };
+const NULL_WORD = { python: 'None', cpp: 'nullptr', c: 'NULL', go: 'nil', rust: 'None' };
 const ZERO_VALUE = { int: 0, long: 0, double: 0, boolean: false, char: '\0' };
 // A field left out of an object: null, or 0 / false for one that can't be null.
 const fieldValue = (f, v) => (v[f.name] !== undefined ? v[f.name] : T.nullable(f.type) ? null : ZERO_VALUE[T.canon(f.type)]);
@@ -177,6 +179,56 @@ function cArg(type, v, name, D, L) {
     `    int* ${name}c = ${dup('int', v.map((r) => (r ? r.length : 0)))};`);
   return [name, String(v.length), name + 'c'];
 }
+// Go: a composite literal, typed all the way down. Fields left out of an object are Go's zero values.
+function goLit(type, v, D) {
+  type = T.canon(type);
+  if (v === null || v === undefined) return 'nil';
+  if (T.isClass(type, D)) return `&${type}{${D[type].filter((f) => v[f.name] !== undefined && v[f.name] !== null).map((f) => `${f.name}: ${goLit(f.type, v[f.name], D)}`).join(', ')}}`;
+  if (isRange(v) && !T.mapTypes(type)) return `${type === 'long[]' ? 'bqRangeL' : 'bqRange'}(${v.range.join(', ')})`;
+  switch (type) {
+    case 'int': case 'long': case 'boolean': return String(v);
+    case 'double': return cDouble(v);
+    case 'char': return cChar(v);
+    case 'string': return JSON.stringify(v);
+    default: break;
+  }
+  const kv = T.mapTypes(type);
+  if (kv) return `${T.goType(type)}{${Object.entries(v).map(([k, x]) => `${kv[0] === 'int' ? Number(k) : JSON.stringify(k)}: ${goLit(kv[1], x, D)}`).join(', ')}}`;
+  return `${T.goType(type)}{${v.map((x) => goLit(elementType(type), x, D)).join(', ')}}`;
+}
+// Rust: String::from, vec!, HashMap::from, Some(Box::new(Point { ... })); every field written out.
+const rsChar = (c) => (c === "'" ? "'\\''" : c === '\\' ? "'\\\\'" : /^[\x20-\x7e]$/.test(c) ? `'${c}'` : `'\\u{${c.codePointAt(0).toString(16)}}'`);
+function rsStr(s) {
+  let o = '"';
+  for (const ch of String(s)) {
+    if (ch === '"') o += '\\"';
+    else if (ch === '\\') o += '\\\\';
+    else if (/^[\x20-\x7e]$/.test(ch)) o += ch;
+    else o += `\\u{${ch.codePointAt(0).toString(16)}}`;
+  }
+  return o + '"';
+}
+function rsLit(type, v, D) {
+  type = T.canon(type);
+  if (v === null || v === undefined) return 'None';
+  if (T.isClass(type, D)) return `Some(Box::new(${type} { ${D[type].map((f) => `${f.name}: ${rsLit(f.type, fieldValue(f, v), D)}`).join(', ')} }))`;
+  if (isRange(v) && !T.mapTypes(type)) return `crate::bq::${type === 'long[]' ? 'range_l' : 'range'}(${v.range.join(', ')})`;
+  switch (type) {
+    case 'int': case 'boolean': return String(v);
+    case 'long': return v + 'i64';
+    case 'double': return cDouble(v) + '_f64';
+    case 'char': return rsChar(v);
+    case 'string': return `String::from(${rsStr(v)})`;
+    default: break;
+  }
+  const kv = T.mapTypes(type);
+  if (kv) {
+    const items = Object.entries(v).map(([k, x]) => `(${kv[0] === 'int' ? Number(k) : `String::from(${rsStr(k)})`}, ${rsLit(kv[1], x, D)})`);
+    return items.length ? `HashMap::from([${items.join(', ')}])` : 'HashMap::new()';
+  }
+  return `vec![${v.map((x) => rsLit(elementType(type), x, D)).join(', ')}]`;
+}
+
 const C_WRITE = { int: 'bq_w_int', long: 'bq_w_ll', double: 'bq_w_dbl', boolean: 'bq_w_bool', char: 'bq_w_chr', string: 'bq_w_str' };
 const cWriter = (t, D) => C_WRITE[T.canon(t)] || `bq_w_${T.canon(t)}`;
 
@@ -189,12 +241,16 @@ function showRange(type, v, lang) {
   const n = rangeLength(v.range);
   const items = n <= 6 ? Array.from({ length: n }, (_, k) => a + k * s) : [a, a + s, a + 2 * s, '...', a + (n - 1) * s];
   const inner = items.join(', ');
+  if (lang === 'go') return `${T.goType(type)}{${inner}}`;
+  if (lang === 'rust') return `vec![${inner}]`;
   return braces(type, lang) ? `{${inner}}` : `[${inner}]`;
 }
 function show(type, v, lang, D) {
   if (v === null || v === undefined) return NULL_WORD[lang] || 'null';
   if (T.isClass(type, D) && v && typeof v === 'object') {
     const args = D[type].map((f) => show(f.type, fieldValue(f, v), lang, D)).join(', ');
+    if (lang === 'go') return `&${type}{${D[type].map((f) => `${f.name}: ${show(f.type, fieldValue(f, v), lang, D)}`).join(', ')}}`;
+    if (lang === 'rust') return `Some(${type} { ${D[type].map((f) => `${f.name}: ${show(f.type, fieldValue(f, v), lang, D)}`).join(', ')} })`;
     return lang === 'python' ? `${type}(${args})` : lang === 'c' ? `&(${type}){${args}}` : `new ${type}(${args})`;
   }
   if (isRange(v) && !T.mapTypes(type)) return showRange(type, v, lang);
@@ -212,10 +268,14 @@ function show(type, v, lang, D) {
     if (lang === 'python') return `{${items.map(([a, b]) => `${a}: ${b}`).join(', ')}}`;
     if (isJs(lang)) return `new Map([${items.map(([a, b]) => `[${a}, ${b}]`).join(', ')}])`;
     if (isC(lang)) return `{${items.map(([a, b]) => `{${a}, ${b}}`).join(', ')}}`;
+    if (lang === 'go') return `${T.goType(type)}{${items.map(([a, b]) => `${a}: ${b}`).join(', ')}}`;
+    if (lang === 'rust') return `HashMap::from([${items.map(([a, b]) => `(${a}, ${b})`).join(', ')}])`;
     return `Map.of(${items.map(([a, b]) => `${a}, ${b}`).join(', ')})`;
   }
   if (!Array.isArray(v)) return JSON.stringify(v);
   const inner = v.map((x) => show(elementType(type), x, lang, D)).join(', ');
+  if (lang === 'go') return `${T.goType(type)}{${inner}}`;
+  if (lang === 'rust') return `vec![${inner}]`;
   return braces(type, lang) ? `{${inner}}` : `[${inner}]`;
 }
 function showGot(type, v, lang, D) {
@@ -242,11 +302,13 @@ function callText(q, test, lang) {
       if (lang === 'java') return `${C.name} ${s.as} = new ${C.name}(${args});`;
       if (isJs(lang)) return `const ${s.as} = new ${C.name}(${args});`;
       if (lang === 'cpp') return `${C.name}* ${s.as} = new ${C.name}(${args});`;
+      if (lang === 'go') return `${s.as} := New${C.name}(${args})`;
+      if (lang === 'rust') return `let mut ${s.as} = ${C.name}::new(${args});`;
       return `${s.as} = ${C.name}(${args})`;
     }
     const m = stepMethod(C, s);
     const args = s.args.map((a, i) => show(m.params[i].type, a, lang, q.types)).join(', ');
-    return lang === 'python' ? `${s.on}.${s.call}(${args})` : `${s.on}${lang === 'cpp' ? '->' : '.'}${s.call}(${args});`;
+    return lang === 'python' || lang === 'go' ? `${s.on}.${s.call}(${args})` : `${s.on}${lang === 'cpp' ? '->' : '.'}${s.call}(${args});`;
   }).join('\n');
 }
 function expectedText(q, test, lang) {
@@ -517,6 +579,83 @@ function cMain(q, tests, marker) {
   return L.join('\n');
 }
 
+// Go: the student's file joins the harness's package main (a "package main" is added at the start of their
+// first line when they leave it out, so line numbers stay theirs). Each test runs in a child process (bqh.go).
+const goPackaged = (code) => (/^\s*package\s+\w+/m.test(code) ? code : 'package main; ' + code);
+function goMain(q, tests, marker) {
+  const D = q.types;
+  const L = ['package main', ''];
+  const locals = (params, args, ind) => params.map((p, k) => `${ind}var a${k} ${T.goType(p.type)} = ${goLit(p.type, args[k], D)}`);
+  const argNames = (n) => Array.from({ length: n }, (_, k) => 'a' + k).join(', ');
+  tests.forEach((t, i) => {
+    L.push(`func bqT${i}(i int) {`);
+    if (q.mode === 'method') {
+      const s = q.signature;
+      L.push(...locals(s.params, t.args, '\t'), `\tvar r ${T.goType(s.returns)} = ${s.name}(${argNames(s.params.length)})`, '\tbqOk(i, r)');
+    } else {
+      const C = q.class;
+      const names = [...new Set(t.steps.filter((st) => st.new).map((st) => st.as))];
+      names.forEach((n) => L.push(`\tvar o_${n} *${C.name}`, `\t_ = o_${n}`));
+      t.steps.forEach((st, k) => {
+        if (st.new) { L.push('\t{', ...locals(C.constructor, st.new, '\t\t'), `\t\to_${st.as} = New${C.name}(${argNames(C.constructor.length)})`, '\t}'); return; }
+        const m = stepMethod(C, st);
+        const call = `o_${st.on}.${st.call}(${argNames(m.params.length)})`;
+        L.push('\t{', ...locals(m.params, st.args, '\t\t'));
+        if (m.returns !== 'void' && (st.expect !== undefined || st.check)) L.push(`\t\tvar r ${T.goType(m.returns)} = ${call}`, `\t\tbqStep(i, ${k}, r)`);
+        else L.push(`\t\t${call}`);
+        L.push('\t}');
+      });
+      L.push('\tbqDone(i)');
+    }
+    L.push('}', '');
+  });
+  L.push('func main() {', `\tbqMain(${JSON.stringify(marker)}, []func(int){${tests.map((_, i) => 'bqT' + i).join(', ')}}, ${ALARM(q)})`, '}', '');
+  return L.join('\n');
+}
+
+// Rust: the student's file is included in a module of its own (sol), next to the question's classes and the
+// tests, so their private methods are reachable and their "use" lines don't clash with ours.
+const RS_PRELUDE = 'pub use std::collections::{BTreeMap, BTreeSet, BinaryHeap, HashMap, HashSet, VecDeque};\npub use std::cell::RefCell;\npub use std::rc::Rc;\n';
+function rsMain(q, tests, marker) {
+  const D = q.types;
+  const L = ['#![allow(warnings)]', 'mod bq;', RS_PRELUDE, 'mod sol {', 'use super::*;', 'pub struct Solution;'];
+  if (D) {
+    L.push(T.classSource(D, 'rust'));
+    for (const [n, fs] of Object.entries(D)) {
+      L.push(`impl crate::bq::J for ${n} {`, '    fn j(&self, w: &mut String, d: usize) {', "        w.push('{');");
+      fs.forEach((f, k) => L.push(`        w.push_str(${JSON.stringify((k ? ',' : '') + JSON.stringify(f.name) + ':')});`, `        crate::bq::J::j(&self.${f.name}, w, d + 1);`));
+      L.push("        w.push('}');", '    }', '}');
+    }
+  }
+  if (q.support && q.support.rust) L.push(q.support.rust);
+  L.push('include!("solution.rs");');
+  const locals = (params, args, ind) => params.map((p, k) => `${ind}let a${k}: ${T.rustType(p.type)} = ${rsLit(p.type, args[k], D)};`);
+  const argNames = (n) => Array.from({ length: n }, (_, k) => 'a' + k).join(', ');
+  tests.forEach((t, i) => {
+    L.push(`pub fn bq_t${i}(i: usize) {`);
+    if (q.mode === 'method') {
+      const s = q.signature;
+      L.push(...locals(s.params, t.args, '    '), `    let r: ${T.rustType(s.returns)} = Solution::${s.name}(${argNames(s.params.length)});`, '    crate::bq::ok(i, &r);');
+    } else {
+      const C = q.class;
+      t.steps.forEach((st, k) => {
+        if (st.new) { L.push(`    let mut o_${st.as} = {`, ...locals(C.constructor, st.new, '        '), `        ${C.name}::new(${argNames(C.constructor.length)})`, '    };'); return; }
+        const m = stepMethod(C, st);
+        const call = `o_${st.on}.${st.call}(${argNames(m.params.length)})`;
+        L.push('    {', ...locals(m.params, st.args, '        '));
+        if (m.returns !== 'void' && (st.expect !== undefined || st.check)) L.push(`        let r: ${T.rustType(m.returns)} = ${call};`, `        crate::bq::step(i, ${k}, &r);`);
+        else L.push(`        ${call};`);
+        L.push('    }');
+      });
+      L.push('    crate::bq::done(i);');
+    }
+    L.push('}');
+  });
+  L.push('pub fn bq_test(i: usize) {', '    match i {', ...tests.map((_, i) => `        ${i} => bq_t${i}(i),`), '        _ => {}', '    }', '}', '}', '',
+    `fn main() { bq::main(${JSON.stringify(marker)}, ${tests.length}, sol::bq_test, ${ALARM(q)}); }`, '');
+  return L.join('\n');
+}
+
 // An argument as JSON for bqh.args: maps carry their keys' types, and objects of declared classes say which
 // class they are ({"__obj__": "Point", "f": [1, 2]}). Lists only get wrapped when they hold objects.
 const hasClass = (type, D) => !!D && Object.keys(D).some((n) => new RegExp(`\\b${n}\\b`).test(type));
@@ -536,6 +675,20 @@ function pyArg(type, x, D) {
 function buildSnippetJob(lang, code) {
   if (lang === 'python') return { language: 'python', files: { 'main.py': code }, main: 'main.py' };
   if (isJs(lang)) { const f = lang === 'typescript' ? 'main.ts' : 'main.js'; return { language: lang, files: { [f]: code }, main: f }; }
+  if (lang === 'go') {
+    let body;
+    if (/^\s*package\s/m.test(code)) body = code;
+    else if (/\bfunc\s+main\s*\(/.test(code)) body = 'package main\n' + code;
+    else {
+      body = 'package main\n\nimport (\n\t"fmt"\n\t"math"\n\t"sort"\n\t"strconv"\n\t"strings"\n)\n\nvar _, _, _, _, _ = fmt.Println, math.Abs, sort.Ints, strconv.Itoa, strings.Split\n\nfunc main() {\n'
+        + code + '\n}\n';
+    }
+    return { language: 'go', files: { 'main.go': body }, main: 'main', sources: ['main.go'] };
+  }
+  if (lang === 'rust') {
+    const body = /\bfn\s+main\s*\(/.test(code) ? '#![allow(warnings)] ' + code : `#![allow(warnings)]\nuse std::collections::*;\nfn main() {\n${code}\n}\n`;
+    return { language: 'rust', files: { 'main.rs': body }, main: 'main', sources: ['main.rs'] };
+  }
   if (isC(lang)) {
     const f = lang === 'cpp' ? 'main.cpp' : 'main.c';
     const body = /\bmain\s*\(/.test(code) ? code : `int main(${lang === 'c' ? 'void' : ''}) {\n${code}\n    return 0;\n}\n`;
@@ -582,6 +735,16 @@ function buildJob(q, lang, code, tests) {
   if (lang === 'cpp') {
     Object.assign(files, { 'solution.cpp': code, 'bq.hpp': BQCPP_SRC, 'bqrt.c': BQRT_SRC, 'bqmain.cpp': cppMain(q, tests, marker) });
     return { marker, job: { language: 'cpp', files, main: 'main', sources: ['bqmain.cpp', 'bqrt.c'] } };
+  }
+  if (lang === 'go') {
+    Object.assign(files, { 'solution.go': goPackaged(code), 'bqh.go': BQGO_SRC, 'bqmain.go': goMain(q, tests, marker) });
+    if (q.types) files['bqtypes.go'] = 'package main\n\n' + T.classSource(q.types, 'go');
+    if (q.support && q.support.go) files['support.go'] = goPackaged(q.support.go);
+    return { marker, job: { language: 'go', files, main: 'main', sources: Object.keys(files).filter((n) => n.endsWith('.go')).sort() } };
+  }
+  if (lang === 'rust') {
+    Object.assign(files, { 'solution.rs': code, 'bq.rs': BQRS_SRC, 'bqmain.rs': rsMain(q, tests, marker) });
+    return { marker, job: { language: 'rust', files, main: 'main', sources: ['bqmain.rs'] } };
   }
   if (lang === 'c') {
     Object.assign(files, { 'solution.c': code, 'bqpre.h': C_PRELUDE + (q.types ? '\n' + T.classSource(q.types, 'c') : ''), 'bqc.h': BQC_SRC, 'bqrt.c': BQRT_SRC, 'bqmain.c': cMain(q, tests, marker) });
@@ -732,9 +895,74 @@ function cleanCc(text, lang, q) {
   return (out || lines.join('\n').trim()).slice(0, 4000);
 }
 
+// Go's errors: one line each ("solution.go:3:5: ..."), with indented details. Theirs as they are; the test file's
+// in plain words.
+function cleanGo(text, q) {
+  const lines = String(text || '').replace(/\/jobs\/[^/\s]+\//g, '').replace(/\r/g, '').split('\n');
+  const keep = [];
+  const known = [];
+  let mine = false;
+  const sig = (name) => {
+    if (q.mode === 'method') return name === q.signature.name ? `${name} should be: func ${name}(${q.signature.params.map((p) => `${p.name} ${T.goType(p.type)}`).join(', ')}) ${T.goType(q.signature.returns)}` : '';
+    const C = q.class;
+    if (name === 'New' + C.name) return `${name} should be: func ${name}(${C.constructor.map((p) => `${p.name} ${T.goType(p.type)}`).join(', ')}) *${C.name}`;
+    const m = C.methods.find((x) => x.name === name);
+    return m ? `${name} should be: func (this *${C.name}) ${name}(${m.params.map((p) => `${p.name} ${T.goType(p.type)}`).join(', ')})${m.returns === 'void' ? '' : ' ' + T.goType(m.returns)}` : '';
+  };
+  for (const line of lines) {
+    const m = /^([\w.-]+):(\d+):(?:\d+:)? (.*)$/.exec(line);
+    if (m) {
+      mine = m[1] === 'solution.go';
+      if (mine) { keep.push(line); if (/main redeclared/.test(m[3])) known.push('Take out func main: the tests call your code themselves'); continue; }
+      const msg = m[3];
+      let x;
+      if ((x = /^undefined: (\w+)/.exec(msg))) known.push(sig(x[1]) ? `Missing ${sig(x[1]).replace(/ should be: /, ': ').replace(/^\w+: /, '')}` : `Missing ${x[1]}`);
+      else if ((x = /\.(\w+) undefined \(type \*?(\w+) has no field or method/.exec(msg))) known.push(`${x[2]} has no method ${x[1]}`);
+      else if ((x = /in (?:argument to|call to) (?:o_\w+\.)?(\w+)/.exec(msg)) || (x = /arguments in call to (?:o_\w+\.)?(\w+)/.exec(msg))) known.push(sig(x[1]) || msg);
+      else if ((x = /cannot use (?:o_\w+\.)?(\w+)\(.*\) \(value of (?:struct |pointer )?type (.+?)\) as (.+?) value/.exec(msg))) known.push(`${x[1]} returns ${x[2]} but should return ${x[3]}`);
+      else if (/main redeclared/.test(msg)) known.push('Take out func main: the tests call your code themselves');
+      else known.push(msg);
+      continue;
+    }
+    if (/^\t/.test(line) && mine && !/\bbq\w+\.go:/.test(line)) keep.push(line);
+  }
+  const out = [...new Set(keep)].join('\n').trim();
+  return ([out, [...new Set(known.filter(Boolean))].join('\n')].filter(Boolean).join('\n') || lines.join('\n').trim()).slice(0, 4000);
+}
+
+// rustc's errors: blocks that start "error[E0308]: ..." and say where with " --> file:line:col".
+function cleanRust(text, q) {
+  const blocks = String(text || '').replace(/\/jobs\/[^/\s]+\//g, '').replace(/\r/g, '').split(/\n(?=(?:error|warning)(?:\[E\d+\])?: )/);
+  const mine = [];
+  const known = [];
+  const sig = (name) => {
+    const ms = q.mode === 'method' ? (q.signature.name === name ? [q.signature] : []) : q.class.methods.filter((m) => m.name === name);
+    if (q.mode === 'class' && name === 'new') return `${q.class.name} needs: pub fn new(${q.class.constructor.map((p) => `${p.name}: ${T.rustType(p.type)}`).join(', ')}) -> Self`;
+    return ms.map((m) => `${name} should be: pub fn ${name}(${q.mode === 'class' ? '&mut self' + (m.params.length ? ', ' : '') : ''}${m.params.map((p) => `${p.name}: ${T.rustType(p.type)}`).join(', ')})${m.returns === 'void' ? '' : ' -> ' + T.rustType(m.returns)}`).join('\n');
+  };
+  for (const raw of blocks) {
+    const b = raw.replace(/\n*(?:error: aborting due to.*|For more information about (?:this|an) error.*|Some errors have detailed explanations.*)$/gm, '').trimEnd();
+    if (!/^error/.test(b)) continue;
+    const at = / --> ([\w.-]+):(\d+)/.exec(b);
+    if (at && at[1] === 'solution.rs') { mine.push(b); continue; }
+    const head = (/^error(?:\[E\d+\])?: (.*)/.exec(b) || [])[1] || '';
+    const call = /(?:Solution::|o_\w+\.)(\w+)\(/.exec(b);
+    let x;
+    if ((x = /no (?:function or associated item|method) named `(\w+)` found for struct `(\w+)`/.exec(head))) known.push(x[1] === 'new' ? sig('new') : x[2] === 'Solution' ? `Missing pub fn ${x[1]} in impl Solution` : `${x[2]} has no method ${x[1]}`);
+    else if ((x = /(?:undeclared type|cannot find (?:struct, variant or union type|type)) `(\w+)`/.exec(head))) known.push(`Missing struct ${x[1]}`);
+    else if (/mismatched types|takes \d+ arguments? but|arguments to this (?:method|function) are incorrect/.test(head) && call) known.push(sig(call[1]) || head);
+    else if (!/^aborting/.test(head)) known.push(head);
+  }
+  return ([...mine, [...new Set(known.filter(Boolean))].join('\n')].filter(Boolean).join('\n\n') || String(text || '').trim()).slice(0, 4000);
+}
+
 // res = runner response. Returns { status, message?, tests: [{ pass, got?, gotSteps?, error? }], printed }
 function readResults(q, lang, tests, res, marker) {
-  if (res.status === 'compile_error') return { status: 'compile_error', message: isC(lang) ? cleanCc(res.stderr || res.stdout, lang, q) : cleanJava(res.stderr || res.stdout) };
+  if (res.status === 'compile_error') {
+    const raw = res.stderr || res.stdout;
+    const message = isC(lang) ? cleanCc(raw, lang, q) : lang === 'go' ? cleanGo(raw, q) : lang === 'rust' ? cleanRust(raw, q) : cleanJava(raw);
+    return { status: 'compile_error', message };
+  }
   if (res.status === 'error') return { status: 'error', message: 'The code runner had a problem. Try again in a moment.' };
   const { records, printed } = splitOutput(res.stdout, marker);
   // The ban check's facts come first, written before any student code ran.
@@ -792,4 +1020,4 @@ function studentView(q, lang, tests, r) {
   };
 }
 
-module.exports = { buildJob, readResults, studentView, starterCode, callText, expectedText, same, show, clean, javaType, pyType, buildSnippetJob, cleanCc, cleanJs };
+module.exports = { buildJob, readResults, studentView, starterCode, callText, expectedText, same, show, clean, javaType, pyType, buildSnippetJob, cleanCc, cleanJs, cleanGo, cleanRust };

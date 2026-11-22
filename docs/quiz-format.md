@@ -6,7 +6,7 @@ at the root (or inside one top-level folder) and an optional `assets/` folder of
 
 <!-- not-in-prompt -->
 Check a quiz before uploading. `--run` also runs the reference solutions, which needs
-`python3`, plus a JDK for Java and gcc/g++ for C and C++ (JavaScript and TypeScript run on Node):
+`python3`, plus a JDK for Java, gcc/g++ for C and C++, `go` for Go and `rustc` for Rust (JavaScript and TypeScript run on Node):
 
 ```bash
 node scripts/check-quiz.mjs path/to/folder --run
@@ -29,7 +29,7 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `format` | `1` | Format version. Optional |
 | `title` | `"Untitled quiz"` | Shown to students and on reports |
 | `timeLimitMin` | `0` (no limit) | Minutes, up to 600. The quiz turns itself in at 0:00 |
-| `language` | `"java"` | `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"` or `"none"`: how `inline code` and unlabeled code blocks are highlighted. `"none"` leaves them plain, for quizzes that aren't about code (networking, math); blocks labeled ```` ```java ```` still get colors. Output, trace and fill questions then default to Java |
+| `language` | `"java"` | `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"`, `"go"`, `"rust"` or `"none"`: how `inline code` and unlabeled code blocks are highlighted. `"none"` leaves them plain, for quizzes that aren't about code (networking, math); blocks labeled ```` ```java ```` still get colors. Output, trace and fill questions then default to Java |
 | `shuffleQuestions` | `true` | Shuffle order per student, within each part (see below) |
 | `shuffleChoices` | `true` | Shuffle multiple choice options per student |
 | `integrity.graceStrikes` | `1` | Times a student can leave the window before the attempt is invalidated (0–10). The default lets one slip go; 0 invalidates on the first. |
@@ -154,6 +154,8 @@ block, a table or a list.
   - Java: statements, or a full class with `main`.
   - C and C++: statements, or a full program with `main`. The usual headers are included (C++
     also gets `using namespace std`).
+  - Go: statements (`fmt`, `math`, `sort`, `strconv` and `strings` are imported), or a full program.
+  - Rust: statements, or a full program with `fn main`.
   - Python, JavaScript, TypeScript: a script.
 - `language`: defaults to the quiz's `language`.
 - `answer` is optional. On upload the code is run and its output becomes the answer. If you
@@ -215,7 +217,7 @@ Grading uses the hidden tests, which students never see.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `languages` | `["java"]` | Any of `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"` (the student picks). See [Languages](#languages) |
+| `languages` | `["java"]` | Any of `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"`, `"go"`, `"rust"` (the student picks). See [Languages](#languages) |
 | `mode` | `"method"` | `"method"`: write one method. `"class"`: write a whole class |
 | `signature` | — | Method mode: `{ "name", "params": [{ "name", "type" }], "returns" }` |
 | `class` | — | Class mode: `{ "name", "constructor": [params], "methods": [{ "name", "params", "returns" }] }` |
@@ -234,16 +236,16 @@ Grading uses the hidden tests, which students never see.
 
 Every parameter and return value uses one of these:
 
-| Type | Java | Python | JavaScript, TypeScript | C++ | C | JSON value |
-| --- | --- | --- | --- | --- | --- | --- |
-| `int`, `long` | `int`, `long` | `int` | `number` | `int`, `long long` | `int`, `long long` | `3` |
-| `double` | `double` | `float` | `number` | `double` | `double` | `2.5` |
-| `boolean` | `boolean` | `bool` | `boolean` | `bool` | `bool` | `true` |
-| `string` | `String` | `str` | `string` | `string` | `char*` | `"hi"` |
-| `char` | `char` | `str` (one letter) | `string` (one letter) | `char` | `char` | `"a"` |
-| any of those with `[]` or `[][]`, like `char[]`, `string[][]` | arrays | `list[...]` | arrays | `vector<...>` | `int* nums, int numsSize` (see below) | `[1, 2]`, `[[1], [2, 3]]` |
-| `list<int>`, `list<string>`, `list<double>`, ... (any of the first six) | `ArrayList<Integer>`, ... | `list[...]` | arrays | `vector<...>` | like an array | `[1, 2]` |
-| `map<string, V>`, `map<int, V>` | `HashMap<String, V>`, ... | `dict[str, V]`, ... | `Map<string, V>`, ... | `unordered_map<string, V>`, ... | none | `{"a": 1}`, `{"3": "c"}` |
+| Type | Java | Python | JavaScript, TypeScript | C++ | C | Go | Rust | JSON value |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `int`, `long` | `int`, `long` | `int` | `number` | `int`, `long long` | `int`, `long long` | `int`, `int64` | `i32`, `i64` | `3` |
+| `double` | `double` | `float` | `number` | `double` | `double` | `float64` | `f64` | `2.5` |
+| `boolean` | `boolean` | `bool` | `boolean` | `bool` | `bool` | `bool` | `bool` | `true` |
+| `string` | `String` | `str` | `string` | `string` | `char*` | `string` | `String` | `"hi"` |
+| `char` | `char` | `str` (one letter) | `string` (one letter) | `char` | `char` | `byte` | `char` | `"a"` |
+| any of those with `[]` or `[][]`, like `char[]`, `string[][]` | arrays | `list[...]` | arrays | `vector<...>` | `int* nums, int numsSize` (see below) | slices | `Vec<...>` | `[1, 2]`, `[[1], [2, 3]]` |
+| `list<int>`, `list<string>`, `list<double>`, ... (any of the first six) | `ArrayList<Integer>`, ... | `list[...]` | arrays | `vector<...>` | like an array | slices | `Vec<...>` | `[1, 2]` |
+| `map<string, V>`, `map<int, V>` | `HashMap<String, V>`, ... | `dict[str, V]`, ... | `Map<string, V>`, ... | `unordered_map<string, V>`, ... | none | `map[string]V`, ... | `HashMap<String, V>`, ... | `{"a": 1}`, `{"3": "c"}` |
 
 A map's values (`V`) can be any of the first six types, `list<int>` or `list<string>`. Map keys
 are strings in JSON, so an `int` key is written `"3"`. Maps match when they have the same keys
@@ -280,7 +282,10 @@ not to write.
   constructor takes every field, each with a default. **C++** gets a struct with a constructor
   taking every field and one taking none; an object is a pointer (`Node*`, `nullptr` for none).
   **C** gets a `typedef struct`, objects are pointers (`Node*`, `NULL`), and its fields can only be
-  numbers, booleans, chars, strings and other classes.
+  numbers, booleans, chars, strings and other classes. **Go** gets a struct with the same field
+  names; an object is a pointer (`*Node`, `nil`). **Rust** gets a `pub struct` with `pub` fields and
+  `new` taking every field; an object is `Option<Box<Node>>` (`None` for none), like LeetCode's
+  `ListNode`.
 - In tests, an object is a JSON object of its fields: `{ "x": 1, "y": 2 }`. Fields holding objects,
   arrays, lists or strings can be left out, and are then `null`:
   `{ "val": 1, "next": { "val": 2 } }` is the list 1, 2.
@@ -304,8 +309,14 @@ not to write.
   int* gridColSize`). A function that returns an array also takes `int* returnSize` and sets it
   (and `int** returnColumnSizes` for 2D). Arguments are on the heap, so code can change or free
   them. Returning `NULL` with `*returnSize` 0 counts as an empty array.
+- **Method mode, Go:** a function, `func <name>(<params>) <returns> { ... }`. The `package main`
+  line is optional; imports are theirs to add (Go refuses unused ones). A `nil` slice or map counts
+  as an empty one.
+- **Method mode, Rust:** `impl Solution { pub fn <name>(<params>) -> <returns> { ... } }`, like
+  LeetCode. The usual collections (`HashMap`, `HashSet`, `VecDeque`, ...) are already in scope.
 - **Class mode:** a class named `class.name` with that constructor and those methods. In
-  Python the constructor is `__init__`. Not in C.
+  Python the constructor is `__init__`. Go: a struct, a `New<Name>(...) *<Name>` function and
+  methods on `*<Name>`. Rust: a struct with `fn new(...) -> Self` and methods. Not in C.
 
 Java gets `java.util.*`, `java.util.function.*` and `java.util.stream.*` imported automatically.
 C++ gets the usual standard headers and `using namespace std`; C gets `stdio.h`, `stdlib.h`,
@@ -317,16 +328,17 @@ Java and Python can do everything here. The others:
 
 - **JavaScript** runs on Node 22. **TypeScript** too, with its types taken out first: it runs,
   but type errors aren't reported (there's no `tsc`).
-- **C++** (g++, C++17) and **C** (gcc, C17) compile with `-O2`. Each test runs in its own
-  process, so a crash fails only that test, with a plain message (segmentation fault, abort,
-  division by zero). In C++ an index out of range on a `vector` stops the program instead of
-  reading garbage.
+- **C++** (g++, C++17) and **C** (gcc, C17) compile with `-O2`, **Go** with its standard compiler
+  and **Rust** (2021 edition) with `rustc`. Each test runs in its own process, so a crash fails only
+  that test, with a plain message (segmentation fault, a panic and its line, stack overflow). In C++
+  an index out of range on a `vector` stops the program instead of reading garbage.
 - Bans only work in Java and Python. With other languages in the question, write the ban per
   language (`{ "java": [...] }`).
-- Speed tests don't run in C or C++ (an optimizing compiler times badly).
+- Speed tests don't run in C, C++, Go or Rust (an optimizing compiler times badly).
 - C has no maps, no class questions, and keeps 2D arrays to numbers, booleans and chars.
-- In C and C++ a `char` is one byte, so test values have to be plain ASCII. C++ has no `null`
-  string, vector or map, so tests can't use one (or leave out such a field of an object).
+- In C, C++ and Go a `char` is one byte, so test values have to be plain ASCII. C++ and Rust have
+  no `null` string, vector or map, and Go no `null` string, so tests can't use one (or leave out
+  such a field of an object).
 
 The upload check says which of these a question runs into.
 

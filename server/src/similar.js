@@ -17,6 +17,8 @@ const JS_KW = new Set(('break case catch class const continue debugger default d
   + 'interface type enum implements private public protected readonly abstract as declare namespace number string boolean any unknown never').split(' '));
 const C_KW = new Set(('auto break case char const continue default do double else enum extern float for goto if inline int long register restrict return short signed sizeof static struct switch typedef union unsigned void volatile while bool true false NULL '
   + 'class public private protected new delete this nullptr template typename namespace using virtual override operator friend explicit mutable constexpr try catch throw static_cast const_cast dynamic_cast reinterpret_cast include define').split(' '));
+const GO_KW = new Set('break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var nil true false iota make len append'.split(' '));
+const RS_KW = new Set('as break const continue crate else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while dyn Some None Ok Err Vec String Box Option'.split(' '));
 const JAVA_RE = /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|([A-Za-z_$][\w$]*)|(\d[\w.]*)|(>>>=?|<<=|>>=|==|!=|<=|>=|&&|\|\||\+\+|--|->|::|[-+*/%&|^]=|<<|>>|\S)/g;
 const JS_RE = /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|([A-Za-z_$][\w$]*)|(\d[\w.]*)|(>>>=?|<<=|>>=|===|!==|==|!=|<=|>=|&&|\|\||\?\?|\?\.|\+\+|--|=>|[-+*/%&|^]=|<<|>>|\S)/g;
 const PY_RE = /("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(#[^\n]*)|([A-Za-z_]\w*)|(\d[\w.]*)|(\*\*=?|\/\/=?|==|!=|<=|>=|->|<<|>>|[-+*/%&|^@]=|\S)/g;
@@ -24,8 +26,8 @@ const PY_RE = /("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\
 // [generic, exact] tokens, and the comments (which copying often keeps word for word)
 function tokenize(code, lang) {
   const js = lang === 'javascript' || lang === 'typescript';
-  const re = new RegExp(lang === 'python' ? PY_RE : js ? JS_RE : JAVA_RE);
-  const kw = lang === 'python' ? PY_KW : js ? JS_KW : lang === 'c' || lang === 'cpp' ? C_KW : JAVA_KW;
+  const re = new RegExp(lang === 'python' ? PY_RE : js || lang === 'go' ? JS_RE : JAVA_RE);
+  const kw = { python: PY_KW, javascript: JS_KW, typescript: JS_KW, c: C_KW, cpp: C_KW, go: GO_KW, rust: RS_KW }[lang] || JAVA_KW;
   const toks = [];
   const comments = [];
   let m;
