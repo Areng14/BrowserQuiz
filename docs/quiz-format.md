@@ -226,7 +226,7 @@ Grading uses the hidden tests, which students never see.
 | `tests` | — | `{ "sample": [...], "hidden": [...] }`: up to 10 sample, 1 to 100 hidden |
 | `reference` | none | `{ "java": "...", "python": "..." }` correct solutions. Strongly recommended |
 | `rubric` | none | `[{ "id", "text", "points", "require", "forbid" }]` points for things tests can't see. See [Rubric checks](#rubric-checks) |
-| `ban` | none | Methods students may not use: `["Arrays.sort", "Collections.sort", "stream"]`, or `{ "java": [...], "cpp": [...] }`. Code that uses one scores 0 on the question. Not in JavaScript, TypeScript or Rust. See [Banned methods](#banned-methods) |
+| `ban` | none | Methods students may not use: `["Arrays.sort", "Collections.sort", "stream"]`, or `{ "java": [...], "cpp": [...] }`. Code that uses one scores 0 on the question. Not in Rust. See [Banned methods](#banned-methods) |
 | `noRun` | `false` | `true`: written without running, like on paper. No **Run examples**; grading still runs the tests |
 | `compare` | `"ordered"` | `"unordered"`: array/list results can come back in any order |
 | `starter` | `"stubs"` | `"stubs"` (generated signatures), `"empty"` (class mode: bare class), or `{ "java": "...", "python": "..." }` |
@@ -340,10 +340,10 @@ Java and Python can do everything here. The others:
   compiler (latest C#). Each test runs in its own process, so a crash fails only
   that test, with a plain message (segmentation fault, a panic and its line, stack overflow). In C++
   an index out of range on a `vector` stops the program instead of reading garbage.
-- Bans work in Java, Python, C, C++, C# and Go, not in JavaScript, TypeScript or Rust. With those in
-  the question, write the ban per language (`{ "java": [...] }`), and for them use a rubric item with a
-  `forbid` pattern (see [Rubric checks](#rubric-checks)). That takes only the item's points, and since
-  it reads the text, it's easier to get around than a ban.
+- Bans work in every language but Rust. With Rust in the question, write the ban per language
+  (`{ "java": [...] }`), and for Rust use a rubric item with a `forbid` pattern (see
+  [Rubric checks](#rubric-checks)). That takes only the item's points, and since it reads the text,
+  it's easier to get around than a ban.
 - Speed tests only run in Java, Python, JavaScript and TypeScript (an optimizing compiler times badly,
   and the others can reach into whatever times them).
 - C has no maps, no class questions, and keeps 2D arrays to numbers, booleans and chars.
@@ -354,7 +354,7 @@ Java and Python can do everything here. The others:
 
 The upload check says which of these a question runs into. With `"languages": "any"` it doesn't: the
 languages that can't run the question are just left out (a map leaves out C, a ban leaves out
-JavaScript, TypeScript and Rust, a speed test leaves the languages that have one and a reference). References are
+Rust, a speed test leaves the languages that have one and a reference). References are
 optional per language there; tests' expected values come from the ones you give.
 
 ### Tests
@@ -424,11 +424,11 @@ examples** tells them if their code uses one, and code that does scores 0 on the
 teacher can still adjust points).
 
 - `"Class.method"`: that method of that class, like `"Arrays.sort"`, `"Math.max"` or `"math.sqrt"`;
-  in C++ `"std::sort"` or `"vector::push_back"`, in Go `"sort.Ints"` or `"strings.Contains"`, in C#
-  `"Array.Sort"` or `"Enumerable.OrderBy"`
+  in JavaScript `"Array.sort"` or `"Math.max"`, in C++ `"std::sort"` or `"vector::push_back"`, in Go
+  `"sort.Ints"` or `"strings.Contains"`, in C# `"Array.Sort"` or `"Enumerable.OrderBy"`
 - `"method"`: a method or function of that name on anything, like `"sort"`, `"stream"`, `"sorted"`, `"qsort"`
-- `"Name"`: a library class or package, like `"HashMap"` (Java), `"map"` or `"priority_queue"` (C++),
-  `"strings"` (Go), `"List"` or `"Linq"` (C#)
+- `"Name"`: a library class or package, like `"HashMap"` (Java), `"Map"` (JavaScript), `"map"` or
+  `"priority_queue"` (C++), `"strings"` (Go), `"List"` or `"Linq"` (C#)
 
 One list counts for every language the question has, so plain names (`["sort"]`) work everywhere. A
 `"Class.method"` entry names something else in each language, so with C++, Go or C# and another
@@ -446,6 +446,13 @@ and the student's own methods and variables (their own `max`, `self.count`) are 
 C++ that covers calling a library function in any normal way; code that works out a function's address
 from another one's gets past it.
 
+JavaScript and TypeScript can't be read that way (`a["so" + "rt"]()` is a sort), so there the banned
+builtins are tripwires instead: before the student's code loads, every library function of that name
+(`Array.prototype.sort`, typed arrays' `sort`, ...) is swapped for one that does the same and notes the
+call. However the name was written, a call counts, but only one that happens while the tests run (code
+that never runs earns nothing either). A JavaScript entry has to be in its library, so the upload
+refuses a typo like `"Sort"`.
+
 A few entries also cover close relatives:
 
 | Entry | Also catches |
@@ -456,6 +463,7 @@ A few entries also cover close relatives:
 | a class, like `"HashMap"` (Java) | its relatives in `java.util` (`LinkedHashMap`) |
 | `"sort"` or `"sorted"` (Python) | each other, and `heapq` and `bisect` |
 | `"math.sqrt"` and other `math.*` | `cmath.sqrt` |
+| `"sort"` (JavaScript) | `toSorted` |
 | `"sort"` (C) | `qsort` |
 | `"sqrt"` and other C math functions | `sqrtf`, `sqrtl` |
 | `"sort"` (C++) | `stable_sort`, `partial_sort`, `list::sort` and every other library sort |
@@ -467,13 +475,15 @@ A few entries also cover close relatives:
 A question with any ban also bans the ways around one: reflection in Java; `eval`, `exec`,
 `getattr`, `__import__`, `importlib`, `pickle` and friends in Python; `dlsym` and friends in C and C++,
 and in C++ inline `asm`, adding to `namespace std`, `#line` and `#include` of anything but a standard
-header; `reflect`, `unsafe`, templates and `go:linkname` in Go; reflection, `dynamic`, expression
-trees and `DllImport` in C#. In C, C++ and C#, `support` code counts as the student's, so keep
-banned names out of it. The reference solutions must keep to the bans, or the upload is refused.
+header; `vm`, workers, `child_process`, the inspector and `process.binding` in JavaScript (each would
+give the code a fresh set of builtins); `reflect`, `unsafe`, templates and `go:linkname` in Go;
+reflection, `dynamic`, expression trees and `DllImport` in C#. In C, C++, C#, JavaScript and
+TypeScript, `support` code counts as the student's, so keep banned names out of it. The reference solutions must keep to the bans, or the upload is refused.
 
 Other library routes to the same answer aren't caught unless you list them. For a sorting
 question, also think about `"PriorityQueue"`, `"TreeSet"`, `"TreeMap"` (`"set"`, `"map"`,
-`"priority_queue"` in C++, `"SortedSet"` in C#); for a max, `"Collections.max"` is caught by `"max"`
+`"priority_queue"` in C++, `"SortedSet"` in C#; in JavaScript an object's integer keys come out in
+order); for a max, `"Collections.max"` is caught by `"max"`
 but `summaryStatistics` isn't; for a square root, `"Math.pow"`.
 
 For a point off instead of a zero, use a rubric item with `"forbid"` (below).

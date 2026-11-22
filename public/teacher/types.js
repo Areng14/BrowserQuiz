@@ -117,8 +117,8 @@
   const isNative = (l) => isC(l) || l === 'go' || l === 'rust';
   // Languages with speed tests: the ones whose harness can time code without the code reaching in
   const hasSpeed = (l) => l === 'java' || l === 'python' || isJs(l);
-  // Bans read what the compiler made of the code (server/src/bans.js); JavaScript, TypeScript and Rust can't say.
-  const hasBans = (l) => !isJs(l) && l !== 'rust';
+  // Bans (server/src/bans.js): read from the compiled code, or in JavaScript and TypeScript tripwires; not Rust.
+  const hasBans = (l) => l !== 'rust';
   const isClassName = (t) => /^[A-Z]\w*$/.test(canon(t));
 
   // JavaScript and TypeScript: numbers are number, chars are one-letter strings, maps are Map.

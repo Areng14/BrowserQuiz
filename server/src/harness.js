@@ -93,7 +93,7 @@ function jsLit(type, v, D) {
     default: break;
   }
   const kv = T.mapTypes(type);
-  if (kv) return `new Map([${Object.entries(v).map(([k, x]) => `[${kv[0] === 'int' ? Number(k) : JSON.stringify(k)}, ${jsLit(kv[1], x, D)}]`).join(', ')}])`;
+  if (kv) return `map([${Object.entries(v).map(([k, x]) => `[${kv[0] === 'int' ? Number(k) : JSON.stringify(k)}, ${jsLit(kv[1], x, D)}]`).join(', ')}])`;
   return `[${v.map((x) => jsLit(elementType(type), x, D)).join(', ')}]`;
 }
 // How bqh.cjs is told a type: { k: 's' } scalar, { k: 'a', e } array or list, { k: 'm', v } map, { k: 'c', n } class.
@@ -440,7 +440,7 @@ function jsMain(q, tests, marker, lang) {
   const D = q.types;
   const L = ["'use strict';", '(function () {', `  const M = ${JSON.stringify(marker)};`, "  const fs = require('fs');",
     '  try { fs.unlinkSync(__filename); } catch (e) {}', "  const H = require('./bqh.cjs');", '  const out = H.writer(M);',
-    '  const { ok, timed, step, done, fail, broken, missing, range, enc, now } = H;'];
+    '  const { ok, timed, step, done, fail, broken, missing, range, map, enc, now } = H;'];
   if (D) L.push(`  H.classes({ ${Object.entries(D).map(([n, fs]) => `${JSON.stringify(n)}: [${fs.map((f) => `[${JSON.stringify(f.name)}, ${jsDesc(f.type, D)}]`).join(', ')}]`).join(', ')} });`);
   const scripts = [];
   if (D) scripts.push(['bqtypes.js', false]);
@@ -451,7 +451,11 @@ function jsMain(q, tests, marker, lang) {
       L.push(`  { let src = fs.readFileSync(${JSON.stringify(f)}, 'utf8');${ts ? " if (strip) src = strip(src, { mode: 'transform' });" : ''} vm.runInThisContext(src, { filename: ${JSON.stringify(f)} }); }`);
     }
   }
-  L.push('  let S;', `  try { S = require('./solution.${lang === 'typescript' ? 'cts' : 'cjs'}'); S = (S && S.__bq) || {}; } catch (e) { broken(out, e); return; }`);
+  // Bans are tripwires on the builtins, armed as their file loads (bqh.cjs guard).
+  const file = `solution.${lang === 'typescript' ? 'cts' : 'cjs'}`;
+  const bans = B.bansFor(q.ban, lang);
+  if (bans.length) L.push(`  H.guard(${JSON.stringify(bans)}, out, ${JSON.stringify(file)}, ${lang === 'typescript'});`);
+  L.push('  let S;', `  try { S = require('./${file}'); S = (S && S.__bq) || {}; } catch (e) { broken(out, e); return; }`);
   if (q.mode === 'method') {
     const s = q.signature;
     L.push(`  if (missing(out, S, [["f", ${JSON.stringify(s.name)}, ${JSON.stringify(`${s.name}(${s.params.map((p) => p.name).join(', ')})`)}]])) return;`, `  const F = S[${JSON.stringify(s.name)}];`);
@@ -1088,7 +1092,9 @@ function readResults(q, lang, tests, res, marker) {
   const { records, printed } = splitOutput(res.stdout, marker);
   // The ban check's facts: the runner's, read from the compiled code (null: it couldn't read it), or in Java
   // and Python the harness's, written first, before any student code ran.
-  const scan = res.scan !== undefined ? B.runnerFacts(res.scan) : records.length && records[0].scan ? records[0].scan : null;
+  const scan = res.scan !== undefined ? B.runnerFacts(res.scan)
+    : isJs(lang) ? (B.bansFor(q.ban, lang).length ? { hits: records.filter((r) => typeof r.ban === 'string').map((r) => r.ban) } : null)
+    : records.length && records[0].scan ? records[0].scan : null;
   const compile = records.find((r) => r.compile);
   if (compile) return { status: 'compile_error', message: isJs(lang) ? cleanJs(compile.err) : cleanPy(compile.err), scan };
   // A Python speed test only counts when the code keeps out of the harness that times it (bans.js).

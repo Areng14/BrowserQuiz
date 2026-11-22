@@ -55,6 +55,7 @@ async function callRunner(job, timeMs, memoryMb) {
   });
 }
 
+const isJsLang = (lang) => lang === 'javascript' || lang === 'typescript';
 const job0Scans = (q, lang) => B.bansFor(q.ban, lang).length > 0 && ['c', 'cpp', 'go', 'csharp'].includes(lang);
 
 // One job for all tests (Run, reference checks) or one job per test (grading, so a hang only costs one test).
@@ -74,7 +75,8 @@ async function runTests(q, lang, code, tests, opts) {
   const compile = parts.find((p) => p.status === 'compile_error');
   if (compile) return compile;
   if (job0Scans(q, lang) && parts[0].status === 'error') return parts[0]; // no facts: grade it again later
-  const scan = (parts.find((p) => p.scan) || {}).scan || null;
+  // (JavaScript's are what each test's run tripped: all of them count)
+  const scan = isJsLang(lang) ? { hits: [...new Set(parts.flatMap((p) => (p.scan && p.scan.hits) || []))] } : (parts.find((p) => p.scan) || {}).scan || null;
   return { status: 'ok', scan, tests: parts.map((p) => (p.status === 'ok' ? p.tests[0] : { pass: false, error: p.message || 'Run failed' })) };
 }
 

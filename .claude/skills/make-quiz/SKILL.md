@@ -80,15 +80,15 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
     (`"types": { "Node": { "val": "int", "next": "Node" } }`, objects in tests as
     `{ "val": 1, "next": { "val": 2 } }`). Don't write those classes in the starter or reference:
     they're given. Overloads only work when the languages are only Java, C++ and C#.
-  - Other languages than Java and Python have limits (spec, "Languages"): no bans in JavaScript,
-    TypeScript and Rust, speed tests only in Java, Python, JavaScript and TypeScript, no maps or
+  - Other languages than Java and Python have limits (spec, "Languages"): no bans in Rust,
+    speed tests only in Java, Python, JavaScript and TypeScript, no maps or
     class questions in C, ASCII chars in C, C++ and Go, no null strings or arrays in C++ and Rust
     (no null strings in Go). Write a reference in every language the question offers.
     `"languages": "any"` lets students pick any language that can run the question; write
     references in the languages you know best.
   - Bans: a plain name (`["sort"]`) covers every language. `Class.method` entries are one
-    language's, so with C++, Go or C# and another language give the ban per language
-    (`{ "java": ["Arrays.sort"], "cpp": ["sort"] }`). For JavaScript, TypeScript and Rust use a
+    language's, so with several languages give those per language
+    (`{ "java": ["Arrays.sort"], "cpp": ["sort"], "javascript": ["Array.sort"] }`). For Rust use a
     rubric item with a `forbid` regex instead.
   - Write 2 simple `sample` tests that students can run, and 5–10 `hidden` tests. Only hidden
     tests are graded, so repeat the sample cases in `hidden` too. Cover:

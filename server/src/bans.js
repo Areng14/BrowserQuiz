@@ -17,17 +17,20 @@
 // strings, spacing, macros, imports, aliases, using-declarations, generics, lambdas and method references
 // are all already dealt with, and the student's own methods and variables (their own max, self.count) are
 // theirs. In C and C++ that holds for code that calls library functions in the usual ways; code that works
-// out a function's address from another's isn't caught.
+// out a function's address from another's isn't caught. JavaScript and TypeScript can't be read that way
+// (a["so" + "rt"]() is a sort), so there the banned builtins are tripwires, set before the student's code
+// loads (harness/bqh.cjs guard): a call counts however it was written, if it happens while the tests run.
 //
 // A few entries cover their close relatives: "sort" also catches parallelSort (Java), sorted, heapq and
-// bisect (Python), qsort (C), every std:: sort (C++), package sort and slices.Sort* (Go), and OrderBy and
-// friends (C#); Math.* also StrictMath.* (Java) and MathF.* and the number types' own (C#), math.* also
+// bisect (Python), toSorted (JavaScript), qsort (C), every std:: sort (C++), package sort and slices.Sort*
+// (Go), and OrderBy and friends (C#); Math.* also StrictMath.* (Java) and MathF.* and the number types' own (C#), math.* also
 // cmath.*, a Java class its subclasses in java.util ("HashMap" catches LinkedHashMap), and a C math
 // function its float and long double versions. Go and C# names match whatever their case.
 // A question with any ban also bans the usual ways around one: reflection and friends in Java and C#
 // (and dynamic, expression trees, DllImport), eval, exec, getattr, __import__, importlib, pickle and friends
 // in Python, dlsym and friends in C and C++ (and in C++ inline asm, reopening namespace std, #line and
-// unusual #includes), reflect, unsafe, templates and go:linkname in Go.
+// unusual #includes), vm, workers, child_process, the inspector and process.binding in JavaScript,
+// reflect, unsafe, templates and go:linkname in Go.
 
 const T = require('../../public/teacher/types.js');
 
@@ -297,6 +300,30 @@ function csHits(entries, facts) {
   return hits;
 }
 
+// JavaScript and TypeScript: the tripwires that went off while the code ran (harness/bqh.cjs guard). Each is an
+// entry, or the module or function that would have given the code a fresh set of builtins.
+function jsHits(entries, facts) {
+  const hits = facts.hits || [];
+  return [...entries.filter((e) => hits.includes(e)), ...hits.filter((h) => !entries.includes(h))];
+}
+
+// Whether a JavaScript ban entry names something there is: a builtin method ("sort"), class or namespace
+// ("Map", "Math"), or one's method ("Math.max", "Array.sort"). From this Node's own builtins (the runner's
+// is the same version).
+let JS_NAMES = null;
+function jsKnows(entry) {
+  if (!JS_NAMES) {
+    const c = require('./harness/bqh.cjs').catalog();
+    JS_NAMES = { methods: new Set(c.methods), classes: new Set(c.classes) };
+  }
+  const [a, b] = entry.split('.');
+  if (!b) return /^[A-Z]/.test(a) ? JS_NAMES.classes.has(a) : JS_NAMES.methods.has(a);
+  const X = JS_NAMES.classes.has(a) ? globalThis[a] : null;
+  if (!X) return false;
+  const has = (o, k) => o != null && Object.getOwnPropertyDescriptor(o, k) !== undefined;
+  return [b, ...(b === 'sort' ? ['toSorted'] : [])].some((k) => has(X, k) || has(X.prototype, k));
+}
+
 // The banned names this code uses (or the way around a ban it uses), in the question's order. `facts` is
 // the scan; without one (the code never got that far) there's nothing to hold against it.
 // D is the question's declared classes, whose fields and methods count as the student's own.
@@ -305,7 +332,7 @@ function bannedUse(ban, lang, facts, D) {
   if (!entries.length || !facts || facts.syntax) return [];
   if (facts.fail) return ['code the check could not read'];
   const hits = lang === 'python' ? pythonHits(entries, facts, D) : lang === 'c' ? cHits(entries, facts) : lang === 'cpp' ? cppHits(entries, facts, D)
-    : lang === 'go' ? goHits(entries, facts) : lang === 'csharp' ? csHits(entries, facts) : javaHits(entries, facts);
+    : lang === 'go' ? goHits(entries, facts) : lang === 'csharp' ? csHits(entries, facts) : T.isJs(lang) ? jsHits(entries, facts) : javaHits(entries, facts);
   return [...new Set(hits.map((h) => (entries.includes(h) ? shown(h, lang) : h)))];
 }
 
@@ -332,8 +359,8 @@ function timingIntrusions(lang, facts) {
   return [...new Set(used)];
 }
 
-// The languages bans work in: the check reads what the compiler saw, which these report. (In JavaScript,
-// TypeScript and Rust it can't be told: a call there can go anywhere at run time, or is compiled away.)
+// The languages bans work in. (Not Rust: its library is compiled into the program, generics and all, so what
+// a call ends up as can't be told, and it has no runtime to put tripwires in.)
 const BAN_LANGS = T.LANGS.filter(T.hasBans);
 
-module.exports = { normalizeBans, bansFor, bannedUse, runnerFacts, timingIntrusions, shown, BAN_LANGS, LIST_QUALIFIED };
+module.exports = { normalizeBans, bansFor, bannedUse, runnerFacts, timingIntrusions, shown, jsKnows, BAN_LANGS, LIST_QUALIFIED };

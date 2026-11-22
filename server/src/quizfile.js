@@ -427,6 +427,12 @@ function languageProblem(where, out, lang, D, ctx) {
     // One list for several languages: "Arrays.sort" is Java's; in C++, Go or C# that class means something else.
     const qualified = Array.isArray(out.ban) && ctx.languages.length > 1 && !B.LIST_QUALIFIED.includes(lang) && out.ban.find((e) => e.includes('.'));
     if (qualified) return `${where}: "ban" lists "${qualified}", which doesn't name the same thing in ${name}. Give it per language, like { "java": ["${qualified}"], "${lang}": [...] }.`;
+    // JavaScript's are tripwires on its builtins, so each has to be one (a list for several languages can
+    // have other languages' names in it).
+    if (T.isJs(lang) && (!Array.isArray(out.ban) || ctx.languages.length === 1)) {
+      const unknown = B.bansFor(out.ban, lang).find((e) => !B.jsKnows(e));
+      if (unknown) return `${where}: "${unknown}" isn't in ${name}'s library. Use a method ("sort"), a class ("Map") or Class.method ("Math.max", "Array.sort").`;
+    }
   }
   const tests = [...out.tests.sample.map((x, i) => [`tests.sample[${i}]`, x]), ...out.tests.hidden.map((x, i) => [`tests.hidden[${i}]`, x])];
   if (tests.some(([, x]) => x.speed)) {
