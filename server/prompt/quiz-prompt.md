@@ -47,7 +47,8 @@ use the defaults for the rest and start writing.
      (O(log n), O(n)) with a speed test (see "Speed tests" in the format); say so in the prompt.
    - **Mixed:** start easy and end hard.
 2. Order the questions by type: single, multi, text, output, trace, fill, code, essay. For AP-style
-   "what is printed" questions use `output`, and for tracing loops use `trace`.
+   "what is printed" questions use `output`, and for tracing loops use `trace`. Use question pools
+   only if I ask for them.
 3. Prompts say exactly what's asked, including edge cases ("return 0 for an empty array").
    No hints and nothing that gives the answer away. When several questions use the same case,
    passage or code, put it in `shared` once and point each question at it, instead of
