@@ -198,7 +198,7 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .qbar-progress { font-size: 14px; color: var(--ink-2); }
 /* time left, in the middle of the top bar: plain text, red under 5 minutes, bold red under 1 */
 .timer { font: 600 16px var(--mono); font-variant-numeric: tabular-nums; transition: color 0.3s; }
-.timer:empty { display: none; }
+.timer:empty { visibility: hidden; } /* no time limit (or Preview): it still holds the middle, so the tools stay on the right */
 .timer.warn { color: var(--bad); }
 .timer.crit { color: var(--bad); font-weight: 800; }
 
@@ -506,7 +506,7 @@ h1[tabindex="-1"]:focus { outline: none; }
 .trace-cell { width: 100%; min-width: 88px; padding: 7px 10px; font: inherit; text-align: center; color: var(--ink); background: var(--bg); border: 0; }
 .trace-cell:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* Fill in the blanks */
-.fill-code { white-space: pre-wrap; line-height: 2; }
+.fill-code { white-space: pre; line-height: 2; } /* long lines scroll sideways like other code, indents kept */
 .fill-code .blank {
   min-width: 6ch; padding: 1px 6px; font: inherit; color: var(--ink); background: var(--bg);
   border: 1px solid var(--line); border-bottom: 2px solid var(--accent); border-radius: 4px; vertical-align: baseline;
@@ -518,3 +518,13 @@ h1[tabindex="-1"]:focus { outline: none; }
 .bq-err-line { background: rgba(229, 83, 75, 0.16); }
 .bq-err-gutter { background: #e5534b; width: 3px !important; margin-left: 3px; }
 @media (max-width: 360px) { .q-jump-word { display: none; } }
+
+/* Touch screens have no hover: a tapped button would keep its hover color until the next tap elsewhere */
+@media (hover: none) {
+  .btn:hover:not(:disabled) { background: var(--bg); }
+  .btn.ghost:hover:not(:disabled), .theme-btn:hover, .scratch-tool:hover, .mark-btn:hover, .choice-x:hover { background: transparent; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent); filter: none; }
+  .choice:hover, .name-opt:hover { background: transparent; }
+  .scratch-tool[aria-pressed="true"]:hover { background: var(--accent); }
+  .mark-btn[aria-pressed="true"]:hover { background: var(--q-review); }
+}

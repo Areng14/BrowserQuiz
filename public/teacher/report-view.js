@@ -294,7 +294,7 @@
     const o = opts || {};
     const kind = q.type === 'code' ? KIND[q.mode] || KIND.method : KIND[q.type];
     const [st, words] = status(q);
-    const pts = q.points == null ? `– / ${fmtPts(q.max)}` : `${fmtPts(q.points)} / ${fmtPts(q.max)}`;
+    const pts = q.points == null || st === 'pending' ? `– / ${fmtPts(q.max)}` : `${fmtPts(q.points)} / ${fmtPts(q.max)}`; // an essay waiting for the teacher isn't 0 yet
     const img = (p) => (o.assetUrl ? o.assetUrl(p) : `/api/t/quizzes/${encodeURIComponent(quiz.id)}/asset?path=${encodeURIComponent(p)}`);
     // Shared material shows once, on the first question that uses it (opts.sharedSeen tracks that).
     const sharedEl = [].concat(q.shared || []).map((sid) => {

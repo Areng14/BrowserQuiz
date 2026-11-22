@@ -173,7 +173,8 @@
 .r-view .r-table th, .r-view .r-table td { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
 .r-view .r-table th { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--ink-2); }
 .r-view .r-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.r-view .r-table a { color: var(--accent); text-decoration: none; }
+.r-view .r-table a, .r-view .r-sim-row a { color: var(--accent); text-decoration: none; }
+.r-view .r-sim-row a:hover { text-decoration: underline; }
 .r-view .r-qkind { font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .r-view .r-bar-cell { width: 34%; white-space: nowrap; }
 .r-view .r-bar-track { display: inline-block; width: calc(100% - 48px); height: 8px; vertical-align: middle; background: var(--soft); border-radius: 4px; overflow: hidden; }

@@ -745,6 +745,11 @@
       const out = [];
       if (!q.prompt.trim()) out.push('Write the prompt.');
       if (!(Number(q.points) > 0)) out.push('Points must be more than 0.');
+      if (q.pool) {
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(q.pool)) out.push('A pool name can only use letters, digits, - and _.');
+        const first = quiz.questions.find((x) => x.pool === q.pool);
+        if (first && Number(first.points) !== Number(q.points)) out.push(`Make it worth ${Number(first.points) || 0}, like the rest of pool "${q.pool}", so every student's quiz is out of the same points.`);
+      }
       if (q.image && imageMissing(q.image)) out.push(`Add the image file for ${q.image}.`);
       const sharedOf = [].concat(q.shared || []).map((id) => (quiz.shared || []).find((x) => x.id === id)).filter(Boolean);
       for (const p of markdownImages({ questions: [q], shared: sharedOf })) if (imageMissing(p)) out.push(`Add the image file for ${p}, or take it out of the text.`);
@@ -808,10 +813,14 @@
       if (!sizes.size) return null;
       return h('div', { class: 'qe-settings-grid' }, [...sizes].map(([name, count]) => field(`Pool "${name}": questions each student gets`,
         h('span', { class: 'qe-line' },
-          input(q, Math.min(count, (quiz.pools || {})[name] || 1), (v) => {
-            quiz.pools = Object.assign({}, quiz.pools, { [name]: Math.max(1, Math.min(count, Math.round(Number(v)) || 1)) });
-            renderOutline(); // the total under the outline: what each student gets
-          }, { type: 'number', min: '1', max: String(count), class: 'input t-points' }),
+          (() => {
+            const el = input(q, Math.min(count, (quiz.pools || {})[name] || 1), (v) => {
+              quiz.pools = Object.assign({}, quiz.pools, { [name]: Math.max(1, Math.min(count, Math.round(Number(v)) || 1)) });
+              renderOutline(); // the total under the outline: what each student gets
+            }, { type: 'number', min: '1', max: String(count), class: 'input t-points' });
+            el.addEventListener('change', () => { el.value = String((quiz.pools || {})[name] || 1); }); // 9 of 3 shows as 3
+            return el;
+          })(),
           h('span', { class: 't-muted', text: `of ${count}` })))));
     };
     const xBtn = (label, onclick, disabled) => h('button', { class: 'btn small qe-x', type: 'button', 'aria-label': label, title: label, disabled, onclick }, icon(ICONS.x, 16));
@@ -1463,6 +1472,7 @@
       renderPane();
       const t = pane.querySelector('#qe-div-title');
       if (t) t.focus({ preventScroll: true });
+      if (matchMedia('(max-width: 1000px)').matches) pane.scrollIntoView({ block: 'start' }); // as select does
     }
     // A divider goes before the open question (the first one from Settings).
     function addDivider() {
@@ -1515,7 +1525,7 @@
           h('button', { class: 'qe-row-btn', type: 'button', 'aria-current': here ? 'true' : null, onclick: () => select(i, true) },
             h('span', { class: 'qe-row-n', text: String(i + 1) }),
             h('span', { class: `qe-row-text${text ? '' : ' t-muted'}`, text: text || 'No prompt yet' }),
-            q.pool ? h('span', { class: 'qe-row-pool', text: q.pool, title: 'Question pool' }) : null,
+            q.pool ? h('span', { class: 'qe-row-pool', text: q.pool, title: `Question pool: ${q.pool}` }) : null,
             problems[i].length ? h('span', { class: 'qe-dot', title: problems[i].join('\n'), role: 'img', 'aria-label': bad ? 'Has problems' : 'Not finished' }) : null,
             h('span', { class: 'qe-row-pts', text: String(Number(q.points) || 0), title: 'Points' })));
         rows.push(row);

@@ -656,7 +656,7 @@
         h('label', { class: 'field', for: 'class-add' }, h('span', { class: 'field-label', text: id ? 'Add students: name, student ID (one per line)' : 'Students: name, student ID (one per line)' }), add),
         h('div', { class: 't-row' }, save, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => showHome('classes') })),
         msg)));
-    (id ? add : name).focus();
+    if (!id) name.focus(); // a new class starts with its name; an open one stays at the top
   }
 
   // ---------- one running quiz ----------

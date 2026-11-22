@@ -29,7 +29,12 @@
   let lastClick = 0;
   let status = '';
 
-  $('w-close').addEventListener('click', () => window.close());
+  let runId = '';
+  $('w-close').addEventListener('click', () => {
+    window.close();
+    // a tab the browser won't close (opened by hand, or with history): back to the run instead
+    setTimeout(() => { if (!window.closed) location.href = runId ? `/teacher/#run/${encodeURIComponent(runId)}` : '/teacher/'; }, 150);
+  });
   // Caught them: invalidate from here (or restore). Their screen stays the same either way.
   let name = '';
   let invalidated = false;
@@ -79,7 +84,13 @@
     return app.watch(view, answers, extra);
   }
 
+  // Polls for good: a slip in handling one answer mustn't stop the watching.
+  let lastStatus = '';
   async function poll() {
+    try { await pollOnce(); } catch (e) { /* the next poll tries again */ }
+    setTimeout(poll, lastStatus === 'active' ? 1000 : 3000);
+  }
+  async function pollOnce() {
     let r;
     try {
       const res = await fetch(`/api/t/attempts/${encodeURIComponent(id)}/watch?since=${since}&ver=${encodeURIComponent(ver)}&xver=${encodeURIComponent(xver)}`, { credentials: 'same-origin' });
@@ -88,20 +99,22 @@
       r = await res.json();
     } catch (e) {
       $('w-live').classList.add('off');
-      setTimeout(poll, 2000);
+      lastStatus = '';
       return;
     }
     $('w-live').classList.remove('off');
+    lastStatus = r.status;
     skew = r.now - Date.now();
     document.title = `Watching ${r.name}`;
     name = r.name;
+    runId = r.runId || runId;
     if (!integrityBtn.disabled) setIntegrity(r.integrity === 'invalidated');
     $('w-name').textContent = `Watching ${r.name}`;
     $('w-away').hidden = !(r.away && r.status === 'active');
     status = r.status;
     if (r.trail && r.trail.length) {
-      trail = trail.concat(r.trail).filter((p) => p[0] > r.now - 30000);
-      since = trail[trail.length - 1][0];
+      since = r.trail[r.trail.length - 1][0];
+      trail = trail.concat(r.trail).filter((p) => p[0] > r.now - 30000); // can be empty: a still mouse, older than that
     }
     if (r.view && (!views.length || views[views.length - 1][0] !== r.viewAt)) views.push([r.viewAt, r.view]);
     if (r.answers !== undefined) { pendingAnswers = { at: r.now, answers: r.answers }; ver = r.ver; }
@@ -114,9 +127,8 @@
     }
     if (r.status === 'submitted') show(doneQueued ? '' : 'Turned in.');
     else if (r.status !== 'active') show("They haven't started yet.");
-    else if (!r.view) show('Waiting for their screen…');
-    else if (frameReady) show('');
-    setTimeout(poll, r.status === 'active' ? 1000 : 3000);
+    else if (!r.view || !frameReady) show('Waiting for their screen…');
+    else show('');
   }
 
   // Playback, a few seconds behind live: screens and answers when their time comes, the cursor along its path.

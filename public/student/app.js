@@ -673,6 +673,7 @@
       marks: S.marks || null, // marked for review, crossed-out choices: only ever in their browser otherwise
       hl: highlightsNow(), pad,
       toast: toastNow(), fs: !!S.el.fsOverlay, dark: isDark(),
+      save: S.saveState || null, phone: phoneSized(), tool: S.scratch ? S.scratch.tool : null,
     };
     // The code editor: where it's scrolled, their cursor and selection
     if (S.editor) {
@@ -1782,7 +1783,8 @@
     ta.dispatchEvent(new Event('input', { bubbles: true }));
   }
   // A phone held either way: Monaco there takes over swipes, so the page can't scroll past it.
-  const phoneSized = () => matchMedia('(pointer: coarse) and (max-width: 600px), (pointer: coarse) and (max-height: 480px)').matches;
+  const phoneSized = () => (cfg.watch ? !!S.watchPhone // the student's screen, not the teacher's mouse
+    : matchMedia('(pointer: coarse) and (max-width: 600px), (pointer: coarse) and (max-height: 480px)').matches);
   // The code box without Monaco: on phones, and if Monaco fails to load.
   function plainEditor(host, ans, lang, q) {
     const ta = h('textarea', { class: 'code-fallback', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', 'aria-label': `Code answer. Tab indents. ${leaveHint()}.` });
@@ -2369,7 +2371,9 @@
     try {
       r = await api.start();
     } catch (e) {
-      mount(entry(h('div', { class: 'panel' }, h('p', { class: 'error', role: 'alert', text: errorText(e) }))));
+      // Not started yet (or a blip): wait and try again; the watch page says what's going on meanwhile.
+      if (e.code === 'teacher_login') { mount(entry(h('div', { class: 'panel' }, h('p', { class: 'error', role: 'alert', text: errorText(e) })))); return; }
+      setTimeout(startWatch, 2000);
       return;
     }
     S.quiz = r.quiz;
@@ -2377,6 +2381,7 @@
     S.deadline = r.deadline || 0;
     S.skew = r.now ? r.now - Date.now() - (r.delay || 0) : 0;
     S.me = { name: r.name || '' };
+    S.run.practice = !!r.practice;
     S.answers = restoreAnswers(r.answers || {});
     S.watchAnswers = JSON.stringify(r.answers || {});
     S.marks = { review: [], out: {} };
@@ -2444,11 +2449,19 @@
       onThemeChange();
     }
     if (v && v.deadline !== undefined) S.deadline = v.deadline || 0; // extra time
+    if (v && typeof v.phone === 'boolean' && v.phone !== !!S.watchPhone) { S.watchPhone = v.phone; redraw = true; } // their plain code box
+    if (v && S.scratch && typeof v.tool === 'string' && v.tool !== S.scratch.tool) { S.scratch.tool = v.tool; padDraw = true; }
     if (v && S.el.scratch && S.el.scratch.hidden === !!v.pad) { // the scratchpad opened or closed
       S.el.scratch.hidden = !v.pad;
       S.el.wrap.classList.toggle('with-scratch', !!v.pad);
+      S.el.scratchBtn.setAttribute('aria-pressed', String(!!v.pad));
       if (S.editor) S.editor.layout();
       padDraw = true;
+    }
+    if (v && S.el.save && v.save !== undefined && v.save !== S.watchSave) { // Saved / Saving… / Not saved yet
+      S.watchSave = v.save;
+      S.el.save.textContent = v.save === 'saved' ? 'Saved' : v.save === 'saving' ? 'Saving…' : v.save === 'offline' ? 'Not saved yet' : '';
+      S.el.save.classList.toggle('bad', v.save === 'offline');
     }
     if (redraw) renderQuestion();
     else if (padDraw) renderScratch();

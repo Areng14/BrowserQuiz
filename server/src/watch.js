@@ -85,6 +85,8 @@ function cleanView(v) {
     marks: cleanMarks(v.marks), hl: cleanHl(v.hl), pad: v.pad === true,
     toast: typeof v.toast === 'string' && v.toast ? v.toast.replace(/[\u0000-\u001f]/g, ' ').slice(0, 200) : null,
     fs: v.fs === true, dark: typeof v.dark === 'boolean' ? v.dark : null, ed: cleanEd(v.ed),
+    save: ['saved', 'saving', 'offline'].includes(v.save) ? v.save : null, phone: v.phone === true,
+    tool: ['pen', 'text', 'eraser'].includes(v.tool) ? v.tool : null,
     q: id(v.q), review: v.review === true, dir: v.dir === true, intro: v.intro === true,
     scroll: num(v.scroll, 0, 1e6) || 0, wscroll: num(v.wscroll, 0, 1e6) || 0,
     w: num(v.w, 200, 8000) || 1280, h: num(v.h, 200, 8000) || 800,

@@ -165,6 +165,12 @@
     reset();
     label();
     requestAnimationFrame(draw);
+    // A theme switch while it's paused: redraw in the new colors (while running, the next frame does)
+    const recolor = () => { if (!wrap.isConnected) { themeWatch.disconnect(); darkQuery.removeEventListener('change', recolor); return; } if (!running) requestAnimationFrame(draw); };
+    const themeWatch = new MutationObserver(recolor);
+    themeWatch.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    darkQuery.addEventListener('change', recolor);
     return wrap;
   };
 }());
