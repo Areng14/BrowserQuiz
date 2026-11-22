@@ -73,6 +73,11 @@ use the defaults for the rest and start writing.
    - Write 2 simple sample tests, plus 5–10 hidden tests. The hidden tests repeat the samples
      and cover empty input, one element, negatives, duplicates, boundaries, and a larger case.
    - Always include a reference solution in every allowed language.
+   - To rule out a shortcut (a library sort, streams), `ban` only works in Java and Python: with
+     a ban list, only those two can answer. With other languages, write the ban per language
+     (`{ "java": [...], "python": [...] }`) and add a rubric item with a `forbid` regex for the
+     others (`\\.sort\\(` in JavaScript, `qsort\\(` in C). It only takes that item's points, and
+     it's a text check, so it's easier to get around. Say in the prompt what isn't allowed.
    - Use a rubric only for things tests can't check (1–2 points). How depends on my answer
      about rubric points:
      - **Automatically:** give every rubric item a `require` or `forbid` regex (see "Rubric

@@ -341,7 +341,9 @@ Java and Python can do everything here. The others:
   that test, with a plain message (segmentation fault, a panic and its line, stack overflow). In C++
   an index out of range on a `vector` stops the program instead of reading garbage.
 - Bans only work in Java and Python. With other languages in the question, write the ban per
-  language (`{ "java": [...] }`).
+  language (`{ "java": [...] }`), and for the others use a rubric item with a `forbid` pattern
+  (see [Rubric checks](#rubric-checks)). That takes only the item's points, and since it reads
+  the text, it's easier to get around than a ban.
 - Speed tests only run in Java, Python, JavaScript and TypeScript (an optimizing compiler times badly,
   and the others can reach into whatever times them).
 - C has no maps, no class questions, and keeps 2D arrays to numbers, booleans and chars.

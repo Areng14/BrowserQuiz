@@ -85,7 +85,8 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
     in C, ASCII chars in C, C++ and Go, no null strings or arrays in C++ and Rust (no null
     strings in Go). Write a reference in every language the question offers. `"languages": "any"`
     lets students pick any language that can run the question; write references in the languages
-    you know best.
+    you know best. To rule out a shortcut in a language without bans, use a rubric item with a
+    `forbid` regex instead.
   - Write 2 simple `sample` tests that students can run, and 5–10 `hidden` tests. Only hidden
     tests are graded, so repeat the sample cases in `hidden` too. Cover:
     - empty input
