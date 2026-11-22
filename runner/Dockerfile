@@ -1,5 +1,5 @@
 # BrowserQuiz code runner: Java 21, Python 3, Node 22 (JavaScript and TypeScript), gcc and g++ (C and C++),
-# .NET 10 (C#), Go, Rust, Swift and Ruby, inside the jail-lite sandbox. It runs as root inside the container only so it can drop each job to its own uid.
+# .NET 10 (C#), Go and Rust, inside the jail-lite sandbox. It runs as root inside the container only so it can drop each job to its own uid.
 FROM node:22-bookworm-slim AS node
 FROM eclipse-temurin:21-jdk
 # Only behind a TLS-intercepting proxy: its CA certificate (public), as in server/Dockerfile.
@@ -8,14 +8,8 @@ ARG EXTRA_CA=""
 RUN if [ -n "$EXTRA_CA" ]; then printf '%s\n' "$EXTRA_CA" > /tmp/extra-ca.crt; echo 'Acquire::https::CaInfo "/tmp/extra-ca.crt";' > /etc/apt/apt.conf.d/99ca; fi; \
     apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 gcc g++ libc6-dev golang-go rustc \
-      dotnet-sdk-10.0 swiftlang ruby \
- && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99ca /tmp/extra-ca.crt \
- # Swift without its debugger, language server, package manager and embedded targets: 2.4 GB -> 1 GB
- && cd /usr/libexec/swift && rm -rf bin/lldb* bin/clangd bin/sourcekit-lsp bin/docc bin/swift-format bin/swift-package* bin/swift-build* \
-      bin/swift-test bin/swift-run bin/swift-sdk bin/swift-experimental-sdk bin/repl_swift bin/llvm-profdata bin/llvm-cov bin/swift-api-* \
-      bin/swift-symbolgraph-extract bin/swift-synthesize-interface bin/plutil bin/wasm-ld bin/lld-link bin/ld64.lld bin/clang-cl \
-      bin/swift-cache-tool bin/swift-help bin/*legacy-driver bin/swift-plugin-server lib/liblldb* lib/libsourcekitdInProc* \
-      lib/swift_static lib/libIndexStore* lib/swift/embedded lib/swift/FrameworkABIBaseline share
+      dotnet-sdk-10.0 \
+ && rm -rf /var/lib/apt/lists/* /etc/apt/apt.conf.d/99ca /tmp/extra-ca.crt
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 # The C++ prelude, precompiled with the same flags runner.py compiles with, so a compile is fast.
 COPY bqpre.hpp /opt/bq/cpp/bqpre.hpp

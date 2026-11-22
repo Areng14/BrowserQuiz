@@ -18,12 +18,10 @@ const BQCPP_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bq.hpp'), 'ut
 const BQGO_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bqh.go'), 'utf8');
 const BQRS_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bq.rs'), 'utf8');
 const BQCS_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'BQ.cs'), 'utf8');
-const BQSW_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bq.swift'), 'utf8');
-const BQRB_SRC = fs.readFileSync(path.join(__dirname, 'harness', 'bq.rb'), 'utf8');
 // What every C answer gets without asking (C++'s is in the runner image, precompiled: runner/bqpre.hpp).
 const C_PRELUDE = ['stdio.h', 'stdlib.h', 'string.h', 'stdbool.h', 'math.h', 'limits.h', 'ctype.h', 'stdint.h'].map((x) => `#include <${x}>`).join('\n') + '\n';
 const { isJs, isC } = T;
-const NULL_WORD = { python: 'None', cpp: 'nullptr', c: 'NULL', go: 'nil', rust: 'None', swift: 'nil', ruby: 'nil' };
+const NULL_WORD = { python: 'None', cpp: 'nullptr', c: 'NULL', go: 'nil', rust: 'None' };
 const ZERO_VALUE = { int: 0, long: 0, double: 0, boolean: false, char: '\0' };
 // A field left out of an object: null, or 0 / false for one that can't be null.
 const fieldValue = (f, v) => (v[f.name] !== undefined ? v[f.name] : T.nullable(f.type) ? null : ZERO_VALUE[T.canon(f.type)]);
@@ -251,59 +249,6 @@ function csLit(type, v, D) {
   if (kv) return `new ${T.csType(type)} {${Object.entries(v).map(([k, x]) => ` {${kv[0] === 'int' ? Number(k) : JSON.stringify(k)}, ${csLit(kv[1], x, D)}}`).join(',')} }`;
   return `new ${T.csType(type)} {${v.map((x) => csLit(elementType(type), x, D)).join(', ')}}`;
 }
-// Swift: typed by the declaration they go into (let a0: [Int] = [1, 2]); ListNode(1, ListNode(2, nil)).
-function swStr(s) {
-  let o = '"';
-  for (const ch of String(s)) {
-    if (ch === '"') o += '\\"';
-    else if (ch === '\\') o += '\\\\';
-    else if (/^[\x20-\x7e]$/.test(ch)) o += ch;
-    else o += `\\u{${ch.codePointAt(0).toString(16)}}`;
-  }
-  return o + '"';
-}
-function swLit(type, v, D) {
-  type = T.canon(type);
-  if (v === null || v === undefined) return 'nil';
-  if (T.isClass(type, D)) return `${type}(${D[type].map((f) => swLit(f.type, fieldValue(f, v), D)).join(', ')})`;
-  if (isRange(v) && !T.mapTypes(type)) return `bqRange(${v.range.join(', ')})`;
-  switch (type) {
-    case 'int': case 'long': case 'boolean': return String(v);
-    case 'double': return cDouble(v);
-    case 'char': case 'string': return swStr(v);
-    default: break;
-  }
-  const kv = T.mapTypes(type);
-  if (kv) { const items = Object.entries(v); return items.length ? `[${items.map(([k, x]) => `${kv[0] === 'int' ? Number(k) : swStr(k)}: ${swLit(kv[1], x, D)}`).join(', ')}]` : '[:]'; }
-  return `[${v.map((x) => swLit(elementType(type), x, D)).join(', ')}]`;
-}
-// Ruby: [1, 2], {"a" => 1}, ListNode.new(1, nil). Double-quoted strings with # escaped (no interpolation).
-const rbStr = (s) => JSON.stringify(String(s)).replace(/#/g, '\\#');
-function rbLit(type, v, D) {
-  type = T.canon(type);
-  if (v === null || v === undefined) return 'nil';
-  if (T.isClass(type, D)) return `${type}.new(${D[type].map((f) => rbLit(f.type, fieldValue(f, v), D)).join(', ')})`;
-  if (isRange(v) && !T.mapTypes(type)) return `BQ.range(${v.range.join(', ')})`;
-  switch (type) {
-    case 'int': case 'long': case 'boolean': return String(v);
-    case 'double': return cDouble(v);
-    case 'char': case 'string': return rbStr(v);
-    default: break;
-  }
-  const kv = T.mapTypes(type);
-  if (kv) return `{${Object.entries(v).map(([k, x]) => `${kv[0] === 'int' ? Number(k) : rbStr(k)} => ${rbLit(kv[1], x, D)}`).join(', ')}}`;
-  return `[${v.map((x) => rbLit(elementType(type), x, D)).join(', ')}]`;
-}
-// How bq.rb is told a type (like jsDesc): {k: :s}, {k: :a, e: ...}, {k: :m, v: ...}, {k: :c, n: "Point"}
-function rbDesc(type, D) {
-  type = T.canon(type);
-  if (T.isClass(type, D)) return `{k: :c, n: ${JSON.stringify(type)}}`;
-  const kv = T.mapTypes(type);
-  if (kv) return `{k: :m, v: ${rbDesc(kv[1], D)}}`;
-  const e = elementType(type);
-  return e ? `{k: :a, e: ${rbDesc(e, D)}}` : '{k: :s}';
-}
-
 const C_WRITE = { int: 'bq_w_int', long: 'bq_w_ll', double: 'bq_w_dbl', boolean: 'bq_w_bool', char: 'bq_w_chr', string: 'bq_w_str' };
 const cWriter = (t, D) => C_WRITE[T.canon(t)] || `bq_w_${T.canon(t)}`;
 
@@ -325,15 +270,13 @@ function show(type, v, lang, D) {
   if (T.isClass(type, D) && v && typeof v === 'object') {
     const args = D[type].map((f) => show(f.type, fieldValue(f, v), lang, D)).join(', ');
     if (lang === 'go') return `&${type}{${D[type].map((f) => `${f.name}: ${show(f.type, fieldValue(f, v), lang, D)}`).join(', ')}}`;
-    if (lang === 'swift') return `${type}(${args})`;
-    if (lang === 'ruby') return `${type}.new(${args})`;
     if (lang === 'rust') return `Some(${type} { ${D[type].map((f) => `${f.name}: ${show(f.type, fieldValue(f, v), lang, D)}`).join(', ')} })`;
     return lang === 'python' ? `${type}(${args})` : lang === 'c' ? `&(${type}){${args}}` : `new ${type}(${args})`;
   }
   if (isRange(v) && !T.mapTypes(type)) return showRange(type, v, lang);
   switch (type) {
     case 'string': return JSON.stringify(v);
-    case 'char': return typeof v === 'string' && !isJs(lang) && lang !== 'swift' && lang !== 'ruby' ? charLit(v) : JSON.stringify(v);
+    case 'char': return typeof v === 'string' && !isJs(lang) ? charLit(v) : JSON.stringify(v);
     case 'boolean': return lang === 'python' ? (v ? 'True' : 'False') : String(v);
     case 'double': return Number.isInteger(v) && !isJs(lang) ? v.toFixed(1) : String(v);
     case 'int': case 'long': return String(v);
@@ -348,8 +291,6 @@ function show(type, v, lang, D) {
     if (lang === 'go') return `${T.goType(type)}{${items.map(([a, b]) => `${a}: ${b}`).join(', ')}}`;
     if (lang === 'rust') return `HashMap::from([${items.map(([a, b]) => `(${a}, ${b})`).join(', ')}])`;
     if (lang === 'csharp') return `{ ${items.map(([a, b]) => `[${a}] = ${b}`).join(', ')} }`;
-    if (lang === 'swift') return items.length ? `[${items.map(([a, b]) => `${a}: ${b}`).join(', ')}]` : '[:]';
-    if (lang === 'ruby') return `{${items.map(([a, b]) => `${a} => ${b}`).join(', ')}}`;
     return `Map.of(${items.map(([a, b]) => `${a}, ${b}`).join(', ')})`;
   }
   if (!Array.isArray(v)) return JSON.stringify(v);
@@ -384,14 +325,12 @@ function callText(q, test, lang) {
       if (lang === 'cpp') return `${C.name}* ${s.as} = new ${C.name}(${args});`;
       if (lang === 'go') return `${s.as} := New${C.name}(${args})`;
       if (lang === 'csharp') return `var ${s.as} = new ${C.name}(${args});`;
-      if (lang === 'swift') return `let ${s.as} = ${C.name}(${args})`;
-      if (lang === 'ruby') return `${s.as} = ${C.name}.new(${args})`;
       if (lang === 'rust') return `let mut ${s.as} = ${C.name}::new(${args});`;
       return `${s.as} = ${C.name}(${args})`;
     }
     const m = stepMethod(C, s);
     const args = s.args.map((a, i) => show(m.params[i].type, a, lang, q.types)).join(', ');
-    return ['python', 'go', 'swift', 'ruby'].includes(lang) ? `${s.on}.${s.call}(${args})` : `${s.on}${lang === 'cpp' ? '->' : '.'}${s.call}(${args});`;
+    return lang === 'python' || lang === 'go' ? `${s.on}.${s.call}(${args})` : `${s.on}${lang === 'cpp' ? '->' : '.'}${s.call}(${args});`;
   }).join('\n');
 }
 function expectedText(q, test, lang) {
@@ -775,83 +714,6 @@ function csMain(q, tests, marker) {
   return L.join('\n');
 }
 
-// Swift: main.swift is the harness (top-level code only goes there); each test runs in a forked child (bq.swift).
-function swMain(q, tests, marker) {
-  const D = q.types;
-  const L = [];
-  if (D) {
-    for (const [n, fs] of Object.entries(D)) {
-      L.push(`extension ${n}: BQJ {`, '    func bqj(_ w: inout String, _ d: Int) {', '        w += "{"');
-      fs.forEach((f, k) => L.push(`        w += ${swStr((k ? ',' : '') + JSON.stringify(f.name) + ':')}`, `        self.${f.name}.bqj(&w, d + 1)`));
-      L.push('        w += "}"', '    }', '}');
-    }
-  }
-  const locals = (params, args, ind) => params.map((p, k) => `${ind}let a${k}: ${T.swiftType(p.type)} = ${swLit(p.type, args[k], D)}`);
-  const argNames = (n) => Array.from({ length: n }, (_, k) => 'a' + k).join(', ');
-  tests.forEach((t, i) => {
-    L.push(`func bqT${i}(_ i: Int) {`);
-    if (q.mode === 'method') {
-      const s = q.signature;
-      L.push(...locals(s.params, t.args, '    '), `    let r: ${T.swiftType(s.returns)} = Solution().${s.name}(${argNames(s.params.length)})`, '    bqOk(i, r)');
-    } else {
-      const C = q.class;
-      const names = [...new Set(t.steps.filter((st) => st.new).map((st) => st.as))];
-      names.forEach((n) => L.push(`    var o_${n}: ${C.name}! = nil`));
-      t.steps.forEach((st, k) => {
-        if (st.new) { L.push('    do {', ...locals(C.constructor, st.new, '        '), `        o_${st.as} = ${C.name}(${argNames(C.constructor.length)})`, '    }'); return; }
-        const m = stepMethod(C, st);
-        const call = `o_${st.on}.${st.call}(${argNames(m.params.length)})`;
-        L.push('    do {', ...locals(m.params, st.args, '        '));
-        if (m.returns !== 'void' && (st.expect !== undefined || st.check)) L.push(`        let r: ${T.swiftType(m.returns)} = ${call}`, `        bqStep(i, ${k}, r)`);
-        else L.push(`        _ = ${call}`);
-        L.push('    }');
-      });
-      L.push('    bqDone(i)');
-    }
-    L.push('}');
-  });
-  L.push(`bqMain(${swStr(marker)}, [${tests.map((_, i) => 'bqT' + i).join(', ')}], ${ALARM(q)})`, '');
-  return L.join('\n');
-}
-
-// Ruby: main.rb loads the question's classes and the student's file, checks they have what the question asks
-// for, and runs each test, any exception (exit and a too-deep recursion included) being that test's failure.
-function rbMain(q, tests, marker) {
-  const D = q.types;
-  const classes = D ? `{${Object.entries(D).map(([n, fs]) => `${JSON.stringify(n)} => [${fs.map((f) => `[${JSON.stringify(f.name)}, ${rbDesc(f.type, D)}]`).join(', ')}]`).join(', ')}}` : '{}';
-  const L = ["require_relative 'bq'", `BQ.start(${rbStr(marker)}, ${classes})`, 'File.delete(__FILE__) rescue nil'];
-  if (D) L.push("require_relative 'bqtypes'");
-  if (q.support && q.support.ruby) L.push("require_relative 'support'");
-  L.push('begin', "  require_relative 'solution'", 'rescue ScriptError, StandardError, SystemStackError => e', '  BQ.broken(e)', '  exit', 'end');
-  if (q.mode === 'method') {
-    const s = q.signature;
-    L.push(`exit if BQ.missing([[:f, :${s.name}, ${rbStr(`${s.name}(${s.params.map((p) => p.name).join(', ')})`)}]])`);
-  } else {
-    L.push(`exit if BQ.missing([[:c, :${q.class.name}, [${[...new Set(q.class.methods.map((m) => ':' + m.name))].join(', ')}]]])`);
-  }
-  L.push('tests = [');
-  tests.forEach((t) => {
-    L.push('  ->(i) {');
-    if (q.mode === 'method') {
-      const s = q.signature;
-      L.push(`    BQ.ok(i, ${rbDesc(s.returns, D)}, ${s.name}(${t.args.map((a, k) => rbLit(s.params[k].type, a, D)).join(', ')}))`);
-    } else {
-      const C = q.class;
-      t.steps.forEach((st, k) => {
-        if (st.new) { L.push(`    o_${st.as} = ${C.name}.new(${st.new.map((a, j) => rbLit(C.constructor[j].type, a, D)).join(', ')})`); return; }
-        const m = stepMethod(C, st);
-        const call = `o_${st.on}.${st.call}(${st.args.map((a, j) => rbLit(m.params[j].type, a, D)).join(', ')})`;
-        if (m.returns !== 'void' && (st.expect !== undefined || st.check)) L.push(`    BQ.step(i, ${k}, ${rbDesc(m.returns, D)}, ${call})`);
-        else L.push(`    ${call}`);
-      });
-      L.push('    BQ.done(i)');
-    }
-    L.push('  },');
-  });
-  L.push(']', 'tests.each_with_index do |t, i|', '  t.call(i)', 'rescue Exception => e', '  BQ.fail(i, e)', 'end', '');
-  return L.join('\n');
-}
-
 // An argument as JSON for bqh.args: maps carry their keys' types, and objects of declared classes say which
 // class they are ({"__obj__": "Point", "f": [1, 2]}). Lists only get wrapped when they hold objects.
 const hasClass = (type, D) => !!D && Object.keys(D).some((n) => new RegExp(`\\b${n}\\b`).test(type));
@@ -872,8 +734,6 @@ function buildSnippetJob(lang, code) {
   if (lang === 'python') return { language: 'python', files: { 'main.py': code }, main: 'main.py' };
   if (isJs(lang)) { const f = lang === 'typescript' ? 'main.ts' : 'main.js'; return { language: lang, files: { [f]: code }, main: f }; }
   if (lang === 'csharp') return { language: 'csharp', files: { 'main.cs': code, 'bqusings.cs': CS_USINGS }, main: 'main', sources: ['bqusings.cs', 'main.cs'] };
-  if (lang === 'swift') return { language: 'swift', files: { 'main.swift': code }, main: 'main', sources: ['main.swift'] };
-  if (lang === 'ruby') return { language: 'ruby', files: { 'main.rb': code }, main: 'main.rb' };
   if (lang === 'go') {
     let body;
     if (/^\s*package\s/m.test(code)) body = code;
@@ -940,18 +800,6 @@ function buildJob(q, lang, code, tests) {
     if (q.types) files['bqtypes.cs'] = T.classSource(q.types, 'csharp');
     if (q.support && q.support.csharp) files['support.cs'] = q.support.csharp;
     return { marker, job: { language: 'csharp', files, main: 'main', entry: 'BQMain', sources: Object.keys(files).filter((n) => n.endsWith('.cs')).sort() } };
-  }
-  if (lang === 'swift') {
-    Object.assign(files, { 'solution.swift': code, 'bq.swift': BQSW_SRC, 'main.swift': swMain(q, tests, marker) });
-    if (q.types) files['bqtypes.swift'] = T.classSource(q.types, 'swift');
-    if (q.support && q.support.swift) files['support.swift'] = q.support.swift;
-    return { marker, job: { language: 'swift', files, main: 'main', sources: Object.keys(files).filter((n) => n.endsWith('.swift')).sort() } };
-  }
-  if (lang === 'ruby') {
-    Object.assign(files, { 'solution.rb': code, 'bq.rb': BQRB_SRC, 'main.rb': rbMain(q, tests, marker) });
-    if (q.types) files['bqtypes.rb'] = T.classSource(q.types, 'ruby');
-    if (q.support && q.support.ruby) files['support.rb'] = q.support.ruby;
-    return { marker, job: { language: 'ruby', files, main: 'main.rb' } };
   }
   if (lang === 'go') {
     Object.assign(files, { 'solution.go': goPackaged(code), 'bqh.go': BQGO_SRC, 'bqmain.go': goMain(q, tests, marker) });
@@ -1202,50 +1050,12 @@ function cleanCs(text, q) {
   return (out || lines.join('\n').trim()).slice(0, 4000);
 }
 
-// swiftc's errors (llvm style): "solution.swift:3:9: error: ..." with the line and a caret after it.
-function cleanSwift(text, q) {
-  const lines = String(text || '').replace(/\/jobs\/[^/\s]+\//g, '').replace(/\r/g, '').split('\n');
-  const keep = [];
-  const known = [];
-  let mine = false;
-  const sig = (name) => {
-    if (q.mode === 'class' && name === 'init') return `${q.class.name} needs: init(${q.class.constructor.map((p) => `_ ${p.name}: ${T.swiftType(p.type)}`).join(', ')})`;
-    const ms = q.mode === 'method' ? (q.signature.name === name ? [q.signature] : []) : q.class.methods.filter((m) => m.name === name);
-    return ms.map((m) => `${name} should be: func ${name}(${m.params.map((p) => `_ ${p.name}: ${T.swiftType(p.type)}`).join(', ')})${m.returns === 'void' ? '' : ' -> ' + T.swiftType(m.returns)}`).join('\n');
-  };
-  let lastCall = null;
-  for (const line of lines) {
-    const m = /^([\w.-]+):(\d+):\d+: (error|warning|note): (.*)$/.exec(line);
-    if (m) {
-      mine = m[1] === 'solution.swift';
-      if (mine) { if (m[3] !== 'warning') keep.push(line); continue; }
-      if (m[3] !== 'error') continue;
-      const msg = m[4];
-      let x;
-      if ((x = /value of type '(\w+)!?' has no member '(\w+)'/.exec(msg))) known.push(x[1] === 'Solution' ? `Missing method ${x[2]}` : `${x[1]} has no method ${x[2]}`);
-      else if ((x = /cannot find (?:type )?'(\w+)' in scope/.exec(msg))) known.push(`Missing class ${x[1]}`);
-      else if ((x = /cannot (?:convert value of type '(.+?)' to specified type|assign value of type '(.+?)' to type) '(.+?)'/.exec(msg))) known.push(`A method returns ${x[1] || x[2]} but should return ${x[3]}`);
-      else if (/argument label|missing argument|extra argument|cannot convert value of type .* to expected argument type/.test(msg)) lastCall = msg;
-      else known.push(msg);
-      continue;
-    }
-    if (lastCall) {
-      const c = /(?:Solution\(\)|o_\w+)\.(\w+)\(|o_\w+ = (\w+)\(/.exec(line);
-      if (c) { known.push(c[1] ? sig(c[1]) || lastCall : sig('init') || lastCall); lastCall = null; }
-    }
-    if (mine) keep.push(line);
-  }
-  if (lastCall) known.push(lastCall);
-  const out = [keep.join('\n').trim(), [...new Set(known.filter(Boolean))].join('\n')].filter(Boolean).join('\n');
-  return (out || lines.join('\n').trim()).slice(0, 4000);
-}
-
 // res = runner response. Returns { status, message?, tests: [{ pass, got?, gotSteps?, error? }], printed }
 function readResults(q, lang, tests, res, marker) {
   if (res.status === 'compile_error') {
     const raw = res.stderr || res.stdout;
     const message = isC(lang) ? cleanCc(raw, lang, q) : lang === 'go' ? cleanGo(raw, q) : lang === 'rust' ? cleanRust(raw, q)
-      : lang === 'csharp' ? cleanCs(raw, q) : lang === 'swift' ? cleanSwift(raw, q) : cleanJava(raw);
+      : lang === 'csharp' ? cleanCs(raw, q) : cleanJava(raw);
     return { status: 'compile_error', message };
   }
   if (res.status === 'error') return { status: 'error', message: 'The code runner had a problem. Try again in a moment.' };
@@ -1253,7 +1063,7 @@ function readResults(q, lang, tests, res, marker) {
   // The ban check's facts come first, written before any student code ran.
   const scan = records.length && records[0].scan ? records[0].scan : null;
   const compile = records.find((r) => r.compile);
-  if (compile) return { status: 'compile_error', message: isJs(lang) ? cleanJs(compile.err) : lang === 'ruby' ? cleanJs(compile.err).replace(/\bsolution\.rb:(\d+):/g, 'solution.rb:$1:') : cleanPy(compile.err), scan };
+  if (compile) return { status: 'compile_error', message: isJs(lang) ? cleanJs(compile.err) : cleanPy(compile.err), scan };
   // A Python speed test only counts when the code keeps out of the harness that times it (bans.js).
   const intrudes = tests.some((t) => t.speed) ? B.timingIntrusions(lang, scan) : [];
   // (.NET can't catch a stack overflow: the program stops, and says so on stderr)
@@ -1307,4 +1117,4 @@ function studentView(q, lang, tests, r) {
   };
 }
 
-module.exports = { buildJob, readResults, studentView, starterCode, callText, expectedText, same, show, clean, javaType, pyType, buildSnippetJob, cleanCc, cleanJs, cleanGo, cleanRust, cleanCs, cleanSwift };
+module.exports = { buildJob, readResults, studentView, starterCode, callText, expectedText, same, show, clean, javaType, pyType, buildSnippetJob, cleanCc, cleanJs, cleanGo, cleanRust, cleanCs };

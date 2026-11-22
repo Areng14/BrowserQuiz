@@ -14,7 +14,7 @@ const TIMEOUT_MS = 100;
 // Code with comments and the inside of string literals removed. Line breaks stay where they were.
 function stripCode(code, lang) {
   const s = String(code || '');
-  const py = lang === 'python' || lang === 'ruby'; // # comments
+  const py = lang === 'python';
   const js = lang === 'javascript' || lang === 'typescript' || lang === 'go'; // `...` strings
   const n = s.length;
   let out = '';

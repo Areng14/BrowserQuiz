@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """BrowserQuiz code runner.
 
-Compiles and runs student Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust, Swift and Ruby inside "jail-lite", a sandbox built only from unprivileged
+Compiles and runs student Java, Python, JavaScript, TypeScript, C, C++, C#, Go and Rust inside "jail-lite", a sandbox built only from unprivileged
 kernel features (it works on hosts like Railway that don't allow privileged containers):
 
   * a separate uid per worker slot; everything that uid owns is killed after every job
@@ -148,8 +148,8 @@ def build_rules(job, run_here=False):
     read_files = ["/etc/ld.so.cache", "/etc/localtime", "/etc/timezone", "/proc/meminfo", "/proc/cpuinfo", "/proc/stat",
                   "/dev/urandom", "/dev/random", "/dev/zero"]
     # the dynamic loader and shared libraries, and gcc's own programs (cc1, collect2)
-    exec_dirs = ["/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/libexec/gcc", "/usr/libexec/swift"]
-    tools = [java, javac, python] + [_real(n) for n in ("node", "gcc", "g++", "cc", "as", "ld", "rustc", "dotnet", "swiftc", "ruby")]
+    exec_dirs = ["/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/libexec/gcc"]
+    tools = [java, javac, python] + [_real(n) for n in ("node", "gcc", "g++", "cc", "as", "ld", "rustc", "dotnet")]
     exec_files = sorted(set(p for p in tools if p))
     # Files in the job dir can only be run as programs by a C or C++ job's run step (its compiled main).
     return dict(read_dirs=read_dirs, read_files=read_files, exec_dirs=exec_dirs, exec_files=exec_files,
@@ -321,7 +321,7 @@ CC_FLAGS = {
     # These flags must match the ones bqpre.hpp.gch was built with (Dockerfile).
     "cpp": ["-std=gnu++17", "-O2", "-pipe", "-w", "-fmax-errors=20", "-fdiagnostics-color=never", "-D_GLIBCXX_ASSERTIONS", "-I/opt/bq/cpp"],
 }
-LANGS = ("java", "python", "javascript", "typescript", "c", "cpp", "csharp", "go", "rust", "swift", "ruby")
+LANGS = ("java", "python", "javascript", "typescript", "c", "cpp", "csharp", "go", "rust")
 CS = "/opt/bq/cs"  # csc, the reference assemblies and the runtime config (Dockerfile)
 CS_FLAGS = ["-nologo", "-noconfig", "-nostdlib", "@" + CS + "/refs.rsp", "-langversion:latest", "-nullable:disable", "-optimize+",
             "-debug:portable", "-warn:0", "-target:exe", "-out:main.dll"]
@@ -329,7 +329,6 @@ CS_FLAGS = ["-nologo", "-noconfig", "-nostdlib", "@" + CS + "/refs.rsp", "-langv
 # denied), and no W^X double mapping of its code (it can't set that up in the sandbox, and fails to start).
 DOTNET_ENV = {"DOTNET_EnableDiagnostics": "0", "DOTNET_EnableWriteXorExecute": "0", "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
               "DOTNET_NOLOGO": "1", "DOTNET_gcServer": "0"}
-SWIFT_FLAGS = ["-Onone", "-suppress-warnings", "-diagnostic-style", "llvm", "-module-cache-path", "mc", "-o", "main"]
 GO = "/opt/bq/go"  # the standard library, compiled when the image was built (Dockerfile)
 # The linker by its full path: with a bare name, Rust's process spawning (rustc changes PATH for the linker)
 # takes a route that needs socketpair, which the sandbox denies.
@@ -349,9 +348,9 @@ def run_job(slot, req):
     entry = req.get("entry")
     if entry is not None and (not isinstance(entry, str) or not entry.isidentifier()):
         return {"status": "error", "message": "bad job"}
-    if lang in ("c", "cpp", "go", "rust", "csharp", "swift"):
+    if lang in ("c", "cpp", "go", "rust", "csharp"):
         if sources is None:
-            sources = sorted(n for n in files if n.endswith({"c": ".c", "cpp": ".cpp", "go": ".go", "rust": ".rs", "csharp": ".cs", "swift": ".swift"}[lang]))
+            sources = sorted(n for n in files if n.endswith({"c": ".c", "cpp": ".cpp", "go": ".go", "rust": ".rs", "csharp": ".cs"}[lang]))
         if not isinstance(sources, list) or not sources or not all(isinstance(n, str) and n in files for n in sources):
             return {"status": "error", "message": "bad job"}
         if include not in (None, "bqpre.h", "bqpre.hpp"):
@@ -414,28 +413,17 @@ def run_job(slot, req):
             run_env = dict(env, GOMEMLIMIT=f"{mem_mb}MiB", GOMAXPROCS="2") if lang == "go" else env
             st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s,
                                               mem_mb + (1536 if lang == "go" else 128), 64, run_env, run_here=True)
-        elif lang in ("csharp", "swift"):
-            if lang == "csharp":
-                argv = [shutil.which("dotnet"), "exec", CS + "/csc.dll"] + CS_FLAGS + (["-main:" + entry] if entry else []) + sources
-                cenv = dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(1536 << 20))
-            else:
-                argv = [shutil.which("swiftc")] + SWIFT_FLAGS + sources
-                cenv = env
+        elif lang == "csharp":
+            argv = [shutil.which("dotnet"), "exec", CS + "/csc.dll"] + CS_FLAGS + (["-main:" + entry] if entry else []) + sources
+            cenv = dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(1536 << 20))
             st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 4096, 64, cenv, fsize=64 << 20)
             kill_uid(uid)
             if st != "ok" or code != 0:
                 return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                         "exitCode": code, "ms": ms}
-            if lang == "csharp":
-                st, code, out, err, ms = run_step([shutil.which("dotnet"), "exec", "--runtimeconfig", CS + "/main.runtimeconfig.json", "main.dll"],
-                                                  uid, job, cpu_s, wall_s, mem_mb + 1792, 64,
-                                                  dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(mem_mb << 20)))
-            else:
-                st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s, mem_mb + 256, 64,
-                                                  dict(env, SWIFT_BACKTRACE="enable=no"), run_here=True)
-        elif lang == "ruby":
-            st, code, out, err, ms = run_step([shutil.which("ruby"), "--disable-gems", "-W0", req.get("main") or "main.rb"],
-                                              uid, job, cpu_s, wall_s, mem_mb + 256, 64, env)
+            st, code, out, err, ms = run_step([shutil.which("dotnet"), "exec", "--runtimeconfig", CS + "/main.runtimeconfig.json", "main.dll"],
+                                              uid, job, cpu_s, wall_s, mem_mb + 1792, 64,
+                                              dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(mem_mb << 20)))
         elif lang in ("javascript", "typescript"):
             argv = [shutil.which("node"), f"--max-old-space-size={mem_mb}"] + NODE_FLAGS + [req.get("main") or "main.cjs"]
             st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1024, 64, env)
@@ -542,12 +530,9 @@ def language_test():
         ("go", {"main.go": "package main\nimport \"fmt\"\nfunc main() { fmt.Printf(\"ok%d\\n\", 1+1) }"}, "main", ["main.go"]),
         ("rust", {"main.rs": "fn main() { let v = vec![1, 1]; println!(\"ok{}\", v[0] + v[1]); }"}, "main", ["main.rs"]),
         ("csharp", {"main.cs": "System.Console.WriteLine(\"ok\" + (1 + 1));"}, "main", ["main.cs"]),
-        ("swift", {"main.swift": "print(\"ok\\(1 + 1)\")"}, "main", ["main.swift"]),
-        ("ruby", {"main.rb": "puts \"ok#{1 + 1}\""}, "main.rb", None),
     ]
     for lang, files, main, sources in probes:
-        need = {"javascript": "node", "typescript": "node", "c": "gcc", "cpp": "g++", "go": None, "rust": "rustc", "csharp": "dotnet",
-                "swift": "swiftc", "ruby": "ruby"}[lang]
+        need = {"javascript": "node", "typescript": "node", "c": "gcc", "cpp": "g++", "go": None, "rust": "rustc", "csharp": "dotnet"}[lang]
         if (need and not shutil.which(need)) or (lang == "go" and not os.path.exists(os.path.join(GO, "importcfg"))):
             notes.append(f"{lang}: not installed")
             continue

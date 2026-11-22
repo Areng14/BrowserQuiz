@@ -434,7 +434,7 @@
         try { ctor = parseSig(u.ctor.trim() ? u.ctor : '()').params; } catch (e) { throw new Error(`Constructor: ${e.message.replace('countVowels(s: string): int', '(owner: string, balance: double)')}`); }
         // Two methods can share a name (overloads) only in Java and C++.
         const seen = new Set();
-        const noOverloads = q.languages.filter((l) => ['python', 'go', 'rust', 'ruby'].includes(l) || BT.isJs(l));
+        const noOverloads = q.languages.filter((l) => ['python', 'go', 'rust'].includes(l) || BT.isJs(l));
         const methods = u.methods.split('\n').filter((l) => l.trim()).map((l, i) => {
           let m;
           try { m = fullSig(l, true); } catch (e) { throw new Error(`Methods, line ${i + 1}: ${e.message}`); }
@@ -1046,8 +1046,8 @@
     // On code questions (langs given) an item can grade itself: a regex the code must have, or must not
     // have, one per language. Comments and strings don't count. Otherwise the teacher ticks it.
     const PATTERN_HINT = {
-      require: { java: 'private\\s+\\w+\\s+\\w+\\s*;', python: 'self\\._\\w+\\s*=', javascript: '\\bconst\\b', typescript: ':\\s*number\\b', c: '\\bfree\\(', cpp: 'private:', go: '\\bfor\\b', rust: '\\bmatch\\b', csharp: 'private\\s+\\w+\\s+\\w+\\s*;', swift: 'private\\s+var', ruby: '@\\w+\\s*=' },
-      forbid: { java: 'Arrays\\.sort', python: 'sorted\\(', javascript: '\\.sort\\(', typescript: '\\.sort\\(', c: 'qsort\\(', cpp: '\\bsort\\(', go: 'sort\\.', rust: '\\.sort', csharp: '\\.Sort\\(|OrderBy', swift: '\\.sort', ruby: '\\.sort' },
+      require: { java: 'private\\s+\\w+\\s+\\w+\\s*;', python: 'self\\._\\w+\\s*=', javascript: '\\bconst\\b', typescript: ':\\s*number\\b', c: '\\bfree\\(', cpp: 'private:', go: '\\bfor\\b', rust: '\\bmatch\\b', csharp: 'private\\s+\\w+\\s+\\w+\\s*;' },
+      forbid: { java: 'Arrays\\.sort', python: 'sorted\\(', javascript: '\\.sort\\(', typescript: '\\.sort\\(', c: 'qsort\\(', cpp: '\\bsort\\(', go: 'sort\\.', rust: '\\.sort', csharp: '\\.Sort\\(|OrderBy' },
     };
     function rubricEditor(q, placeholder, langs) {
       q.rubric = q.rubric || [];
@@ -1112,7 +1112,6 @@
       java: 'int x = 7;\nSystem.out.println(x / 2);', python: 'x = 7\nprint(x // 2)', javascript: 'const x = 7;\nconsole.log(Math.floor(x / 2));',
       typescript: 'const x: number = 7;\nconsole.log(Math.floor(x / 2));', c: 'int x = 7;\nprintf("%d\\n", x / 2);', cpp: 'int x = 7;\ncout << x / 2 << endl;',
       go: 'x := 7\nfmt.Println(x / 2)', rust: 'let x = 7;\nprintln!("{}", x / 2);', csharp: 'int x = 7;\nConsole.WriteLine(x / 2);',
-      swift: 'let x = 7\nprint(x / 2)', ruby: 'x = 7\nputs x / 2',
     };
     function traceEditor(q) {
       const u = q._ui;

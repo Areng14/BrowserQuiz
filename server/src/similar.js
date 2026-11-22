@@ -20,8 +20,6 @@ const C_KW = new Set(('auto break case char const continue default do double els
 const GO_KW = new Set('break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var nil true false iota make len append'.split(' '));
 const RS_KW = new Set('as break const continue crate else enum extern false fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait true type unsafe use where while dyn Some None Ok Err Vec String Box Option'.split(' '));
 const CS_KW = new Set('abstract as base bool break case catch char class const continue default do double else enum false finally for foreach if in int interface is long new null object out override private protected public readonly ref return static string struct switch this throw true try using var virtual void while List Dictionary'.split(' '));
-const SWIFT_KW = new Set('class func let var init if else for in while return guard switch case default break continue struct enum nil true false self Int String Double Bool Character'.split(' '));
-const RUBY_KW = new Set('def end class module if elsif else unless while until for in do return yield begin rescue ensure nil true false self and or not then when case attr_accessor new each map'.split(' '));
 const JAVA_RE = /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|([A-Za-z_$][\w$]*)|(\d[\w.]*)|(>>>=?|<<=|>>=|==|!=|<=|>=|&&|\|\||\+\+|--|->|::|[-+*/%&|^]=|<<|>>|\S)/g;
 const JS_RE = /("(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`)|(\/\/[^\n]*|\/\*[\s\S]*?\*\/)|([A-Za-z_$][\w$]*)|(\d[\w.]*)|(>>>=?|<<=|>>=|===|!==|==|!=|<=|>=|&&|\|\||\?\?|\?\.|\+\+|--|=>|[-+*/%&|^]=|<<|>>|\S)/g;
 const PY_RE = /("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')|(#[^\n]*)|([A-Za-z_]\w*)|(\d[\w.]*)|(\*\*=?|\/\/=?|==|!=|<=|>=|->|<<|>>|[-+*/%&|^@]=|\S)/g;
@@ -29,8 +27,8 @@ const PY_RE = /("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\
 // [generic, exact] tokens, and the comments (which copying often keeps word for word)
 function tokenize(code, lang) {
   const js = lang === 'javascript' || lang === 'typescript';
-  const re = new RegExp(lang === 'python' || lang === 'ruby' ? PY_RE : js || lang === 'go' ? JS_RE : JAVA_RE);
-  const kw = { python: PY_KW, javascript: JS_KW, typescript: JS_KW, c: C_KW, cpp: C_KW, go: GO_KW, rust: RS_KW, csharp: CS_KW, swift: SWIFT_KW, ruby: RUBY_KW }[lang] || JAVA_KW;
+  const re = new RegExp(lang === 'python' ? PY_RE : js || lang === 'go' ? JS_RE : JAVA_RE);
+  const kw = { python: PY_KW, javascript: JS_KW, typescript: JS_KW, c: C_KW, cpp: C_KW, go: GO_KW, rust: RS_KW, csharp: CS_KW }[lang] || JAVA_KW;
   const toks = [];
   const comments = [];
   let m;

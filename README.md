@@ -43,7 +43,7 @@ the Monaco editor, with insane question customizability.
 - **Trace tables.** Students fill in what the loop does to each variable, step by step, in a table.
 - **Fill in the blanks.** Blanks right inside the code. Fill it out and check your work.
 - **Written answers.** Free response with a rubric. Grade by hand or with AI.
-- **Code.** Implement a method or an entire class. Supports Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust, Swift and Ruby. Like LeetCode, students can
+- **Code.** Implement a method or an entire class. Supports Java, Python, JavaScript, TypeScript, C, C++, C#, Go and Rust. Like LeetCode, students can
   run some example test cases, and you can have hidden test cases to catch more. Plus speed tests,
   custom classes as parameters, banned methods, and a no-running mode for paper-style questions.
 
