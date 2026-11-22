@@ -456,5 +456,46 @@
     }).catch(() => {});
   }
 
-  window.BQReport = { question, student, classOverview, highlight, h };
+  // ---------- code that looks copied (server: similar.js) ----------
+  // Each flagged pair: how alike, whether names and comments match too, and both answers side by side
+  // on demand, with the lines they share marked.
+  const KW = new Set(('abstract boolean break byte case catch char class continue default do double else extends final finally float for if implements import instanceof int interface long new private protected public return short static super switch this throw throws try void while var true false null and as def elif except from in is lambda not or pass raise with yield None True False').split(' '));
+  const lineShape = (line) => line.replace(/("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/g, 'S').replace(/\/\/.*$|#.*$/, '')
+    .replace(/[A-Za-z_$][\w$]*/g, (w) => (KW.has(w) ? w : 'I')).replace(/\d[\w.]*/g, 'N').replace(/\s+/g, '');
+  // A line is marked when its shape is anywhere in the other answer, line breaks and all left out, so a
+  // copy squeezed onto fewer lines still lines up.
+  function sideBySide(codeA, codeB, lang) {
+    const whole = (code) => code.split('\n').map(lineShape).join('');
+    const box = (code, other) => h('pre', { class: 'r-code r-sim-code' }, code.split('\n').map((line) => {
+      const shape = lineShape(line);
+      return h('span', { class: `r-sim-line${shape.length > 3 && other.includes(shape) ? ' same' : ''}` }, h('code', { 'data-lang': lang, text: line || ' ' }));
+    }));
+    return [box(codeA, whole(codeB)), box(codeB, whole(codeA))];
+  }
+  function similarCode(students, similar) {
+    if (!similar || !similar.length) return null; // no code questions
+    const flagged = similar.filter((x) => x.pairs.length);
+    const name = (i) => h('a', { href: `#s${i}`, text: students[i].name });
+    return h('section', { class: 'r-similar' },
+      h('h2', { text: 'Similar code' }),
+      flagged.length ? flagged.map((qs) => h('div', { class: 'r-sim-q' },
+        h('h3', { text: `Question ${qs.n}` }),
+        h('ul', { class: 'r-sim-list' }, qs.pairs.map((p) => {
+          const codeOf = (i) => { const q = students[i].questions.find((x) => x.id === qs.id); return (q && q.answer) || ''; };
+          const views = h('div', { class: 'r-sim-views', hidden: true });
+          const btn = h('button', { class: 'r-diff-btn', type: 'button', text: 'Compare', 'aria-expanded': 'false' });
+          btn.addEventListener('click', () => {
+            const open = views.hidden;
+            if (open && !views.childElementCount) { views.append(...sideBySide(codeOf(p.a), codeOf(p.b), p.language)); highlight(views); }
+            views.hidden = !open;
+            btn.textContent = open ? 'Hide' : 'Compare';
+            btn.setAttribute('aria-expanded', String(open));
+          });
+          const notes = [`${Math.round(p.score * 100)}% alike`, p.names >= 0.6 ? 'same names' : null,
+            p.comments ? `${p.comments} same ${p.comments === 1 ? 'comment' : 'comments'}` : null].filter(Boolean).join(', ');
+          return h('li', {}, h('div', { class: 'r-sim-row' }, h('span', {}, name(p.a), ' and ', name(p.b)), h('span', { class: 'r-sim-note', text: notes }), btn), views);
+        })))) : h('p', { class: 'r-sim-none', text: 'None found.' }));
+  }
+
+  window.BQReport = { question, student, classOverview, similarCode, highlight, h };
 })();

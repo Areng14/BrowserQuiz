@@ -21,6 +21,10 @@ the Monaco editor, with insane question customizability.
   change any of them.
 - **Auto grading and reports.** Every answer next to the right one, with a diff view for code. Export to
   CSV.
+- **Catches copied code.** The class report flags students whose code is near-identical, even with the
+  variables renamed and the formatting changed, and shows both side by side.
+- **Question pools.** Each student gets a random few questions from a pool, so a neighbor's screen
+  won't help.
 - **Exam lockdown.** Full screen, leaving the window gets flagged quietly, and if that isn't safe
   enough, Safe Exam Browser is an option.
 - **Student tools.** Scratchpad, highlighting, mark for review, cross out choices, dark mode. Bluebook

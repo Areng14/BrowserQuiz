@@ -12,6 +12,7 @@ const { totals, questionScore, gradeAttempt, answerReport, cleanAnswers, gradeAu
 const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
 const W = require('./watch');
+const { similarCode } = require('./similar');
 const AI = require('./aigrade');
 const AICSV = require('./aicsv');
 const G = require('./grade');
@@ -1033,7 +1034,11 @@ module.exports = function teacherRoutes(r) {
     const quiz = store.getQuiz(run.quiz_id);
     const rows = q(`SELECT attempts.id, roster_students.name FROM attempts JOIN roster_students ON roster_students.id = attempts.student_id
       WHERE attempts.run_id = ? AND attempts.archived = 0 AND attempts.status = 'submitted' ORDER BY roster_students.name`).all(run.id);
-    json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: rows.map((x) => studentReport(quiz, store.getAttempt(x.id), x.name)) });
+    const attempts = rows.map((x) => store.getAttempt(x.id));
+    json(res, 200, {
+      quiz: reportQuiz(quiz, run.quiz_id), students: rows.map((x, i) => studentReport(quiz, attempts[i], x.name)),
+      similar: similarCode(quiz, attempts.map((attempt, who) => ({ who, attempt }))), // who: a place in students
+    });
   });
 
   // Quiz images for the report page (students get theirs through /asset/ with their own cookie).
