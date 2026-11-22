@@ -88,7 +88,8 @@ const quiz = parsed.quiz;
 
 for (const q of quiz.questions) {
   if (q.type !== 'code') continue; // fill-in questions build their reference from the answer key
-  const missing = q.languages.filter((l) => !q.reference[l]);
+  // ("any" is every language that can run it: a reference in each isn't expected)
+  const missing = q.languagesAny ? (Object.keys(q.reference).length ? [] : ['any of them']) : q.languages.filter((l) => !q.reference[l]);
   if (missing.length) warnings.push(`${q.id}: no reference solution for ${missing.join(', ')}; nothing checks those tests until a student fails them`);
   if (!q.tests.sample.length) warnings.push(`${q.id}: no sample tests, so Run examples has nothing to run`);
 }
@@ -101,7 +102,7 @@ console.log(`  ${['single', 'multi', 'text', 'code', 'output', 'trace', 'fill', 
 for (const q of quiz.questions) {
   if (q.type !== 'code') continue;
   const what = q.mode === 'class' ? `class ${q.class.name}` : `method ${q.signature.name}`;
-  console.log(`  ${q.id}: ${what} [${q.languages.join(', ')}], ${q.tests.sample.length} sample + ${q.tests.hidden.length} hidden tests, reference: ${Object.keys(q.reference).join(', ') || 'none'}`);
+  console.log(`  ${q.id}: ${what} [${q.languagesAny ? 'any: ' : ''}${q.languages.join(', ')}], ${q.tests.sample.length} sample + ${q.tests.hidden.length} hidden tests, reference: ${Object.keys(q.reference).join(', ') || 'none'}`);
 }
 for (const w of warnings) console.log('warning: ' + w);
 

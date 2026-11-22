@@ -219,7 +219,7 @@ Grading uses the hidden tests, which students never see.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
-| `languages` | `["java"]` | Any of `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"`, `"csharp"`, `"go"`, `"rust"` (the student picks). See [Languages](#languages) |
+| `languages` | `["java"]` | Any of `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"`, `"csharp"`, `"go"`, `"rust"` (the student picks), or `"any"`: every language that can run the question. See [Languages](#languages) |
 | `mode` | `"method"` | `"method"`: write one method. `"class"`: write a whole class |
 | `signature` | — | Method mode: `{ "name", "params": [{ "name", "type" }], "returns" }` |
 | `class` | — | Class mode: `{ "name", "constructor": [params], "methods": [{ "name", "params", "returns" }] }` |
@@ -350,7 +350,10 @@ Java and Python can do everything here. The others:
   so tests can't use one (or leave out such a field of an object).
 - A C# stack overflow stops the run, so the examples after it say so too.
 
-The upload check says which of these a question runs into.
+The upload check says which of these a question runs into. With `"languages": "any"` it doesn't: the
+languages that can't run the question are just left out (a map leaves out C, a ban list leaves Java
+and Python, a speed test leaves the languages that have one and a reference). References are
+optional per language there; tests' expected values come from the ones you give.
 
 ### Tests
 

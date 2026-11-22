@@ -83,7 +83,9 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
   - Other languages than Java and Python have limits (spec, "Languages"): bans only in Java and
     Python, speed tests only in Java, Python, JavaScript and TypeScript, no maps or class questions
     in C, ASCII chars in C, C++ and Go, no null strings or arrays in C++ and Rust (no null
-    strings in Go). Write a reference in every language the question offers.
+    strings in Go). Write a reference in every language the question offers. `"languages": "any"`
+    lets students pick any language that can run the question; write references in the languages
+    you know best.
   - Write 2 simple `sample` tests that students can run, and 5–10 `hidden` tests. Only hidden
     tests are graded, so repeat the sample cases in `hidden` too. Cover:
     - empty input

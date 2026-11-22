@@ -9,7 +9,7 @@ Topic:
 Difficulty (easy, medium, hard, or mixed):
 Number and kinds of questions:
 Time limit:
-Languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust; one or several):
+Languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust; one or several, or any):
 Rubric points on code questions (graded automatically, by me, or none):
 Anything else:
 

@@ -363,9 +363,18 @@
     }
     return withUi(q);
   }
+  // The languages a question gets reference boxes and rubric patterns for: its languages, or with "any",
+  // the ones it has a reference in, or was given a box for (Java to start with).
+  function refLangsOf(q) {
+    if (!q.languagesAny) return q.languages;
+    const want = new Set([...(q._ui && q._ui.refLangs) || [], ...Object.keys(q.reference || {}).filter((l) => (q.reference[l] || '').trim())]);
+    if (!want.size) want.add('java');
+    return Object.keys(LANGS).filter((l) => want.has(l));
+  }
   // Fields that are edited as text, or in a shape of their own, live in q._ui and are read back on save.
   function withUi(q) {
     const u = {};
+    if (q.languages === 'any') { q.languagesAny = true; q.languages = Object.keys(LANGS); }
     if (q.type === 'code' || q.type === 'fill') {
       const C = q.class || { name: '', constructor: [], methods: [] };
       const S = q.signature;
@@ -434,7 +443,7 @@
         try { ctor = parseSig(u.ctor.trim() ? u.ctor : '()').params; } catch (e) { throw new Error(`Constructor: ${e.message.replace('countVowels(s: string): int', '(owner: string, balance: double)')}`); }
         // Two methods can share a name (overloads) only in Java and C++.
         const seen = new Set();
-        const noOverloads = q.languages.filter((l) => ['python', 'go', 'rust'].includes(l) || BT.isJs(l));
+        const noOverloads = q.languagesAny ? [] : q.languages.filter((l) => ['python', 'go', 'rust'].includes(l) || BT.isJs(l));
         const methods = u.methods.split('\n').filter((l) => l.trim()).map((l, i) => {
           let m;
           try { m = fullSig(l, true); } catch (e) { throw new Error(`Methods, line ${i + 1}: ${e.message}`); }
@@ -493,6 +502,8 @@
     for (const q of quiz.questions) {
       const o = Object.assign({}, q);
       delete o._ui;
+      delete o.languagesAny;
+      if (q.languagesAny) o.languages = 'any';
       if (q.type === 'text') o.answer = q.answer.map((a) => a.trim()).filter(Boolean);
       if (q.type === 'single' || q.type === 'multi') { // empty rows are left out
         const keep = q.choices.map((c, k) => k).filter((k) => q.choices[k].trim());
@@ -503,9 +514,10 @@
       const pattern = (v) => {
         if (typeof v === 'string') return v.trim() || undefined;
         if (!v || typeof v !== 'object') return undefined;
-        const e = q.languages.map((l) => [l, String(v[l] || '').trim()]).filter(([, p]) => p);
+        const langs = refLangsOf(q);
+        const e = langs.map((l) => [l, String(v[l] || '').trim()]).filter(([, p]) => p);
         if (!e.length) return undefined;
-        return e.length === q.languages.length && new Set(e.map(([, p]) => p)).size === 1 ? e[0][1] : Object.fromEntries(e);
+        return !q.languagesAny && e.length === langs.length && new Set(e.map(([, p]) => p)).size === 1 ? e[0][1] : Object.fromEntries(e);
       };
       const rubric = (checks) => (q.rubric || []).filter((x) => x.text.trim()).map((x, k) => {
         const item = { id: x.id || `r${k + 1}`, text: x.text.trim(), points: Number(x.points) || 0 };
@@ -1205,7 +1217,13 @@
       const fill = q.type === 'fill';
       const from = fill ? 'your answers for the blanks' : 'the reference solution';
       const isClass = q.mode === 'class';
-      const langs = fill ? null : h('div', { class: 'qe-line' }, Object.entries(LANGS).map(([l, name]) => check(q, q.languages.includes(l), name, (v) => {
+      // "Any language": every language that can run the question (the server leaves out the ones that can't)
+      const anyBox = check(q, !!q.languagesAny, 'Any language', (v) => {
+        q.languages = v ? Object.keys(LANGS) : refLangsOf(q);
+        q.languagesAny = v;
+        renderPane();
+      });
+      const langs = fill ? null : h('div', { class: 'qe-line' }, anyBox, q.languagesAny ? null : Object.entries(LANGS).map(([l, name]) => check(q, q.languages.includes(l), name, (v) => {
         q.languages = Object.keys(LANGS).filter((x) => (x === l ? v : q.languages.includes(x)));
         if (!q.languages.length) q.languages = [l === 'java' ? 'python' : 'java'];
         renderPane();
@@ -1225,7 +1243,8 @@
       const notes = { sample: h('p', { class: 't-small qe-note' }), hidden: h('p', { class: 't-small qe-note' }) };
       const tests = (kind, rows, placeholder) => area(q, u[kind], (v) => { u[kind] = v; }, { rows, placeholder, class: 'input qe-area qe-mono qe-code', 'data-tests': kind });
       const starters = [];
-      const refs = (fill ? [] : q.languages).map((l) => {
+      const refLangs = fill ? [] : refLangsOf(q);
+      const refs = refLangs.map((l) => {
         const ta = area(q, (q.reference || {})[l], (v) => { q.reference = Object.assign({}, q.reference, { [l]: v }); }, { rows: 8, class: 'input qe-area qe-mono qe-code' });
         codeKeys(ta);
         const btn = h('button', { class: 'btn small', type: 'button', text: 'Insert the starter code', onclick: () => {
@@ -1237,7 +1256,15 @@
         starters.push({ ta, btn });
         return h('div', { class: 'qe-ref' }, field(`Reference solution (${LANGS[l]})`, ta), h('div', {}, btn));
       });
-      const rubric = fill ? null : rubricEditor(q, 'Uses private instance variables', q.languages);
+      // With "any", a reference in another language is one pick away
+      const more = q.languagesAny ? Object.keys(LANGS).filter((l) => !refLangs.includes(l)) : [];
+      if (more.length) {
+        const add = h('select', { class: 'input qe-narrow', 'aria-label': 'Add a reference solution' },
+          h('option', { value: '', text: 'Add a reference in…' }), more.map((l) => h('option', { value: l, text: LANGS[l] })));
+        add.addEventListener('change', () => { if (add.value) { u.refLangs = [...(u.refLangs || refLangs), add.value]; renderPane(); } });
+        refs.push(h('div', { class: 'qe-line' }, add));
+      }
+      const rubric = fill ? null : rubricEditor(q, 'Uses private instance variables', refLangs);
       // Methods students may not use: comma separated. Using one scores 0 (server/src/bans.js).
       const banList = Array.isArray(q.ban) ? q.ban : q.ban ? [...new Set(Object.values(q.ban).flat())] : [];
       const bans = fill ? null : field('Not allowed (methods students may not use)', input(q, banList.join(', '), (v) => {
@@ -1567,7 +1594,7 @@
       const rank = order.indexOf(type);
       let at = sel + 1;
       if (!like) { at = 0; quiz.questions.forEach((q, i) => { if (order.indexOf(q.type) <= rank) at = i + 1; }); }
-      const q = blank(type, like ? { id: nextId(), points: like.points, mode: type === 'code' ? like.mode : null, languages: like.languages && like.languages.slice(), language: like.language } : { id: nextId() });
+      const q = blank(type, like ? { id: nextId(), points: like.points, mode: type === 'code' ? like.mode : null, languages: like.languagesAny ? 'any' : like.languages && like.languages.slice(), language: like.language } : { id: nextId() });
       if (like && like.shuffleChoices === false) q.shuffleChoices = false;
       for (const d of quiz.sections) if (d.at >= at) d.at++; // a new question joins the section of the one before it
       quiz.questions.splice(at, 0, q);

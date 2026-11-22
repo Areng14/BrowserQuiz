@@ -273,7 +273,7 @@ function quizSource(quiz) {
     }
     if (qq.type === 'code') {
       o.mode = qq.mode;
-      o.languages = qq.languages;
+      o.languages = qq.languagesAny ? 'any' : qq.languages;
       if (qq.types) o.types = Object.fromEntries(Object.entries(qq.types).map(([n, fs]) => [n, Object.fromEntries(fs.map((f) => [f.name, f.type]))]));
       if (qq.mode === 'method') o.signature = qq.signature; else o.class = qq.class;
       o.tests = qq.tests;

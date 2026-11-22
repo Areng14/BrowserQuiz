@@ -402,57 +402,71 @@ const RUST_TAKEN = words('Vec String Option Box Some None Ok Err Result HashMap 
 // JavaScript's own classes, which a declared class would hide from the harness.
 const JS_TAKEN = words('Array Map Set WeakMap WeakSet Object Function Promise Error Date JSON Math Number String Boolean Symbol RegExp BigInt Reflect Proxy Buffer Intl Atomics');
 
-// What the question's languages other than Java and Python can't do: C has no classes to write or maps,
-// C, C++, Go and Rust have no speed tests (an optimizing compiler times them badly), and some values don't
-// exist (a null string in C++, Go or Rust, a C, C++ or Go char that isn't ASCII).
-function checkLanguages(where, out, languages, D) {
+// Why one language can't run the question, or null: names it reserves, types or values it doesn't have
+// (C has no classes to write or maps; C++, Go and Rust no null string; C, C++ and Go only ASCII chars),
+// overloads, bans and speed tests where it has none, a speed test without its reference solution.
+// ctx: { overloaded: a method name used twice, or null; reference: { lang: code } }.
+function languageProblem(where, out, lang, D, ctx) {
+  const name = langName(lang);
   const names = [];
   if (out.mode === 'method') names.push(out.signature.name, ...out.signature.params.map((p) => p.name));
   else names.push(out.class.name, ...out.class.constructor.map((p) => p.name), ...out.class.methods.flatMap((m) => [m.name, ...m.params.map((p) => p.name)]));
   const fields = [];
   for (const [n, fs] of Object.entries(D || {})) { names.push(n); fields.push(...fs.map((f) => f.name)); }
-  for (const lang of languages) {
-    const bad = [...names, ...fields].find((n) => LANG_RESERVED[lang] && LANG_RESERVED[lang].has(n));
-    if (bad) fail(`${where}: "${bad}" can't be a name in ${langName(lang)}. Pick another, or leave ${langName(lang)} out.`);
-    if (T.isJs(lang)) { const t = Object.keys(D || {}).find((n) => JS_TAKEN.has(n)); if (t) fail(`${where}.types: "${t}" is already a JavaScript class. Pick another name.`); }
-    if (lang === 'rust') { const t = Object.keys(D || {}).find((n) => RUST_TAKEN.has(n)) || (out.mode === 'class' && RUST_TAKEN.has(out.class.name) && out.class.name); if (t) fail(`${where}: "${t}" is already a Rust type. Pick another name.`); }
-    if (OTHER_TAKEN[lang]) { const t = Object.keys(D || {}).find((n) => OTHER_TAKEN[lang].has(n)) || (out.mode === 'class' && OTHER_TAKEN[lang].has(out.class.name) && out.class.name); if (t) fail(`${where}: "${t}" is already a ${langName(lang)} type. Pick another name.`); }
+  const bad = [...names, ...fields].find((n) => LANG_RESERVED[lang] && LANG_RESERVED[lang].has(n));
+  if (bad) return `${where}: "${bad}" can't be a name in ${name}. Pick another, or leave ${name} out.`;
+  const classes = [...Object.keys(D || {}), ...(out.mode === 'class' ? [out.class.name] : [])];
+  const taken = T.isJs(lang) ? JS_TAKEN : lang === 'rust' ? RUST_TAKEN : OTHER_TAKEN[lang];
+  const t = taken && classes.find((n) => taken.has(n));
+  if (t) return `${where}: "${t}" is already a ${T.isJs(lang) ? 'JavaScript' : name} class. Pick another name.`;
+  if (ctx.overloaded && (['python', 'go', 'rust'].includes(lang) || T.isJs(lang))) {
+    return `${where}: there are two methods named ${ctx.overloaded}. Overloads only work in Java, C++ and C# (${name} can't have two methods with one name).`;
   }
-  const tests = [...out.tests.sample.map((t, i) => [`tests.sample[${i}]`, t]), ...out.tests.hidden.map((t, i) => [`tests.hidden[${i}]`, t])];
-  const noSpeed = languages.filter((l) => !T.hasSpeed(l));
-  if (noSpeed.length && tests.some(([, t]) => t.speed)) fail(`${where}: speed tests only work in Java, Python, JavaScript and TypeScript, so take them out or leave ${noSpeed.map(langName).join(' and ')} out.`);
-  const cc = languages.filter(T.isNative);
-  if (languages.includes('c')) {
-    if (out.mode === 'class') fail(`${where}: C has no classes, so a "write a class" question can't include C.`);
-    const types = [out.signature.returns, ...out.signature.params.map((p) => p.type)];
-    for (const t of types) { const why = T.unsupported('c', t, D); if (why) fail(`${where}: ${t} doesn't work in C (${why}). Leave C out.`); }
+  if (out.ban && !B.BAN_LANGS.includes(lang) && B.bansFor(out.ban, lang).length) {
+    return `${where}: "ban" only works in Java and Python. Write it as { "java": [...], "python": [...] } and ${name} won't have bans.`;
+  }
+  const tests = [...out.tests.sample.map((x, i) => [`tests.sample[${i}]`, x]), ...out.tests.hidden.map((x, i) => [`tests.hidden[${i}]`, x])];
+  if (tests.some(([, x]) => x.speed)) {
+    if (!T.hasSpeed(lang)) return `${where}: speed tests only work in Java, Python, JavaScript and TypeScript, so take them out or leave ${name} out.`;
+    if (!ctx.reference[lang]) return `${where}: speed tests are timed against the reference solution, so add one for ${name}.`;
+  }
+  if (lang === 'c') {
+    if (out.mode === 'class') return `${where}: C has no classes, so a "write a class" question can't include C.`;
+    for (const ty of [out.signature.returns, ...out.signature.params.map((p) => p.type)]) {
+      const why = T.unsupported('c', ty, D);
+      if (why) return `${where}: ${ty} doesn't work in C (${why}). Leave C out.`;
+    }
     for (const [n, fs] of Object.entries(D || {})) {
       const f = fs.find((x) => T.elementType(x.type) || T.mapTypes(x.type));
-      if (f) fail(`${where}.types.${n}: in C a class can only hold numbers, booleans, chars, strings and other classes, not ${f.type}. Leave C out.`);
+      if (f) return `${where}.types.${n}: in C a class can only hold numbers, booleans, chars, strings and other classes, not ${f.type}. Leave C out.`;
     }
   }
-  for (const lang of cc) {
-    const check = (w, t, v) => { const why = T.fits(lang, t, v, D); if (why) fail(`${where}.${w}: ${why}, so this test can't run in ${langName(lang)}.`); };
-    for (const [w, t] of tests) {
-      if (out.mode === 'method') {
-        t.args.forEach((a, k) => check(`${w} argument ${k + 1}`, out.signature.params[k].type, a));
-        if (t.expected !== undefined) check(`${w} expected`, out.signature.returns, t.expected);
-        continue;
-      }
-      t.steps.forEach((st, k) => {
-        if (st.new) { st.new.forEach((a, j) => check(`${w}.steps[${k}]`, out.class.constructor[j].type, a)); return; }
-        const m = (st.m != null && out.class.methods[st.m]) || out.class.methods.find((x) => x.name === st.call);
-        st.args.forEach((a, j) => check(`${w}.steps[${k}]`, m.params[j].type, a));
-        if (st.expect !== undefined) check(`${w}.steps[${k}] expect`, m.returns, st.expect);
-      });
+  if (!T.isNative(lang)) return null;
+  const check = (w, ty, v) => { const why = T.fits(lang, ty, v, D); return why ? `${where}.${w}: ${why}, so this test can't run in ${name}.` : null; };
+  for (const [w, x] of tests) {
+    if (out.mode === 'method') {
+      for (let k = 0; k < x.args.length; k++) { const p = check(`${w} argument ${k + 1}`, out.signature.params[k].type, x.args[k]); if (p) return p; }
+      if (x.expected !== undefined) { const p = check(`${w} expected`, out.signature.returns, x.expected); if (p) return p; }
+      continue;
+    }
+    for (let k = 0; k < x.steps.length; k++) {
+      const st = x.steps[k];
+      if (st.new) { for (let j = 0; j < st.new.length; j++) { const p = check(`${w}.steps[${k}]`, out.class.constructor[j].type, st.new[j]); if (p) return p; } continue; }
+      const m = (st.m != null && out.class.methods[st.m]) || out.class.methods.find((y) => y.name === st.call);
+      for (let j = 0; j < st.args.length; j++) { const p = check(`${w}.steps[${k}]`, m.params[j].type, st.args[j]); if (p) return p; }
+      if (st.expect !== undefined) { const p = check(`${w}.steps[${k}] expect`, m.returns, st.expect); if (p) return p; }
     }
   }
+  return null;
 }
 
 function normalizeCode(where, q) {
   const mode = q.mode === 'class' ? 'class' : 'method';
-  const languages = Array.isArray(q.languages) && q.languages.length ? [...new Set(q.languages)] : ['java'];
-  if (languages.some((l) => !LANGS.includes(l))) fail(`${where}: languages can be ${LANGS.join(', ')}.`);
+  // "any": every language that can run the question (the others are left out, see languageProblem)
+  const any = q.languages === 'any' || (Array.isArray(q.languages) && q.languages.length === 1 && q.languages[0] === 'any');
+  const languages = any ? [...LANGS] : Array.isArray(q.languages) && q.languages.length ? [...new Set(q.languages)] : ['java'];
+  if (languages.some((l) => !LANGS.includes(l))) fail(`${where}: languages can be "any", or some of ${LANGS.join(', ')}.`);
+  let overloaded = null;
   const out = { mode, languages };
   const D = normalizeTypes(where, q.types, mode === 'class' && q.class ? q.class.name : null);
   if (D) out.types = D;
@@ -474,10 +488,7 @@ function normalizeCode(where, q) {
         const params = checkParams(`${where}.class.methods[${i}]`, m.params || [], D);
         const key = `${mn}(${params.map((p) => p.type).join(',')})`;
         if (seen.has(key)) fail(`${where}: method ${key} is listed twice.`);
-        const noOverloads = languages.filter((l) => ['python', 'go', 'rust'].includes(l) || T.isJs(l));
-        if ([...seen].some((k) => k.startsWith(mn + '(')) && noOverloads.length) {
-          fail(`${where}: there are two methods named ${mn}. Overloads only work in Java, C++ and C# (${noOverloads.map(langName).join(' and ')} can't have two methods with one name).`);
-        }
+        if (!overloaded && [...seen].some((k) => k.startsWith(mn + '('))) overloaded = mn;
         seen.add(key);
         return { name: mn, params, returns: checkType(`${where}.class.methods[${i}].returns`, m.returns, true, D) };
       }),
@@ -546,10 +557,6 @@ function normalizeCode(where, q) {
     return { steps, weight };
   };
   out.tests = { sample: sample.map((x, i) => normTest('sample', x, i)), hidden: hidden.map((x, i) => normTest('hidden', x, i)) };
-  const noRef = languages.filter((l) => !reference[l]);
-  if (noRef.length && [...out.tests.sample, ...out.tests.hidden].some((t) => t.speed)) {
-    fail(`${where}: speed tests are timed against the reference solution, so add one for ${noRef.map(langName).join(' and ')}.`);
-  }
   out.reference = reference;
   out.compare = q.compare === 'unordered' ? 'unordered' : 'ordered';
   // Written without running, like on paper: no Run examples. Grading still runs the hidden tests.
@@ -588,18 +595,27 @@ function normalizeCode(where, q) {
   // Methods the student may not use (bans.js).
   try { const ban = B.normalizeBans(q.ban, languages); if (ban) out.ban = ban; } catch (e) { fail(`${where}: ${e.message}`); }
   // (The reference solutions have to keep to them too: checked when they run, in coderun.checkReferences.)
-  if (out.ban) {
-    const open = languages.filter((l) => !B.BAN_LANGS.includes(l) && B.bansFor(out.ban, l).length);
-    if (open.length) fail(`${where}: "ban" only works in Java and Python. Write it as { "java": [...], "python": [...] } and ${open.map(langName).join(' and ')} won't have bans.`);
+  const problems = languages.map((l) => [l, languageProblem(where, out, l, D, { overloaded, reference })]);
+  if (!any) {
+    const bad = problems.find(([, p]) => p);
+    if (bad) fail(bad[1]);
+  } else {
+    const keep = problems.filter(([, p]) => !p).map(([l]) => l);
+    if (!keep.length) fail(problems[0][1]);
+    const only = (o) => (o && typeof o === 'object' && !Array.isArray(o) ? Object.fromEntries(Object.entries(o).filter(([l]) => keep.includes(l))) : o);
+    out.languages = keep;
+    out.languagesAny = true;
+    out.reference = only(reference);
+    if (out.ban && !Array.isArray(out.ban)) out.ban = only(out.ban);
+    for (const item of out.rubric) { if (item.require) item.require = only(item.require); if (item.forbid) item.forbid = only(item.forbid); }
   }
-  checkLanguages(where, out, languages, D);
   const rubricPoints = out.rubric.reduce((s, r) => s + r.points, 0);
   if (rubricPoints >= Number(q.points || 1)) fail(`${where}: rubric points must be less than the question's points, so the tests are worth something.`);
   // starter: "empty" | "stubs" (default) | { java: "...custom...", python: "..." }
   out.starterStyle = q.starter === 'empty' ? 'empty' : 'stubs';
   out.starter = {};
   out.support = {};
-  for (const l of languages) {
+  for (const l of out.languages) {
     const s = q.starter && typeof q.starter === 'object' ? q.starter[l] : null;
     out.starter[l] = typeof s === 'string' ? s.slice(0, 50000) : null;
     if (q.support && typeof q.support[l] === 'string') out.support[l] = q.support[l].slice(0, 50000);
