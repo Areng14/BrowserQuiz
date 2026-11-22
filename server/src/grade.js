@@ -277,6 +277,8 @@ function studentReport(fullQuiz, a, name, opts = {}) {
         id: qq.id, type: qq.type, mode: qq.mode || null, prompt: qq.prompt, image: qq.image || null, imageAlt: qq.imageAlt || '', shared: qq.shared || null,
         points: sc && sc.state === 'done' ? sc.points : null, max: qq.points, review: !!(sc && sc.review),
       };
+      // Why the answer is right: teachers' reports, and a student's own practice review once it's turned in
+      if (qq.explanation) row.explanation = qq.explanation;
       // For the teacher's class report: where it is in the whole quiz, and its pool
       if (!opts.forStudent) { row.qn = at.get(qq.id); if (qq.pool) row.pool = qq.pool; }
       if (qq.type === 'single' || qq.type === 'multi') {

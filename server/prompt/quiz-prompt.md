@@ -49,11 +49,14 @@ use the defaults for the rest and start writing.
 2. Order the questions by type: single, multi, text, output, trace, fill, code, essay. For AP-style
    "what is printed" questions use `output`, and for tracing loops use `trace`. Use question pools
    only if I ask for them.
-3. Prompts say exactly what's asked, including edge cases ("return 0 for an empty array").
+3. Give every question an `explanation`: one or two sentences on why the right answer is right,
+   and for multiple choice, the mistake behind the likeliest wrong choice. Students read it after a
+   practice quiz, so teach, don't just restate the answer.
+4. Prompts say exactly what's asked, including edge cases ("return 0 for an empty array").
    No hints and nothing that gives the answer away. When several questions use the same case,
    passage or code, put it in `shared` once and point each question at it, instead of
    repeating it in every prompt.
-4. Multiple choice:
+5. Multiple choice:
    - Exactly one clearly correct answer.
    - Wrong choices come from real mistakes: integer division, off-by-one, `==` vs `.equals`,
      aliasing, short-circuiting, precedence.
@@ -61,9 +64,9 @@ use the defaults for the rest and start writing.
    - Choices are one line each. Multi-line code goes in the prompt as labeled segments
      (Segment I, II, …), and for "I only / I and II" style choices, set
      `"shuffleChoices": false` on that question.
-5. Use select-all only when 2+ choices are correct. Use short answer only when there are few
+6. Use select-all only when 2+ choices are correct. Use short answer only when there are few
    ways to write the answer, and list all of them.
-6. Code questions:
+7. Code questions:
    - Use only the types in the format's type table.
    - Write 2 simple sample tests, plus 5–10 hidden tests. The hidden tests repeat the samples
      and cover empty input, one element, negatives, duplicates, boundaries, and a larger case.

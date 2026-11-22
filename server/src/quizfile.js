@@ -186,6 +186,9 @@ function normalizeQuiz(raw, assetNames) {
       if (sids.length) out.shared = sids.length === 1 ? sids[0] : sids;
     }
     imageOf(where, q, out);
+    // Why the answer is right (Markdown): in the practice review after turning in, and in reports.
+    if (q.explanation != null && typeof q.explanation !== 'string') fail(`${where}: explanation must be text.`);
+    if (typeof q.explanation === 'string' && q.explanation.trim()) out.explanation = q.explanation.trim().slice(0, 4000);
     // A question pool: each student gets some of its questions, picked at random (quiz.pools says how many).
     if (q.pool != null && q.pool !== '') {
       const pool = String(q.pool);

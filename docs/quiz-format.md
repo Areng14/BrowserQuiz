@@ -91,6 +91,7 @@ picked at random, so a neighbor's screen doesn't help:
 | `image` | none | `"assets/diagram.png"`, must exist in the zip |
 | `imageAlt` | `""` | Alt text for the image |
 | `shared` | none | The `id` of a shared material this question uses, or a list of up to 3 (`["s1", "s2"]`), shown in that order |
+| `explanation` | none | Why the answer is right (Markdown, up to 4000 characters). Students see it with the answer in a practice quiz's review, after turning it in; never during a quiz. It's in reports, and AI grading reads it as your notes |
 | `pool` | none | A question pool's name (letters, digits, `-`, `_`): each student gets some of the pool's questions (see Question pools) |
 
 **Prompts** (and shared material) use Markdown:

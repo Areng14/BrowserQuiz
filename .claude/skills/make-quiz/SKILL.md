@@ -42,6 +42,9 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
   each starting at a question id with a title and optional directions.
 - **Names:** give each question a short `name` ("BankAccount class", "Trace the sum loop").
   Students see names, types and points before they start, so a name never hints at the answer.
+- **Explanations:** give every question an `explanation`, one or two sentences on why the right
+  answer is right (for multiple choice, the mistake behind the likeliest wrong choice). Students see it
+  after a practice quiz.
 - **Prompts** say exactly what's asked, including edge cases ("return 0 for an empty array").
   No flavor text, no hints, nothing that gives away the answer. Put code in backticks or
   fenced blocks.

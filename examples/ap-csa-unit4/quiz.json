@@ -9,6 +9,7 @@
       "id": "q1", "name": "Arithmetic",
       "type": "single",
       "prompt": "What does this print?\n\n```java\nint x = 7;\nint y = x / 2 * 2;\nSystem.out.println(x - y);\n```",
+      "explanation": "`7 / 2` is integer division, so it's `3`, and `3 * 2` is `6`: `7 - 6` prints `1`. Picking `0` means doing the math as if `7 / 2` were `3.5`.",
       "choices": ["`0`", "`1`", "`3`", "`3.5`"],
       "answer": 1
     },
@@ -17,6 +18,7 @@
       "type": "multi",
       "points": 2,
       "prompt": "Which of these lines compile? Assume `java.util.*` is imported.",
+      "explanation": "Generics take class names, so `string` isn't a type (it's `String`). An `ArrayList` is a `List`, so `b` compiles, but it's never a `String[]`.",
       "choices": [
         "`ArrayList<String> a = new ArrayList<>();`",
         "`List<String> b = new ArrayList<String>();`",
@@ -29,6 +31,7 @@
       "id": "q3", "name": "Search running time",
       "type": "text",
       "prompt": "What is the worst-case time complexity of binary search on a sorted array of `n` items? Use Big-O notation.",
+      "explanation": "Each step halves the part of the array still in play, so it takes about log₂ n steps to get down to one item.",
       "answer": ["O(log n)", "O(logn)", "O(log(n))", "O(lg n)"]
     },
     {
@@ -37,6 +40,7 @@
       "points": 8,
       "languages": ["java", "python"],
       "prompt": "Write `countVowels(s)`, which returns how many vowels (`a e i o u`, upper or lower case) are in `s`.",
+      "explanation": "Loop over the characters and count the ones in `\"aeiouAEIOU\"`. Lowercasing each character first handles capitals with a single check.",
       "signature": { "name": "countVowels", "params": [{ "name": "s", "type": "string" }], "returns": "int" },
       "tests": {
         "sample": [
@@ -63,6 +67,7 @@
       "points": 9,
       "languages": ["java", "python"],
       "prompt": "Write the complete `BankAccount` class.\n\n- A constructor that takes the owner's name and a starting balance\n- `deposit(amount)` adds to the balance\n- `withdraw(amount)` takes money out and returns `true`, or refuses and returns `false` if it would overdraw the account\n- `getBalance()` returns the balance",
+      "explanation": "Keep the fields `private` and change the balance only through `deposit` and `withdraw`, so the class itself refuses a withdrawal that would go below 0.",
       "class": {
         "name": "BankAccount",
         "constructor": [{ "name": "owner", "type": "string" }, { "name": "balance", "type": "double" }],

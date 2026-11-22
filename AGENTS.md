@@ -19,9 +19,9 @@ Put quizzes in `quizzes/`, which is gitignored because quiz files contain answer
 - Never commit `.env`: it holds the teacher password and secrets.
 - Students must never learn their integrity status. API responses and screens look the same
   whether or not an attempt was invalidated, and student-facing reports leave it out.
-- Answers, hidden tests, reference solutions and rubrics never go to the student's browser. The one
-  exception is the practice review after submitting, which shows answers and reference solutions
-  (still no hidden tests or rubrics).
+- Answers, explanations, hidden tests, reference solutions and rubrics never go to the student's browser.
+  The one exception is the practice review after submitting, which shows answers, explanations and
+  reference solutions (still no hidden tests or rubrics).
 - Keep UI copy short: no text that repeats what the screen already shows.
 - No slogans or explainer lines under headings, buttons, fields or dialogs. Add one only when the point
   really can't be made by the UI itself.

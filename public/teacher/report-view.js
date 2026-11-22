@@ -316,7 +316,8 @@
       sharedEl,
       md(q.prompt, quiz.language, img),
       q.image ? h('img', { class: 'r-img', src: o.assetUrl ? o.assetUrl(q.image) : `/api/t/quizzes/${encodeURIComponent(quiz.id)}/asset?path=${encodeURIComponent(q.image)}`, alt: q.imageAlt || '' }) : null,
-      body(quiz, q, o));
+      body(quiz, q, o),
+      q.explanation ? h('div', { class: 'r-explain' }, h('p', { class: 'r-label', text: 'Explanation' }), md(q.explanation, quiz.language, img)) : null);
   }
 
   function student(quiz, s, opts) {

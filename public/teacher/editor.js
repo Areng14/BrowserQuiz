@@ -1347,6 +1347,9 @@
         kind.addEventListener('change', () => { if (kind.value) q.language = kind.value; else delete q.language; touch(q); });
         add([h('div', { class: 'qe-line' }, field('Students write', kind)), rubricEditor(q, 'Says == compares references').node]);
       }
+      // Why the answer is right: with the answer in a practice quiz's review, in reports, and for AI grading
+      fields.append(field('Explanation', area(q, q.explanation || '', (v) => { if (v.trim()) q.explanation = v; else delete q.explanation; },
+        { rows: 2, spellcheck: 'true', placeholder: 'Optional. Shown with the answer after a practice quiz.' })));
       const code = q.type === 'code' || (q.type === 'fill' && q._ui.run) ? codeEditor(q) : null;
       paneTick = () => {
         view.replaceChildren(...studentView(q));
