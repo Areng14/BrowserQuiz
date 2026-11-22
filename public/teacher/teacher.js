@@ -863,6 +863,25 @@
     boxes[0].focus();
   }
 
+  // The join code filling the screen, for a projector: where to go and the code. Esc or a click closes it.
+  function projector(joinCode, quizTitle) {
+    const dlg = h('dialog', { class: 't-projector', 'aria-label': `Join code ${joinCode}` },
+      h('button', { class: 'btn small ghost t-dialog-x', type: 'button', 'aria-label': 'Close', onclick: () => dlg.close() }, icon(ICONS.x, 22)),
+      h('p', { class: 't-proj-title', text: quizTitle }),
+      h('p', { class: 't-proj-url', text: `Join at ${location.host}` }),
+      h('p', { class: 't-proj-code', text: joinCode }));
+    dlg.addEventListener('click', (e) => { if (e.target === dlg || e.target.classList.contains('t-proj-code')) dlg.close(); });
+    const onFs = () => { if (!document.fullscreenElement && dlg.open) dlg.close(); }; // Esc out of fullscreen closes it too
+    dlg.addEventListener('close', () => {
+      document.removeEventListener('fullscreenchange', onFs);
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      dlg.remove();
+    });
+    root.append(dlg);
+    dlg.showModal();
+    if (dlg.requestFullscreen) dlg.requestFullscreen().then(() => document.addEventListener('fullscreenchange', onFs)).catch(() => {});
+  }
+
   // Corrections (server: corrections.js): a practice run of its own where each student redoes what they
   // missed. The teacher picks how much a fixed answer earns back, and whether to ask what went wrong.
   function correctionsDialog(runId, run) {
@@ -917,7 +936,9 @@
     setHash('#run/' + encodeURIComponent(runId));
     ++navSeq;
     selected = null;
-    const code = h('span', { class: 't-joincode' });
+    // The join code: click it to show it big, for a projector
+    const code = h('button', { class: 't-joincode', type: 'button', title: 'Show it big' });
+    code.addEventListener('click', () => projector(code.textContent, title.textContent));
     const title = h('h1');
     const meta = h('p', { class: 't-muted' });
     const tbody = h('tbody');
@@ -1009,7 +1030,11 @@
         }).catch(() => {});
       }
       title.textContent = run.title;
-      meta.textContent = `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.corrections ? `, corrections, earning back ${Math.round(run.corrections.earnBack * 100)}%` : run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
+      code.setAttribute('aria-label', `Join code ${run.code}. Show it big`);
+      meta.textContent = run.corrections
+        // each student has their own questions and no clock, so just what it is and what it's worth
+        ? `Corrections, ${run.status === 'open' ? 'open' : 'closed'}. Fixed answers earn back ${Math.round(run.corrections.earnBack * 100)}%.`
+        : `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
       howTo.textContent = run.sebFile ? `Join at ${location.origin}, which opens Safe Exam Browser` : `Join at ${location.origin}`;
       quitPw.hidden = !run.sebQuit || run.status !== 'open';
       if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp', text: run.sebQuit }));

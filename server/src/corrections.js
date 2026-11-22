@@ -52,12 +52,16 @@ function plan(quiz, exam, askWhy) {
   return { layout: { order, perms, subset: true, fix, why: !!askWhy, exam: exam.id }, answers };
 }
 
-// For the start screen: how many questions and points a student has to correct.
+// For the start screen: their score on the quiz, and how many questions and points they have to correct.
+// The score is the raw one, as their reports show it: an invalidated exam's 0 is the teacher's alone.
 function preview(run, quiz, studentId) {
-  const p = plan(quiz, examAttemptFor(run, studentId), false);
-  if (!p) return { questionCount: 0, points: 0 };
-  const pts = p.layout.order.reduce((t, id) => t + quiz.questions.find((x) => x.id === id).points, 0);
-  return { questionCount: p.layout.order.length, points: Math.round(pts * 100) / 100 };
+  const exam = examAttemptFor(run, studentId);
+  const t = exam ? totals(exam.result, quiz, exam.answers, exam.layout) : null;
+  const score = t ? { score: t.score, max: t.max, pending: t.pending + t.review > 0 } : null;
+  const p = plan(quiz, exam, false);
+  if (!p) return { questionCount: 0, points: 0, exam: score };
+  const pts = p.layout.order.reduce((t2, id) => t2 + quiz.questions.find((x) => x.id === id).points, 0);
+  return { questionCount: p.layout.order.length, points: Math.round(pts * 100) / 100, exam: score };
 }
 
 // Points a corrections attempt earns back: the share of what each question gained over the exam.

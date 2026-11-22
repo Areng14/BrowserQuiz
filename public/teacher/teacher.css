@@ -344,6 +344,16 @@ input[type="file"].input { padding: 6px 10px; }
 
 .t-code { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
 .t-joincode { font: 600 44px var(--mono); letter-spacing: 0.15em; }
+button.t-joincode { margin: 0 -6px; padding: 0 6px; color: inherit; background: none; border: 0; border-radius: 8px; cursor: zoom-in; }
+button.t-joincode:hover { background: var(--soft); }
+/* The join code for a projector: the whole screen */
+.t-projector { width: calc(100vw / var(--zoom, 1)); height: calc(100vh / var(--zoom, 1)); max-width: none; max-height: none; margin: 0; padding: 4vh 4vw; border: 0; color: var(--ink); background: var(--bg); text-align: center; }
+.t-projector[open] { display: grid; place-content: center; gap: 3vh; }
+.t-projector::backdrop { background: var(--bg); }
+.t-projector .t-dialog-x { position: absolute; top: 16px; right: 16px; }
+.t-proj-title { font-size: clamp(18px, 2.2vw, 40px); color: var(--ink-2); }
+.t-proj-url { font-size: clamp(22px, 3.6vw, 64px); font-weight: 600; }
+.t-proj-code { font: 700 clamp(64px, 15vw, 340px)/1 var(--mono); letter-spacing: 0.12em; cursor: zoom-out; }
 .st-waiting { color: var(--warn); font-weight: 600; }
 .st-bad { color: var(--bad); font-weight: 600; }
 .st-good { color: var(--good); font-weight: 600; }

@@ -566,10 +566,14 @@
   // Corrections: the questions they missed on the quiz, their answers filled in. Practice: no lockdown.
   function screenCorrections(err) {
     const n = S.run.questionCount || 0;
+    const e = S.run.exam; // their score on the quiz (raw, like their reports)
+    const scoreLine = e ? h('p', { class: 'corr-score' }, 'Your score on the quiz: ', h('b', { text: `${e.score} / ${e.max}` }), e.pending ? ' so far' : '') : null;
     if (!n) {
-      mount(entry(h('div', { class: 'panel', role: 'status' },
+      const screen = entry(h('div', { class: 'panel', role: 'status' },
         h('p', { class: 'eyebrow', text: S.run.title }),
-        h('div', { class: 'heading' }, h('h1', { text: 'Nothing to correct' })))));
+        h('div', { class: 'heading' }, h('h1', { text: 'Nothing to correct' }), scoreLine)));
+      if (e) screen.prepend(confetti()); // nothing missed: same as turning one in
+      mount(screen);
       return;
     }
     if (S.run.hasCode) loadMonaco().catch(() => {});
@@ -580,6 +584,7 @@
       h('p', { class: 'eyebrow', text: S.run.title }),
       h('div', { class: 'heading' },
         h('h1', { text: 'Corrections' }),
+        scoreLine,
         h('p', { text: `${plural(n, 'question')} to fix${S.run.points ? ` (${plural(S.run.points, 'point')})` : ''}. Your answers from the quiz are filled in.` })),
       btn, msg)));
     btn.focus();
