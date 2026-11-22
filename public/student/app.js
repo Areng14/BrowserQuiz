@@ -1698,7 +1698,7 @@
     // What this question doesn't allow, for the language in use: it's part of the rules.
     const bans = !q.ban ? [] : Array.isArray(q.ban) ? q.ban : q.ban[lang] || [];
     const banNote = bans.length ? h('p', { class: 'ban-note' }, h('strong', { text: 'Not allowed: ' }),
-      bans.map((b, i) => [i ? ', ' : '', h('code', { text: b })])) : null;
+      bans.map((b, i) => [i ? ', ' : '', h('code', { text: lang === 'cpp' ? b.replace('.', '::') : b })])) : null;
     // Classes the question gives them (Point, Node, ...), in the language they're writing.
     const given = q.given && q.given[lang] ? [h('h2', { class: 'sub', text: 'Classes you can use' }),
       h('div', { class: 'prompt given-code hl-root' }, BQ.md.render('```' + lang + '\n' + q.given[lang] + '```', mdOpts()))] : null;

@@ -1057,6 +1057,8 @@
     // ---------- rubric, for code and written answers ----------
     // On code questions (langs given) an item can grade itself: a regex the code must have, or must not
     // have, one per language. Comments and strings don't count. Otherwise the teacher ticks it.
+    const BAN_HINT = { java: 'Arrays.sort, Collections.sort, stream', python: 'sorted, sort', c: 'qsort', cpp: 'std::sort, max_element',
+      csharp: 'Array.Sort, OrderBy', go: 'sort, slices.Sort' };
     const PATTERN_HINT = {
       require: { java: 'private\\s+\\w+\\s+\\w+\\s*;', python: 'self\\._\\w+\\s*=', javascript: '\\bconst\\b', typescript: ':\\s*number\\b', c: '\\bfree\\(', cpp: 'private:', go: '\\bfor\\b', rust: '\\bmatch\\b', csharp: 'private\\s+\\w+\\s+\\w+\\s*;' },
       forbid: { java: 'Arrays\\.sort', python: 'sorted\\(', javascript: '\\.sort\\(', typescript: '\\.sort\\(', c: 'qsort\\(', cpp: '\\bsort\\(', go: 'sort\\.', rust: '\\.sort', csharp: '\\.Sort\\(|OrderBy' },
@@ -1265,12 +1267,30 @@
         refs.push(h('div', { class: 'qe-line' }, add));
       }
       const rubric = fill ? null : rubricEditor(q, 'Uses private instance variables', refLangs);
-      // Methods students may not use: comma separated. Using one scores 0 (server/src/bans.js).
-      const banList = Array.isArray(q.ban) ? q.ban : q.ban ? [...new Set(Object.values(q.ban).flat())] : [];
-      const bans = fill ? null : field('Not allowed (methods students may not use)', input(q, banList.join(', '), (v) => {
-        const list = v.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
-        if (list.length) q.ban = list; else delete q.ban;
-      }, { class: 'input qe-mono', placeholder: 'Arrays.sort, Collections.sort, sorted, stream', spellcheck: 'false' }));
+      // Methods students may not use: comma separated, one list for every language or one per language (a
+      // Class.method entry names one language's class). Using one scores 0 (server/src/bans.js).
+      const banLangs = q.languages.filter(BT.hasBans);
+      const parse = (v) => v.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
+      const cppOnly = (l) => l === 'cpp' || (!l && banLangs.length === 1 && banLangs[0] === 'cpp');
+      const banField = (label, list, set, hint, l) => field(label, input(q, list.map((b) => (cppOnly(l) ? b.replace('.', '::') : b)).join(', '), (v) => set(parse(v)),
+        { class: 'input qe-mono', placeholder: hint, spellcheck: 'false' }));
+      let bans = null;
+      if (!fill) {
+        const perLang = !!q.ban && !Array.isArray(q.ban);
+        const fields = perLang
+          ? banLangs.map((l) => banField(`Not allowed in ${LANGS[l]}`, q.ban[l] || [], (list) => {
+            if (list.length) q.ban[l] = list; else delete q.ban[l];
+          }, BAN_HINT[l], l))
+          : [banField('Not allowed (methods students may not use)', q.ban || [], (list) => { if (list.length) q.ban = list; else delete q.ban; },
+            banLangs.length === 1 ? BAN_HINT[banLangs[0]] : banLangs.every((l) => l === 'java' || l === 'python') ? BAN_HINT.java + ', sorted' : 'sort')];
+        const split = banLangs.length > 1 && !q.languagesAny ? check(q, perLang, 'Per language', (v) => {
+          const all = [...new Set(Array.isArray(q.ban) ? q.ban : Object.values(q.ban || {}).flat())];
+          if (v) q.ban = Object.fromEntries(banLangs.map((l) => [l, all.slice()]));
+          else if (all.length) q.ban = all; else delete q.ban;
+          renderPane();
+        }) : null;
+        bans = h('div', { class: 'qe-stack' }, ...fields, split);
+      }
 
       const tick = () => {
         const r = readCode(q);

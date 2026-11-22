@@ -519,6 +519,18 @@ function cppMain(q, tests, marker) {
   }
   const locals = (params, args, ind) => params.map((p, k) => `${ind}${T.cppType(p.type)} a${k} = ${cppLit(T.canon(p.type), args[k], D)};`);
   const argNames = (n) => Array.from({ length: n }, (_, k) => 'a' + k).join(', ');
+  const paramList = (params) => params.map((p, k) => `${T.cppType(p.type)} a${k}`);
+  // The test code is all in namespace bq, which the ban check leaves out (bans.js). Each method the question
+  // asks for is also called here with arguments the compiler can't know, so every one is compiled whole
+  // whichever tests run.
+  L.push('namespace bq {');
+  if (q.mode === 'method') {
+    L.push(`void keep(${paramList(q.signature.params).join(', ')}) { Solution sol; (void)sol.${q.signature.name}(${argNames(q.signature.params.length)}); }`);
+  } else {
+    const C = q.class;
+    L.push(`void keep_new(${paramList(C.constructor).join(', ')}) { (void)new ${C.name}(${argNames(C.constructor.length)}); }`);
+    C.methods.forEach((m, j) => L.push(`void keep${j}(${[`${C.name}* o`, ...paramList(m.params)].join(', ')}) { (void)o->${m.name}(${argNames(m.params.length)}); }`));
+  }
   tests.forEach((t, i) => {
     L.push(`static void t${i}(int i) {`);
     if (q.mode === 'method') {
@@ -542,22 +554,28 @@ function cppMain(q, tests, marker) {
     }
     L.push('}');
   });
-  L.push(`static void (*const bq_tests[])(int) = {${tests.map((_, i) => 't' + i).join(', ') || 'nullptr'}};`, 'int main() {',
+  L.push(`static void (*const tests[])(int) = {${tests.map((_, i) => 't' + i).join(', ') || 'nullptr'}};`, '}  // namespace bq', 'int main() {',
     `    bq_begin(${cStr(marker).lit});`, '    std::remove("bqmain.cpp");', `    for (int i = 0; i < ${tests.length}; i++) {`, '        std::cout.flush();',
-    `        if (!bq_test_begin(i, ${ALARM(q)})) continue;`, '        try {', '            bq_tests[i](i);', '        } catch (const std::exception& e) {', '            bq::fail(i, e);',
+    `        if (!bq_test_begin(i, ${ALARM(q)})) continue;`, '        try {', '            bq::tests[i](i);', '        } catch (const std::exception& e) {', '            bq::fail(i, e);',
     '        } catch (const char* e) {', '            bq::fail(i, std::string("Threw ") + e);', '        } catch (const std::string& e) {', '            bq::fail(i, "Threw " + e);',
     '        } catch (...) {', '            bq::fail(i, "Threw something that isn\'t an exception");', '        }', '        bq_test_end();', '    }', '    return 0;', '}', '');
   return L.join('\n');
 }
 
-// C: functions only. The question's function is declared first, so a definition that doesn't match it is a
-// compile error in their file ("conflicting types"), not a wrong call.
+// C: functions only. The student's file is its own translation unit (bqsol.c), so the ban check reads exactly
+// what it uses from the compiled object, and nothing of theirs (macros, names) meets the tests'. The
+// question's function is declared first, so a definition that doesn't match it is a compile error in their
+// file ("conflicting types"), not a wrong call.
+function cSol(q) {
+  const L = ['#include "bqpre.h"'];
+  if (q.support && q.support.c) L.push(q.support.c);
+  L.push(T.cSignature(q.signature) + ';', '#define main bq_student_main', '#include "solution.c"', '');
+  return L.join('\n');
+}
 function cMain(q, tests, marker) {
   const D = q.types;
   const s = q.signature;
-  const L = ['#include "bqpre.h"'];
-  if (q.support && q.support.c) L.push(q.support.c);
-  L.push(T.cSignature(s) + ';', '#define main bq_student_main', '#include "solution.c"', '#undef main', '#include "bqc.h"');
+  const L = ['#include "bqpre.h"', T.cSignature(s) + ';', '#include "bqc.h"'];
   if (D) {
     const names = Object.keys(D);
     L.push(...names.map((n) => `static void bq_w_${n}(bq_w* w, const ${n}* p);`));
@@ -765,7 +783,9 @@ function buildSnippetJob(lang, code) {
   return { language: 'java', files: { 'Main.java': imports + 'public class Main { public static void main(String[] args) throws Exception {\n' + code + '\n} }' }, main: 'Main' };
 }
 
-function buildJob(q, lang, code, tests) {
+// opts.scan: false leaves out the ban check's facts for the compiled languages (they're read once per answer).
+function buildJob(q, lang, code, tests, opts) {
+  const scan = B.bansFor(q.ban, lang).length > 0 && !(opts && opts.scan === false);
   // Random through and through, so there's no fixed part to search memory or output for.
   const marker = crypto.randomBytes(16).toString('hex');
   const files = {};
@@ -791,29 +811,35 @@ function buildJob(q, lang, code, tests) {
     files['main.cjs'] = jsMain(q, tests, marker, lang);
     return { marker, job: { language: lang, files, main: 'main.cjs' } };
   }
+  // The ban check's facts for these come from the runner (runner.py, run_scan): which files it reads.
+  const scanOf = (list) => (scan ? { scan: list } : {});
   if (lang === 'cpp') {
     Object.assign(files, { 'solution.cpp': code, 'bq.hpp': BQCPP_SRC, 'bqrt.c': BQRT_SRC, 'bqmain.cpp': cppMain(q, tests, marker) });
-    return { marker, job: { language: 'cpp', files, main: 'main', sources: ['bqmain.cpp', 'bqrt.c'] } };
+    return { marker, job: { language: 'cpp', files, main: 'main', sources: ['bqmain.cpp', 'bqrt.c'], ...scanOf(['bqmain.cpp', 'solution.cpp']) } };
   }
   if (lang === 'csharp') {
     Object.assign(files, { 'solution.cs': code, 'BQ.cs': BQCS_SRC, 'bqusings.cs': CS_USINGS, 'bqmain.cs': csMain(q, tests, marker) });
     if (q.types) files['bqtypes.cs'] = T.classSource(q.types, 'csharp');
     if (q.support && q.support.csharp) files['support.cs'] = q.support.csharp;
-    return { marker, job: { language: 'csharp', files, main: 'main', entry: 'BQMain', sources: Object.keys(files).filter((n) => n.endsWith('.cs')).sort() } };
+    const sources = Object.keys(files).filter((n) => n.endsWith('.cs')).sort();
+    return { marker, job: { language: 'csharp', files, main: 'main', entry: 'BQMain', sources, ...scanOf(sources.filter((n) => n !== 'BQ.cs' && n !== 'bqmain.cs')) } };
   }
   if (lang === 'go') {
     Object.assign(files, { 'solution.go': goPackaged(code), 'bqh.go': BQGO_SRC, 'bqmain.go': goMain(q, tests, marker) });
     if (q.types) files['bqtypes.go'] = 'package main\n\n' + T.classSource(q.types, 'go');
     if (q.support && q.support.go) files['support.go'] = goPackaged(q.support.go);
-    return { marker, job: { language: 'go', files, main: 'main', sources: Object.keys(files).filter((n) => n.endsWith('.go')).sort() } };
+    return { marker, job: { language: 'go', files, main: 'main', sources: Object.keys(files).filter((n) => n.endsWith('.go')).sort(), ...scanOf(['solution.go']) } };
   }
   if (lang === 'rust') {
     Object.assign(files, { 'solution.rs': code, 'bq.rs': BQRS_SRC, 'bqmain.rs': rsMain(q, tests, marker) });
     return { marker, job: { language: 'rust', files, main: 'main', sources: ['bqmain.rs'] } };
   }
   if (lang === 'c') {
-    Object.assign(files, { 'solution.c': code, 'bqpre.h': C_PRELUDE + (q.types ? '\n' + T.classSource(q.types, 'c') : ''), 'bqc.h': BQC_SRC, 'bqrt.c': BQRT_SRC, 'bqmain.c': cMain(q, tests, marker) });
-    return { marker, job: { language: 'c', files, main: 'main', sources: ['bqmain.c', 'bqrt.c'] } };
+    Object.assign(files, {
+      'solution.c': code, 'bqpre.h': C_PRELUDE + (q.types ? '\n' + T.classSource(q.types, 'c') : ''), 'bqc.h': BQC_SRC, 'bqrt.c': BQRT_SRC,
+      'bqsol.c': cSol(q), 'bqmain.c': cMain(q, tests, marker),
+    });
+    return { marker, job: { language: 'c', files, main: 'main', sources: ['bqmain.c', 'bqsol.c', 'bqrt.c'], ...scanOf(['bqsol.c']) } };
   }
   files['solution.py'] = code;
   files['bqh.py'] = BQH_SRC;
@@ -1060,8 +1086,9 @@ function readResults(q, lang, tests, res, marker) {
   }
   if (res.status === 'error') return { status: 'error', message: 'The code runner had a problem. Try again in a moment.' };
   const { records, printed } = splitOutput(res.stdout, marker);
-  // The ban check's facts come first, written before any student code ran.
-  const scan = records.length && records[0].scan ? records[0].scan : null;
+  // The ban check's facts: the runner's, read from the compiled code (null: it couldn't read it), or in Java
+  // and Python the harness's, written first, before any student code ran.
+  const scan = res.scan !== undefined ? B.runnerFacts(res.scan) : records.length && records[0].scan ? records[0].scan : null;
   const compile = records.find((r) => r.compile);
   if (compile) return { status: 'compile_error', message: isJs(lang) ? cleanJs(compile.err) : cleanPy(compile.err), scan };
   // A Python speed test only counts when the code keeps out of the harness that times it (bans.js).

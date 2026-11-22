@@ -1,26 +1,40 @@
 'use strict';
 // Methods and names a code question doesn't allow: "ban": ["Arrays.sort", "stream", "sorted"], or
-// { "java": [...], "python": [...] }. Code that uses one scores 0 on the question.
+// { "java": [...], "python": [...], "cpp": [...] }. Code that uses one scores 0 on the question.
 //
 // Each entry is one of:
-//   Class.method   that method of that class: "Arrays.sort", "Math.max", "math.sqrt"
+//   Class.method   that method of that class: "Arrays.sort", "Math.max", "math.sqrt", "std::sort", "sort.Ints"
 //   method         a method or function of that name, on anything: "sort", "stream", "sorted", "max"
-//   Name           (Java, capitalized) a library class or interface: "HashMap", "Stream"
+//   Name           a library class, interface or package: "HashMap", "Stream", "List", "map", "strings"
 //
-// The check doesn't read the source text. The harness reports what the compiler saw, before any student
-// code runs (harness/BQJ.java scan, harness/bqscan.py): for Java, every method, field and class the
-// compiled classes refer to; for Python, the names that reach the builtins, the attributes read and the
-// imports, from Python's own parser and symbol table. So comments, strings, spacing, unicode escapes and
-// look-alike letters, imports, aliases, generics and method references are all already dealt with, and the
-// student's own methods and variables (their own max, self.count) are theirs.
+// The check doesn't read the source text. It reads what the compiler made of the code, before any of it
+// runs: for Java, every method, field and class the compiled classes refer to (harness/BQJ.java scan); for
+// Python, the names that reach the builtins, the attributes read and the imports, from Python's own parser
+// and symbol table (harness/bqscan.py); for C, the library functions the student's compiled file calls; for
+// C++, what each of the student's compiled functions calls or refers to in the library; for Go, what Go's
+// own type checker says the student's file uses from other packages; for C#, the library members and types
+// the compiled code refers to (runner.py run_scan, runner/bqscan.go, runner/bqscan.cs). So comments,
+// strings, spacing, macros, imports, aliases, using-declarations, generics, lambdas and method references
+// are all already dealt with, and the student's own methods and variables (their own max, self.count) are
+// theirs. In C and C++ that holds for code that calls library functions in the usual ways; code that works
+// out a function's address from another's isn't caught.
 //
-// A few entries cover their close relatives: "sort" also catches parallelSort, Math.* also StrictMath.*,
-// "stream" anything in java.util.stream, a Java class its subclasses in java.util ("HashMap" catches
-// LinkedHashMap), Python's sort and sorted each other plus heapq and bisect, math.* also cmath.*.
-// A question with any ban also bans the usual ways around one: reflection and friends in Java; eval, exec,
-// getattr, __import__, importlib, pickle and friends in Python.
+// A few entries cover their close relatives: "sort" also catches parallelSort (Java), sorted, heapq and
+// bisect (Python), qsort (C), every std:: sort (C++), package sort and slices.Sort* (Go), and OrderBy and
+// friends (C#); Math.* also StrictMath.* (Java) and MathF.* and the number types' own (C#), math.* also
+// cmath.*, a Java class its subclasses in java.util ("HashMap" catches LinkedHashMap), and a C math
+// function its float and long double versions. Go and C# names match whatever their case.
+// A question with any ban also bans the usual ways around one: reflection and friends in Java and C#
+// (and dynamic, expression trees, DllImport), eval, exec, getattr, __import__, importlib, pickle and friends
+// in Python, dlsym and friends in C and C++ (and in C++ inline asm, reopening namespace std, #line and
+// unusual #includes), reflect, unsafe, templates and go:linkname in Go.
+
+const T = require('../../public/teacher/types.js');
 
 const ENTRY = /^[A-Za-z_]\w*(\.[A-Za-z_]\w*)?$/;
+// A ban list that applies to every language (not one per language) can have Class.method entries only for
+// these: elsewhere a class name means something else (C has no classes, so there it's just the method).
+const LIST_QUALIFIED = ['java', 'python', 'c'];
 
 // The ban list from a question, checked and tidied. Throws a message for the quiz file's error.
 function normalizeBans(raw, languages) {
@@ -29,7 +43,7 @@ function normalizeBans(raw, languages) {
     if (!Array.isArray(list)) throw new Error(`${label} should be a list of names, like ["Arrays.sort", "stream"].`);
     const out = [];
     for (const v of list.slice(0, 30)) {
-      const name = String(v == null ? '' : v).trim();
+      const name = String(v == null ? '' : v).trim().replace(/::/g, '.');
       if (!name) continue;
       if (!ENTRY.test(name)) throw new Error(`${label}: "${name.slice(0, 60)}" isn't a name. Use a method ("sort"), Class.method ("Arrays.sort") or a class ("HashMap").`);
       if (!out.includes(name)) out.push(name);
@@ -143,15 +157,160 @@ function pythonHits(entries, facts, D) {
   return [...new Set(hits)];
 }
 
+// ---------- the compiled languages: facts from the runner (runner.py run_scan) ----------
+// The runner's text, one fact per line; null means it couldn't read the code.
+function runnerFacts(text) {
+  if (text === null) return { fail: true };
+  const lines = String(text || '').split('\n').filter(Boolean);
+  return lines.some((l) => l.startsWith('fail')) ? { fail: true } : { lines };
+}
+const lower = (x) => String(x).toLowerCase();
+const fl = (names) => names.flatMap((n) => [n, n + 'f', n + 'l']); // C's sqrt, sqrtf, sqrtl
+const isSort = (n) => /sort/i.test(n) && !/^_*is_sorted/i.test(n);
+const DL = ['dlopen', 'dlsym', 'dlvsym', 'dlmopen', 'dladdr', 'dlinfo', 'dl_iterate_phdr'];
+
+// C: the library functions the student's own compiled file refers to (nm -u).
+const C_KIN = { sort: ['qsort', 'qsort_r'], qsort: ['qsort', 'qsort_r'], abs: ['abs', 'labs', 'llabs', 'fabs', 'imaxabs'], max: ['fmax'], min: ['fmin'] };
+function cHits(entries, facts) {
+  // glibc's other names for the same function: __isoc99_scanf, __printf_chk
+  const refs = new Set(facts.lines.filter((l) => l.startsWith('ref ')).map((l) => l.slice(4).replace(/@.*$/, '').replace(/^__isoc\d+_/, '').replace(/^__(\w+)_chk$/, '$1')));
+  const hits = entries.filter((entry) => {
+    const name = entry.split('.').pop();
+    return fl(C_KIN[name] || [name]).some((n) => refs.has(n));
+  });
+  hits.push(...DL.filter((n) => refs.has(n)));
+  return hits;
+}
+
+// C++: what the student's compiled functions call or refer to in the library (std::, or not in the object).
+const CPP_LIB = ['std', '__gnu_cxx', '__cxxabiv1'];
+const CPP_KIN = { max: ['max', 'max_element', 'fmax', 'minmax', 'minmax_element'], min: ['min', 'min_element', 'fmin', 'minmax', 'minmax_element'],
+  abs: ['abs', 'labs', 'llabs', 'fabs'] };
+const CPP_ALIAS = { string: ['basic_string'], stringstream: ['basic_stringstream'], istringstream: ['basic_istringstream'], ostringstream: ['basic_ostringstream'],
+  string_view: ['basic_string_view'] };
+function cppHits(entries, facts, D) {
+  const given = new Set(Object.keys(D || {}));
+  const uses = [];
+  for (const l of facts.lines) {
+    if (!l.startsWith('call ')) continue;
+    const [owner, target, kind] = l.slice(5).split('\t');
+    const o = owner.split('::');
+    if ((o[0] === 'bq' && o.length > 1) || owner === 'main' || given.has(o[0])) continue; // the tests' code, the given classes'
+    const t = target.split('::');
+    if (kind === 'U' || CPP_LIB.includes(t[0])) uses.push(t);
+  }
+  const nameIs = (a) => {
+    if (lower(a) === 'sort') return (n) => isSort(n);
+    const kin = fl(CPP_KIN[a] || [a]);
+    return (n, path) => kin.includes(n) && !(['max', 'min'].includes(a) && path.includes('numeric_limits'));
+  };
+  const classIs = (a) => [a, ...(CPP_ALIAS[a] || [])];
+  const hits = entries.filter((entry) => {
+    const [a, b] = entry.split('.');
+    if (b) {
+      const cls = classIs(a);
+      const name = nameIs(b);
+      return uses.some((p) => p.slice(0, -1).some((c) => cls.includes(c)) && name(p[p.length - 1], p));
+    }
+    const name = nameIs(a);
+    const cls = classIs(a);
+    return uses.some((p) => name(p[p.length - 1], p) || p.slice(0, -1).some((c) => cls.includes(c)));
+  });
+  hits.push(...DL.filter((n) => uses.some((p) => p.length === 1 && p[0] === n)));
+  for (const l of facts.lines) {
+    if (l === 'asm') hits.push('asm');
+    else if (l === 'linemarker') hits.push('#line');
+    else if (l.startsWith('namespace ')) hits.push('own code in ' + l);
+    else if (l.startsWith('include ')) hits.push('#include ' + l.slice(8));
+  }
+  return hits;
+}
+
+// Go: what the student's file uses from other packages, by Go's type checker.
+const GO_ESCAPES = ['reflect', 'unsafe', 'text/template', 'html/template', 'plugin'];
+const GO_HARNESS = ['bqh.go', 'bqmain.go'];
+function goHits(entries, facts) {
+  const uses = [];
+  const imports = [];
+  const builtins = [];
+  for (const l of facts.lines) {
+    if (l.startsWith('use ')) {
+      const ref = l.slice(4);
+      const k = ref.indexOf('.', ref.lastIndexOf('/') + 1);
+      const path = ref.slice(0, k);
+      uses.push({ path, pkg: lower(path.split('/').pop()), parts: ref.slice(k + 1).split('.').map(lower) });
+    } else if (l.startsWith('import ')) imports.push(l.slice(7));
+    else if (l.startsWith('builtin ')) builtins.push(lower(l.slice(8)));
+  }
+  const nameIs = (a) => (lower(a) === 'sort' ? (n) => /^sort/.test(n) : (n) => n === lower(a));
+  const hits = entries.filter((entry) => {
+    const [a, b] = entry.split('.');
+    if (b) return uses.some((u) => (u.pkg === lower(a) || (u.parts.length === 2 && u.parts[0] === lower(a))) && nameIs(b)(u.parts[u.parts.length - 1]));
+    const name = nameIs(a);
+    return uses.some((u) => u.pkg === lower(a) || u.parts.some(name)) || builtins.some(name);
+  });
+  hits.push(...GO_ESCAPES.filter((p) => imports.includes(p)));
+  if (facts.lines.includes('linkname')) hits.push('go:linkname');
+  if (facts.lines.some((l) => GO_HARNESS.includes(l.split(' ')[1]) && l.startsWith('local '))) hits.push('the test code');
+  return hits;
+}
+
+// C#: the library members and types the compiled code refers to.
+const CS_KIN = { sort: ['sort', 'orderby', 'orderbydescending', 'order', 'orderdescending', 'thenby', 'thenbydescending'],
+  max: ['max', 'maxby', 'maxmagnitude', 'maxnumber'], min: ['min', 'minby', 'minmagnitude', 'minnumber'] };
+const CS_CLASS_KIN = { math: ['math', 'mathf', 'int16', 'int32', 'int64', 'int128', 'uint16', 'uint32', 'uint64', 'uint128', 'byte', 'sbyte',
+  'double', 'single', 'decimal', 'half', 'biginteger'], array: ['array', 'memoryextensions'] };
+const CS_ESCAPE_NS = /^(System\.Reflection|System\.Linq\.Expressions|Microsoft\.CSharp|System\.Dynamic|System\.Runtime\.Loader)(\.|$)/;
+const CS_ESCAPE_TYPES = ['System.Runtime.InteropServices.NativeLibrary', 'System.Runtime.CompilerServices.UnsafeAccessorAttribute',
+  'System.Runtime.CompilerServices.UnsafeAccessorTypeAttribute'];
+const CS_ESCAPE_MEMBERS = /^(System\.Type::(GetType|GetMethods?|GetMembers?|InvokeMember|GetPropert(y|ies)|GetFields?|GetConstructors?|GetInterfaces?|GetNestedTypes?|MakeGenericType|GetEvents?|FindMembers|GetDefaultMembers)|System\.Delegate::CreateDelegate|System\.Runtime\.InteropServices\.Marshal::GetDelegateForFunctionPointer)$/;
+const CS_COMPILER = ['System.Reflection.DefaultMemberAttribute']; // what the compiler itself puts there (an indexer's)
+function csHits(entries, facts) {
+  const split = (full) => {
+    const name = full.split(/[.+]/).pop().replace(/`\d+$/, '');
+    return { full, simple: lower(name), ns: full.split('.').slice(0, -1).map(lower) };
+  };
+  const members = [];
+  const types = [];
+  for (const l of facts.lines) {
+    if (l.startsWith('M ')) {
+      const k = l.lastIndexOf('::');
+      // a property is its accessors: DataView.Sort is set_Sort
+      members.push({ ...split(l.slice(2, k)), name: lower(l.slice(k + 2)).replace(/^(get|set|add|remove)_/, ''), text: l.slice(2) });
+    } else if (l.startsWith('T ')) types.push(split(l.slice(2)));
+  }
+  const all = [...types, ...members];
+  const hits = entries.filter((entry) => {
+    const [a, b] = entry.split('.').map(lower);
+    if (b) {
+      const cls = CS_CLASS_KIN[a] || [a];
+      const kin = CS_KIN[b] || [b];
+      return members.some((m) => cls.includes(m.simple) && kin.includes(m.name));
+    }
+    const kin = CS_KIN[a] || [a];
+    return members.some((m) => kin.includes(m.name)) || all.some((t) => t.simple === a || t.ns.includes(a));
+  });
+  const escape = all.find((t) => !CS_COMPILER.includes(t.full) && (CS_ESCAPE_NS.test(t.full) || CS_ESCAPE_TYPES.includes(t.full)))
+    || members.find((m) => CS_ESCAPE_MEMBERS.test(m.text));
+  if (escape) hits.push('reflection');
+  if (facts.lines.includes('pinvoke')) hits.push('DllImport');
+  return hits;
+}
+
 // The banned names this code uses (or the way around a ban it uses), in the question's order. `facts` is
-// the harness's scan; without one (the code never got that far) there's nothing to hold against it.
+// the scan; without one (the code never got that far) there's nothing to hold against it.
 // D is the question's declared classes, whose fields and methods count as the student's own.
 function bannedUse(ban, lang, facts, D) {
   const entries = bansFor(ban, lang);
   if (!entries.length || !facts || facts.syntax) return [];
   if (facts.fail) return ['code the check could not read'];
-  return lang === 'python' ? pythonHits(entries, facts, D) : javaHits(entries, facts);
+  const hits = lang === 'python' ? pythonHits(entries, facts, D) : lang === 'c' ? cHits(entries, facts) : lang === 'cpp' ? cppHits(entries, facts, D)
+    : lang === 'go' ? goHits(entries, facts) : lang === 'csharp' ? csHits(entries, facts) : javaHits(entries, facts);
+  return [...new Set(hits.map((h) => (entries.includes(h) ? shown(h, lang) : h)))];
 }
+
+// An entry as students of a language see it: std::sort in C++.
+const shown = (entry, lang) => (lang === 'cpp' ? entry.replace('.', '::') : entry);
 
 // Speed tests time the code from inside its own process, so in Python they only count when the code keeps
 // out of the harness: no frames, closures or code objects, no swapping module attributes (time.perf_counter,
@@ -173,7 +332,8 @@ function timingIntrusions(lang, facts) {
   return [...new Set(used)];
 }
 
-// The languages bans work in: the check reads what the compiler saw, which these two report.
-const BAN_LANGS = ['java', 'python'];
+// The languages bans work in: the check reads what the compiler saw, which these report. (In JavaScript,
+// TypeScript and Rust it can't be told: a call there can go anywhere at run time, or is compiled away.)
+const BAN_LANGS = T.LANGS.filter(T.hasBans);
 
-module.exports = { normalizeBans, bansFor, bannedUse, timingIntrusions, BAN_LANGS };
+module.exports = { normalizeBans, bansFor, bannedUse, runnerFacts, timingIntrusions, shown, BAN_LANGS, LIST_QUALIFIED };

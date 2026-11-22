@@ -14,6 +14,7 @@ import http from 'node:http';
 const require = createRequire(import.meta.url);
 const { writeZip, readZip } = require('../server/src/zip.js');
 const { loadQuizFile, QuizError } = require('../server/src/quizfile.js');
+const { bansFor } = require('../server/src/bans.js');
 
 const args = process.argv.slice(2);
 const target = args.find((a) => !a.startsWith('--'));
@@ -122,6 +123,9 @@ for (const [i, q] of quiz.questions.entries()) {
     if (!tools[lang]) {
       delete q.reference[lang];
       console.log(`skipped: ${q.id} ${lang} reference (${MISSING[lang]} here; the server checks it on upload)`);
+    } else if (['c', 'cpp', 'go'].includes(lang) && bansFor(q.ban, lang).length) {
+      // their ban check is the runner's (runner.py), and this stand-in doesn't have it
+      console.log(`skipped: ${q.id} ${lang} ban check (the server checks it on upload)`);
     }
   }
 }

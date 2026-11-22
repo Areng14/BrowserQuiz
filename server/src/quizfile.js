@@ -422,8 +422,11 @@ function languageProblem(where, out, lang, D, ctx) {
   if (ctx.overloaded && (['python', 'go', 'rust'].includes(lang) || T.isJs(lang))) {
     return `${where}: there are two methods named ${ctx.overloaded}. Overloads only work in Java, C++ and C# (${name} can't have two methods with one name).`;
   }
-  if (out.ban && !B.BAN_LANGS.includes(lang) && B.bansFor(out.ban, lang).length) {
-    return `${where}: "ban" only works in Java and Python. Write it as { "java": [...], "python": [...] } and ${name} won't have bans.`;
+  if (out.ban && B.bansFor(out.ban, lang).length) {
+    if (!B.BAN_LANGS.includes(lang)) return `${where}: "ban" doesn't work in ${name}. Give it per language, like { "java": [...] }, and leave ${name} out.`;
+    // One list for several languages: "Arrays.sort" is Java's; in C++, Go or C# that class means something else.
+    const qualified = Array.isArray(out.ban) && ctx.languages.length > 1 && !B.LIST_QUALIFIED.includes(lang) && out.ban.find((e) => e.includes('.'));
+    if (qualified) return `${where}: "ban" lists "${qualified}", which doesn't name the same thing in ${name}. Give it per language, like { "java": ["${qualified}"], "${lang}": [...] }.`;
   }
   const tests = [...out.tests.sample.map((x, i) => [`tests.sample[${i}]`, x]), ...out.tests.hidden.map((x, i) => [`tests.hidden[${i}]`, x])];
   if (tests.some(([, x]) => x.speed)) {
@@ -595,7 +598,7 @@ function normalizeCode(where, q) {
   // Methods the student may not use (bans.js).
   try { const ban = B.normalizeBans(q.ban, languages); if (ban) out.ban = ban; } catch (e) { fail(`${where}: ${e.message}`); }
   // (The reference solutions have to keep to them too: checked when they run, in coderun.checkReferences.)
-  const problems = languages.map((l) => [l, languageProblem(where, out, l, D, { overloaded, reference })]);
+  const problems = languages.map((l) => [l, languageProblem(where, out, l, D, { overloaded, reference, languages })]);
   if (!any) {
     const bad = problems.find(([, p]) => p);
     if (bad) fail(bad[1]);

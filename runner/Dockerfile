@@ -13,16 +13,25 @@ RUN if [ -n "$EXTRA_CA" ]; then printf '%s\n' "$EXTRA_CA" > /tmp/extra-ca.crt; e
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
 # The C++ prelude, precompiled with the same flags runner.py compiles with, so a compile is fast.
 COPY bqpre.hpp /opt/bq/cpp/bqpre.hpp
-RUN g++ -std=gnu++17 -O2 -D_GLIBCXX_ASSERTIONS -w -x c++-header /opt/bq/cpp/bqpre.hpp -o /opt/bq/cpp/bqpre.hpp.gch
+RUN g++ -std=gnu++17 -O2 -D_GLIBCXX_ASSERTIONS -w -fno-inline -fno-builtin -fno-tree-loop-distribute-patterns -fno-ipa-icf -fno-ipa-cp \
+      -ffunction-sections -x c++-header /opt/bq/cpp/bqpre.hpp -o /opt/bq/cpp/bqpre.hpp.gch
 # Go's standard library, compiled once: jobs compile and link against it (go tool compile/link with this
 # importcfg) instead of running "go build", which would rebuild it into a cache every time.
+# bqscan: the ban check's facts for Go (go/types over the student's files).
+COPY bqscan.go /opt/bq/go/src/bqscan.go
 RUN mkdir -p /opt/bq/go && GOCACHE=/opt/bq/go/cache go list -export -f '{{if .Export}}packagefile {{.ImportPath}}={{.Export}}{{end}}' std > /opt/bq/go/importcfg \
- && ln -s "$(go env GOTOOLDIR)" /opt/bq/go/tool && chmod -R a+rX /opt/bq/go
+ && ln -s "$(go env GOTOOLDIR)" /opt/bq/go/tool \
+ && cd /opt/bq/go/src && GOCACHE=/tmp/gobuild GO111MODULE=off go build -o /opt/bq/go/bqscan bqscan.go && rm -rf /tmp/gobuild \
+ && chmod -R a+rX /opt/bq/go
 # C#: the compiler run directly (no MSBuild, which takes seconds), against the framework's reference assemblies.
 RUN mkdir -p /opt/bq/cs && ln -s "$(ls -d /usr/lib/dotnet/sdk/*/Roslyn/bincore/csc.dll | head -1)" /opt/bq/cs/csc.dll \
  && for f in $(ls -d /usr/lib/dotnet/packs/Microsoft.NETCore.App.Ref/*/ref/net*/ | head -1)*.dll; do echo "-r:$f"; done > /opt/bq/cs/refs.rsp \
  && printf '{ "runtimeOptions": { "tfm": "net10.0", "framework": { "name": "Microsoft.NETCore.App", "version": "%s" } } }\n' \
-      "$(ls /usr/lib/dotnet/shared/Microsoft.NETCore.App/ | head -1)" > /opt/bq/cs/main.runtimeconfig.json && chmod -R a+rX /opt/bq/cs
+      "$(ls /usr/lib/dotnet/shared/Microsoft.NETCore.App/ | head -1)" > /opt/bq/cs/main.runtimeconfig.json
+# bqscan: the ban check's facts for C# (the compiled code's member and type references).
+COPY bqscan.cs /opt/bq/cs/src/bqscan.cs
+RUN DOTNET_CLI_TELEMETRY_OPTOUT=1 dotnet exec /opt/bq/cs/csc.dll -nologo -noconfig -nostdlib @/opt/bq/cs/refs.rsp -langversion:latest -nullable:enable \
+      -optimize+ -target:exe -out:/opt/bq/cs/bqscan.dll /opt/bq/cs/src/bqscan.cs && chmod -R a+rX /opt/bq/cs
 COPY runner.py /runner/runner.py
 ENV JOBS_DIR=/jobs PORT=8080 PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8080

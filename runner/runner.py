@@ -26,6 +26,7 @@ import json
 import os
 import platform
 import queue
+import re
 import resource
 import shutil
 import signal
@@ -306,7 +307,7 @@ def job_bytes(job):
     return total
 
 
-def run_step(argv, uid, job, cpu_s, wall_s, mem_mb, nproc, env, fsize=FILE_CAP, tools=(), run_file=None):
+def run_step(argv, uid, job, cpu_s, wall_s, mem_mb, nproc, env, fsize=FILE_CAP, tools=(), run_file=None, cap=OUT_CAP):
     out = tempfile.TemporaryFile(dir=OUT_DIR)
     err = tempfile.TemporaryFile(dir=OUT_DIR)
     ruleset = prepare_landlock(build_rules(job, tools, run_file))
@@ -339,7 +340,7 @@ def run_step(argv, uid, job, cpu_s, wall_s, mem_mb, nproc, env, fsize=FILE_CAP, 
             status = "output_limit"
         out.seek(0)
         err.seek(0)
-        return status, code, out.read(OUT_CAP).decode("utf-8", "replace"), err.read(OUT_CAP).decode("utf-8", "replace"), int((time.time() - t0) * 1000)
+        return status, code, out.read(cap).decode("utf-8", "replace"), err.read(OUT_CAP).decode("utf-8", "replace"), int((time.time() - t0) * 1000)
     finally:
         out.close()
         err.close()
@@ -353,11 +354,16 @@ JAVA_RUN_FLAGS = ["-XX:ActiveProcessorCount=1", "-XX:+UseSerialGC", "-XX:TieredS
 # Node: V8 needs ~700 MB of address space before any code runs, and WebAssembly's usual 10 GB reservation
 # won't fit under RLIMIT_AS, so it's switched to bounds checks (TypeScript's type stripping is WebAssembly).
 NODE_FLAGS = ["--disable-wasm-trap-handler", "--experimental-transform-types", "--no-warnings", "--stack-size=4000"]
+# Library calls stay calls, so the ban check sees them in the compiled object: no builtins (strlen, abs and
+# friends compiled inline), no loops turned into memset or memcpy, and in C++ no inlining, no identical
+# functions folded together and no copies of a function specialized for its callers. Every program is built
+# this way, checked or not, so code can't tell which build it's in.
 CC_FLAGS = {
-    "c": ["-std=gnu17", "-O2", "-pipe", "-w", "-fmax-errors=20", "-fdiagnostics-color=never"],
+    "c": ["-std=gnu17", "-O2", "-pipe", "-w", "-fmax-errors=20", "-fdiagnostics-color=never", "-fno-builtin", "-fno-tree-loop-distribute-patterns"],
     # -D_GLIBCXX_ASSERTIONS: an index out of range on a vector stops the program instead of reading garbage.
     # These flags must match the ones bqpre.hpp.gch was built with (Dockerfile).
-    "cpp": ["-std=gnu++17", "-O2", "-pipe", "-w", "-fmax-errors=20", "-fdiagnostics-color=never", "-D_GLIBCXX_ASSERTIONS", "-I/opt/bq/cpp"],
+    "cpp": ["-std=gnu++17", "-O2", "-pipe", "-w", "-fmax-errors=20", "-fdiagnostics-color=never", "-D_GLIBCXX_ASSERTIONS", "-I/opt/bq/cpp",
+            "-fno-inline", "-fno-builtin", "-fno-tree-loop-distribute-patterns", "-fno-ipa-icf", "-fno-ipa-cp", "-ffunction-sections"],
 }
 LANGS = ("java", "python", "javascript", "typescript", "c", "cpp", "csharp", "go", "rust")
 CS = "/opt/bq/cs"  # csc, the reference assemblies and the runtime config (Dockerfile)
@@ -373,6 +379,265 @@ GO = "/opt/bq/go"  # the standard library, compiled when the image was built (Do
 RUST_FLAGS = ["--edition", "2021", "-C", "opt-level=1", "-C", "debuginfo=0", "-C", "linker=/usr/bin/cc", "--color", "never", "-A", "warnings"]
 
 
+# The ban check (server/src/bans.js) for compiled languages: facts about what the student's code uses, read
+# from what the compiler made of it before any of their code runs. In C and C++ that's the very object the
+# program is linked from (so the code can't tell it's being checked), C in its own translation unit; Go is
+# its own type checker over the same files; C# a library compiled from the student's files alone.
+SCAN_CAP = 32 << 20
+LIB_NS = ("std", "__gnu_cxx", "__cxxabiv1")  # in a C++ object, the library's own code
+
+
+def scan_steps(lang, scan, sources, objs, include):
+    if lang == "c":
+        return [[shutil.which("nm"), "-u", objs[sources.index(scan[0])]]], [["nm"]]
+    if lang == "cpp":
+        pre = ["-include", include] if include else []
+        return ([[shutil.which("readelf"), "-SrsW", "-C", objs[sources.index(scan[0])]],
+                 [shutil.which("g++")] + CC_FLAGS["cpp"] + pre + ["-E", "-fpch-preprocess", scan[0]]],
+                [["readelf"], ["g++"]])
+    if lang == "go":
+        return [[GO + "/bqscan", "-importcfg", GO + "/importcfg", "-own", ",".join(scan)] + sources], [[GO + "/bqscan"]]
+    if lang == "csharp":
+        flags = [f for f in CS_FLAGS if not f.startswith(("-target:", "-out:"))] + ["-target:library", "-out:bqscan.dll"]
+        return ([[shutil.which("dotnet"), "exec", CS + "/csc.dll"] + flags + scan,
+                 [shutil.which("dotnet"), "exec", "--runtimeconfig", CS + "/main.runtimeconfig.json", CS + "/bqscan.dll", "bqscan.dll"]],
+                [["dotnet"], ["dotnet"]])
+    return [], []
+
+
+def run_scan(lang, scan, sources, objs, include, files, uid, job, env):
+    """The facts as text, or None when the check couldn't read the code (which then counts against it)."""
+    argvs, tools = scan_steps(lang, scan, sources, objs, include)
+    outs = []
+    for argv, tl in zip(argvs, tools):
+        senv = dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(1536 << 20)) if lang == "csharp" else env
+        st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 4096, 64, senv, fsize=64 << 20, tools=tl, cap=SCAN_CAP)
+        kill_uid(uid)
+        if st != "ok" or code != 0 or len(out) >= SCAN_CAP:
+            return None
+        outs.append(out)
+    try:
+        if lang == "c":
+            return "\n".join(sorted(set("ref " + m.group(1) for m in re.finditer(r"^\s*[Uwv] (\S+)$", outs[0], re.M))))
+        if lang == "cpp":
+            return cpp_facts(outs[0], outs[1], [files[n] for n in scan[1:]])
+        return outs[-1]
+    except Exception:  # a shape we don't know: say nothing for the code
+        return None
+
+
+# ---- C++: who calls what, from the object's relocations
+_OPS = sorted(["<<=", ">>=", "<=>", "->*", "<<", ">>", "<=", ">=", "->", "()", "[]", "==", "!=", "&&", "||", "++", "--", "+=", "-=",
+               "*=", "/=", "%=", "&=", "|=", "^=", "<", ">", "+", "-", "*", "/", "%", "^", "&", "|", "~", "!", "=", ","], key=len, reverse=True)
+_SPECIAL = ("vtable for ", "VTT for ", "typeinfo for ", "typeinfo name for ", "construction vtable for ", "guard variable for ",
+            "non-virtual thunk to ", "virtual thunk to ", "covariant return thunk to ", "TLS init function for ", "TLS wrapper function for ",
+            "transaction clone for ", "reference temporary #0 for ")
+_QUALS = {"const", "volatile", "&", "&&", "noexcept", "throw"}
+
+
+def cpp_path(name):
+    """'void std::sort<...>(...)' -> 'std::sort'; 'Solution::f(...)::{lambda(int)#1}::operator()(int) const' ->
+    'Solution::f::{lambda}::operator()'."""
+    s = name.strip()
+    again = True
+    while again:
+        again = False
+        for p in _SPECIAL:
+            if s.startswith(p):
+                s, again = s[len(p):], True
+    s = re.sub(r"\[(?:clone [^\]]*|abi:[^\]]*)\]", "", s)
+    s = s.replace("(anonymous namespace)", "{anon}")
+    s = re.sub(r"\{lambda\([^{}]*\)#\d+\}", "{lambda}", s)
+    ops = []
+
+    def op(m):
+        ops.append(m.group(1))
+        return "operator@%d" % (len(ops) - 1)
+    s = re.sub(r"\boperator\s*(new\[\]|delete\[\]|new\b|delete\b|" + '""' + r"\s*\w+|" + "|".join(re.escape(o) for o in _OPS) + ")", op, s)
+    s = re.sub(r"\boperator\s+[^()]+?(?=\()", "operator@cast", s)  # conversion operators
+    prev = None
+    while prev != s:
+        prev, s = s, re.sub(r"<[^<>]*>", "", s)
+    prev = None
+    while prev != s:
+        prev, s = s, re.sub(r"\([^()]*\)", "", s)
+    toks = [t for t in s.split() if t not in _QUALS and re.search(r"[\w@{}~]", t)]
+    if not toks:
+        return ""
+    last = re.sub(r"^[*&]+", "", toks[-1])
+    return re.sub(r"operator@(\d+)", lambda m: "operator" + ops[int(m.group(1))], last)
+
+
+def cpp_facts(elf, pre, raw):
+    sections = {}  # index -> name
+    rela_target = {}  # a relocation section's file offset -> the index of the section it relocates
+    sec_re = re.compile(r"^\s*\[\s*(\d+)\]\s+(\S+)\s+(\S+)\s+[0-9a-f]+\s+([0-9a-f]+)\s+[0-9a-f]+\s+[0-9a-f]+\s+[A-Za-z]*\s+\d+\s+(\d+)\s+\d+\s*$")
+    sym_re = re.compile(r"^\s*\d+:\s+([0-9a-f]+)\s+(0x[0-9a-f]+|\d+)\s+(\w+)\s+\w+\s+\w+\s+(\w+)\s+(.*)$")
+    rel_head = re.compile(r"^Relocation section '(.*)' at offset 0x([0-9a-f]+) contains")
+    rel_re = re.compile(r"^([0-9a-f]+)\s+[0-9a-f]+\s+\S+\s+[0-9a-f]+\s+(.*?)\s+[+-]\s+[0-9a-f]+\s*$")
+    syms = []  # (section index, value, size, name)
+    by_name = {}  # symbol name -> defined (True) / undefined (False)
+    relocs = []  # (relocated section index or None, offset, target name, skip)
+    mode = None
+    cur = None
+    for line in elf.split("\n"):
+        if line.startswith("Section Headers:"):
+            mode = "sec"
+            continue
+        if line.startswith("Symbol table"):
+            mode = "sym"
+            continue
+        m = rel_head.match(line)
+        if m:
+            mode = "rel"
+            name = m.group(1)
+            skip = name.startswith((".rela.eh_frame", ".rela.gcc_except_table", ".rela.debug", ".rela.note"))
+            cur = (rela_target.get(int(m.group(2), 16)), skip)
+            continue
+        if mode == "sec":
+            m = sec_re.match(line)
+            if m:
+                idx, name, typ, off, inf = int(m.group(1)), m.group(2), m.group(3), int(m.group(4), 16), int(m.group(5))
+                sections[idx] = name
+                if typ in ("RELA", "REL"):
+                    rela_target[off] = inf
+        elif mode == "sym":
+            m = sym_re.match(line)
+            if m:
+                value, size, typ, ndx, name = int(m.group(1), 16), int(m.group(2), 0), m.group(3), m.group(4), m.group(5).strip()
+                if ndx == "UND":
+                    by_name.setdefault(name, False)
+                elif ndx.isdigit() and typ in ("FUNC", "OBJECT", "NOTYPE", "TLS", "GNU_IFUNC"):
+                    syms.append((int(ndx), value, size, name))
+                    by_name[name] = True
+        elif mode == "rel" and cur is not None:
+            m = rel_re.match(line)
+            if m:
+                relocs.append((cur[0], int(m.group(1), 16), m.group(2), cur[1]))
+    in_section = {}
+    for ndx, value, size, name in syms:
+        in_section.setdefault(ndx, []).append((value, size, name))
+    names_of_section = {}
+    for idx, name in sections.items():
+        names_of_section.setdefault(name, []).append(idx)
+    lib = lambda p: p.split("::")[0] in LIB_NS  # noqa: E731
+    out = set()
+    for ndx, off, target, skip in relocs:
+        if skip:
+            continue
+        owners = [cpp_path(n) for v, z, n in in_section.get(ndx, []) if v <= off < v + max(z, 1)] if ndx is not None else []
+        if not owners:
+            # No symbol covers it: count it, unless it points at code by its section (a jump table, say)
+            if target in names_of_section:
+                continue
+            owners = ["?"]
+        owners = [o for o in owners if o and not lib(o)]
+        if not owners:
+            continue  # the library's own code
+        if target in names_of_section:  # a section's own symbol: what's defined there
+            targets = [(cpp_path(n), "D") for i in names_of_section[target] for v, z, n in in_section.get(i, [])]
+        else:
+            targets = [(cpp_path(target), "D" if by_name.get(target) else "U")]
+        for t, kind in targets:
+            if t:
+                for o in owners:
+                    out.add("call %s\t%s\t%s" % (o, t, kind))
+    out.update(cpp_source_facts(pre, raw))
+    return "\n".join(sorted(out))
+
+
+def cpp_code_only(src):
+    """C or C++ source with its line splices joined, comments blanked and string and character literals
+    emptied (raw strings too), newlines kept: what's left is where a directive could be."""
+    src = re.sub(r"\\\r?\n", "", src)
+    out = []
+    i, n = 0, len(src)
+    while i < n:
+        c = src[i]
+        if c == "/" and src.startswith("//", i):
+            j = src.find("\n", i)
+            i = n if j < 0 else j
+        elif c == "/" and src.startswith("/*", i):
+            j = src.find("*/", i + 2)
+            j = n if j < 0 else j + 2
+            out.append(" " + "\n" * src.count("\n", i, j))
+            i = j
+        elif c == '"' or c == "'":
+            raw = None
+            if c == '"' and i > 0 and src[i - 1] == "R":
+                k = i - 1
+                k -= 2 if src[max(0, k - 2):k] == "u8" else 1 if k > 0 and src[k - 1] in "uUL" else 0
+                if k == 0 or not (src[k - 1].isalnum() or src[k - 1] == "_"):
+                    raw = re.compile(r"([^ ()\\\t\v\f\n]{0,16})\(").match(src, i + 1)
+            if raw:
+                end = ")" + raw.group(1) + '"'
+                j = src.find(end, raw.end())
+                j = n if j < 0 else j + len(end)
+            else:
+                j = i + 1
+                while j < n and src[j] != c and src[j] != "\n":
+                    j += 2 if src[j] == "\\" else 1
+                j = min(n, j + 1)
+            out.append(c + c + "\n" * src.count("\n", i, j))
+            i = j
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def cpp_source_facts(pre, raw):
+    """What the compiled object can't say: the student's code reopening the library's namespaces (or the
+    harness's), inline asm, symbol renaming, and includes of anything but a system header. Read from the
+    preprocessed translation unit, the student's file's parts only; its line markers can be trusted because
+    the student's own source isn't allowed to write any."""
+    facts = set()
+    for src in raw:
+        if re.search(r"^[ \t]*(?:#|%:)[ \t]*(?:\d|line\b)", cpp_code_only(src), re.M):
+            facts.add("linemarker")
+    stack = []
+    owned = []
+    marker = re.compile(r'^# (\d+) "((?:[^"\\]|\\.)*)"((?: \d+)*)\s*$')
+    for line in pre.split("\n"):
+        m = marker.match(line)
+        if m:
+            name, flags = m.group(2), m.group(3).split()
+            base = name.replace("\\\\", "\\").rsplit("/", 1)[-1]
+            if "1" in flags:
+                parent = bool(stack) and stack[-1]
+                mine = base == "solution.cpp"
+                if parent and not mine and ("3" not in flags or
+                                            re.search(r"/c\+\+/[^/]+/(?:ext|parallel|tr1|tr2|experimental|pstl|debug|backward|profile)/", name)):
+                    facts.add("include " + re.sub(r"^.*/include/(?:c\+\+/[^/]+/)?", "", name))
+                stack.append(mine)
+            elif "2" in flags:
+                if stack:
+                    stack.pop()
+            elif not stack:
+                stack.append(False)  # the harness's own file
+            continue
+        if stack and stack[-1]:
+            owned.append(line)
+    text = "\n".join(owned)
+    ns = LIB_NS + ("bq",)
+    for m in re.finditer(r"\b(\w+)?\s*\bnamespace\s*(?:\[\[[^\]]*\]\]\s*)*(\w+)", text):
+        if m.group(1) != "using" and m.group(2) in ns:
+            facts.add("namespace " + m.group(2))
+    # Code put in those namespaces without opening one: a specialization (template<> struct std::hash<T>, or
+    # template<> void std::swap(...)) is the student's code under the library's name.
+    names = "|".join(ns)
+    for m in re.finditer(r"\b(?:struct|class|union)\s+(?:::\s*)?(" + names + r")\s*::", text):
+        facts.add("namespace " + m.group(1))
+    for m in re.finditer(r"\btemplate\s*<\s*>\s*[^;{}()]*?(?<![\w:])(?:::\s*)?(" + names + r")\s*::\s*(?:\w+\s*(?:<[^;{}()]*>)?\s*::\s*)*"
+                         r"(?:\w+|operator\s*[^\s(]+)\s*(?:<[^;{}()]*>)?\s*\(", text):
+        facts.add("namespace " + m.group(1))
+    if re.search(r"\b(?:asm|__asm|__asm__|redefine_extname|symver|weakref|ifunc)\b", text):
+        facts.add("asm")
+    if re.search(r"\b_Z\w+", text):
+        facts.add("asm")
+    return facts
+
+
 def run_job(slot, req):
     uid = UID_BASE + slot
     lang = req.get("language")
@@ -383,6 +648,10 @@ def run_job(slot, req):
         return {"status": "error", "message": "bad job"}
     sources = req.get("sources")
     include = req.get("include")
+    scan = req.get("scan")
+    if scan is not None and (lang not in ("c", "cpp", "go", "csharp") or not isinstance(scan, list) or not scan
+                             or not all(isinstance(n, str) and n in files for n in scan)):
+        return {"status": "error", "message": "bad job"}
     entry = req.get("entry")
     if entry is not None and (not isinstance(entry, str) or not entry.isidentifier()):
         return {"status": "error", "message": "bad job"}
@@ -392,6 +661,10 @@ def run_job(slot, req):
         if not isinstance(sources, list) or not sources or not all(isinstance(n, str) and n in files for n in sources):
             return {"status": "error", "message": "bad job"}
         if include not in (None, "bqpre.h", "bqpre.hpp"):
+            return {"status": "error", "message": "bad job"}
+        if lang in ("c", "cpp") and len(set(n.rsplit(".", 1)[0] for n in sources)) != len(sources):
+            return {"status": "error", "message": "bad job"}
+        if scan is not None and lang in ("c", "cpp", "go") and scan[0] not in sources:
             return {"status": "error", "message": "bad job"}
     total = 0
     for name, body in files.items():
@@ -413,6 +686,7 @@ def run_job(slot, req):
         env = {"PATH": "/usr/bin:/bin", "HOME": job, "LANG": "C.UTF-8", "MALLOC_ARENA_MAX": "2", "TMPDIR": job}
         cpu_s = max(1, -(-time_ms // 1000))
         wall_s = cpu_s * 3 + 3
+        facts = None
         if lang == "java":
             javac = shutil.which("javac")
             srcs = sorted(n for n in files if n.endswith(".java"))
@@ -427,14 +701,18 @@ def run_job(slot, req):
             argv = [shutil.which("java"), f"-Xmx{mem_mb}m"] + JAVA_RUN_FLAGS + ["-cp", ".", req.get("main") or "BQMain"]
             st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1536, 256, env, tools=["java"])
         elif lang in ("c", "cpp"):
+            # Each source to its own object, then linked: the ban check reads the student's object.
             cc = shutil.which("g++" if lang == "cpp" else "gcc")
-            argv = [cc] + CC_FLAGS[lang] + (["-include", include] if include else []) + ["-o", "main"] + sources + (["-lm"] if lang == "c" else [])
-            st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 2048, 64, env, fsize=32 << 20,
-                                              tools=["g++" if lang == "cpp" else "gcc", "cc", "as", "ld"])
-            kill_uid(uid)
-            if st != "ok" or code != 0:
-                return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
-                        "exitCode": code, "ms": ms}
+            objs = [n.rsplit(".", 1)[0] + ".o" for n in sources]
+            tools = ["g++" if lang == "cpp" else "gcc", "cc", "as", "ld"]
+            for argv in ([cc] + CC_FLAGS[lang] + (["-include", include] if include else []) + ["-c"] + sources,
+                         [cc, "-o", "main"] + objs + (["-lm"] if lang == "c" else [])):
+                st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 2048, 64, env, fsize=32 << 20, tools=tools)
+                kill_uid(uid)
+                if st != "ok" or code != 0:
+                    return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
+                            "exitCode": code, "ms": ms}
+            facts = run_scan(lang, scan, sources, objs, include, files, uid, job, env) if scan else None
             st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s, mem_mb + 64, 64, env,
                                               run_file=os.path.join(job, "main"))
         elif lang in ("go", "rust"):
@@ -450,6 +728,7 @@ def run_job(slot, req):
                 if st != "ok" or code != 0:
                     return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                             "exitCode": code, "ms": ms}
+            facts = run_scan(lang, scan, sources, None, None, files, uid, job, env) if scan else None
             # Go reserves ~800 MB of address space before it starts; GOMEMLIMIT keeps its heap to the limit.
             run_env = dict(env, GOMEMLIMIT=f"{mem_mb}MiB", GOMAXPROCS="2") if lang == "go" else env
             st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s,
@@ -463,6 +742,7 @@ def run_job(slot, req):
             if st != "ok" or code != 0:
                 return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                         "exitCode": code, "ms": ms}
+            facts = run_scan(lang, scan, sources, None, None, files, uid, job, env) if scan else None
             st, code, out, err, ms = run_step([shutil.which("dotnet"), "exec", "--runtimeconfig", CS + "/main.runtimeconfig.json", "main.dll"],
                                               uid, job, cpu_s, wall_s, mem_mb + 1792, 64,
                                               dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(mem_mb << 20)), tools=["dotnet"])
@@ -472,7 +752,10 @@ def run_job(slot, req):
         else:
             argv = [shutil.which("python3"), "-E", "-s", "-B", "-X", "utf8", req.get("main") or "main.py"]
             st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 128, 64, env, tools=["python3"])
-        return {"status": st, "stdout": out, "stderr": err, "exitCode": code, "ms": ms}
+        res = {"status": st, "stdout": out, "stderr": err, "exitCode": code, "ms": ms}
+        if scan:
+            res["scan"] = facts  # None: the scan didn't work, so nothing can be said for the code
+        return res
     finally:
         kill_uid(uid)
         shutil.rmtree(job, ignore_errors=True)

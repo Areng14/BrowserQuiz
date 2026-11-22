@@ -55,6 +55,8 @@ async function callRunner(job, timeMs, memoryMb) {
   });
 }
 
+const job0Scans = (q, lang) => B.bansFor(q.ban, lang).length > 0 && ['c', 'cpp', 'go', 'csharp'].includes(lang);
+
 // One job for all tests (Run, reference checks) or one job per test (grading, so a hang only costs one test).
 async function runTests(q, lang, code, tests, opts) {
   const perTest = opts && opts.perTest;
@@ -63,13 +65,15 @@ async function runTests(q, lang, code, tests, opts) {
     const res = await callRunner(job, Math.min(10000, q.limits.timeMs * tests.length), q.limits.memoryMb);
     return H.readResults(q, lang, tests, res, marker);
   }
-  const parts = await Promise.all(tests.map(async (t) => {
-    const { marker, job } = H.buildJob(q, lang, code, [t]);
+  // In the compiled languages the ban check's facts are the runner's, read once: with the first test.
+  const parts = await Promise.all(tests.map(async (t, k) => {
+    const { marker, job } = H.buildJob(q, lang, code, [t], { scan: k === 0 });
     const res = await callRunner(job, q.limits.timeMs, q.limits.memoryMb);
     return H.readResults(q, lang, [t], res, marker);
   }));
   const compile = parts.find((p) => p.status === 'compile_error');
   if (compile) return compile;
+  if (job0Scans(q, lang) && parts[0].status === 'error') return parts[0]; // no facts: grade it again later
   const scan = (parts.find((p) => p.scan) || {}).scan || null;
   return { status: 'ok', scan, tests: parts.map((p) => (p.status === 'ok' ? p.tests[0] : { pass: false, error: p.message || 'Run failed' })) };
 }
