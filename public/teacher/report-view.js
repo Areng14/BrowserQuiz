@@ -30,6 +30,7 @@
     : h('span', {}, window.BQ.md.renderInline(src, { lang, assetUrl })));
   const imagesOf = (quiz, o) => (p) => (o && o.assetUrl ? o.assetUrl(p) : `/api/t/quizzes/${encodeURIComponent(quiz.id)}/asset?path=${encodeURIComponent(p)}`);
   const codeBox = (text, lang) => h('pre', { class: 'r-code' }, h('code', { 'data-lang': lang || null, text }));
+  const clock = (ms) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
   function answered(q) {
     if (q.type === 'single' || q.type === 'multi') return q.picked.length > 0;
@@ -287,6 +288,12 @@
     return [wrap, h('div', { class: 'r-diff-row' }, btn)];
   }
 
+  function replayButton(attemptId, q, n) {
+    const b = h('button', { class: 'r-diff-btn r-replay', type: 'button', text: 'Replay typing', 'aria-label': `Replay typing, question ${n}` });
+    b.addEventListener('click', () => window.BQReplay.open(attemptId, q.id, n, q.answer));
+    return b;
+  }
+
   // opts.teacher: the dashboard's student panel (no rubric list: it shows editable checkboxes instead).
   // opts.assetUrl(path): where images load from (teacher API, or /asset/ for a student).
   // opts.anchor: id for jumping to this question.
@@ -312,6 +319,9 @@
         h('span', { class: 'n', text: String(i + 1) }), h('span', { class: 'kind', text: kind }),
         h('span', { class: 'r-status', role: 'img', 'aria-label': words, title: words }, mark(ICON[st])),
         q.review || st === 'pending' ? h('span', { class: 'r-waiting', text: words }) : null,
+        // the teacher's: time on the question (fast.js), and how a code answer was typed (replay.js)
+        q.time ? h('span', { class: 'r-qtime', title: 'Time on this question', text: clock(q.time) }) : null,
+        q.type === 'code' && o.attemptId && window.BQReplay ? replayButton(o.attemptId, q, q.qn || i + 1) : null,
         h('span', { class: 'pts', text: pts })),
       sharedEl,
       q.was ? h('p', { class: 'r-was', text: q.was.fresh ? 'A new question like the one missed' : `On the quiz: ${fmtPts(q.was.points)} / ${fmtPts(q.was.max)}` }) : null, // corrections
@@ -341,7 +351,7 @@
         const [st, words] = status(q);
         return h('a', { class: `r-chip st-${st}`, href: `#${key}-q${i + 1}`, title: `Question ${i + 1}: ${words}`, 'aria-label': `Question ${i + 1}: ${words}`, text: String(i + 1) });
       })),
-      s.questions.map((q, i) => question(quiz, q, i, Object.assign({}, o, { anchor: `${key}-q${i + 1}`, sharedSeen }))));
+      s.questions.map((q, i) => question(quiz, q, i, Object.assign({}, o, { anchor: `${key}-q${i + 1}`, sharedSeen, attemptId: s.attemptId }))));
   }
 
   // First page of a class report: how everyone did, and how each question went.
@@ -524,5 +534,15 @@
     return pairSection('r-same-wrong', 'Same wrong answers', rows);
   }
 
-  window.BQReport = { question, student, classOverview, similarCode, sameWrong, highlight, h };
+  // ---------- right answers given much faster than the class (server: fast.js) ----------
+  function fastRight(students, rows) {
+    if (!rows) return null; // no times yet (quizzes from before they were kept)
+    const items = rows.map((x) => h('li', { class: 'r-pair' },
+      h('div', { class: 'r-sim-row r-pair-row' },
+        h('span', { class: 'r-pair-names' }, h('a', { href: `#s${x.who}`, text: students[x.who].name })),
+        h('span', { class: 'r-sim-note', text: `Question ${x.n}: right in ${clock(x.ms)}, the class took ${clock(x.median)}` }))));
+    return pairSection('r-fast', 'Fast right answers', items);
+  }
+
+  window.BQReport = { question, student, classOverview, similarCode, sameWrong, fastRight, highlight, h };
 })();

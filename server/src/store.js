@@ -53,6 +53,8 @@ const CLIENT_EVENTS = {
   'setup': 'info',
   // also evidence only: a scripted browser, or the quiz running in a virtual machine or remote desktop
   'automation': 'warning', 'virtual-machine': 'warning', 'software-graphics': 'info',
+  // evidence: an answer changed within seconds of coming back from somewhere else
+  'answer-after-return': 'warning',
 };
 // Events only the server records.
 // A lost heartbeat is only a warning: school wifi drops, and actually leaving the window is caught by
@@ -60,13 +62,15 @@ const CLIENT_EVENTS = {
 const SERVER_EVENTS = {
   'reload': 'violation', 'unfocused-beat': 'violation',
   'heartbeat-lost': 'warning', 'late-submit': 'warning', 'other-network': 'warning', 'other-device': 'warning', 'left-network': 'warning',
+  // evidence: another student signed in from this browser; a network this student hasn't used before
+  'same-browser': 'warning', 'new-network': 'warning',
   'join': 'info', 'admit': 'info', 'start': 'info', 'submit': 'info', 'run': 'info', 'reconnect': 'info', 'resume': 'info',
   'restore': 'info', 'invalidate': 'info', 'let-in': 'info', 'extend': 'info', 'grade': 'info',
 };
 // In Safe Exam Browser with BrowserQuiz's own settings, SEB blocks every other app, so the page losing focus
 // is SEB's own doing (its toolbar, a system dialog, an iPad keyboard) and can't be the student leaving:
 // logged, never a strike. Quitting SEB to leave still counts, as the reload when they come back.
-const SEB_QUIET = new Set(['blur', 'hidden', 'fullscreen-exit', 'mouse-left', 'resize', 'extended-display']);
+const SEB_QUIET = new Set(['blur', 'hidden', 'fullscreen-exit', 'mouse-left', 'resize', 'extended-display', 'answer-after-return']);
 const MERGE_MS = 2000;
 const MAX_EVENTS = 3000;
 const WARN_PER_TYPE_PER_MIN = 20;
@@ -82,8 +86,9 @@ function fromRow(r) {
     result: r.result ? JSON.parse(r.result) : null, ip: r.ip, userAgent: r.user_agent, edits: r.edits,
     archived: !!r.archived, createdAt: r.created_at,
     awayMs: r.away_ms || 0, awayMax: r.away_max || 0, restoreStrikes: r.restore_strikes, pinIp: r.pin_ip || null,
+    qTime: r.q_time ? JSON.parse(r.q_time) : {}, device: r.device || null,
     // runtime only
-    awaySince: 0, away: false, burstStart: 0, beatLost: false, eventCount: null, warnWindow: new Map(), flagged: new Set(),
+    awaySince: 0, away: false, burstStart: 0, beatLost: false, eventCount: null, warnWindow: new Map(), flagged: new Set(), viewQ: null, viewAt: 0,
   };
 }
 function getAttempt(id) {
@@ -104,10 +109,11 @@ function attemptByToken(token) {
 function save(a) {
   q(`UPDATE attempts SET status = ?, integrity = ?, strikes = ?, warnings = ?, reason = ?, invalidated_at = ?, started_at = ?,
      deadline = ?, submitted_at = ?, last_beat = ?, layout = ?, answers = ?, result = ?, edits = ?, archived = ?,
-     away_ms = ?, away_max = ?, restore_strikes = ?, pin_ip = ? WHERE id = ?`).run(
+     away_ms = ?, away_max = ?, restore_strikes = ?, pin_ip = ?, q_time = ? WHERE id = ?`).run(
     a.status, a.integrity, a.strikes, a.warnings, a.reason, a.invalidatedAt, a.startedAt, a.deadline, a.submittedAt,
     a.lastBeat, a.layout ? JSON.stringify(a.layout) : null, JSON.stringify(a.answers || {}), a.result ? JSON.stringify(storedResult(a.result)) : null,
-    a.edits || 0, a.archived ? 1 : 0, a.awayMs || 0, a.awayMax || 0, a.restoreStrikes == null ? null : a.restoreStrikes, a.pinIp || null, a.id,
+    a.edits || 0, a.archived ? 1 : 0, a.awayMs || 0, a.awayMax || 0, a.restoreStrikes == null ? null : a.restoreStrikes, a.pinIp || null,
+    a.qTime && Object.keys(a.qTime).length ? JSON.stringify(a.qTime) : null, a.id,
   );
 }
 function forget(id) { attempts.delete(id); }

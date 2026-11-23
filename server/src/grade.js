@@ -269,6 +269,7 @@ function studentReport(fullQuiz, a, name, opts = {}) {
   const res = a.result || {};
   return {
     name,
+    attemptId: opts.forStudent ? undefined : a.id, // the teacher's: for the typing replay
     submittedAt: a.submittedAt,
     score: t ? t.score : null,
     max: quiz.questions.reduce((sum, qq) => sum + qq.points, 0),
@@ -287,7 +288,11 @@ function studentReport(fullQuiz, a, name, opts = {}) {
       if (fx) row.was = { points: fx.old, max: fx.max, fresh: !!fx.fresh };
       if (a.answers && typeof a.answers[qq.id + '~why'] === 'string') row.why = a.answers[qq.id + '~why'];
       // For the teacher's class report: where it is in the whole quiz, and its pool
-      if (!opts.forStudent) { row.qn = at.get(qq.id); if (qq.pool) row.pool = qq.pool; }
+      if (!opts.forStudent) {
+        row.qn = at.get(qq.id);
+        if (qq.pool) row.pool = qq.pool;
+        if (a.qTime && a.qTime[qq.id] > 0) row.time = Math.round(a.qTime[qq.id]); // time on it (fast.js)
+      }
       if (qq.type === 'single' || qq.type === 'multi') {
         const perm = a.layout && a.layout.perms ? a.layout.perms[qq.id] : null;
         row.choices = qq.choices;

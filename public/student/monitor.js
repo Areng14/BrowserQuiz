@@ -98,6 +98,10 @@
       this.answersDirty = false;
       this.edits = [];
       this.typed = [];
+      this.lastText = new Map(); // "question language" -> its code after the last edit we recorded (replay)
+      this.backAt = 0; // when they last came back to the quiz, and from how long away
+      this.backAway = 0;
+      this.changedSinceBack = new Set();
       this.typingFlaggedAt = 0;
       this.selectionProvider = null; // (target) => selected text, set by the code editor
       this.beatTimer = 0;
@@ -181,6 +185,9 @@
       this.on(window, 'focus', () => {
         if (this.awaySince) {
           this.report('return', ((Date.now() - this.awaySince) / 1000).toFixed(1) + 's away');
+          this.backAt = Date.now();
+          this.backAway = this.backAt - this.awaySince;
+          this.changedSinceBack.clear();
           this.awaySince = 0;
           if (this.opts.onReturn) this.opts.onReturn();
         }
@@ -481,8 +488,18 @@
         });
     }
 
+    // The typing replay starts from what's in the box when it opens (the starter code, or their code
+    // after a reload), so it can be rebuilt exactly. Only sent when it isn't what we already recorded.
+    replayStart(questionId, lang, text) {
+      const key = questionId + ' ' + lang;
+      if (this.lastText.get(key) === text || this.edits.length >= 5000) return;
+      this.lastText.set(key, text);
+      this.edits.push({ q: questionId, l: lang, t: Date.now(), init: text.slice(0, 100000) });
+    }
+
     // Code editor telemetry: every edit delta (for typing replay), bulk inserts, inhuman typing speed.
-    trackEditor(editor, questionId) {
+    trackEditor(editor, questionId, lang) {
+      this.replayStart(questionId, lang, editor.getValue());
       const sub = editor.onDidChangeModelContent((e) => {
         const now = Date.now();
         this.lastActivityAt = now;
@@ -494,7 +511,8 @@
           return [c.rangeOffset, c.rangeLength, c.text];
         });
         if (this.edits.length < 5000) {
-          this.edits.push({ q: questionId, t: now, ch, u: e.isUndoing ? 1 : 0, r: e.isRedoing ? 1 : 0, f: e.isFlush ? 1 : 0 });
+          this.edits.push({ q: questionId, l: lang, t: now, ch, u: e.isUndoing ? 1 : 0, r: e.isRedoing ? 1 : 0, f: e.isFlush ? 1 : 0 });
+          this.lastText.set(questionId + ' ' + lang, editor.getValue());
         }
         if (!this.armed || e.isFlush || e.isUndoing || e.isRedoing) return;
         // One big piece arriving at once. Indenting or commenting many lines is many small pieces, and
@@ -516,8 +534,43 @@
       return sub;
     }
 
-    markAnswersDirty() {
+    // The plain code box (phones, or when the editor can't load): the same replay, from the text's changes.
+    trackText(ta, questionId, lang) {
+      let before = ta.value;
+      this.replayStart(questionId, lang, before);
+      const onInput = () => {
+        const now = Date.now();
+        this.lastActivityAt = now;
+        const after = ta.value;
+        let s = 0;
+        while (s < before.length && s < after.length && before[s] === after[s]) s++;
+        let e = 0;
+        while (e < before.length - s && e < after.length - s && before[before.length - 1 - e] === after[after.length - 1 - e]) e++;
+        if (this.edits.length < 5000) {
+          this.edits.push({ q: questionId, l: lang, t: now, ch: [[s, before.length - s - e, after.slice(s, after.length - e)]] });
+          this.lastText.set(questionId + ' ' + lang, after);
+        }
+        before = after;
+      };
+      ta.addEventListener('input', onInput);
+      return { dispose: () => ta.removeEventListener('input', onInput) };
+    }
+
+    // questionId: an answer just changed. Within 30s of coming back from 3s or more away, that's worth a
+    // look (they may have looked it up): flagged once per question per time back. The server words it.
+    // Turning in: the edits the next heartbeat would have carried go with the submit instead, since a
+    // heartbeat after it isn't stored.
+    takeEdits() {
+      return this.edits.splice(0, 300);
+    }
+
+    markAnswersDirty(questionId) {
       this.answersDirty = true;
+      if (!this.armed || !questionId || !this.backAt || this.awaySince) return;
+      const after = Date.now() - this.backAt;
+      if (after > 30000 || this.backAway < 3000 || this.changedSinceBack.has(questionId)) return;
+      this.changedSinceBack.add(questionId);
+      this.report('answer-after-return', `${questionId}|${Math.round(after / 1000)}|${Math.round(this.backAway / 1000)}`);
     }
 
     disarm() {

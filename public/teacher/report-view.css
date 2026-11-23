@@ -238,3 +238,34 @@
   .r-view .r-sim-views { grid-template-columns: minmax(0, 1fr); }
 }
 .r-view .r-same-table tbody tr:last-child td { border-bottom: 0; } /* the pair's own line closes it */
+
+/* The teacher's extras in a question's head: time on it (fast.js) and the typing replay, by the points */
+.r-view .r-qhead .r-qtime { margin-left: auto; font-variant-numeric: tabular-nums; }
+.r-view .r-qhead .r-replay { margin-left: auto; }
+.r-view .r-qhead .r-qtime ~ .r-replay, .r-view .r-qhead .r-qtime ~ .pts, .r-view .r-qhead .r-replay ~ .pts { margin-left: 0; }
+.r-view .r-fast { margin-bottom: 40px; }
+
+/* Typing replay (replay.js): over the report page or the dashboard, so it carries its own styles */
+.rp-dialog { width: min(900px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); overflow: hidden; }
+.rp-dialog[open] { display: flex; flex-direction: column; }
+.rp-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+.rp-head { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.rp-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 18px; }
+.rp-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 16px 20px 20px; }
+.rp-controls { display: flex; align-items: center; gap: 10px; }
+.rp-btn, .rp-select { height: 34px; padding: 0 12px; font: 600 14px system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.rp-btn:hover, .rp-select:hover { background: var(--soft); }
+.rp-btn:focus-visible, .rp-select:focus-visible, .rp-slider:focus-visible, .rp-code:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rp-play { min-width: 80px; color: var(--accent-ink, #fff); background: var(--accent); border-color: var(--accent); }
+.rp-play:hover { background: var(--accent); filter: brightness(1.08); }
+.rp-slider { flex: 1; min-width: 80px; accent-color: var(--accent); }
+.rp-time { font-size: 13px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rp-code { min-height: 240px; max-height: 60vh; margin: 0; padding: 12px 14px; overflow: auto; font: 13px/1.55 var(--mono, ui-monospace, 'Cascadia Mono', Consolas, monospace); white-space: pre; tab-size: 4; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; }
+.rp-code mark { color: inherit; background: color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 2px; }
+.rp-stats, .rp-note { margin: 0; font-size: 13px; color: var(--ink-2); }
+.rp-note[hidden] { display: none; }
+@media (max-width: 640px) {
+  .rp-controls { flex-wrap: wrap; }
+  .rp-slider { order: 5; flex-basis: 100%; }
+  .rp-head, .rp-body { padding-left: 16px; padding-right: 16px; }
+}

@@ -15,6 +15,7 @@ const { submit, hashSid, publicQuiz } = require('./student');
 const W = require('./watch');
 const { similarCode } = require('./similar');
 const { sameWrong } = require('./samewrong');
+const { fastRight } = require('./fast');
 const C = require('./corrections');
 const AI = require('./aigrade');
 const AICSV = require('./aicsv');
@@ -176,7 +177,8 @@ function activity(a, now) {
   return now - (a.activeAt || a.startedAt || 0) < 120000 ? 'reading' : 'idle';
 }
 function liveRow(student, a, quiz, run) {
-  if (!a) return { rosterId: student.id, name: student.name, attempt: null };
+  const timeX = student.time_x && student.time_x !== 1 ? student.time_x : undefined; // extra time
+  if (!a) return { rosterId: student.id, name: student.name, timeX, attempt: null };
   const t = totals(a.result, quiz, a.answers, a.layout);
   const answered = a.answers ? Object.keys(a.answers).filter((k) => !k.includes('~')).length : 0; // not corrections' notes
   // Where they are right now (watch.js has their last heartbeat's screen): question 4 in their own order,
@@ -187,6 +189,7 @@ function liveRow(student, a, quiz, run) {
   return {
     rosterId: student.id,
     name: student.name,
+    timeX,
     attempt: {
       id: a.id, status: a.status, integrity: a.integrity, strikes: a.strikes, warnings: a.warnings,
       awayMs: (a.awayMs || 0) + store.awayNow(a, Date.now()), awayNow: store.awayNow(a, Date.now()) || null,
@@ -330,6 +333,10 @@ const imagePaths = (raw) => new Set([...[...(Array.isArray(raw && raw.questions)
 // One student per line, pasted from anywhere: "Name, ID", a spreadsheet (tabs), or a CSV with a header
 // row and extra columns ("name, student_id, period" or "first name, last name, id"). Without a header,
 // the ID is the field with the most digits; "Martinez, Ava, 204511" keeps "Martinez, Ava" as the name.
+// Extra time a student gets on every timed quiz (an accommodation): 1 (standard), 1.25, 1.5 or 2.
+const TIME_X = [1, 1.25, 1.5, 2];
+const TIME_CELL = /^(1|1\.25|1\.5|2)\s*[x×]$/i;
+const parseTimeX = (v) => { const x = Number(String(v).replace(/[x×\s]/gi, '')); return TIME_X.includes(x) ? x : 1; };
 function parseRosterText(text) {
   const students = [];
   const problems = [];
@@ -352,6 +359,10 @@ function parseRosterText(text) {
   for (const [cells, i] of rows) {
     let name;
     let sid;
+    // extra time, as a cell of its own: "1.5x", "2x"
+    const tk = cells.findIndex((c) => TIME_CELL.test(c));
+    const timeX = tk >= 0 ? parseTimeX(cells[tk]) : 1;
+    if (tk >= 0) cells[tk] = '';
     if (cols) {
       name = cols.name >= 0 ? cells[cols.name] : [cells[cols.first], cells[cols.last]].filter(Boolean).join(' ');
       sid = cols.id >= 0 ? cells[cols.id] : '';
@@ -364,7 +375,7 @@ function parseRosterText(text) {
     name = String(name || '').trim().slice(0, 80);
     sid = String(sid || '').trim().slice(0, 40);
     if (!name || !sid) problems.push(`Line ${i + 1} needs a name and a student ID.`);
-    else students.push({ name, sid });
+    else students.push({ name, sid, timeX });
   }
   return { students, problems };
 }
@@ -372,7 +383,7 @@ function retireRoster(id) {
   if (q('SELECT 1 FROM runs WHERE roster_id = ? LIMIT 1').get(id)) q('UPDATE rosters SET archived = 1 WHERE id = ?').run(id);
   else q('DELETE FROM rosters WHERE id = ?').run(id);
 }
-const rosterStudentsForRun = (run) => q(`SELECT id, name FROM roster_students WHERE roster_id = ?
+const rosterStudentsForRun = (run) => q(`SELECT id, name, time_x FROM roster_students WHERE roster_id = ?
   AND (removed = 0 OR id IN (SELECT student_id FROM attempts WHERE run_id = ?)) ORDER BY name`).all(run.roster_id, run.id);
 
 // Signed in, by password or passkey: the session cookie.
@@ -820,7 +831,7 @@ module.exports = function teacherRoutes(r) {
     const id = crypto.randomUUID();
     tx(() => {
       q('INSERT INTO rosters (id, name, created_at, owner_id) VALUES (?, ?, ?, ?)').run(id, name, Date.now(), me.id);
-      for (const s of students) q('INSERT INTO roster_students (id, roster_id, name, sid_hash) VALUES (?, ?, ?, ?)').run(crypto.randomUUID(), id, s.name, hashSid(s.sid));
+      for (const s of students) q('INSERT INTO roster_students (id, roster_id, name, sid_hash, time_x) VALUES (?, ?, ?, ?, ?)').run(crypto.randomUUID(), id, s.name, hashSid(s.sid), s.timeX || 1);
     });
     audit(me, 'create-roster', null, `${name} (${students.length})`);
     json(res, 200, { id, name, students: students.length });
@@ -831,9 +842,9 @@ module.exports = function teacherRoutes(r) {
   r.get('/api/t/rosters/:id', (req, res, p) => {
     const me = requireTeacher(req);
     const roster = getRoster(me, p.id);
-    const students = q(`SELECT s.id, s.name, EXISTS(SELECT 1 FROM attempts a WHERE a.student_id = s.id) AS results
+    const students = q(`SELECT s.id, s.name, s.time_x, EXISTS(SELECT 1 FROM attempts a WHERE a.student_id = s.id) AS results
       FROM roster_students s WHERE s.roster_id = ? AND s.removed = 0 ORDER BY s.name`).all(roster.id)
-      .map((x) => ({ id: x.id, name: x.name, results: !!x.results }));
+      .map((x) => ({ id: x.id, name: x.name, results: !!x.results, timeX: x.time_x || 1 }));
     json(res, 200, { id: roster.id, name: roster.name, students });
   });
 
@@ -847,7 +858,11 @@ module.exports = function teacherRoutes(r) {
     tx(() => {
       const name = String(body.name || '').trim().slice(0, 80);
       if (name) q('UPDATE rosters SET name = ? WHERE id = ?').run(name, roster.id);
-      for (const s of students) q('INSERT INTO roster_students (id, roster_id, name, sid_hash) VALUES (?, ?, ?, ?)').run(crypto.randomUUID(), roster.id, s.name, hashSid(s.sid));
+      for (const s of students) q('INSERT INTO roster_students (id, roster_id, name, sid_hash, time_x) VALUES (?, ?, ?, ?, ?)').run(crypto.randomUUID(), roster.id, s.name, hashSid(s.sid), s.timeX || 1);
+      // extra time per student: { roster student id: 1 | 1.25 | 1.5 | 2 }; a quiz already started keeps its clock
+      if (body.time && typeof body.time === 'object') {
+        for (const [sid, v] of Object.entries(body.time).slice(0, 500)) q('UPDATE roster_students SET time_x = ? WHERE id = ? AND roster_id = ?').run(parseTimeX(v), String(sid), roster.id);
+      }
       for (const sid of remove) {
         // Students with quiz results stay in the database (hidden) so old results keep their names.
         if (q('SELECT 1 FROM attempts WHERE student_id = ? LIMIT 1').get(sid)) q('UPDATE roster_students SET removed = 1 WHERE id = ? AND roster_id = ?').run(sid, roster.id);
@@ -1147,7 +1162,7 @@ module.exports = function teacherRoutes(r) {
     const me = requireTeacher(req);
     const { a, run } = getAttemptRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
-    const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
+    const student = q('SELECT name, time_x FROM roster_students WHERE id = ?').get(a.studentId);
     const events = q('SELECT t, type, severity, detail FROM events WHERE attempt_id = ? ORDER BY id DESC LIMIT 400').all(a.id);
     const mouse = [];
     for (const m of q('SELECT points FROM mouse WHERE attempt_id = ? ORDER BY rowid DESC LIMIT 60').all(a.id).reverse()) mouse.push(...JSON.parse(m.points));
@@ -1156,6 +1171,7 @@ module.exports = function teacherRoutes(r) {
       invalidatedAt: a.invalidatedAt, strikes: a.strikes, warnings: a.warnings,
       awayMs: (a.awayMs || 0) + store.awayNow(a, Date.now()), awayMax: Math.max(a.awayMax || 0, store.awayNow(a, Date.now())), startedAt: a.startedAt, submittedAt: a.submittedAt,
       deadline: a.deadline, timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
+      timeX: student && student.time_x && student.time_x !== 1 ? student.time_x : undefined,
       totals: totals(a.result, quiz, a.answers, a.layout), answers: answerReport(quiz, a), events,
       quiz: reportQuiz(quiz, run.quiz_id), report: studentReport(quiz, a, student ? student.name : ''), mouse: mouse.slice(-3000), ip: a.ip, userAgent: a.userAgent,
     });
@@ -1197,6 +1213,29 @@ module.exports = function teacherRoutes(r) {
     });
   });
 
+  // Typing replay (monitor.js trackEditor): each code question's edits, in order, as the student typed
+  // them. { question id: [{ t, l, init } | { t, l, ch: [[offset, removed, text]] }] }. Edits from before
+  // replays had a starting point (no init) can't be rebuilt, so the page says so.
+  r.get('/api/t/attempts/:id/replay', (req, res, p) => {
+    const me = requireTeacher(req);
+    const { a } = getAttemptRun(me, p.id);
+    const out = {};
+    for (const row of q('SELECT deltas FROM code_edits WHERE attempt_id = ? ORDER BY rowid').all(a.id)) {
+      let list;
+      try { list = JSON.parse(row.deltas); } catch (e) { continue; }
+      if (!Array.isArray(list)) continue;
+      for (const e of list) {
+        if (!e || typeof e.q !== 'string' || !Number.isFinite(e.t)) continue;
+        const l = typeof e.l === 'string' ? e.l.slice(0, 20) : null;
+        const item = typeof e.init === 'string' ? { t: e.t, l, init: e.init }
+          : Array.isArray(e.ch) ? { t: e.t, l, ch: e.ch.filter((c) => Array.isArray(c) && Number.isInteger(c[0]) && Number.isInteger(c[1]) && typeof c[2] === 'string') } : null;
+        if (!item) continue;
+        (out[e.q] = out[e.q] || []).push(item);
+      }
+    }
+    json(res, 200, { edits: out });
+  });
+
   r.get('/api/t/attempts/:id/report', (req, res, p) => {
     const me = requireTeacher(req);
     const { a, run } = getAttemptRun(me, p.id);
@@ -1216,6 +1255,7 @@ module.exports = function teacherRoutes(r) {
       quiz: reportQuiz(quiz, run.quiz_id), students: rows.map((x, i) => studentReport(quiz, attempts[i], x.name)),
       similar: similarCode(quiz, attempts.map((attempt, who) => ({ who, attempt }))), // who: a place in students
       sameWrong: sameWrong(quiz, attempts.map((attempt, who) => ({ who, attempt }))),
+      fast: fastRight(quiz, attempts.map((attempt, who) => ({ who, attempt }))),
     });
   });
 

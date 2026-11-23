@@ -107,6 +107,13 @@ addColumn('attempts', 'away_max', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('attempts', 'restore_strikes', 'INTEGER');
 // The network the student started on: the attempt can't be continued from another (student.js current).
 addColumn('attempts', 'pin_ip', 'TEXT');
+// Time on each question ({ question id: ms }, from heartbeats: what was on screen while the quiz had
+// focus), for the class report's too-fast check. device: a hash of the browser's dev cookie, to spot two
+// students signing in from the same browser.
+addColumn('attempts', 'q_time', 'TEXT');
+addColumn('attempts', 'device', 'TEXT');
+// Extra time for one student (an accommodation): their time limit is multiplied by this on every quiz.
+addColumn('roster_students', 'time_x', 'REAL NOT NULL DEFAULT 1');
 // Passkeys (passkeys.js): id is the credential id, public_key its SPKI DER. key_wrap is the teacher's quiz
 // key sealed with what the passkey's PRF gives (vault.js); null for admin while its key comes from .env.
 // pk_user is the random user handle a teacher's passkeys carry. A session's passkey flag: it was made

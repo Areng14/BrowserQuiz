@@ -30,6 +30,7 @@ function deviceOf(req) {
   const d = cookies(req)[DEV];
   return d && /^[A-Za-z0-9_-]{43}$/.test(d) ? d : null;
 }
+const deviceHash = (dev) => sha256('device ' + dev).slice(0, 32);
 function issueDevice(req, res) {
   if (deviceOf(req) || !devIssues(clientIp(req))) return;
   setCookie(req, res, DEV, newToken(), 12 * 3600);
@@ -97,6 +98,77 @@ function checkPin(a, run, ip) {
 }
 
 // The attempt behind this browser's cookie, plus its run and quiz.
+// Extra time for this student (roster_students.time_x): their own time limit, in minutes.
+function timeX(studentId) {
+  const s = q('SELECT time_x FROM roster_students WHERE id = ?').get(studentId);
+  const x = s ? Number(s.time_x) : 1;
+  return Number.isFinite(x) && x >= 1 && x <= 3 ? x : 1;
+}
+const myLimit = (quiz, studentId) => (quiz.timeLimitMin ? Math.round(quiz.timeLimitMin * timeX(studentId)) : quiz.timeLimitMin);
+
+// The same area of the internet, for comparing a student's quizzes: the same public /24 (schools often
+// have a few addresses next to each other), the same IPv6 /48, or both on private networks.
+function sameArea(x, y) {
+  x = String(x || '').replace(/^::ffff:/i, '');
+  y = String(y || '').replace(/^::ffff:/i, '');
+  if (x === y) return true;
+  if (sameNetwork(x, y)) return true;
+  const a = x.split('.');
+  const b = y.split('.');
+  return a.length === 4 && b.length === 4 && a.slice(0, 3).join('.') === b.slice(0, 3).join('.');
+}
+// A network the student hasn't started a quiz from before (their earlier exams for this teacher, in any
+// class, matched by student ID). Evidence only: a new school address or a phone hotspot explains it too.
+function noteNewNetwork(a, run, quiz) {
+  if (!a.pinIp) return;
+  const me = q('SELECT sid_hash FROM roster_students WHERE id = ?').get(a.studentId);
+  if (!me) return;
+  const before = q(`SELECT a.pin_ip FROM attempts a JOIN roster_students s ON s.id = a.student_id JOIN runs r ON r.id = a.run_id
+    WHERE s.sid_hash = ? AND r.owner_id = ? AND a.run_id != ? AND a.pin_ip IS NOT NULL AND a.archived = 0
+    ORDER BY a.started_at DESC LIMIT 50`).all(me.sid_hash, run.owner_id, run.id).map((x) => x.pin_ip);
+  if (!before.length || before.some((ip) => sameArea(ip, a.pinIp))) return;
+  const seen = [...new Set(before)].slice(0, 2);
+  store.record(a, 'new-network', `${a.pinIp}, before: ${seen.join(', ')}${new Set(before).size > 2 ? ', …' : ''}`, quiz);
+}
+// Two students signing in from the same browser in one quiz (one taking it for the other, or swapping
+// seats): flagged on both, once per pair.
+function noteSameBrowser(a, run, quiz, name) {
+  if (!a.device || run.mode === 'practice') return;
+  const others = q(`SELECT a.id, s.name FROM attempts a JOIN roster_students s ON s.id = a.student_id
+    WHERE a.run_id = ? AND a.device = ? AND a.student_id != ? AND a.archived = 0`).all(run.id, a.device, a.studentId);
+  const logged = (id, who) => q("SELECT 1 FROM events WHERE attempt_id = ? AND type = 'same-browser' AND detail = ?").get(id, who);
+  for (const o of others) {
+    const other = store.getAttempt(o.id);
+    if (!logged(a.id, o.name)) store.record(a, 'same-browser', o.name, quiz); // "Same browser as" + the other's name
+    if (other && !logged(other.id, name)) store.record(other, 'same-browser', name, quiz);
+  }
+}
+
+// What a client event says, in the teacher's words. "answer-after-return" arrives as "question id|seconds
+// after|seconds away", and names the question as the teacher's view numbers it (the quiz's order).
+function eventDetail(a, quiz, type, detail) {
+  if (type !== 'answer-after-return') return detail;
+  const [id, after, away] = String(detail || '').split('|');
+  const list = quiz && a.layout ? store.quizFor(quiz, a.layout).questions : [];
+  const i = list.findIndex((qq) => qq.id === id);
+  if (i < 0) return null;
+  const n = Math.max(0, Math.min(3600, Number(after) | 0));
+  const gone = Math.max(0, Math.min(86400, Number(away) | 0));
+  const away2 = gone >= 60 ? `${Math.floor(gone / 60)}:${String(gone % 60).padStart(2, '0')}` : `${gone}s`;
+  return `Question ${i + 1}${list[i].name ? ` (${String(list[i].name).slice(0, 40)})` : ''}, ${n}s after ${away2} away`;
+}
+
+// The typing replay (teacher.js replay): whole edits only, so a big paste can't cut the JSON short.
+function storeEdits(a, list, now) {
+  if (!Array.isArray(list) || !list.length || a.edits >= 20000) return;
+  const edits = list.slice(0, 300);
+  let text = JSON.stringify(edits);
+  while (text.length > 400000 && edits.length > 1) { edits.pop(); text = JSON.stringify(edits); }
+  if (text.length > 400000) return;
+  q('INSERT INTO code_edits (attempt_id, t, deltas) VALUES (?, ?, ?)').run(a.id, now, text);
+  a.edits += edits.length;
+}
+
 function current(req, { mustBeOpen = true } = {}) {
   const a = store.attemptByToken(cookies(req)[ATT]);
   if (!a || a.archived) throw new HttpError(401, 'no_attempt');
@@ -367,7 +439,7 @@ module.exports = function studentRoutes(r) {
           existing.resumeOk = true;
           if (existing.status === 'active' && run.mode !== 'practice') { existing.pinIp = trustedIp(req); existing.flagged.delete('pin'); store.save(existing); }
         } else checkPin(existing, run, trustedIp(req));
-        return json(res, 200, { ok: true, run: run.corrects ? runInfo(run, store.getQuiz(run.quiz_id), student.id) : undefined });
+        return json(res, 200, { ok: true, run: run.corrects ? runInfo(run, store.getQuiz(run.quiz_id), student.id) : undefined, timeLimitMin: run.corrects ? undefined : myLimit(store.getQuiz(run.quiz_id), student.id) });
       }
       // A student who lost their cookie before starting can sign in again. After that, only if the teacher
       // pressed "Let back in" (crashed PC, new seat): they pick up the same attempt, answers and clock.
@@ -384,16 +456,20 @@ module.exports = function studentRoutes(r) {
       q('UPDATE attempts SET token_hash = ?, ip = ?, user_agent = ? WHERE id = ?').run(existing.tokenHash, clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), existing.id);
       existing.userAgent = String(req.headers['user-agent'] || '').slice(0, 300);
       store.logEvent(existing, 'join', 'info', 'signed in again');
+      if (dev) { existing.device = deviceHash(dev); q('UPDATE attempts SET device = ? WHERE id = ?').run(existing.device, existing.id); }
+      noteSameBrowser(existing, run, store.getQuiz(run.quiz_id), student.name);
     } else {
       const id = crypto.randomUUID();
       // Practice runs skip the waiting room.
-      q(`INSERT INTO attempts (id, run_id, student_id, token_hash, status, ip, user_agent, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(id, run.id, student.id, sha256(token), run.mode === 'practice' ? 'admitted' : 'waiting',
-        clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), now);
-      store.logEvent(store.getAttempt(id), 'join', 'info', student.name);
+      q(`INSERT INTO attempts (id, run_id, student_id, token_hash, status, ip, user_agent, created_at, device)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, run.id, student.id, sha256(token), run.mode === 'practice' ? 'admitted' : 'waiting',
+        clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), now, dev ? deviceHash(dev) : null);
+      const fresh = store.getAttempt(id);
+      store.logEvent(fresh, 'join', 'info', student.name);
+      noteSameBrowser(fresh, run, store.getQuiz(run.quiz_id), student.name);
     }
     setCookie(req, res, ATT, token, 12 * 3600);
-    json(res, 200, { ok: true, run: run.corrects ? runInfo(run, store.getQuiz(run.quiz_id), student.id) : undefined });
+    json(res, 200, { ok: true, run: run.corrects ? runInfo(run, store.getQuiz(run.quiz_id), student.id) : undefined, timeLimitMin: run.corrects ? undefined : myLimit(store.getQuiz(run.quiz_id), student.id) });
   });
 
   r.post('/api/admit-status', async (req, res) => {
@@ -416,9 +492,11 @@ module.exports = function studentRoutes(r) {
       a.status = 'active';
       a.startedAt = now;
       if (!a.practice) a.pinIp = trustedIp(req); // the network it's pinned to (current); none when it can't be told
-      a.deadline = quiz.timeLimitMin && !run.corrects ? now + quiz.timeLimitMin * 60000 : null;
+      const x = timeX(a.studentId); // extra time for this student
+      a.deadline = quiz.timeLimitMin && !run.corrects ? now + Math.round(quiz.timeLimitMin * x * 60000) : null;
       a.lastBeat = now;
-      store.logEvent(a, 'start', 'info', null);
+      store.logEvent(a, 'start', 'info', x !== 1 && a.deadline ? `${x}× time` : null);
+      if (!a.practice && !run.corrects) noteNewNetwork(a, run, quiz);
       store.save(a);
     } else if (a.resumeOk) {
       a.resumeOk = false;
@@ -431,7 +509,9 @@ module.exports = function studentRoutes(r) {
       a.beatLost = false;
     }
     // Saved answers go back in the student's own positional order.
-    json(res, 200, { quiz: publicQuiz(quiz, a.layout), deadline: a.deadline, now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0 });
+    const pq = publicQuiz(quiz, a.layout);
+    if (pq.timeLimitMin && !run.corrects) pq.timeLimitMin = myLimit(quiz, a.studentId); // their own, with extra time
+    json(res, 200, { quiz: pq, deadline: a.deadline, now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0 });
   });
 
   r.post('/api/event', async (req, res) => {
@@ -443,7 +523,10 @@ module.exports = function studentRoutes(r) {
     const { a, quiz } = ctx;
     // Violations always count (spending the budget first mustn't hide one); the rest draw on it.
     if (a.status === 'active' && Object.hasOwn(store.CLIENT_EVENTS, body.type)
-      && (store.CLIENT_EVENTS[body.type] === 'violation' || allow(a.id, Date.now()))) store.record(a, body.type, body.detail, quiz);
+      && (store.CLIENT_EVENTS[body.type] === 'violation' || allow(a.id, Date.now()))) {
+      const detail = eventDetail(a, quiz, body.type, body.detail);
+      if (detail !== null) store.record(a, body.type, detail, quiz);
+    }
     json(res, 200, { ok: true });
   });
 
@@ -466,7 +549,9 @@ module.exports = function studentRoutes(r) {
           const agoMs = Math.max(0, Number(e[2]) || 0);
           at = Math.min(now, Math.max(at, now - agoMs));
           const ago = Math.round(agoMs / 1000);
-          store.record(a, e[0], [e[1] ? String(e[1]).slice(0, 120) : null, `sent ${ago}s late`].filter(Boolean).join(', '), quiz, at);
+          const d = eventDetail(a, quiz, e[0], e[1]);
+          if (d === null) continue;
+          store.record(a, e[0], [d ? String(d).slice(0, 120) : null, `sent ${ago}s late`].filter(Boolean).join(', '), quiz, at);
         }
       }
       if (a.beatLost) store.logEvent(a, 'reconnect', 'info', Math.round((now - a.lastBeat) / 1000) + 's offline');
@@ -494,11 +579,18 @@ module.exports = function studentRoutes(r) {
       if (body.answers || (Array.isArray(body.edits) && body.edits.length)) a.workedAt = now;
       const idle = Number(body.idleMs);
       if (Number.isFinite(idle)) a.activeAt = now - Math.min(Math.max(0, idle), 3600000);
-      if (Array.isArray(body.edits) && body.edits.length && a.edits < 20000) {
-        const edits = body.edits.slice(0, 300);
-        q('INSERT INTO code_edits (attempt_id, t, deltas) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(edits).slice(0, 400000));
-        a.edits += edits.length;
+      storeEdits(a, body.edits, now);
+      // Time on each question: the stretch since the last heartbeat goes to the question that was on
+      // screen then, if the quiz had focus. Gaps (offline, asleep) count 30s at most.
+      const order = a.layout && Array.isArray(a.layout.order) ? a.layout.order : [];
+      const v = body.view && typeof body.view === 'object' ? body.view : null;
+      const onQ = v && typeof v.q === 'string' && !v.review && !v.dir && !v.intro && order.includes(v.q) ? v.q : null;
+      if (a.viewQ && a.viewAt && body.focused !== false && body.visible !== false) {
+        if (!a.qTime) a.qTime = {};
+        a.qTime[a.viewQ] = (a.qTime[a.viewQ] || 0) + Math.min(Math.max(0, now - a.viewAt), 30000);
       }
+      a.viewQ = onQ;
+      a.viewAt = now;
       // autosave stops at time's up; only the final submit gets the grace, for its trip over the network
       if (body.answers && !(a.deadline && now > a.deadline)) a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers));
       store.save(a);
@@ -573,6 +665,12 @@ module.exports = function studentRoutes(r) {
   r.post('/api/submit', async (req, res) => {
     const body = await readJson(req, 1024 * 1024);
     const { a, quiz } = current(req, { mustBeOpen: false });
+    if (a.status === 'active') {
+      const now = Date.now();
+      storeEdits(a, body.edits, now); // the last few seconds of typing, for the replay
+      // and the time since the last heartbeat, on the question that was on screen then
+      if (a.viewQ && a.viewAt) { if (!a.qTime) a.qTime = {}; a.qTime[a.viewQ] = (a.qTime[a.viewQ] || 0) + Math.min(Math.max(0, now - a.viewAt), 30000); a.viewQ = null; }
+    }
     submit(a, quiz, body.answers, 'student');
     json(res, 200, { ok: true });
   });

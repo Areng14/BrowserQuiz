@@ -452,6 +452,7 @@
       try {
         const got = await api.attempt({ runId: run.runId, rosterId: picked.id, studentId: sid.value.trim() });
         if (got && got.run) Object.assign(S.run, got.run); // corrections: what this student has to correct
+        if (got && got.timeLimitMin != null) S.run.timeLimitMin = got.timeLimitMin; // with any extra time they get
         S.me = { name: picked.name };
         if (run.practice) screenRules(); else screenWait();
       } catch (ex) {
@@ -828,7 +829,7 @@
   function setAnswer(qid, value) {
     if (value === undefined) delete S.answers[qid];
     else S.answers[qid] = value;
-    if (S.monitor) S.monitor.markAnswersDirty();
+    if (S.monitor) S.monitor.markAnswersDirty(String(qid).split('~')[0]);
     if (S.saveState !== 'offline') setSave('saving');
     renderSheet();
   }
@@ -1810,7 +1811,7 @@
       S.errDecor = [];
       markErrorLines(S.results[q.id + ':' + lang]);
       if (S.monitor) {
-        S.editorSubs.push(S.monitor.trackEditor(editor, q.id));
+        S.editorSubs.push(S.monitor.trackEditor(editor, q.id, lang));
         S.monitor.selectionProvider = (target) => {
           if (!target || !target.closest || !target.closest('.monaco-editor')) return '';
           const sel = editor.getSelection();
@@ -1915,6 +1916,7 @@
       setAnswer(q.id, ans);
     });
     host.replaceChildren(ta);
+    if (S.monitor) S.editorSubs.push(S.monitor.trackText(ta, q.id, lang)); // the typing replay
   }
 
   async function runCode(q, btn, results) {
@@ -2268,10 +2270,11 @@
     clearInterval(S.timer);
     hideFsOverlay();
     const answers = serializeAnswers();
+    const edits = S.monitor ? S.monitor.takeEdits() : []; // the replay's last few seconds
     const ov = submittingOverlay();
     for (let tries = 0; ; tries++) {
       try {
-        S.result = await api.submit(answers);
+        S.result = await api.submit(answers, edits);
         break;
       } catch (e) {
         if (S.done) return;

@@ -16,6 +16,8 @@
     'late-submit': 'Submitted late', exit: 'Exited the quiz', 'other-network': 'Request from another network', 'left-network': 'Tried to continue from another network', 'other-device': 'Request from another browser',
     extension: 'Extension on the page', 'spoofed-checks': 'Extension hides leaving the window', 'no-frames': 'Quiz not on screen, no leave reported',
     'scripted-input': 'Typed by a script', viewport: 'Side panel or DevTools open', setup: 'Computer',
+    'answer-after-return': 'Changed an answer right after coming back', 'same-browser': 'Same browser as',
+    'new-network': 'Network not used on earlier quizzes',
   };
   // Browsers only offer passkeys on HTTPS (and localhost), so plain-http installs don't show them.
   const PASSKEYS = !!(window.PublicKeyCredential && window.isSecureContext && navigator.credentials);
@@ -781,6 +783,7 @@
       try { roster = await api(`/api/t/rosters/${encodeURIComponent(id)}`); } catch (e) { return; }
     }
     const removing = new Set();
+    const timeChanges = {}; // roster student id -> 1 | 1.25 | 1.5 | 2: extra time on every timed quiz
     const name = h('input', { class: 'input', id: 'class-name', value: roster.name, placeholder: 'Period 3' });
     const add = h('textarea', { class: 'input t-textarea', id: 'class-add', rows: 8, spellcheck: 'false', placeholder: 'Ava Martinez, 204511\nDiego Ramos, 204651' });
     const msg = h('p', { class: 't-error', role: 'alert' });
@@ -793,14 +796,17 @@
           if (removing.has(st.id)) { removing.delete(st.id); btn.textContent = 'Remove'; btn.setAttribute('aria-label', `Remove ${st.name}`); row.classList.remove('t-removed'); }
           else { removing.add(st.id); btn.textContent = 'Undo'; btn.setAttribute('aria-label', `Undo removing ${st.name}`); row.classList.add('t-removed'); }
         });
-        row.append(h('td', { text: st.name }), h('td', { class: 't-actions' }, btn));
+        const time = h('select', { class: 'input t-time-x', 'aria-label': `Time for ${st.name}` },
+          [[1, 'Standard time'], [1.25, '1.25× time'], [1.5, '1.5× time'], [2, '2× time']].map(([v, t]) => h('option', { value: String(v), text: t, selected: Number(st.timeX || 1) === v })));
+        time.addEventListener('change', () => { timeChanges[st.id] = Number(time.value); });
+        row.append(h('td', { text: st.name }), h('td', { class: 't-actions' }, time, btn));
         return row;
       })))) : null;
     save.addEventListener('click', async () => {
       save.disabled = true;
       msg.textContent = '';
       try {
-        if (id) await post(`/api/t/rosters/${encodeURIComponent(id)}/edit`, { name: name.value, add: add.value, remove: [...removing] });
+        if (id) await post(`/api/t/rosters/${encodeURIComponent(id)}/edit`, { name: name.value, add: add.value, remove: [...removing], time: timeChanges });
         else await post('/api/t/rosters', { name: name.value, text: add.value });
         showHome('classes');
       } catch (e) { msg.textContent = e.message; save.disabled = false; }
@@ -1360,7 +1366,10 @@
           statusCell(s), integrityCell(a),
           strikesCell(a),
           progressCell(a),
-          h('td', Object.assign({ class: 'num', 'data-label': 'Time left', text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }, a && a.timeLeft != null && a.status === 'active' ? ticks('left', a.timeLeft) : {})),
+          // extra time (the class's settings) shows next to the clock, and on it in words for screen readers
+          h('td', { class: 'num', 'data-label': 'Time left', title: s.timeX ? `${s.timeX}× time` : null },
+            h('span', Object.assign({ text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }, a && a.timeLeft != null && a.status === 'active' ? ticks('left', a.timeLeft) : {})),
+            s.timeX ? h('span', { class: 't-muted t-xtime', text: ` ${s.timeX}×`, 'aria-label': `, ${s.timeX} times the time` }) : null),
           h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), 'data-label': 'Score', text: score }),
           actions);
       }));
@@ -1393,7 +1402,7 @@
       const sharedSeen = new Set();
       const answers = h('div', { class: 't-answers r-view' }, d.report.questions.map((rq, i) => {
         const x = d.answers[i];
-        const sec = window.BQReport.question(d.quiz, rq, i, { teacher: true, sharedSeen });
+        const sec = window.BQReport.question(d.quiz, rq, i, { teacher: true, sharedSeen, attemptId: id });
         const notes = [];
         if (x.state === 'pending') notes.push('Grading…');
         if (x.state === 'failed') notes.push(`Grading failed (${(x.code && x.code.message) || 'runner offline'})`);
@@ -1433,6 +1442,7 @@
           d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Un-invalidate', onclick: () => unInvalidate(id, d.name) }, dk('restore'))) : null,
           d.status === 'active' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }, dk('end'))) : null,
           d.status === 'active' && d.deadline ? h('span', Object.assign({ class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }, ticks('left-label', d.timeLeft || 0))) : null,
+          d.timeX ? h('span', { class: 't-muted t-small', text: `${d.timeX}× time` }) : null,
           d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
           d.status === 'submitted' && d.totals && d.totals.review ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Grade with AI', title: 'Send the answers waiting for you to Claude. Names and IDs stay here.',
             onclick: () => aiDialog(runId, id, aiDone) }, dk('ai'))) : null,

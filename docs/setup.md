@@ -64,6 +64,10 @@ picks their own the first time they sign in.
   score.
 - **Classes:** on the **Classes** tab, use **New class** and paste one student per line
   (`name, student ID`, or straight from a spreadsheet), or upload a CSV.
+- **Extra time:** students with an accommodation get 1.25×, 1.5× or 2× the time limit on every timed
+  quiz. Pick it next to their name in the class, or add it as a third column when you paste
+  (`Ava Martinez, 204511, 1.5x`). It applies from the next quiz they start, and their clock and the
+  live page show it.
 - **With an AI chat (ChatGPT, Claude, …):** click **Copy AI prompt** on the Quizzes tab, paste it into
   the chat, and fill in the blanks at the top.
   - AIs that can make files hand back a `.quiz` (images included) to upload.
