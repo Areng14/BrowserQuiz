@@ -238,15 +238,15 @@
     { id: 'classes', label: 'Classes', icon: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'] },
     { id: 'teachers', label: 'Teachers', icon: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'], admin: true },
   ];
-  // The open quiz (the newest, if there are several): its live page is a tab of its own, Current quiz.
-  const CURRENT = { id: 'current', label: 'Current quiz', short: 'Current', icon: ['M12 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4z', 'M16.24 7.76a6 6 0 0 1 0 8.49', 'M7.76 16.24a6 6 0 0 1 0-8.49', 'M19.07 4.93a10 10 0 0 1 0 14.14', 'M4.93 19.07a10 10 0 0 1 0-14.14'] };
+  // Open quizzes: one goes straight to its live page, two or more to a list of them (#open).
+  const OPEN = { id: 'open', label: 'Open quizzes', short: 'Open', icon: ['M12 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4z', 'M16.24 7.76a6 6 0 0 1 0 8.49', 'M7.76 16.24a6 6 0 0 1 0-8.49', 'M19.07 4.93a10 10 0 0 1 0 14.14', 'M4.93 19.07a10 10 0 0 1 0-14.14'] };
   let openRuns = null; // [{ id, title, code }], newest first; null until the overview says
   function noteRuns(runs) {
     openRuns = runs.filter((r) => r.status === 'open').map((r) => ({ id: r.id, title: r.quiz_title, code: r.code }));
     live = openRuns.length;
   }
   let tab = 'give';
-  let live = 0; // open quizzes, shown on Current quiz when there's more than one
+  let live = 0; // open quizzes, shown on the Open tab when there's more than one
   let here = location.hash;
   let leaveGuard = null; // set by a page with unsaved work; false keeps the teacher there
   let navSeq = 0; // the latest page asked for, so a slow load doesn't replace a newer page
@@ -265,7 +265,7 @@
     if (a === 'run' && id) showRun(id);
     else if (a === 'class') showRoster(id === 'new' ? null : id);
     else if (a === 'quiz') openQuiz(id === 'new' ? null : id);
-    else showHome(TABS.some((t) => t.id === a) ? a : 'give');
+    else showHome(a === 'open' || TABS.some((t) => t.id === a) ? a : 'give');
   }
   window.addEventListener('hashchange', route);
   function openQuiz(id) {
@@ -309,14 +309,14 @@
   // The page frame: tabs on the left, the page on the right. active: the tab this page belongs to.
   function shell(active, ...content) {
     const tabs = TABS.filter((t) => !t.admin || (who && who.role === 'admin'));
-    const cur = openRuns && openRuns[0];
-    if (cur) tabs.splice(1, 0, Object.assign({}, CURRENT, { href: '#run/' + encodeURIComponent(cur.id), title: `${cur.title} (${cur.code})` }));
+    const one = openRuns && openRuns.length === 1 && openRuns[0];
+    if (openRuns && openRuns.length) tabs.splice(1, 0, Object.assign({}, OPEN, one ? { label: 'Open quiz', href: '#run/' + encodeURIComponent(one.id), title: `${one.title} (${one.code})` } : {}));
     return h('div', { class: 't-shell' },
       h('nav', { class: 't-side', 'aria-label': 'Dashboard' },
         h('div', { class: 't-brand' }, h('img', { class: 't-brand-icon', src: '/icon.svg', alt: '', width: 26, height: 26 }), 'BrowserQuiz'),
         h('div', { class: 't-nav' }, tabs.map((t) => h('a', { class: 't-nav-item', href: t.href || '#' + t.id, title: t.title || null, 'aria-current': t.id === active ? 'page' : null },
           icon(t.icon), h('span', { class: 't-nav-label' }, t.short || t.label, t.short ? h('span', { class: 't-nav-more', text: t.label.slice(t.short.length) }) : null),
-          t.id === 'current' && live > 1 ? h('span', { class: 't-badge', title: `${live} open`, 'aria-label': `${live} open`, text: String(live) }) : null))),
+          t.id === 'open' && live > 1 ? h('span', { class: 't-badge', title: `${live} open`, 'aria-label': `${live} open`, text: String(live) }) : null))),
         h('div', { class: 't-side-foot' },
           who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null,
           h('div', { class: 't-side-btns' }, themeButton(),
@@ -338,7 +338,8 @@
     who = me && me.teacher;
     if (tab === 'teachers' && !(who && who.role === 'admin')) { showHome('give'); return; }
     noteRuns(data.runs);
-    const page = { give: giveTab, results: resultsTab, quizzes: quizzesTab, classes: classesTab, teachers: teachersSection }[tab](data, me);
+    if (tab === 'open' && live < 2) { if (live) { history.replaceState(null, '', '#run/' + encodeURIComponent(openRuns[0].id)); showRun(openRuns[0].id); } else showHome('give'); return; }
+    const page = { open: openTab, give: giveTab, results: resultsTab, quizzes: quizzesTab, classes: classesTab, teachers: teachersSection }[tab](data, me);
     const y = same ? window.scrollY : 0;
     mount(shell(tab, page));
     window.scrollTo(0, y);
@@ -413,6 +414,10 @@
           h('div', { class: 't-row t-start-row' }, startBtn, startMsg), runner)),
       open.length ? h('section', { class: 't-section' }, h('h2', { text: 'Open now' }), runsTable(open)) : null,
     ];
+  }
+
+  function openTab(data) {
+    return h('section', { class: 't-section' }, h('h1', { text: 'Open quizzes' }), runsTable(data.runs.filter((r) => r.status === 'open')));
   }
 
   function resultsTab(data) {
@@ -1037,13 +1042,13 @@
         aiMsg.className = job.failed ? 't-small t-error' : 't-small t-muted';
         aiMsg.textContent = `AI graded ${plural(job.graded, 'answer')}${job.failed ? `; ${job.failed} didn't work: ${job.errors.join(' ')}` : '.'}`;
       }
-      // This run's place in the Current quiz tab.
+      // This run's place in the Open tab.
       if (openRuns && (run.status === 'open') !== openRuns.some((r) => r.id === runId)) {
         api('/api/t/overview').then((o) => {
           noteRuns(o.runs);
           const nav = root.querySelector('.t-side');
-          const cur = openRuns[0] && openRuns[0].id === runId;
-          if (nav && root.contains(tbody)) nav.replaceWith(shell(cur ? 'current' : tab === 'results' ? 'results' : 'give').querySelector('.t-side'));
+          const cur = openRuns.some((r) => r.id === runId);
+          if (nav && root.contains(tbody)) nav.replaceWith(shell(cur ? 'open' : tab === 'results' ? 'results' : 'give').querySelector('.t-side'));
         }).catch(() => {});
       }
       title.textContent = run.title;
@@ -1258,8 +1263,8 @@
     detail.className = 't-detail-host';
     detail.setAttribute('aria-labelledby', 't-detail-name');
     if (openRuns === null) { try { noteRuns((await api('/api/t/overview')).runs); } catch (e) { /* the tab can wait */ } }
-    const isCurrent = openRuns && openRuns[0] && openRuns[0].id === runId;
-    mount(shell(isCurrent ? 'current' : tab === 'results' ? 'results' : 'give',
+    const isOpen = openRuns && openRuns.some((r) => r.id === runId);
+    mount(shell(isOpen ? 'open' : tab === 'results' ? 'results' : 'give',
         h('section', { class: 't-section' },
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
           howTo, quitPw,

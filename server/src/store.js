@@ -60,6 +60,10 @@ const SERVER_EVENTS = {
   'join': 'info', 'admit': 'info', 'start': 'info', 'submit': 'info', 'run': 'info', 'reconnect': 'info', 'resume': 'info',
   'restore': 'info', 'invalidate': 'info', 'let-in': 'info', 'extend': 'info', 'grade': 'info',
 };
+// In Safe Exam Browser with BrowserQuiz's own settings, SEB blocks every other app, so the page losing focus
+// is SEB's own doing (its toolbar, a system dialog, an iPad keyboard) and can't be the student leaving:
+// logged, never a strike. Quitting SEB to leave still counts, as the reload when they come back.
+const SEB_QUIET = new Set(['blur', 'hidden', 'fullscreen-exit', 'mouse-left', 'resize', 'extended-display']);
 const MERGE_MS = 2000;
 const MAX_EVENTS = 3000;
 const WARN_PER_TYPE_PER_MIN = 20;
@@ -135,8 +139,12 @@ const awayNow = (a, now) => (a.status === 'active' && a.away && a.awaySince ? Ma
 // to the first event of a burst, so leaving every 1.9s still counts every time. `at` is when it happened, for
 // events the client queued while offline: they arrive together but still count one strike per departure.
 function record(a, type, detail, quiz, at) {
-  const severity = (Object.hasOwn(CLIENT_EVENTS, type) && CLIENT_EVENTS[type]) || (Object.hasOwn(SERVER_EVENTS, type) && SERVER_EVENTS[type]);
+  let severity = (Object.hasOwn(CLIENT_EVENTS, type) && CLIENT_EVENTS[type]) || (Object.hasOwn(SERVER_EVENTS, type) && SERVER_EVENTS[type]);
   if (!severity) return;
+  if (a.lockedSeb && SEB_QUIET.has(type)) {
+    severity = 'info';
+    detail = [detail, 'in Safe Exam Browser'].filter(Boolean).join(', ');
+  }
   if (a.practice && severity !== 'info') return; // practice runs aren't monitored
   const now = Date.now();
   const t = at == null ? now : at;

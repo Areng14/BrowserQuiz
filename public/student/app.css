@@ -133,6 +133,10 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .cheat-rule { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--bad) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--bad) 8%, transparent); }
 .cheat-rule p { margin: 0; }
 .cheat-title { font-weight: 700; color: var(--bad); }
+/* Safe Exam Browser: going into lockdown, not a warning */
+.lock-rule { display: grid; gap: 4px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.lock-rule p { margin: 0; }
+.lock-title { font-weight: 700; color: var(--accent); }
 .modal.warn-modal { border-color: var(--bad); border-top: 4px solid var(--bad); }
 .fs-card p { margin: 0; }
 .checks { list-style: none; margin: 0; padding: 12px 0 0; border-top: 1px solid var(--line); display: grid; gap: 4px; font-size: 14px; }
@@ -306,12 +310,33 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
   .shared-split { max-width: 1480px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; }
   .shared-split > .shared, .shared-split > .shared-stack { position: sticky; top: 0; max-height: calc(100vh - var(--quiz-chrome, 200px)); overflow: auto; }
 }
+/* Side by side: the page stays put and each side scrolls on its own */
+@media (min-width: 1100px) and (min-height: 481px) {
+  .qmain.split-fit { overflow: hidden; display: flex; flex-direction: column; padding-top: 24px; padding-bottom: 24px; }
+  .qmain.split-fit > .shared-split { flex: 1; min-height: 0; width: 100%; grid-template-rows: minmax(0, 1fr); }
+  .qmain.split-fit > .shared-split > * { position: relative; overflow: auto; overscroll-behavior: contain; }
+  .qmain.split-fit > .shared-split > .shared { align-self: start; max-height: 100%; } /* short material: a short card */
+  .qmain.split-fit > .shared-split > .shared-stack { align-self: stretch; max-height: none; padding: 2px 12px 2px 2px; }
+  .qmain.split-fit > .shared-split > .qview { align-self: stretch; align-content: start; padding: 2px 12px 2px 2px; }
+}
+.shared:focus { outline: none; }
+.shared:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* code questions: prompt | editor */
 .code-q { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
 .code-left { flex: 0 1 clamp(320px, 30%, 600px); min-width: 0; display: grid; gap: 14px; }
 .code-right { flex: 1 1 420px; min-width: 0; height: max(420px, calc(100vh - var(--quiz-chrome, 200px))); display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
 @media (max-width: 780px) { .code-left { flex-basis: 100%; } } /* too narrow for side by side: prompt on top */
+/* Side by side: the page stays put, the prompt scrolls on its own and the editor takes the rest of the height */
+@media (min-width: 781px) and (min-height: 481px) {
+  .qmain.code-fit { overflow: hidden; display: flex; flex-direction: column; padding-top: 24px; padding-bottom: 24px; }
+  .qmain.code-fit > .qview { flex: 1; min-height: 0; width: 100%; display: flex; flex-direction: column; }
+  .qmain.code-fit .code-q { flex: 1; min-height: 0; flex-wrap: nowrap; align-items: stretch; }
+  .qmain.code-fit .code-left { position: relative; align-self: stretch; overflow: auto; overscroll-behavior: contain; align-content: start; padding: 2px 12px 2px 2px; }
+  .qmain.code-fit .code-right { height: auto; }
+}
+.code-left:focus { outline: none; }
+.code-left:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 .bq-app .sub { font-size: 15px; font-weight: 600; margin: 0; }
 .ban-note { margin: 0; font-size: 15px; }
 .ban-note code { font-family: var(--mono); font-size: 0.92em; }
@@ -460,6 +485,7 @@ h1[tabindex="-1"]:focus { outline: none; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .row-actions a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 .seb-launch { display: grid; justify-items: start; gap: 8px; }
+.seb-back { justify-self: start; margin-left: 0; }
 .seb-launch a.btn, .done-panel a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 
 /* Big screens: scale the text up. Not the code editor itself: CSS zoom throws off where its cursor lands,

@@ -304,21 +304,11 @@
     });
     const msg = h('p', { class: 'error', role: 'alert', text: err || '' });
     const btn = h('button', { class: 'btn primary', type: 'submit', text: 'Join' });
-    // A quiz that needs Safe Exam Browser: the seb:// (sebs:// on https) link starts SEB with the quiz's settings.
-    const seb = h('div', { class: 'seb-launch', hidden: true });
-    // iPads say they're Macs; a touch screen gives them away. SEB for them comes from the App Store.
-    const apple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-    const showSeb = (c) => {
-      const href = `${location.protocol === 'https:' ? 'sebs' : 'seb'}://${location.host}/api/seb/${c}.seb`;
-      seb.replaceChildren(h('a', { class: 'btn primary', href, text: 'Open Safe Exam Browser' }),
-        h('p', { class: 'hint' }, 'Nothing happens? ', h('a', { href: apple ? 'https://apps.apple.com/app/id1155002964' : 'https://safeexambrowser.org/download_en.html', target: '_blank', rel: 'noopener', text: 'Get Safe Exam Browser' })));
-      seb.hidden = false;
-    };
     const form = h('form', { class: 'panel', novalidate: true },
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
       h('div', { class: 'heading' }, h('h1', { text: 'Join your quiz' })),
       h('div', { class: 'field' }, h('label', { class: 'field-label', for: 'join-code', text: 'Join code' }), input),
-      btn, msg, seb,
+      btn, msg,
       demoHint('Demo code: ', h('b', { text: 'K7QX4M' })));
     // Where the project lives; only here, before any quiz.
     const ghIcon = svgEl('svg', { width: 15, height: 15, viewBox: '0 0 16 16', fill: 'currentColor', 'aria-hidden': 'true' });
@@ -328,13 +318,12 @@
       e.preventDefault();
       if (input.value.length !== 6) { msg.textContent = 'Join codes are 6 characters.'; input.focus(); return; }
       btn.disabled = true; btn.textContent = 'Joining…'; msg.textContent = '';
-      seb.hidden = true;
       try {
         S.run = await api.join(input.value);
         screenWho();
       } catch (ex) {
+        if (ex && ex.code === 'seb_launch') { screenSebLaunch(input.value); return; }
         msg.textContent = errorText(ex);
-        if (ex && ex.code === 'seb_launch') showSeb(input.value);
         btn.disabled = false; btn.textContent = 'Join';
         input.focus();
       }
@@ -343,6 +332,22 @@
     input.focus();
     code = String(code || '').toUpperCase().replace(CODE_ALPHABET, '');
     if (code.length === 6 && !err) { input.value = code; btn.click(); }
+  }
+
+  // A quiz that needs Safe Exam Browser: the seb:// (sebs:// on https) link starts SEB with the quiz's settings.
+  function screenSebLaunch(code) {
+    const href = `${location.protocol === 'https:' ? 'sebs' : 'seb'}://${location.host}/api/seb/${code}.seb`;
+    // iPads say they're Macs; a touch screen gives them away. SEB for them comes from the App Store.
+    const apple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+    const open = h('a', { class: 'btn primary', href, text: 'Open Safe Exam Browser' });
+    mount(entry(h('div', { class: 'panel' },
+      h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
+      h('div', { class: 'heading' }, h('h1', { text: 'This quiz opens in lockdown' }),
+        h('p', { text: 'Safe Exam Browser locks your device until you turn in.' })),
+      h('div', { class: 'seb-launch' }, open,
+        h('p', { class: 'hint' }, 'Nothing happens? ', h('a', { href: apple ? 'https://apps.apple.com/app/id1155002964' : 'https://safeexambrowser.org/download_en.html', target: '_blank', rel: 'noopener', text: 'Get Safe Exam Browser' }))),
+      h('button', { class: 'link-btn seb-back', type: 'button', text: 'Use a different code', onclick: () => screenJoin() }))));
+    open.focus();
   }
 
   // Type your name, then pick it. The server only ever sends back names that match what you typed.
@@ -616,21 +621,27 @@
     if (window.screen && window.screen.addEventListener) window.screen.addEventListener('change', onChange);
     agree.addEventListener('change', () => { btn.disabled = !agree.checked || blocked; });
 
+    // In Safe Exam Browser with our settings there's nothing to leave to: the device is locked until they turn in
+    const locked = !!S.run.sebQuit;
     const panel = h('div', { class: 'panel wide' },
       h('p', { class: 'eyebrow', text: S.run.title }),
       h('div', { class: 'heading' },
         h('h1', { text: 'Before you start' }),
         h('p', { text: summaryLine(S.run) })),
-      h('div', { class: 'cheat-rule', role: 'note' },
-        h('p', { class: 'cheat-title', text: 'Leaving the quiz counts as cheating.' }),
-        h('p', { text: 'That means switching to another window, tab or app, leaving fullscreen, reloading or closing this page, or using Exit when your teacher didn\'t say to. Your teacher sees each time it happens.' })),
+      locked
+        ? h('div', { class: 'lock-rule', role: 'note' },
+          h('p', { class: 'lock-title', text: 'Your device is locked until you turn in.' }),
+          h('p', { text: 'Other apps, tabs and windows are blocked. If you get stuck, ask your teacher.' }))
+        : h('div', { class: 'cheat-rule', role: 'note' },
+          h('p', { class: 'cheat-title', text: 'Leaving the quiz counts as cheating.' }),
+          h('p', { text: 'That means switching to another window, tab or app, leaving fullscreen, reloading or closing this page, or using Exit when your teacher didn\'t say to. Your teacher sees each time it happens.' })),
       h('ul', { class: 'rules' },
-        h('li', { text: 'The quiz runs in fullscreen.' }),
+        locked ? null : h('li', { text: 'The quiz runs in fullscreen.' }),
         h('li', { text: 'Mouse and keyboard activity is recorded, and your teacher can watch the quiz page live.' }),
         h('li', { text: 'Pasting from outside the quiz is blocked.' }),
         mins ? h('li', { text: 'The quiz turns itself in when time runs out.' }) : null),
       checkList,
-      h('label', { class: 'agree', for: 'agree' }, agree, h('span', { text: 'I understand that leaving the quiz counts as cheating' })),
+      h('label', { class: 'agree', for: 'agree' }, agree, h('span', { text: locked ? 'I\'m ready to lock my device and start' : 'I understand that leaving the quiz counts as cheating' })),
       btn, msg,
       cfg.demo && prechecks().some((c) => !c.ok) ? demoHint('Demo: checks are shown but not enforced here.') : null);
 
@@ -676,7 +687,9 @@
       getView: currentView,
       onFullscreenLost: showFsOverlay,
       onFullscreenBack: hideFsOverlay,
-      onReturn: showLeftWarning,
+      // In Safe Exam Browser with our settings nothing else can be in front, so coming back from SEB's own
+      // toolbar or a system dialog isn't leaving the quiz (the server doesn't count it either)
+      onReturn: S.run.sebQuit ? null : showLeftWarning,
       onPasteBlocked: () => toast('Pasting from outside the quiz is blocked.'),
       onSave: () => toast('Saved'),
       onReloadBlocked: () => toast('Reloading is off during the quiz.'),
@@ -955,6 +968,7 @@
       S.el.jump.hidden = true;
       document.title = `Check your work – ${S.quiz.title}`;
       if (S.el.hlBar) S.el.hlBar.hide();
+      S.el.main.classList.remove('code-fit', 'split-fit');
       S.el.main.replaceChildren(reviewView());
       renderScratch();
       return;
@@ -970,10 +984,17 @@
     if (!S.dirOpen && S.quiz.corrections && S.quiz.corrections.why && S.quiz.corrections.fix[q.id]) (view.querySelector('.code-left') || view).append(whyBox(q));
     // Shared material sits beside the question (above it on narrow screens). Code questions put it in
     // their left column themselves.
-    if (!S.dirOpen && q.shared && !view.classList.contains('wide')) view = h('div', { class: 'shared-split' }, sharedBlock(q), view);
+    if (!S.dirOpen && q.shared && !view.classList.contains('wide')) {
+      const shared = sharedBlock(q);
+      if (shared) shared.tabIndex = 0; // it scrolls on its own beside the question (app.css), so keys can scroll it too
+      view = h('div', { class: 'shared-split' }, shared, view);
+    }
     const where = S.dirOpen ? partOf(S.idx).title : `Question ${S.idx + 1} of ${total}${q.name ? `: ${q.name}` : ''}`;
     document.title = `${where} – ${S.quiz.title}`;
     if (S.el.hlBar) S.el.hlBar.hide();
+    // Code questions and shared material fill the window, each side scrolling on its own (app.css).
+    S.el.main.classList.toggle('code-fit', view.classList.contains('wide'));
+    S.el.main.classList.toggle('split-fit', view.classList.contains('shared-split'));
     S.el.main.replaceChildren(...(S.dirOpen ? [] : [h('h1', { class: 'sr-only', id: 'q-heading', text: where })]), view);
     colorize(view);
     renderSheet();
@@ -1316,6 +1337,8 @@
     ? h('div', { class: 'choice-text choice-rich hl-root' }, BQ.md.render(c, mdOpts()))
     : h('span', { class: 'choice-text hl-root' }, BQ.md.renderInline(c, mdOpts())));
 
+  // The material's card is kept between questions; it's only a tab stop where it scrolls on its own.
+  const notTabbable = (el) => { if (el) el.removeAttribute('tabindex'); return el; };
   // A question can use more than one: they stack, in the quiz's order.
   function sharedBlock(q) {
     const blocks = [].concat(q.shared || []).map((sid) => {
@@ -1326,7 +1349,7 @@
         m.image ? h('img', { class: 'qimg', src: api.assetUrl(m.image), alt: m.imageAlt || '' }) : null));
     }).filter(Boolean);
     if (!blocks.length) return null;
-    return blocks.length === 1 ? blocks[0] : h('div', { class: 'shared-stack' }, blocks);
+    return blocks.length === 1 ? blocks[0] : h('div', { class: 'shared-stack', role: 'group', 'aria-label': 'Shared material' }, blocks);
   }
 
   function prompt(q) {
@@ -1729,8 +1752,8 @@
 
     const view = h('div', { class: 'qview wide' },
       h('div', { class: 'code-q' },
-        h('section', { class: 'code-left' },
-          metaRow(q, KIND[q.mode] || KIND.method), sharedBlock(q), prompt(q),
+        h('section', { class: 'code-left', tabindex: '0', 'aria-label': 'Question' },
+          metaRow(q, KIND[q.mode] || KIND.method), notTabbable(sharedBlock(q)), prompt(q),
           banNote, given,
           h('h2', { class: 'sub', text: 'Examples' }), samples),
         h('section', { class: 'code-right', 'aria-label': 'Code editor' },

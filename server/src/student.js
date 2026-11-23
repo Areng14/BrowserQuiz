@@ -95,6 +95,8 @@ function current(req, { mustBeOpen = true } = {}) {
   if (!run) throw new HttpError(401, 'no_attempt');
   a.practice = run.mode === 'practice';
   requireSeb(req, run);
+  // Safe Exam Browser with our settings (seb.js), checked just above: no other app can be in front
+  a.lockedSeb = !!run.seb_config;
   if (mustBeOpen && run.status !== 'open' && a.status !== 'active') throw new HttpError(403, 'run_closed');
   const ip = clientIp(req);
   if (run.ip_lock && !sameNetwork(ip, run.ip_lock)) {
@@ -416,7 +418,7 @@ module.exports = function studentRoutes(r) {
       a.lastBeat = now;
       a.beatLost = false;
       if (body.focused === false || body.visible === false) {
-        if (!a.away) store.record(a, 'unfocused-beat', body.visible === false ? 'tab hidden' : 'window not focused', quiz);
+        if (!a.away && !a.lockedSeb) store.record(a, 'unfocused-beat', body.visible === false ? 'tab hidden' : 'window not focused', quiz);
       } else {
         store.back(a, now);
       }
