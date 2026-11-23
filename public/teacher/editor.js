@@ -666,7 +666,7 @@
 
   // preset: { quiz, missing } from a pasted quiz.json, loaded into this editor unsaved.
   async function showQuizEditor(id, preset) {
-    const { h, api, post, mount, bar, showHome, plural, icon, ICONS } = window.BQT;
+    const { h, api, post, mount, bar, showHome, plural, icon, ICONS, moreMenu } = window.BQT;
     let quiz;
     let currentId = id;
     let existingAssets = new Set(); // images already stored with the quiz being edited
@@ -921,7 +921,7 @@
       paint();
       sortable(rows, (from, to) => editChoices(q, (r) => r.splice(to, 0, r.splice(from, 1)[0])), (row) => row.firstChild);
       const add = h('button', { class: 'btn small', type: 'button', text: 'Add choice', disabled: full, onclick: () => { editChoices(q, (r) => r.push({ text: '', on: false })); focusChoice(q.choices.length - 1); } });
-      const label = h('h2', { class: 'qe-card-title', id: `qe-choices-${q._ui ? q._ui.id || 'q' : 'q'}`, text: multi ? 'Choices, with the correct ones ticked' : 'Choices, with the correct one marked' });
+      const label = h('h2', { class: 'qe-card-title', id: `qe-choices-${q._ui ? q._ui.id || 'q' : 'q'}`, text: 'Choices' });
       return h('div', { class: 'qe-stack qe-tight' }, label,
         h('div', { class: 'qe-choices', role: 'group', 'aria-labelledby': label.id }, rows),
         h('div', { class: 'qe-line' }, add, check(q, q.shuffleChoices === false, 'Keep choices in this order', (v) => { if (v) q.shuffleChoices = false; else delete q.shuffleChoices; }),
@@ -931,8 +931,8 @@
     // ---------- images ----------
     function addImage(q, f) {
       if (!f) return;
-      if (!IMAGE_MIME[extOf(f.name)]) { alert('Images must be png, jpg, gif or webp.'); return; }
-      if (f.size > 5 * 1024 * 1024) { alert('Images can be up to 5 MB.'); return; }
+      if (!IMAGE_MIME[extOf(f.name)]) { window.BQAsk.notice({ title: "That image can't be used", text: 'Images must be png, jpg, gif or webp.' }); return; }
+      if (f.size > 5 * 1024 * 1024) { window.BQAsk.notice({ title: 'That image is too big', text: 'Images can be up to 5 MB.' }); return; }
       const reader = new FileReader();
       reader.onload = () => {
         const base = f.name.replace(/[^A-Za-z0-9 _.-]/g, '_').slice(-80);
@@ -952,8 +952,8 @@
     // More images go into the text as Markdown, ![](assets/name.png), at the cursor.
     function addInlineImage(ta, f) {
       if (!f) return;
-      if (!IMAGE_MIME[extOf(f.name)]) { alert('Images must be png, jpg, gif or webp.'); return; }
-      if (f.size > 5 * 1024 * 1024) { alert('Images can be up to 5 MB.'); return; }
+      if (!IMAGE_MIME[extOf(f.name)]) { window.BQAsk.notice({ title: "That image can't be used", text: 'Images must be png, jpg, gif or webp.' }); return; }
+      if (f.size > 5 * 1024 * 1024) { window.BQAsk.notice({ title: 'That image is too big', text: 'Images can be up to 5 MB.' }); return; }
       const reader = new FileReader();
       reader.onload = () => {
         const base = f.name.replace(/\s+/g, '-').replace(/[^A-Za-z0-9_.-]/g, '_').slice(-80);
@@ -1410,10 +1410,13 @@
         h('span', { class: 'qe-type' }, icon(ICONS[q.type], 18), type),
         h('label', { class: 'qe-pts' }, 'Points', input(q, q.points, (v) => { q.points = Number(v); }, { type: 'number', min: '0.5', step: '0.5', class: 'input t-points' })),
         h('span', { class: 'qe-grow' }),
-        h('button', { class: 'btn small qe-icon', type: 'button', 'aria-label': 'Move up', title: `Move up (${ALT}Shift+↑)`, disabled: i === 0, onclick: () => moveQuestion(i, i - 1) }, icon(ICONS.up, 16)),
-        h('button', { class: 'btn small qe-icon', type: 'button', 'aria-label': 'Move down', title: `Move down (${ALT}Shift+↓)`, disabled: i === n - 1, onclick: () => moveQuestion(i, i + 1) }, icon(ICONS.down, 16)),
+        // Duplicate in view; moving (also by dragging in the list, or Alt+Shift+arrows) and Delete under ⋯
         h('button', { class: 'btn small qe-act', type: 'button', onclick: () => duplicate(i) }, icon(ICONS.copy, 15), 'Duplicate'),
-        h('button', { class: 'btn small qe-act', type: 'button', onclick: () => remove(i) }, icon(ICONS.trash, 15), 'Delete'));
+        moreMenu(`More for question ${i + 1}`, 'qe-more-q', [
+          i > 0 ? { text: 'Move up', onclick: () => moveQuestion(i, i - 1) } : null,
+          i < n - 1 ? { text: 'Move down', onclick: () => moveQuestion(i, i + 1) } : null,
+          { text: 'Delete', danger: true, onclick: () => remove(i) },
+        ].filter(Boolean)));
       const probs = h('ul', { class: 't-error qe-problems', role: 'alert' });
       const view = h('div', { class: 'qe-view', inert: true }); // a picture of the student's screen, not something to use
       // Optional. Students see names, types and points before they start, so a name shouldn't give the answer away.
@@ -1546,7 +1549,7 @@
       const pasteBtn = h('button', { class: 'btn small', type: 'button', text: 'Load' });
       pasteBtn.addEventListener('click', async () => {
         pasteMsg.textContent = '';
-        if (dirty && quiz.questions.length && !confirm('Replace what\'s here with the pasted quiz?')) return;
+        if (dirty && quiz.questions.length && !(await window.BQAsk.confirm({ title: "Replace what's here?", text: 'The pasted quiz takes its place. Changes you haven\'t saved are lost.', ok: 'Replace', danger: true }))) return;
         try {
           const r = await post('/api/t/quizzes/normalize', { json: pasteArea.value });
           showQuizEditor(currentId, { quiz: r.quiz, missing: r.missingImages });
@@ -1848,7 +1851,8 @@
       if (saved && w) w.location = `/teacher/preview.html?quiz=${encodeURIComponent(saved)}`;
       else if (w) w.close();
     });
-    const leave = () => { if (!dirty || confirm('Leave without saving?')) showHome('quizzes'); };
+    const leaveOk = () => !dirty || window.BQAsk.confirm({ title: 'Leave without saving?', text: "Changes you haven't saved are lost.", ok: 'Leave', danger: true });
+    const leave = async () => { if (await leaveOk()) showHome('quizzes'); };
 
     const title = h('input', { class: 'input qe-title', value: quiz.title || '', placeholder: 'Quiz title', 'aria-label': 'Title', maxlength: '120' });
     title.addEventListener('input', () => { quiz.title = title.value; touch(); });
@@ -1916,7 +1920,7 @@
 
     mount(bar(h('button', { class: 't-link t-back', type: 'button', onclick: leave }, icon(ICONS.back, 16), 'Quizzes')), root);
     // The browser's Back button asks too.
-    window.BQT.guard(() => !dirty || confirm('Leave without saving?'));
+    window.BQT.guard(leaveOk);
     renderPane();
     if (!id && !preset) title.focus();
   }

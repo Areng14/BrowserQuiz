@@ -19,6 +19,9 @@ Put quizzes in `quizzes/`, which is gitignored because quiz files contain answer
 Follow `.claude/skills/arenguidesign/SKILL.md` for any UI you build or change, and check it
 with screenshots before calling it done.
 
+Never use the browser's `alert()`, `confirm()` or `prompt()`. Teacher pages use their own dialogs from
+`public/teacher/ask.js` (`BQAsk.confirm`, `BQAsk.notice`, `BQAsk.ask`); the student app has its own modals.
+
 ## Rules
 
 - Never commit `.env`: it holds the teacher password and secrets.

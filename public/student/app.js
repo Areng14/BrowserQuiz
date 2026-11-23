@@ -1277,7 +1277,8 @@
       part.md ? h('div', { class: 'directions prompt' }, BQ.md.render(part.md, mdOpts()))
         : part.list ? h('div', { class: 'directions' }, h('strong', { text: 'Directions' }), h('ul', {}, part.list.map(([t, text]) => h('li', {}, h('b', { text: `${t}: ` }), text))))
           : h('p', { class: 'directions' }, h('strong', { text: 'Directions: ' }), part.text),
-      intro ? null : quizDirections(S.quiz.directions && S.quiz.directions.quiz, 'For the whole quiz'),
+      // shown once, before the first part; after that only when they open Directions again
+      intro || !seen ? null : quizDirections(S.quiz.directions && S.quiz.directions.quiz, 'For the whole quiz'),
       h('div', {}, h('button', { class: 'btn primary', type: 'button', text: seen ? 'Back to the question' : 'Start this part', onclick: closeDirections })));
   }
 

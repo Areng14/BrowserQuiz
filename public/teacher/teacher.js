@@ -3,6 +3,7 @@
 (function () {
   'use strict';
   const root = document.getElementById('t-app');
+  const ask = window.BQAsk; // our own confirm, notice and prompt (ask.js)
   const THEME_KEY = 'bq-theme';
   const LABEL = {
     join: 'Signed in', admit: 'Admitted', start: 'Started the quiz', submit: 'Submitted', run: 'Ran examples', reload: 'Reopened mid-quiz',
@@ -77,13 +78,17 @@
     return b;
   }
   let who = null; // the signed-in teacher, from /api/t/me
-  // Password and passkeys. Admin's password in .env is changed there, so admin only gets passkeys.
-  const accountBtn = () => (!who || (who.passwordFromEnv && !PASSKEYS) ? null
-    : h('button', { class: 'btn small', type: 'button', text: who.passwordFromEnv ? 'Passkeys' : 'Password', onclick: () => showSetPassword(false) }));
+  // The signed-in teacher's name, opening a menu: their password (or, for admin with the password in
+  // .env, which is changed there, only passkeys) and Sign out.
+  function accountMenu() {
+    if (!who) return null;
+    const items = [];
+    if (!(who.passwordFromEnv && !PASSKEYS)) items.push({ text: who.passwordFromEnv ? 'Passkeys' : 'Password', onclick: () => showSetPassword(false) });
+    items.push({ text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } });
+    return moreMenu(`Account, ${who.name}`, 'account', items, null, { text: who.name });
+  }
   function bar(...left) {
-    return h('header', { class: 't-bar' }, h('span', { class: 'grow' }, ...left),
-      who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null, themeButton(), accountBtn(),
-      h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } }));
+    return h('header', { class: 't-bar' }, h('span', { class: 'grow' }, ...left), themeButton(), accountMenu());
   }
   // A new page: the tab title names it, and reading starts at its heading unless the page focused a field.
   function mount(...nodes) {
@@ -171,7 +176,7 @@
       msg.textContent = '';
       if (next.value !== again.value) { msg.textContent = "The new passwords don't match."; return; }
       btn.disabled = true;
-      if (recover && fresh.checked && !confirm('Start over? Your quizzes, and the results from them, are deleted for good.')) { btn.disabled = false; return; }
+      if (recover && fresh.checked && !(await ask.confirm({ title: 'Start over?', text: 'Your quizzes, and the results from them, are deleted for good.', ok: 'Start over', danger: true }))) { btn.disabled = false; return; }
       try {
         const r = await post('/api/t/me/password', { current: cur.value, next: next.value, recoveryCode: recover && !fresh.checked ? code.value : undefined, startOver: recover && fresh.checked });
         if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else showHome();
@@ -272,7 +277,7 @@
             h('span', { text: `Added ${new Date(k.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}` }), ' · ',
             h('span', { text: k.lastUsedAt ? `Last used ${date(k.lastUsedAt)}` : 'Not used yet' }))),
         h('button', { class: 'btn small', type: 'button', text: 'Remove', 'aria-label': `Remove ${k.name}`, onclick: async () => {
-          if (!confirm(`Remove ${k.name}?`)) return;
+          if (!(await ask.confirm({ title: `Remove ${k.name}?`, text: "You can't sign in with it after this.", ok: 'Remove', danger: true }))) return;
           msg.textContent = '';
           try { paint((await post(`/api/t/passkeys/${encodeURIComponent(k.id)}/delete`)).passkeys); } catch (e) { if (e.message !== 'login') msg.textContent = e.message; }
         } }))));
@@ -315,7 +320,7 @@
       let r;
       try { r = await api('/api/t/teachers'); } catch (e) { return; }
       const act = async (x, action) => {
-        if (action === 'disable' && !confirm(`Disable ${x.name}? They're signed out and can't sign in. Their quizzes and results stay.`)) return;
+        if (action === 'disable' && !(await ask.confirm({ title: `Disable ${x.name}?`, text: "They're signed out and can't sign in. Their quizzes and results stay.", ok: 'Disable', danger: true }))) return;
         try {
           const out = await post(`/api/t/teachers/${x.id}/${action}`);
           if (out.tempPassword) showTemp(x.name, out.tempPassword); else msg.textContent = '';
@@ -371,6 +376,7 @@
   let live = 0; // open quizzes, shown on the Open tab when there's more than one
   let here = location.hash;
   let leaveGuard = null; // set by a page with unsaved work; false keeps the teacher there
+  let guardOpen = false;
   let navSeq = 0; // the latest page asked for, so a slow load doesn't replace a newer page
 
   function setHash(hash, replace) {
@@ -379,7 +385,13 @@
     history[replace ? 'replaceState' : 'pushState'](null, '', hash);
   }
   async function route() {
-    if (leaveGuard && !leaveGuard()) { history.pushState(null, '', here); return; }
+    if (leaveGuard) {
+      if (guardOpen) return; // already asking
+      guardOpen = true;
+      const go = await leaveGuard();
+      guardOpen = false;
+      if (!go) { history.pushState(null, '', here); return; }
+    }
     leaveGuard = null;
     if (!who) { try { who = (await api('/api/t/me')).teacher; } catch (e) { return; } } // signs in first if needed
     const [a, b] = location.hash.slice(1).split('/');
@@ -440,10 +452,7 @@
         h('div', { class: 't-nav' }, tabs.map((t) => h('a', { class: 't-nav-item', href: t.href || '#' + t.id, title: t.title || null, 'aria-current': t.id === active ? 'page' : null },
           icon(t.icon), h('span', { class: 't-nav-label' }, t.short || t.label, t.short ? h('span', { class: 't-nav-more', text: t.label.slice(t.short.length) }) : null),
           t.id === 'open' && live > 1 ? h('span', { class: 't-badge', title: `${live} open`, 'aria-label': `${live} open`, text: String(live) }) : null))),
-        h('div', { class: 't-side-foot' },
-          who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null,
-          h('div', { class: 't-side-btns' }, themeButton(), accountBtn(),
-            h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } })))),
+        h('div', { class: 't-side-foot' }, accountMenu(), themeButton())),
       h('main', { class: 't-main' }, ...content),
       h('footer', { class: 't-foot' }, ghLink())); // at the bottom of the page, or after it when it's long
   }
@@ -474,8 +483,10 @@
       h('td', { text: r.quiz }), h('td', { text: r.roster }),
       h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.corrections ? ' (corrections)' : r.practice ? ' (practice)' : r.seb ? ' (SEB)' : ''}` }),
       h('td', { class: 'num', 'data-label': 'Joined', text: String(r.joined) }), h('td', { 'data-label': 'Started', text: date(r.createdAt) }),
-      h('td', { class: 't-actions' }, h('button', { class: 'btn small', type: 'button', text: 'Delete', 'aria-label': `Delete ${r.code}`,
-        onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?${r.status === 'open' ? " It's still open: anyone taking it gets signed out." : ''}`) })))))));
+      // like every list: the rest, and Delete in red, under ⋯
+      h('td', { class: 't-actions' }, moreMenu(`More for ${r.code}`, `run:${r.id}`, [
+        h('a', { href: `/teacher/report.html?run=${encodeURIComponent(r.id)}`, target: '_blank', rel: 'noopener', text: 'Class report' }),
+        { text: 'Delete', danger: true, onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?`, r.status === 'open' ? "It's still open: anyone taking it gets signed out." : null) }])))))));
 
   // Start a quiz: what, who, and how it's locked down. (Open ones are under the Open tab.)
   function giveTab(data, me) {
@@ -513,7 +524,7 @@
     startBtn.addEventListener('click', async () => {
       const pick = data.quizzes.find((x) => x.id === quizSel.value);
       if (mode !== 'practice' && pick && pick.practiced
-        && !confirm(`Students who practiced "${pick.title}" have seen its answers. Give it as a graded quiz anyway?`)) return;
+        && !(await ask.confirm({ title: 'Give it as a graded quiz?', text: `Students who practiced "${pick.title}" have seen its answers.`, ok: 'Give it anyway' }))) return;
       startBtn.disabled = true;
       startMsg.textContent = '';
       try {
@@ -585,7 +596,7 @@
             moreMenu(`More for ${x.title}`, `quiz:${x.id}`, [
               linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true),
               linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
-              { text: 'Delete', danger: true, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}? Past results stay.`) }]))))))) : null,
+              { text: 'Delete', danger: true, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}?`, 'Past results stay.') }]))))))) : null,
       h('div', { class: 't-row t-add' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizBtn),
       h('details', { class: 't-paste' }, h('summary', { text: 'Paste a quiz.json' }),
         h('label', { class: 'field', for: 'paste-quiz' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteJson), h('div', {}, pasteBtn)),
@@ -614,7 +625,7 @@
           h('td', { class: 't-actions' },
             h('button', { class: 'btn small', type: 'button', text: 'Edit', 'aria-label': `Edit ${x.name}`, onclick: () => showRoster(x.id) }),
             moreMenu(`More for ${x.name}`, `class:${x.id}`, [
-              { text: 'Delete', danger: true, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}? Past results stay.`) }]))))))) : null,
+              { text: 'Delete', danger: true, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}?`, 'Past results stay.') }]))))))) : null,
       h('div', { class: 't-row t-add' },
         h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
         h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile),
@@ -707,7 +718,7 @@
     const copy = h('button', { class: 'btn', type: 'button', text: 'Copy SEB link' });
     let reset = 0;
     copy.addEventListener('click', async () => {
-      if (!(await copyText(link))) { prompt('Copy this link:', link); return; }
+      if (!(await copyText(link))) { ask.ask({ title: 'Copy this link', value: link, copy: true, ok: 'Done' }); return; }
       copy.textContent = 'Copied';
       clearTimeout(reset);
       reset = setTimeout(() => { copy.textContent = 'Copy SEB link'; }, 2000);
@@ -750,9 +761,9 @@
     ta.remove();
     return ok;
   }
-  async function remove(path, question) {
-    if (!confirm(question)) return;
-    try { await post(path); } catch (e) { alert(e.message); }
+  async function remove(path, title, text) {
+    if (!(await ask.confirm({ title, text, ok: 'Delete', danger: true }))) return;
+    try { await post(path); } catch (e) { await ask.notice({ title: "Couldn't delete it", text: e.message }); }
     showHome();
   }
 
@@ -832,8 +843,8 @@
   async function aiDialog(runId, attemptId, done) {
     const qs = attemptId ? `?attempt=${encodeURIComponent(attemptId)}` : '';
     let p;
-    try { p = await api(`/api/t/runs/${runId}/ai-prompt${qs}`); } catch (e) { alert(e.message); return; }
-    if (!p.answers) { alert('Nothing is waiting for you to grade.'); return; }
+    try { p = await api(`/api/t/runs/${runId}/ai-prompt${qs}`); } catch (e) { ask.notice({ title: "Couldn't start grading", text: e.message }); return; }
+    if (!p.answers) { ask.notice({ title: 'Nothing to grade' }); return; }
     let ks = { mine: false, hint: null, server: false };
     try { ks = await api('/api/t/ai-key'); } catch (e) { /* the copy and paste way still works */ }
     const dlg = h('dialog', { class: 't-dialog t-ai-dialog', 'aria-labelledby': 't-ai-title' });
@@ -1097,9 +1108,13 @@
   // or an element (a link, say), or a function that gives them, asked each time it opens. The live table
   // doesn't redraw while one is open (menuOpen), so it stays put; onClose catches it up.
   let menuOpen = false;
-  function moreMenu(label, key, items, onClose) {
-    const btn = h('button', { class: 'btn small t-menu-btn', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': label, title: 'More', 'data-key': key }, icon(ICONS.dots, 18));
-    btn.firstChild.setAttribute('fill', 'currentColor');
+  // opts.text: a button with that text and a chevron (the account menu) instead of ⋯.
+  function moreMenu(label, key, items, onClose, opts) {
+    const named = opts && opts.text;
+    const btn = named
+      ? h('button', { class: 'btn small t-menu-btn t-menu-named', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': label, 'data-key': key }, h('span', { class: 't-menu-name', text: opts.text }), icon(ICONS.chevron, 16))
+      : h('button', { class: 'btn small t-menu-btn', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': label, title: 'More', 'data-key': key }, icon(ICONS.dots, 18));
+    if (!named) btn.firstChild.setAttribute('fill', 'currentColor');
     const menu = h('div', { class: 't-menu', popover: 'manual', role: 'menu', 'aria-label': label });
     const fill = (list) => menu.replaceChildren(...list.filter(Boolean).map((it) => {
       if (it.nodeType) {
@@ -1120,10 +1135,13 @@
     function place() {
       const r = btn.getBoundingClientRect();
       if (!btn.isConnected || r.bottom < 0 || r.top > innerHeight) { close(false); return; }
+      // Big screens zoom the page (teacher.css), and zoom scales top and left too: measure by how much.
+      menu.style.top = menu.style.left = '100px';
       const m = menu.getBoundingClientRect();
+      const k = m.left / 100 || 1;
       const top = r.bottom + 4 + m.height > innerHeight - 8 ? r.top - 4 - m.height : r.bottom + 4;
-      menu.style.top = `${Math.max(8, top)}px`;
-      menu.style.left = `${Math.max(8, Math.min(r.right - m.width, innerWidth - m.width - 8))}px`;
+      menu.style.top = `${Math.max(8, top) / k}px`;
+      menu.style.left = `${Math.max(8, Math.min(r.right - m.width, innerWidth - m.width - 8)) / k}px`;
     }
     const away = (e) => { if (!(e.target instanceof Node) || !menu.contains(e.target)) place(); }; // resize's target is the window
     let isOpen = false;
@@ -1219,8 +1237,20 @@
     }
     function alertBox(msg) { detail.prepend(h('p', { class: 't-error', text: msg })); }
     // Ends one student's quiz: their answers are turned in and they see "Your teacher ended your quiz".
-    function endQuiz(id, name) {
-      if (!confirm(`End ${name}'s quiz now? Their answers are turned in and they can't continue.`)) return;
+    async function unInvalidate(id, name) {
+      if (await ask.confirm({ title: `Un-invalidate ${name}?`, ok: 'Un-invalidate' })) act(`/api/t/attempts/${id}/restore`);
+    }
+    async function invalidate(id, name) {
+      const note = await ask.ask({ title: `Invalidate ${name}?`, label: 'Reason (optional)', ok: 'Invalidate', danger: true });
+      if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note });
+    }
+    async function resetAttempt(id, name, before) {
+      if (!(await ask.confirm({ title: `Reset ${name}?`, text: 'Their answers are deleted. Crashed computer? Use Let back in instead.', ok: 'Reset', danger: true }))) return;
+      if (before) before();
+      act(`/api/t/attempts/${id}/reset`);
+    }
+    async function endQuiz(id, name) {
+      if (!(await ask.confirm({ title: `End ${name}'s quiz?`, text: "Their answers are turned in and they can't continue.", ok: 'End quiz', danger: true }))) return;
       lastDetail = '';
       act(`/api/t/attempts/${id}/end`);
     }
@@ -1277,8 +1307,8 @@
       if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp', text: run.sebQuit }));
       if (run.sebFile && !sebParts) sebParts = sebButtons(run.code, run.joinUrl);
       toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
-      toggle.onclick = () => {
-        if (run.status === 'open' && !confirm('Close the quiz? Anyone still working gets turned in.')) return;
+      toggle.onclick = async () => {
+        if (run.status === 'open' && !(await ask.confirm({ title: 'Close the quiz?', text: 'Anyone still working gets turned in.', ok: 'Close quiz', danger: true }))) return;
         act(`/api/t/runs/${runId}/${run.status === 'open' ? 'close' : 'open'}`);
       };
       lockBtn.textContent = run.ipLock ? 'Network lock: on' : 'Network lock: off';
@@ -1298,7 +1328,7 @@
         const more = [];
         const bad = a && a.integrity === 'invalidated';
         if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`)), { class: 'btn small primary' }));
-        if (bad) actions.append(btn('Un-invalidate', 'restore', () => { if (confirm(`Un-invalidate ${s.name}?`)) act(`/api/t/attempts/${a.id}/restore`); }));
+        if (bad) actions.append(btn('Un-invalidate', 'restore', () => unInvalidate(a.id, s.name)));
         // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
         // popup doesn't end anyone's quiz without the teacher looking).
         if (bad && a.status === 'active') actions.append(btn('End quiz', 'end', () => endQuiz(a.id, s.name)));
@@ -1306,7 +1336,7 @@
         if (a && a.status === 'active') (bad ? more.push(watchLink(a.id, s.name)) : actions.append(watchLink(a.id, s.name)));
         if (a && (a.status === 'active' || a.status === 'admitted') && !a.letIn) more.push({ text: 'Let back in', onclick: () => act(`/api/t/attempts/${a.id}/let-in`) });
         if (a && (a.status === 'active' || a.status === 'admitted') && a.letIn) actions.append(h('span', { class: 't-muted t-small', text: 'Can sign in again' }));
-        if (a) more.push({ text: 'Reset', danger: true, onclick: () => { if (confirm(`Reset ${s.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) act(`/api/t/attempts/${a.id}/reset`); } });
+        if (a) more.push({ text: 'Reset', danger: true, onclick: () => resetAttempt(a.id, s.name) });
         if (more.length) actions.append(...moreMenu(`More for ${s.name}`, `${a.id}:more`, more, () => refresh()));
         // On a phone a row shows only what needs doing now (Admit, End quiz); the rest is one tap away, on the student.
         for (const b of actions.children) if (!/:(admit|end)$/.test(b.dataset.key || '')) b.classList.add('t-row-extra');
@@ -1395,18 +1425,18 @@
         // what's for now in the row; the rest under ⋯
         h('div', { class: 't-row t-detail-acts' },
           d.status === 'active' ? watchLink(id, d.name) : null,
-          d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Un-invalidate', onclick: () => { if (confirm(`Un-invalidate ${d.name}?`)) act(`/api/t/attempts/${id}/restore`); } }, dk('restore'))) : null,
+          d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Un-invalidate', onclick: () => unInvalidate(id, d.name) }, dk('restore'))) : null,
           d.status === 'active' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }, dk('end'))) : null,
           d.status === 'active' && d.deadline ? h('span', Object.assign({ class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }, ticks('left-label', d.timeLeft || 0))) : null,
-          d.status === 'active' && d.deadline ? h('button', Object.assign({ class: 'btn small', type: 'button', text: '+5 min', 'aria-label': 'Add 5 minutes', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } }, dk('extend'))) : null,
           d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
           d.status === 'submitted' && d.totals && d.totals.review ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Grade with AI', title: 'Send the answers waiting for you to Claude. Names and IDs stay here.',
             onclick: () => aiDialog(runId, id, aiDone) }, dk('ai'))) : null,
           moreMenu(`More for ${d.name}`, 'detail:more', [
-            d.integrity !== 'invalidated' ? { text: 'Invalidate', onclick: () => { const note = prompt('Reason (optional)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } } : null,
+            d.status === 'active' && d.deadline ? { text: 'Add 5 minutes', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } } : null,
+            d.integrity !== 'invalidated' ? { text: 'Invalidate', onclick: () => invalidate(id, d.name) } : null,
             d.status === 'submitted' ? { text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) } : null,
             d.status === 'active' || d.status === 'admitted' ? { text: 'Let back in', onclick: () => act(`/api/t/attempts/${id}/let-in`) } : null,
-            { text: 'Reset', danger: true, onclick: () => { if (confirm(`Reset ${d.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) { closeDetail(); act(`/api/t/attempts/${id}/reset`); } } },
+            { text: 'Reset', danger: true, onclick: () => resetAttempt(id, d.name, closeDetail) },
           ], () => refresh())),
         d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}` }) : null,
         d.strikes ? h('p', { class: 't-small t-away', text: `Left ${d.strikes === 1 ? 'once' : d.strikes + ' times'}. Away ${mmss(d.awayMs)} in all${d.strikes > 1 ? `, ${mmss(d.awayMax)} at the longest` : ''}.` }) : null,
@@ -1523,6 +1553,6 @@
     ctx.globalAlpha = 1;
   }
 
-  window.BQT = { h, api, post, mount, bar, showHome, plural, date, setHash, icon, ICONS, guard: (fn) => { leaveGuard = fn; } };
+  window.BQT = { h, api, post, mount, bar, showHome, plural, date, setHash, icon, ICONS, moreMenu, guard: (fn) => { leaveGuard = fn; } };
   route();
 })();

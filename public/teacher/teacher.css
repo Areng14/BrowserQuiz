@@ -39,9 +39,12 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .t-nav-label { flex: 1; min-width: 0; }
 .t-badge { font-size: 13px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.t-side-foot { margin-top: auto; display: grid; gap: 8px; padding: 7.5px 10px 0; border-top: 1px solid var(--line); } /* the name sits midway between the line and the buttons */
-.t-side-btns { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.t-side .t-who { overflow: hidden; text-overflow: ellipsis; }
+.t-side-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 12px 0 0; border-top: 1px solid var(--line); }
+/* the account menu: the teacher's name with a chevron, the width the theme button leaves */
+.btn.t-menu-btn.t-menu-named { flex: 0 1 auto; min-width: 0; max-width: 240px; width: auto; justify-content: space-between; gap: 6px; padding: 0 10px; font-weight: 600; }
+.t-side-foot .btn.t-menu-named { flex: 1 1 auto; max-width: none; } /* fills the sidebar's footer row */
+.t-menu-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-menu-named svg { flex: none; color: var(--ink-2); }
 
 /* Give a quiz: pick the quiz and class, then a mode */
 .t-start-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 20px; border: 1px solid var(--line); border-radius: 10px; }
@@ -95,8 +98,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
   .t-nav-label { flex: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .t-badge { position: absolute; top: 4px; left: calc(50% + 13px); font-size: 11px; line-height: 1; }
   .t-side-foot { flex: 1; min-width: 0; margin: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0; border: 0; }
-  .t-side-btns { flex: none; flex-wrap: nowrap; }
-  .t-side .t-who { min-width: 0; }
+  .t-side-foot .btn.t-menu-named { flex: 0 1 auto; }
   .t-modes { grid-template-columns: minmax(0, 1fr); }
   .t-start-form { padding: 14px; }
   .t-row .field { min-width: 0; }
@@ -104,7 +106,6 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
   .pick-meta > span + span { display: none; }
 }
 @media (max-width: 420px) {
-  .t-side-btns .btn.small { padding-left: 10px; padding-right: 10px; }
   .t-nav-more { display: none; }
 }
 /* The smallest phones, with six tabs (Current quiz is open): every label still whole */
@@ -289,6 +290,12 @@ input[type="file"].input { padding: 6px 10px; }
 .t-corr-pct { display: flex; align-items: center; gap: 8px; }
 .t-corr-pct .input { width: 90px; }
 .t-admit-list { display: grid; gap: 12px; padding: 18px 20px 20px; }
+/* Our own confirm, notice and prompt (ask.js), in place of the browser's */
+.t-ask { width: min(440px, calc(100vw / var(--zoom, 1) - 32px)); }
+.t-ask-body { display: grid; gap: 14px; padding: 16px 20px 20px; }
+.t-ask-body p { margin: 0; }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: var(--accent-ink); }
+.btn.danger:hover:not(:disabled) { background: var(--bad); filter: brightness(1.08); }
 /* The two ways to grade, as a segmented control under the header */
 .t-tabs { display: flex; gap: 4px; margin: 14px 20px 0; padding: 4px; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; }
 .t-tab { flex: 1; min-height: 34px; padding: 0 12px; font: 600 14px var(--font); color: var(--ink-2); background: none; border: 0; border-radius: 7px; cursor: pointer; }
@@ -567,7 +574,7 @@ details.qe-card:not([open]) { padding-bottom: 16px; }
 /* A choice can grow to several lines (Shift+Enter): the marks stay level with its first line. */
 .qe-choice-row { align-items: flex-start; }
 .qe-choice-row > input[type="radio"], .qe-choice-row > input[type="checkbox"] { margin-top: 11px; }
-.qe-choice-row > .qe-grip { margin-top: 8px; }
+.qe-choice-row > .qe-grip { margin-top: 0; min-height: 40px; } /* as tall as its row, centered on it */
 .qe-choice-text { flex: 1; min-width: 0; min-height: 40px; }
 .qe-grip { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; min-height: 24px; padding: 0; color: var(--ink-2); background: none; border: 0; border-radius: 4px; cursor: grab; user-select: none; }
 .qe-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -679,3 +686,10 @@ th .qe-gridcell { font: 600 13px var(--font); }
   .qe { max-width: 1760px; }
   .qe-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 760px); }
 }
+
+/* the same heights for controls side by side (arenguidesign) */
+.qe-head .input { height: 34px; min-height: 34px; padding-block: 0; } /* the question's head: all small, like its buttons */
+.qe-tools .input.qe-narrow { height: 34px; min-height: 34px; padding-block: 0; }
+.qe-choice > .input.t-points { height: 40px; min-height: 40px; } /* a rubric item's points, as tall as its text */
+.qe-cell .qe-tool { min-height: 30px; } /* a trace column's remove button, as tall as its name */
+@media (pointer: coarse) { .qe-tool { min-height: 40px; min-width: 40px; } .qe-grip { min-width: 40px; } }
