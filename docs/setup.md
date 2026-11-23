@@ -264,8 +264,20 @@ docker compose up -d --no-build
 
 ## Hosting on Railway
 
-BrowserQuiz runs on [Railway](https://railway.com) as two services from this repo, with HTTPS on your
-own domain:
+The quickest way: [deploy it on Railway](https://railway.com/deploy/fMUAh_?referralCode=dP9ijG&utm_medium=integration&utm_source=button&utm_campaign=generic).
+
+1. Sign in to Railway (new accounts get a 30-day trial; after that, the Hobby plan is about $5 a month).
+2. Pick a password of 10 or more characters. That's admin's password.
+3. Wait for the first build, about 10 minutes.
+4. Open the `app` service's address (a `.up.railway.app` link, with HTTPS) and sign in at `/teacher`
+   as `admin`.
+
+The secrets are generated for your copy when it deploys, and nobody else has them. When this repo
+changes, Railway shows **Update available** on your project, and nothing changes until you apply it.
+Stay on the Hobby plan rather than the Free one: Free puts services to sleep when idle, and a restart
+locks quizzes until their teacher signs in again.
+
+To set it up by hand instead, it's two services from this repo:
 
 | Service | Settings |
 | --- | --- |

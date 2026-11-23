@@ -63,7 +63,15 @@ The details are in [docs/security.md](docs/security.md).
 
 ## Quick start
 
-You need Docker.
+**No install:** deploy your own copy on Railway (about $5 a month after the free trial).
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/fMUAh_?referralCode=dP9ijG&utm_medium=integration&utm_source=button&utm_campaign=generic)
+
+Pick a password (10+ characters) when it asks, wait about 10 minutes for the first build, then open the
+`app` service's address and sign in at `/teacher` as `admin`. More in
+[docs/setup.md](docs/setup.md#hosting-on-railway).
+
+**On your own server:** you need Docker.
 
 ```bash
 git clone https://github.com/Areng14/BrowserQuiz.git && cd BrowserQuiz
