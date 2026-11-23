@@ -1367,9 +1367,9 @@
           strikesCell(a),
           progressCell(a),
           // extra time (the class's settings) shows next to the clock, and on it in words for screen readers
-          h('td', { class: 'num', 'data-label': 'Time left', title: s.timeX ? `${s.timeX}× time` : null },
+          h('td', { class: 'num', 'data-label': 'Time left', title: s.timeX && !(a && a.status === 'submitted') ? `${s.timeX}× time` : null },
             h('span', Object.assign({ text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }, a && a.timeLeft != null && a.status === 'active' ? ticks('left', a.timeLeft) : {})),
-            s.timeX ? h('span', { class: 't-muted t-xtime', text: ` ${s.timeX}×`, 'aria-label': `, ${s.timeX} times the time` }) : null),
+            s.timeX && !(a && a.status === 'submitted') ? h('span', { class: 't-muted t-xtime', text: ` ${s.timeX}×`, 'aria-label': `, ${s.timeX} times the time` }) : null),
           h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), 'data-label': 'Score', text: score }),
           actions);
       }));
