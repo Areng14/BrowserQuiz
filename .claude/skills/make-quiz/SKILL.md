@@ -13,28 +13,46 @@ for a working example of every question type.
 Use what the user gave you: topic or unit, source material (notes, a worksheet, a PDF),
 number of questions and mix of types, time limit, languages, and difficulty.
 Fill gaps with these defaults and say which ones you used. Don't stop to ask.
-- AP CSA style, Java (add Python to code questions only if asked). If a unit number is
-  given, say which course outline you assumed (AP CSA renumbered its units in 2025).
+- Match the style, level and language of the topic and notes. If nothing says otherwise, use
+  Java. If an AP unit number is given, say which course outline you assumed (AP CSA renumbered
+  its units in 2025).
+- Topics that aren't about code (networking, math, theory): `"language": "none"` and no code
+  questions unless asked.
 - Minutes per question: 1 for multiple choice, 2 for select-all, 1–2 for short answer or output,
-  3–4 for a trace table, 2–4 for fill in the blanks, 5–10 for code, 5 for a written answer
+  3–4 for a trace table, 2–4 for fill in the blanks, 5–15 for code (by difficulty), 5 for a
+  written answer
 - Points per question: 1 for multiple choice, 2 for select-all, 1 for short answer, 6–9 for code
 - "A few" questions means 3–5
-- Medium difficulty. Easy: one idea per question, short code (about 5 lines), direct tracing
-  or recall. Medium: AP exam level, two ideas per question, traps real students fall into,
-  code questions the size of one free-response part. Hard: multi-step reasoning, nested loops
-  and 2D arrays, tricky edge cases, and speed tests that require an efficient solution (see
-  "Speed tests" in the format spec; say the required big-O in the prompt). Mixed: start easy,
-  end hard.
+- Medium difficulty.
+  - Easy: one idea per question, recall or a single direct step, code to trace about 5 lines,
+    code questions about 5 minutes.
+  - Medium: questions combine two ideas, and wrong choices are real student mistakes. Code
+    questions take about 10 minutes.
+  - Hard: multi-step reasoning and tricky edge cases, code questions about 15 minutes with more
+    hidden tests, and speed tests that require an efficient solution (see "Speed tests" in the
+    format spec; say the required big-O in the prompt).
+  - Mixed: start easy, end hard.
 - Rubric items on code questions grade themselves (`require`/`forbid`) unless the user wants
   to grade them by hand or wants no rubric
 
 ## 2. Write it
 
+Keep every question short: long ones overflow the screen on laptops, iPads and phones.
+- Prompt: what's asked in 1–3 sentences (about 60 words), plus code if it's about code. No story,
+  no setup, no restating the rules.
+- Code shown to students: at most about 15 lines, each under about 70 characters, one snippet per
+  question.
+- Choices: one line, under about 60 characters, about the same length.
+- Code questions: one method with an exact signature; the prompt is about 100 words at most and
+  doesn't repeat the sample tests in words.
+- Explanations one or two sentences, directions one line or none. If a question needs more,
+  split it into two.
+
 Create `quizzes/<short-name>/quiz.json`. `quizzes/` is gitignored, because quiz files hold
 answer keys. Images go in `quizzes/<short-name>/assets/`.
 
 - **Question types:** single, multi, text, code, plus output (predict what code prints), trace (trace
-  table), fill (fill in the blanks) and essay (teacher-graded). Prefer output and trace for AP-style
+  table), fill (fill in the blanks) and essay (teacher-graded). Prefer output and trace for
   "what is printed" and tracing questions.
 - **Order** questions single → multi → text → output → trace → fill → code → essay. Consecutive questions of one type form a part,
   with its own directions page, and shuffling stays inside parts.
@@ -59,13 +77,13 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
 - **Shared material:** when several questions use the same case, passage or code, write it
   once in top-level `shared` and give each question `"shared": "<id>"`. Keep the set's
   questions next to each other.
-- **Multiple choice:** one clearly correct answer. Wrong choices come from real mistakes:
-  - integer division
-  - off-by-one errors
-  - `==` vs `.equals`
-  - aliasing
-  - short-circuiting
-  - precedence
+- **Multiple choice:** one clearly correct answer. Wrong choices come from real mistakes in the
+  quiz's language or topic:
+  - Java: integer division, off-by-one errors, `==` vs `.equals`, aliasing, short-circuiting,
+    precedence
+  - Python: mutable default arguments, `is` vs `==`, off-by-one in `range`
+  - networking: off-by-one subnet sizes, mixing up layers
+  - or the equivalent mistakes for any other language or topic
 
   Keep choices about the same length. No "all/none of the above". `answer` counts from 0:
   recount it against the `choices` list.
@@ -116,12 +134,12 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
   - For `list`/array answers where order doesn't matter, set `"compare": "unordered"`.
 - **Fair to students:** they lose points for not knowing the material, never for guessing what
   was meant.
-  - Only what's been taught. No trivia, trick questions, misleading names or planted typos. "NOT"
-    questions say **NOT** in bold.
+  - Only the language features and library methods the notes cover. With no notes, stick to what
+    an intro course in that language teaches (for AP CSA, the Java Quick Reference). No trivia,
+    trick questions, misleading names or planted typos. "NOT" questions say **NOT** in bold.
   - Every hidden test checks something the prompt says (empty input, negatives, ties); a speed
     test means the prompt names the speed needed.
-  - Code students read compiles, reads normally and stays under about 15 lines; output questions
-    print a few short lines.
+  - Code students read compiles and reads normally; output questions print a few short lines.
   - Short answers and blanks accept every reasonable form. Trace tables: about 8 rows, starting
     values given. Select-all with 3+ correct choices gets `"partialCredit": true`.
   - Points match the work, and the time limit is about 20% more than the questions need.
