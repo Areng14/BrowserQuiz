@@ -669,9 +669,19 @@
       btn, msg,
       cfg.demo && prechecks().some((c) => !c.ok) ? demoHint('Demo: checks are shown but not enforced here.') : null);
 
-    btn.addEventListener('click', () => agreeAndWait(btn, msg));
+    btn.addEventListener('click', () => { clearInterval(S.poll); agreeAndWait(btn, msg); });
     mount(entry(panel));
     btn.focus();
+    // While they read: notice the quiz closing (or them being signed out) without waiting for the click
+    clearInterval(S.poll);
+    S.poll = setInterval(async () => {
+      if (!panel.isConnected) { clearInterval(S.poll); return; }
+      try { await api.admitStatus(); } catch (e) {
+        if (!panel.isConnected) return;
+        if (e.code === 'run_closed') { clearInterval(S.poll); screenClosed(); }
+        else if (e.code === 'no_attempt') { clearInterval(S.poll); signedOut(); }
+      }
+    }, cfg.demo ? 2000 : 4000);
   }
 
   // "I agree": full screen (it needs this click), the server marks them ready, and the monitoring starts.
