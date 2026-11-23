@@ -188,7 +188,12 @@ HTTPS:
 2. In `.env`, set `DOMAIN=quiz.yourschool.org`, `APP_BIND=127.0.0.1` and `TRUST_PROXY=1`.
 3. Open ports 80 and 443, then run `docker compose --profile https up -d --build`.
 
-Caddy gets the certificate on its own. Why bother:
+Caddy gets the certificate on its own, as long as ports 80 and 443 can be reached from the internet.
+A box only the school network can reach can't get one that way, and Let's Encrypt doesn't issue
+certificates for local IPs. Ask IT for a certificate (many schools have their own), or point a domain
+at the box's local address and use Caddy's DNS challenge instead.
+
+Why bother:
 - Over plain HTTP, the teacher password and student IDs cross the network unencrypted.
 - School filters often block bare IPs.
 - Passkeys only work on HTTPS.
@@ -199,8 +204,9 @@ Where to host:
 
 - **Off campus (a VPS):** it works from anywhere, and nobody at school has to run a server. The
   "only my network" lock matches the school's public IP.
-- **A box on the school network:** fine too, but the lab PCs have to reach it, and IT usually has
-  opinions about that. The network lock then accepts any private (10.x / 192.168.x) address.
+- **A box on the school network:** fine too, but the lab PCs have to reach it, it needs its own way
+  to a certificate (above), and IT usually has opinions about that. The network lock then accepts any
+  private (10.x / 192.168.x) address.
 - **Railway:** see [Hosting on Railway](#hosting-on-railway).
 
 ## Requirements
