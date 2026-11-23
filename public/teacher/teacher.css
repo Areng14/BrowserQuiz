@@ -690,6 +690,7 @@ th .qe-gridcell { font: 600 13px var(--font); }
 /* the same heights for controls side by side (arenguidesign) */
 .qe-head .input { height: 34px; min-height: 34px; padding-block: 0; } /* the question's head: all small, like its buttons */
 .qe-tools .input.qe-narrow { height: 34px; min-height: 34px; padding-block: 0; }
+.qe-tools .qe-tool { min-height: 34px; } /* the same height as the language picker beside them */
 .qe-choice > .input.t-points { height: 40px; min-height: 40px; } /* a rubric item's points, as tall as its text */
 .qe-cell .qe-tool { min-height: 30px; } /* a trace column's remove button, as tall as its name */
 @media (pointer: coarse) { .qe-tool { min-height: 40px; min-width: 40px; } .qe-grip { min-width: 40px; } }
