@@ -345,8 +345,8 @@
       h('div', { class: 'heading' }, h('h1', { text: 'This quiz opens in lockdown' }),
         h('p', { text: 'Safe Exam Browser locks your device until you turn in.' })),
       h('div', { class: 'seb-launch' }, open,
-        h('p', { class: 'hint' }, 'Nothing happens? ', h('a', { href: apple ? 'https://apps.apple.com/app/id1155002964' : 'https://safeexambrowser.org/download_en.html', target: '_blank', rel: 'noopener', text: 'Get Safe Exam Browser' }))),
-      h('button', { class: 'link-btn seb-back', type: 'button', text: 'Use a different code', onclick: () => screenJoin() }))));
+        h('button', { class: 'btn', type: 'button', text: 'Use a different code', onclick: () => screenJoin() })),
+      h('p', { class: 'hint seb-get' }, 'Nothing happens? ', h('a', { href: apple ? 'https://apps.apple.com/app/id1155002964' : 'https://safeexambrowser.org/download_en.html', target: '_blank', rel: 'noopener', text: 'Get Safe Exam Browser' })))));
     open.focus();
   }
 
@@ -630,8 +630,8 @@
         h('p', { text: summaryLine(S.run) })),
       locked
         ? h('div', { class: 'lock-rule', role: 'note' },
-          h('p', { class: 'lock-title', text: 'Your device is locked until you turn in.' }),
-          h('p', { text: 'Other apps, tabs and windows are blocked. If you get stuck, ask your teacher.' }))
+          h('p', { class: 'lock-title', text: 'Lockdown mode' }),
+          h('p', { text: 'Other apps, tabs and windows are blocked until you turn in. If you get stuck, ask your teacher.' }))
         : h('div', { class: 'cheat-rule', role: 'note' },
           h('p', { class: 'cheat-title', text: 'Leaving the quiz counts as cheating.' }),
           h('p', { text: 'That means switching to another window, tab or app, leaving fullscreen, reloading or closing this page, or using Exit when your teacher didn\'t say to. Your teacher sees each time it happens.' })),

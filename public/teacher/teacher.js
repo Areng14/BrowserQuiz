@@ -206,10 +206,10 @@
           h('td', { text: x.name }), h('td', { class: 't-muted', text: x.username }),
           h('td', { class: 'num', 'data-label': 'Quizzes', text: String(x.quizzes) }), h('td', { class: 'num', 'data-label': 'Classes', text: String(x.classes) }),
           h('td', { class: x.disabled ? 't-muted' : x.pending ? 'st-waiting' : 'st-good', text: x.role === 'admin' ? 'Admin' : x.disabled ? 'Disabled' : x.pending ? 'Not signed in yet' : 'Active' }),
-          h('td', { class: 't-actions' }, x.role === 'admin' ? null : [
-            h('button', { class: 'btn small', type: 'button', text: 'Reset password', 'aria-label': `Reset password for ${x.name}`, onclick: () => act(x, 'reset') }),
-            h('button', { class: 'btn small', type: 'button', text: x.disabled ? 'Enable' : 'Disable', 'aria-label': `${x.disabled ? 'Enable' : 'Disable'} ${x.name}`, onclick: () => act(x, x.disabled ? 'enable' : 'disable') }),
-          ])))))));
+          h('td', { class: 't-actions' }, x.role === 'admin' ? null : moreMenu(`More for ${x.name}`, `teacher:${x.id}`, [
+            { text: 'Reset password', onclick: () => act(x, 'reset') },
+            { text: x.disabled ? 'Enable' : 'Disable', danger: !x.disabled, onclick: () => act(x, x.disabled ? 'enable' : 'disable') },
+          ]))))))));
     }
     const form = h('form', { class: 't-row' },
       h('label', { class: 'field', for: 'teacher-name' }, h('span', { class: 'field-label', text: 'Name' }), name),
@@ -288,6 +288,7 @@
     copy: ['M9 9h11v11H9z', 'M5 15H4V4h11v1'],
     trash: ['M3 6h18', 'M8 6V4h8v2', 'M19 6l-1 14H6L5 6', 'M10 11v6', 'M14 11v6'],
     chevron: ['M6 9l6 6 6-6'],
+    dots: ['M5 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z', 'M12 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z', 'M19 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z'], // filled (rowMenu)
     // question types (the quiz maker)
     single: ['M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z'],
     multi: ['M4 4h16v16H4z', 'M8 12l3 3 5-6'],
@@ -355,7 +356,7 @@
       h('td', { class: 't-actions' }, h('button', { class: 'btn small', type: 'button', text: 'Delete', 'aria-label': `Delete ${r.code}`,
         onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?${r.status === 'open' ? " It's still open: anyone taking it gets signed out." : ''}`) })))))));
 
-  // Start a quiz: what, who, and how it's locked down. Open quizzes are listed under it.
+  // Start a quiz: what, who, and how it's locked down. (Open ones are under the Open tab.)
   function giveTab(data, me) {
     const runner = !me || !me.runner || me.runnerOk ? null
       : h('p', { class: 't-error t-small' }, h('span', { class: 'dot bad' }), 'Code runner offline. Code questions get graded once it is back.');
@@ -401,7 +402,6 @@
       } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
     });
     const missing = [!data.quizzes.length && ['quiz', '#quizzes'], !data.rosters.length && ['class', '#classes']].filter(Boolean);
-    const open = data.runs.filter((r) => r.status === 'open');
     return [
       h('section', { class: 't-section' },
         h('h1', { text: 'Give a quiz' }),
@@ -412,7 +412,6 @@
           sebOwn,
           h('label', { class: 't-check t-switch-row', for: 'ip-lock' }, ipLock, h('span', { text: 'Only students on my current network' })),
           h('div', { class: 't-row t-start-row' }, startBtn, startMsg), runner)),
-      open.length ? h('section', { class: 't-section' }, h('h2', { text: 'Open now' }), runsTable(open)) : null,
     ];
   }
 
@@ -461,11 +460,12 @@
           h('td', { class: 't-muted', text: x.timeLimitMin ? `${x.timeLimitMin} min` : 'No time limit' }),
           h('td', { class: 't-muted', text: date(x.createdAt) }),
           h('td', { class: 't-actions' },
-            named(linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true), `Preview ${x.title}`),
             h('button', { class: 'btn small', type: 'button', text: 'Edit', 'aria-label': `Edit ${x.title}`, onclick: () => openQuiz(x.id) }),
-            named(linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`), `Download ${x.title}`),
-            h('button', { class: 'btn small', type: 'button', text: 'Delete', 'aria-label': `Delete ${x.title}`, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}? Past results stay.`) }))))))) : null,
-      h('div', { class: 't-row' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizBtn),
+            moreMenu(`More for ${x.title}`, `quiz:${x.id}`, [
+              linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true),
+              linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
+              { text: 'Delete', danger: true, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}? Past results stay.`) }]))))))) : null,
+      h('div', { class: 't-row t-add' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizBtn),
       h('details', { class: 't-paste' }, h('summary', { text: 'Paste a quiz.json' }),
         h('label', { class: 'field', for: 'paste-quiz' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteJson), h('div', {}, pasteBtn)),
       quizMsg);
@@ -492,8 +492,9 @@
           h('td', { class: 't-muted', text: plural(x.students, 'student') }),
           h('td', { class: 't-actions' },
             h('button', { class: 'btn small', type: 'button', text: 'Edit', 'aria-label': `Edit ${x.name}`, onclick: () => showRoster(x.id) }),
-            h('button', { class: 'btn small', type: 'button', text: 'Delete', 'aria-label': `Delete ${x.name}`, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}? Past results stay.`) }))))))) : null,
-      h('div', { class: 't-row' },
+            moreMenu(`More for ${x.name}`, `class:${x.id}`, [
+              { text: 'Delete', danger: true, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}? Past results stay.`) }]))))))) : null,
+      h('div', { class: 't-row t-add' },
         h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
         h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile),
         rosterBtn),
@@ -685,12 +686,13 @@
     const a = s.attempt;
     if (a.status === 'waiting') return h('td', { class: 'st-waiting', text: 'Waiting' });
     if (a.status === 'admitted') return h('td', { text: 'Admitted' });
-    if (a.status === 'active') return h('td', { text: 'In progress' });
+    // a heartbeat every few seconds; much longer without one and they've lost their connection
+    if (a.status === 'active') return a.lastBeatAgo > 15000 ? h('td', { class: 't-late', text: `No signal for ${mmss(a.lastBeatAgo)}` }) : h('td', { text: 'In progress' });
     return h('td', { class: 'st-good', text: 'Submitted' });
   }
   function integrityCell(a) {
     if (!a) return h('td');
-    if (a.integrity === 'invalidated') return h('td', { class: 'st-bad', text: `Invalidated (${LABEL[a.reason] || a.reason})` });
+    if (a.integrity === 'invalidated') return h('td', { class: 'st-bad', title: LABEL[a.reason] || a.reason, text: 'Invalidated' }); // why: the student's panel
     // Restoring doesn't re-arm the strikes, so say when a restored student has left again.
     if (a.integrity === 'restored') return h('td', { class: a.leftAgain ? 'st-bad' : 'st-waiting', text: a.leftAgain ? `Restored, left ${a.leftAgain} more` : 'Restored' });
     return h('td', { class: 'st-good t-clean', text: 'Clean' });
@@ -939,15 +941,108 @@
   }
 
   // How far along: a bar of what's answered, the count, and where they are right now.
-  function progressCell(a) {
-    if (!a || a.status === 'waiting') return h('td', { class: 'num', 'data-label': 'Answered' });
-    const pct = a.total ? Math.round((a.answered / a.total) * 100) : 0;
-    const on = a.status !== 'active' || !a.on ? null : a.on === 'review' ? 'checking their work' : a.on === 'directions' ? 'reading directions' : `on question ${a.on}`;
-    return h('td', { class: 'num t-progress', 'data-label': 'Answered' },
-      h('span', { class: 't-prog', 'aria-hidden': 'true' }, h('span', { style: `width:${pct}%` })),
-      h('span', { text: `${a.answered}/${a.total}` }),
-      on ? h('span', { class: 't-on', text: on }) : null);
+  // "Chrome on macOS", from the browser's long description (which hovering shows).
+  function browserName(ua) {
+    const app = /SEB\//.test(ua) ? 'Safe Exam Browser' : /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Firefox\//.test(ua) ? 'Firefox'
+      : /Chrome\/|CriOS\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
+    const os = /CrOS/.test(ua) ? 'ChromeOS' : /Windows/.test(ua) ? 'Windows' : /iPad/.test(ua) ? 'iPad' : /iPhone/.test(ua) ? 'iPhone'
+      : /Android/.test(ua) ? 'Android' : /Mac OS X|Macintosh/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : '';
+    return os ? `${app} on ${os}` : app;
   }
+  // Strikes, and how long they were away in all after a dot (ticking, in red, while they're away now)
+  function strikesCell(a) {
+    if (!a) return h('td', { class: 'num', 'data-label': 'Strikes' });
+    const away = a.awayMs ? h('span', Object.assign({ class: a.awayNow ? 'st-bad' : 't-muted', text: (a.awayNow ? 'away ' : '') + mmss(a.awayMs) }, a.awayNow ? ticks('away', -a.awayMs) : {})) : null;
+    return h('td', { class: 'num' + (!a.strikes && !away ? ' t-zero' : ''), 'data-label': 'Strikes', title: a.awayMs ? `Away ${mmss(a.awayMs)} in all` : null },
+      String(a.strikes), away ? [h('span', { class: 't-muted', text: ' · ' }), away] : null);
+  }
+  // The bar: answered out of all, colored by what they're doing (green working, blue reading, gray idle),
+  // which hovering (and a screen reader) says in words.
+  function progressCell(a) {
+    if (!a || a.status === 'waiting') return h('td', { class: 'num', 'data-label': 'Progress' });
+    const pct = a.total ? Math.round((a.answered / a.total) * 100) : 0;
+    const act = a.status === 'active' ? a.activity : null;
+    const at = a.on === 'review' ? 'the review' : a.on === 'directions' ? 'directions' : a.on ? `question ${a.on}` : null;
+    const on = !act || !at ? null
+      : act === 'working' ? (a.on === 'review' ? 'checking their work' : `working on ${at}`)
+      : act === 'idle' ? `idle on ${at}`
+      : a.on === 'review' ? 'checking their work' : `reading ${at}`;
+    return h('td', { class: 'num t-progress', 'data-label': 'Progress', title: on ? on[0].toUpperCase() + on.slice(1) : null },
+      h('span', { class: 't-prog' + (act ? ' is-' + act : ''), 'aria-hidden': 'true' }, h('span', { style: `width:${pct}%` })),
+      h('span', { text: `${a.answered}/${a.total}` }),
+      on ? h('span', { class: 'sr-only', text: `, ${on}` }) : null);
+  }
+  // Less-used actions behind a ⋯ button: a row's, a quiz's, the live quiz's. items: { text, onclick, danger }
+  // or an element (a link, say), or a function that gives them, asked each time it opens. The live table
+  // doesn't redraw while one is open (menuOpen), so it stays put; onClose catches it up.
+  let menuOpen = false;
+  function moreMenu(label, key, items, onClose) {
+    const btn = h('button', { class: 'btn small t-menu-btn', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': label, title: 'More', 'data-key': key }, icon(ICONS.dots, 18));
+    btn.firstChild.setAttribute('fill', 'currentColor');
+    const menu = h('div', { class: 't-menu', popover: 'manual', role: 'menu', 'aria-label': label });
+    const fill = (list) => menu.replaceChildren(...list.filter(Boolean).map((it) => {
+      if (it.nodeType) {
+        it.classList.remove('btn', 'small', 'primary');
+        it.classList.add('t-menu-item');
+        it.removeAttribute('style');
+        it.setAttribute('role', 'menuitem');
+        if (!it.dataset.inMenu) { it.dataset.inMenu = '1'; it.addEventListener('click', () => close(false)); }
+        return it;
+      }
+      return h('button', { class: 't-menu-item' + (it.danger ? ' danger' : ''), type: 'button', role: 'menuitem', text: it.text, onclick: () => { close(true); it.onclick(); } });
+    }));
+    if (typeof items !== 'function') fill(items);
+    const entries = () => [...menu.querySelectorAll('[role=menuitem]:not([hidden])')];
+    const outside = (e) => { if (!menu.contains(e.target) && !btn.contains(e.target)) close(false); };
+    // under the button, right edges lined up; above it if there's no room below. It follows the button
+    // when the page scrolls, and closes once the button is out of sight.
+    function place() {
+      const r = btn.getBoundingClientRect();
+      if (!btn.isConnected || r.bottom < 0 || r.top > innerHeight) { close(false); return; }
+      const m = menu.getBoundingClientRect();
+      const top = r.bottom + 4 + m.height > innerHeight - 8 ? r.top - 4 - m.height : r.bottom + 4;
+      menu.style.top = `${Math.max(8, top)}px`;
+      menu.style.left = `${Math.max(8, Math.min(r.right - m.width, innerWidth - m.width - 8))}px`;
+    }
+    const away = (e) => { if (!(e.target instanceof Node) || !menu.contains(e.target)) place(); }; // resize's target is the window
+    let isOpen = false;
+    function close(focusBack) {
+      if (!isOpen) return;
+      isOpen = false;
+      if (menu.matches(':popover-open')) menu.hidePopover();
+      btn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('pointerdown', outside, true);
+      window.removeEventListener('scroll', away, true);
+      window.removeEventListener('resize', away);
+      if (focusBack) btn.focus({ preventScroll: true });
+      menuOpen = false;
+      if (onClose) onClose();
+    }
+    function open() {
+      if (typeof items === 'function') fill(items());
+      if (!entries().length) return;
+      menu.showPopover();
+      isOpen = true;
+      menuOpen = true;
+      btn.setAttribute('aria-expanded', 'true');
+      place();
+      document.addEventListener('pointerdown', outside, true);
+      window.addEventListener('scroll', away, true);
+      window.addEventListener('resize', away);
+      entries()[0].focus();
+    }
+    btn.addEventListener('click', () => (isOpen ? close(true) : open()));
+    menu.addEventListener('keydown', (e) => {
+      const all = entries();
+      const i = all.indexOf(document.activeElement);
+      const go = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: all.length - 1 }[e.key];
+      if (go !== undefined) { e.preventDefault(); all[(go + all.length) % all.length].focus(); }
+      else if (e.key === 'Escape') { e.preventDefault(); close(true); }
+      else if (e.key === 'Tab') close(false);
+    });
+    return [btn, menu];
+  }
+
   function watchLink(id, name) {
     const w = h('a', { class: 'btn small', href: `/teacher/watch.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Watch', 'aria-label': `Watch ${name}`, 'data-key': `${id}:watch` });
     w.style.cssText = 'display:inline-flex;align-items:center;text-decoration:none';
@@ -956,6 +1051,7 @@
 
   async function showRun(runId) {
     setHash('#run/' + encodeURIComponent(runId));
+    menuOpen = false; // a menu left open on the page before went with it
     ++navSeq;
     selected = null;
     // The join code: click it to show it big, for a projector
@@ -970,7 +1066,7 @@
     const howTo = h('p', { class: 't-muted t-small' });
     // A stuck student can only leave Safe Exam Browser with this; it's also what locks an iPad.
     const quitPw = h('p', { class: 't-small', hidden: true });
-    const sebLinks = h('span', { class: 't-seb-links', hidden: true });
+    let sebParts = null; // Download .seb and Copy SEB link, made once the run says it has a file
     const failedBox = h('div');
     let lastDetail = '';
     let lastRun = null; // the run as of the last refresh (for Corrections)
@@ -986,10 +1082,6 @@
     let aiWaiting = 0;
     const aiDone = (text) => { if (text) { aiMsg.hidden = false; aiMsg.className = 't-small t-muted'; aiMsg.textContent = text; } lastDetail = ''; refresh(); };
     aiBtn.addEventListener('click', () => aiDialog(runId, null, aiDone));
-    // On a phone the less-used buttons fold under More, so the students start near the top.
-    const extra = h('span', { class: 't-run-extra', id: 't-run-extra' });
-    const moreBtn = h('button', { class: 'btn t-run-morebtn', type: 'button', text: 'More', 'aria-expanded': 'false', 'aria-controls': 't-run-extra',
-      onclick: () => moreBtn.setAttribute('aria-expanded', String(extra.classList.toggle('open'))) });
     // Read out when the counts change, not on every 2-second refresh.
     const summary = h('p', { class: 'sr-only', 'aria-live': 'polite' });
     const exportLink = h('a', { class: 'btn', href: `/api/t/runs/${runId}/export.csv`, download: true, text: 'Export CSV' });
@@ -1062,8 +1154,7 @@
       howTo.textContent = run.sebFile ? `Join at ${joinAt}, which opens Safe Exam Browser` : `Join at ${joinAt}`;
       quitPw.hidden = !run.sebQuit || run.status !== 'open';
       if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp', text: run.sebQuit }));
-      if (run.sebFile && !sebLinks.childNodes.length) sebLinks.append(...sebButtons(run.code, run.joinUrl));
-      sebLinks.hidden = !run.sebFile || run.status !== 'open';
+      if (run.sebFile && !sebParts) sebParts = sebButtons(run.code, run.joinUrl);
       toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
       toggle.onclick = () => {
         if (run.status === 'open' && !confirm('Close the quiz? Anyone still working gets turned in.')) return;
@@ -1078,27 +1169,27 @@
       const order = (s) => (s.attempt ? (s.attempt.integrity === 'invalidated' || s.attempt.leftAgain ? 0 : s.attempt.status === 'waiting' ? 1 : 2) : 3);
       const rows = data.students.slice().sort((x, y) => order(x) - order(y) || x.name.localeCompare(y.name));
       const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
-      tbody.replaceChildren(...rows.map((s) => {
+      if (!menuOpen) tbody.replaceChildren(...rows.map((s) => {
         const a = s.attempt;
         const actions = h('td', { class: 't-actions' });
         const btn = (text, key, onclick, extra) => h('button', Object.assign({ class: 'btn small', type: 'button', text, onclick, 'data-key': `${a.id}:${key}`, 'aria-label': `${text} ${s.name}` }, extra || {}));
+        // In the row: what needs deciding now. The rest is under ⋯.
+        const more = [];
+        const bad = a && a.integrity === 'invalidated';
         if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`)), { class: 'btn small primary' }));
-        // Their screen, live, in a new tab (watch.html).
-        if (a && a.status === 'active') actions.append(watchLink(a.id, s.name));
-        if (a && a.integrity === 'invalidated') actions.append(btn('Restore', 'restore', () => { if (confirm(`Restore ${s.name}?`)) act(`/api/t/attempts/${a.id}/restore`); }));
+        if (bad) actions.append(btn('Un-invalidate', 'restore', () => { if (confirm(`Un-invalidate ${s.name}?`)) act(`/api/t/attempts/${a.id}/restore`); }));
         // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
         // popup doesn't end anyone's quiz without the teacher looking).
-        if (a && a.integrity === 'invalidated' && a.status === 'active') actions.append(btn('End quiz', 'end', () => endQuiz(a.id, s.name)));
-        if (a && (a.status === 'active' || a.status === 'admitted')) {
-          actions.append(a.letIn
-            ? h('span', { class: 't-muted t-small', text: 'Can sign in again' })
-            : btn('Let back in', 'letin', () => act(`/api/t/attempts/${a.id}/let-in`), { title: 'Crashed computer or new seat: they sign in again and keep their answers and time' }));
-        }
-        if (a) actions.append(btn('Reset', 'reset', () => { if (confirm(`Reset ${s.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) act(`/api/t/attempts/${a.id}/reset`); }, { title: 'Throw out this attempt and let them start over' }));
+        if (bad && a.status === 'active') actions.append(btn('End quiz', 'end', () => endQuiz(a.id, s.name)));
+        // Their screen, live, in a new tab (watch.html).
+        if (a && a.status === 'active') (bad ? more.push(watchLink(a.id, s.name)) : actions.append(watchLink(a.id, s.name)));
+        if (a && (a.status === 'active' || a.status === 'admitted') && !a.letIn) more.push({ text: 'Let back in', onclick: () => act(`/api/t/attempts/${a.id}/let-in`) });
+        if (a && (a.status === 'active' || a.status === 'admitted') && a.letIn) actions.append(h('span', { class: 't-muted t-small', text: 'Can sign in again' }));
+        if (a) more.push({ text: 'Reset', danger: true, onclick: () => { if (confirm(`Reset ${s.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) act(`/api/t/attempts/${a.id}/reset`); } });
+        if (more.length) actions.append(...moreMenu(`More for ${s.name}`, `${a.id}:more`, more, () => refresh()));
         // On a phone a row shows only what needs doing now (Admit, End quiz); the rest is one tap away, on the student.
         for (const b of actions.children) if (!/:(admit|end)$/.test(b.dataset.key || '')) b.classList.add('t-row-extra');
         if (![...actions.children].some((b) => !b.classList.contains('t-row-extra'))) actions.classList.add('t-only-extra');
-        const beat = a && a.lastBeatAgo != null ? Math.round(a.lastBeatAgo / 1000) : null;
         let score = '';
         if (a && a.score != null) {
           score = `${a.score} / ${a.max}`;
@@ -1109,37 +1200,34 @@
         }
         const open = () => { selected = a.id; lastDetail = ''; showDetail(a.id); refresh(); };
         return h('tr', { class: selected === (a && a.id) ? 'sel' : null, onclick: a ? (e) => { if (!e.target.closest('a, button, input') && phone()) open(); } : null },
-          h('td', { role: 'rowheader', class: 't-rowhead' }, a ? h('button', { class: 't-link', type: 'button', text: s.name, 'data-key': `${a.id}:name`, 'aria-expanded': String(selected === a.id), onclick: open }) : s.name),
+          h('td', { role: 'rowheader', class: 't-rowhead t-name' }, a ? h('button', { class: 't-link', type: 'button', text: s.name, title: s.name, 'data-key': `${a.id}:name`, 'aria-expanded': String(selected === a.id), onclick: open }) : h('span', { title: s.name, text: s.name })),
           statusCell(s), integrityCell(a),
-          h('td', { class: 'num' + (a && !a.strikes ? ' t-zero' : ''), 'data-label': 'Strikes', text: a ? String(a.strikes) : '' }),
-          h('td', Object.assign({ class: 'num' + (a && a.awayNow ? ' st-bad' : ''), 'data-label': 'Away', text: a && a.awayMs ? (a.awayNow ? 'Now, ' : '') + mmss(a.awayMs) : '' }, a && a.awayNow ? ticks('away', -a.awayMs) : {})),
-          h('td', { class: 'num quiet', 'data-label': 'Warnings', text: a ? String(a.warnings) : '' }),
+          strikesCell(a),
           progressCell(a),
-          h('td', Object.assign({ class: 'num' + (beat != null && beat > 6 ? ' t-late' : ' quiet'), 'data-label': 'Heartbeat', text: beat != null ? `${beat}s ago` : '' }, beat != null && a.status === 'active' ? ticks('beat', -a.lastBeatAgo) : {})),
           h('td', Object.assign({ class: 'num', 'data-label': 'Time left', text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }, a && a.timeLeft != null && a.status === 'active' ? ticks('left', a.timeLeft) : {})),
           h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), 'data-label': 'Score', text: score }),
           actions);
       }));
       // Keep keyboard focus on the same button after the redraw, without scrolling the page back to it. If
       // that button is gone (say, Admit after admitting), go to the next Admit, or to the student's name.
-      if (focusKey) {
+      if (focusKey && !menuOpen) {
         const [fid, what] = focusKey.split(':');
         const again = tbody.querySelector(`[data-key="${CSS.escape(focusKey)}"]`)
           || (what === 'admit' && (tbody.querySelector('[data-key$=":admit"]') || (admitAll.isConnected && admitAll)))
           || tbody.querySelector(`[data-key="${CSS.escape(fid)}:name"]`);
         if (again) again.focus({ preventScroll: true });
       }
-      if (selected) showDetail(selected, true);
+      if (selected && !menuOpen) showDetail(selected, true);
     }
 
     async function showDetail(id, quiet) {
       let d;
       try { d = await api(`/api/t/attempts/${id}`); } catch (e) { return; }
       if (selected !== id) return;
-      // The poll re-renders every 2s: don't wipe what the teacher is typing, selecting or reading.
+      // The poll re-renders every 2s: don't wipe what the teacher is typing, selecting, reading or has open.
       const snapshot = JSON.stringify(Object.assign({}, d, { timeLeft: null, awayMs: null, awayMax: null })); // clocks that tick: not a reason to redraw
       const typing = detail.contains(document.activeElement) && document.activeElement.matches('input, textarea, select');
-      if (quiet && (snapshot === lastDetail || typing || String(window.getSelection() || '') !== '')) return;
+      if (quiet && (snapshot === lastDetail || typing || menuOpen || String(window.getSelection() || '') !== '')) return;
       lastDetail = snapshot;
       const keep = detail.contains(document.activeElement) && document.activeElement.dataset ? document.activeElement.dataset.key : null;
       const dk = (key) => ({ 'data-key': `detail:${key}` });
@@ -1183,27 +1271,29 @@
         h('div', { class: 't-row t-detail-head' },
           h('h2', { style: 'flex:1', tabindex: '-1', class: 't-detail-name', id: 't-detail-name', text: d.name }),
           h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Close', onclick: closeDetail }, dk('close')))),
+        // what's for now in the row; the rest under ⋯
         h('div', { class: 't-row t-detail-acts' },
           d.status === 'active' ? watchLink(id, d.name) : null,
+          d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Un-invalidate', onclick: () => { if (confirm(`Un-invalidate ${d.name}?`)) act(`/api/t/attempts/${id}/restore`); } }, dk('restore'))) : null,
           d.status === 'active' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }, dk('end'))) : null,
-          d.integrity !== 'invalidated' ? h('button', Object.assign(dk('invalidate'), { class: 'btn small', type: 'button', text: 'Invalidate', onclick: () => { const note = prompt('Reason (optional)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } })) : null,
           d.status === 'active' && d.deadline ? h('span', Object.assign({ class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }, ticks('left-label', d.timeLeft || 0))) : null,
           d.status === 'active' && d.deadline ? h('button', Object.assign({ class: 'btn small', type: 'button', text: '+5 min', 'aria-label': 'Add 5 minutes', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } }, dk('extend'))) : null,
           d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
-          d.status === 'submitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) }, dk('regrade'))) : null,
           d.status === 'submitted' && d.totals && d.totals.review ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Grade with AI', title: 'Send the answers waiting for you to Claude. Names and IDs stay here.',
             onclick: () => aiDialog(runId, id, aiDone) }, dk('ai'))) : null,
-          d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Restore', onclick: () => { if (confirm(`Restore ${d.name}?`)) act(`/api/t/attempts/${id}/restore`); } }, dk('restore'))) : null,
-          d.status === 'active' || d.status === 'admitted' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Let back in', title: 'Crashed computer or new seat: they sign in again and keep their answers and time', onclick: () => act(`/api/t/attempts/${id}/let-in`) }, dk('letin'))) : null,
-          h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Reset', title: 'Throw out this attempt and let them start over', onclick: () => { if (confirm(`Reset ${d.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) { closeDetail(); act(`/api/t/attempts/${id}/reset`); } } }, dk('reset')))),
+          moreMenu(`More for ${d.name}`, 'detail:more', [
+            d.integrity !== 'invalidated' ? { text: 'Invalidate', onclick: () => { const note = prompt('Reason (optional)'); if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note }); } } : null,
+            d.status === 'submitted' ? { text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) } : null,
+            d.status === 'active' || d.status === 'admitted' ? { text: 'Let back in', onclick: () => act(`/api/t/attempts/${id}/let-in`) } : null,
+            { text: 'Reset', danger: true, onclick: () => { if (confirm(`Reset ${d.name}? Their answers are deleted. (Crashed computer? Use Let back in.)`)) { closeDetail(); act(`/api/t/attempts/${id}/reset`); } } },
+          ], () => refresh())),
         d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}` }) : null,
         d.strikes ? h('p', { class: 't-small t-away', text: `Left ${d.strikes === 1 ? 'once' : d.strikes + ' times'}. Away ${mmss(d.awayMs)} in all${d.strikes > 1 ? `, ${mmss(d.awayMax)} at the longest` : ''}.` }) : null,
         h('div', { class: 't-detail-grid' },
           h('div', { class: 't-section' }, h('h3', { text: 'Activity' }),
             h('ul', { class: 't-events' }, d.events.map((e) => h('li', { class: e.severity }, h('time', { text: clock(e.t) }), h('span', {}, h('b', { text: LABEL[e.type] || e.type }), e.detail ? h('span', { class: 't-muted', text: ` ${e.detail}` }) : null))))),
           h('div', { class: 't-section' }, h('h3', { text: 'Mouse trail' }), canvas,
-            h('p', { class: 't-muted t-small', text: `${d.mouse.length} mouse samples` }),
-            d.userAgent ? h('p', { class: 't-muted t-small', text: d.userAgent }) : null)),
+            d.userAgent ? h('p', { class: 't-muted t-small', title: d.userAgent, text: browserName(d.userAgent) }) : null)),
         h('div', { class: 't-section' }, h('h3', { text: d.totals ? `Answers (${d.totals.score} / ${d.totals.max}${d.totals.pending ? ', code still grading' : d.totals.failed ? ', grading failed' : d.totals.review ? ', needs review' : ''})` : 'Answers so far' }), answers)));
       drawTrail(canvas, d.mouse);
       window.BQReport.highlight(answers);
@@ -1259,7 +1349,10 @@
     }
 
     const corrBtn = h('button', { class: 'btn', type: 'button', text: 'Corrections', hidden: true, onclick: () => correctionsDialog(runId, lastRun) });
-    extra.append(toggle, lockBtn, sebLinks, exportLink, classReport, corrBtn);
+    // Close quiz stays out; the rest is under ⋯.
+    const runMenu = moreMenu('More for this quiz', 'run:more', () => [lockBtn,
+      ...(lastRun && lastRun.sebFile && lastRun.status === 'open' && sebParts ? sebParts : []),
+      exportLink, classReport, corrBtn.hidden ? null : corrBtn], () => refresh());
     detail.className = 't-detail-host';
     detail.setAttribute('aria-labelledby', 't-detail-name');
     if (openRuns === null) { try { noteRuns((await api('/api/t/overview')).runs); } catch (e) { /* the tab can wait */ } }
@@ -1268,10 +1361,10 @@
         h('section', { class: 't-section' },
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
           howTo, quitPw,
-          h('div', { class: 't-row t-run-acts' }, admitAll, aiBtn, moreBtn, extra), aiMsg,
+          h('div', { class: 't-row t-run-acts' }, admitAll, aiBtn, toggle, runMenu), aiMsg,
           failedBox, summary),
         h('div', { class: 't-livegrid' }, h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },
-          h('thead', {}, h('tr', {}, heads(['Student', 'Status', 'Integrity', 'Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score'], ['Strikes', 'Time away', 'Warnings', 'Answered', 'Heartbeat', 'Time left', 'Score']), actionsHead())),
+          h('thead', {}, h('tr', {}, heads(['Student', 'Status', 'Integrity', 'Strikes', 'Progress', 'Time left', 'Score'], ['Strikes', 'Progress', 'Time left', 'Score']), actionsHead())),
           tbody)),
         detail)));
     await refresh();
@@ -1288,13 +1381,7 @@
       const at = Number(el.dataset.at);
       if (el.dataset.tick === 'left') el.textContent = mmss(Math.max(0, at - now));
       else if (el.dataset.tick === 'left-label') el.textContent = `${mmss(Math.max(0, at - now))} left`;
-      else if (el.dataset.tick === 'away') el.textContent = 'Now, ' + mmss(now - at);
-      else if (el.dataset.tick === 'beat') {
-        const s = Math.round((now - at) / 1000);
-        el.textContent = `${s}s ago`;
-        el.classList.toggle('t-late', s > 6);
-        el.classList.toggle('quiet', s <= 6);
-      }
+      else if (el.dataset.tick === 'away') el.textContent = 'away ' + mmss(now - at);
     }
   }
 

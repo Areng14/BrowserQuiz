@@ -41,7 +41,7 @@
   const integrityBtn = $('w-integrity');
   integrityBtn.addEventListener('click', async () => {
     let body = {};
-    if (invalidated) { if (!confirm(`Restore ${name}?`)) return; } else {
+    if (invalidated) { if (!confirm(`Un-invalidate ${name}?`)) return; } else {
       const note = prompt('Reason (optional)');
       if (note === null) return;
       body = { note };
@@ -58,8 +58,8 @@
   function setIntegrity(bad) {
     invalidated = bad;
     $('w-state').hidden = !bad;
-    integrityBtn.textContent = bad ? 'Restore' : 'Invalidate';
-    integrityBtn.setAttribute('aria-label', `${bad ? 'Restore' : 'Invalidate'} ${name}`);
+    integrityBtn.textContent = bad ? 'Un-invalidate' : 'Invalidate';
+    integrityBtn.setAttribute('aria-label', `${bad ? 'Un-invalidate' : 'Invalidate'} ${name}`);
     integrityBtn.hidden = false;
   }
   frame.src = `/teacher/watch-frame.html?attempt=${encodeURIComponent(id)}`;

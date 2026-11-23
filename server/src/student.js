@@ -434,6 +434,11 @@ module.exports = function studentRoutes(r) {
         if (n % 50 === 0) q('DELETE FROM mouse WHERE attempt_id = ? AND rowid NOT IN (SELECT rowid FROM mouse WHERE attempt_id = ? ORDER BY rowid DESC LIMIT ?)').run(a.id, a.id, MOUSE_ROWS);
       }
       live = W.beat(a, body, pts, now); // for a teacher watching live (watch.js)
+      // What they're doing, for the live table (teacher.js activity): an answer changed or code was typed,
+      // or just any mouse or key at all. In memory only.
+      if (body.answers || (Array.isArray(body.edits) && body.edits.length)) a.workedAt = now;
+      const idle = Number(body.idleMs);
+      if (Number.isFinite(idle)) a.activeAt = now - Math.min(Math.max(0, idle), 3600000);
       if (Array.isArray(body.edits) && body.edits.length && a.edits < 20000) {
         const edits = body.edits.slice(0, 300);
         q('INSERT INTO code_edits (attempt_id, t, deltas) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(edits).slice(0, 400000));

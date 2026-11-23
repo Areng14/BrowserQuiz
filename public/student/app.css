@@ -484,8 +484,10 @@ h1[tabindex="-1"]:focus { outline: none; }
 /* Practice */
 .row-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .row-actions a.btn { display: inline-flex; align-items: center; text-decoration: none; }
-.seb-launch { display: grid; justify-items: start; gap: 8px; }
-.seb-back { justify-self: start; margin-left: 0; }
+.seb-launch { display: grid; gap: 10px; }
+.seb-launch a.btn { justify-content: center; }
+.seb-get { margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--line); }
+.seb-get a { color: var(--accent); }
 .seb-launch a.btn, .done-panel a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 
 /* Big screens: scale the text up. Not the code editor itself: CSS zoom throws off where its cursor lands,

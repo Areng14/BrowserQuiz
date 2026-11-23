@@ -165,6 +165,14 @@ function lanIp() {
   return null;
 }
 
+
+// What a working student is doing (student.js sets the times on each heartbeat): working, if they answered
+// or typed code in the last 30 seconds; reading, if they moved the mouse or pressed a key in the last 2
+// minutes; idle otherwise.
+function activity(a, now) {
+  if (now - (a.workedAt || 0) < 30000) return 'working';
+  return now - (a.activeAt || a.startedAt || 0) < 120000 ? 'reading' : 'idle';
+}
 function liveRow(student, a, quiz, run) {
   if (!a) return { rosterId: student.id, name: student.name, attempt: null };
   const t = totals(a.result, quiz, a.answers, a.layout);
@@ -183,6 +191,7 @@ function liveRow(student, a, quiz, run) {
       leftAgain: a.integrity === 'restored' && a.restoreStrikes != null ? Math.max(0, a.strikes - a.restoreStrikes) : 0,
       reason: a.reason, invalidatedAt: a.invalidatedAt, lastBeatAgo: a.status === 'active' && a.lastBeat ? Date.now() - a.lastBeat : null,
       answered, total: a.layout ? store.quizFor(quiz, a.layout).questions.length : store.perStudent(quiz).count, on, deadline: a.deadline,
+      activity: a.status === 'active' ? activity(a, Date.now()) : null,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
       letIn: !!(a.letIn && Date.now() - a.letIn < LET_IN_MS),
       score: t ? (a.integrity === 'invalidated' ? 0 : t.score) : null, rawScore: t ? t.score : null, max: t ? t.max : null,
