@@ -14,6 +14,11 @@ Follow `.claude/skills/make-quiz/SKILL.md`. The format spec is `docs/quiz-format
 
 Put quizzes in `quizzes/`, which is gitignored because quiz files contain answer keys.
 
+## UI work
+
+Follow `.claude/skills/arenguidesign/SKILL.md` for any UI you build or change, and check it
+with screenshots before calling it done.
+
 ## Rules
 
 - Never commit `.env`: it holds the teacher password and secrets.

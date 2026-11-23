@@ -8,9 +8,13 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
 .r-bar { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 16px; background: var(--soft); border-bottom: 1px solid var(--line); }
-.r-btn { font: inherit; font-weight: 600; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+/* the bar's controls: one height, one font, one radius */
+.r-btn, .r-jump { height: 38px; font: inherit; font-size: 15px; border-radius: 6px; }
+.r-btn { font-weight: 600; padding: 0 16px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
 .r-btn:disabled { opacity: 0.5; cursor: default; }
-.r-jump { max-width: 100%; font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.r-jump { max-width: 100%; padding: 0 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+/* a jump to a student lands below the sticky bar */
+.r-student { scroll-margin-top: 72px; }
 #r-status { color: var(--ink-2); font-size: 14px; }
 main { max-width: 920px; margin: 0 auto; padding: 28px 16px 64px; }
 /* Big screens: bigger, like the student app; the bar's ends line up with the page */

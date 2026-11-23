@@ -475,54 +475,53 @@
     }));
     return [box(codeA, whole(codeB)), box(codeB, whole(codeA))];
   }
+  // A pair of students and what they share, as one row of a list: names, what matches, and Show, which
+  // opens the details under it. "Similar code" and "Same wrong answers" both use it, so they line up.
+  function pairRow(students, a, b, note, details) {
+    const name = (i) => h('a', { href: `#s${i}`, text: students[i].name });
+    const box = h('div', { class: 'r-pair-detail', hidden: true });
+    const btn = h('button', { class: 'r-diff-btn', type: 'button', text: 'Show', 'aria-expanded': 'false', 'aria-label': `Show what ${students[a].name} and ${students[b].name} share` });
+    btn.addEventListener('click', () => {
+      const open = box.hidden;
+      if (open && !box.childElementCount) { box.append(...details()); highlight(box); }
+      box.hidden = !open;
+      btn.textContent = open ? 'Hide' : 'Show';
+      btn.setAttribute('aria-expanded', String(open));
+    });
+    return h('li', { class: 'r-pair' },
+      h('div', { class: 'r-sim-row r-pair-row' }, h('span', { class: 'r-pair-names' }, name(a), ' and ', name(b)), h('span', { class: 'r-sim-note', text: note }), btn),
+      box);
+  }
+  const pairSection = (cls, title, rows) => h('section', { class: `r-similar ${cls}` }, h('h2', { text: title }),
+    rows.length ? h('ul', { class: 'r-pairs' }, rows) : h('p', { class: 'r-sim-none', text: 'None found.' }));
+
   function similarCode(students, similar) {
     if (!similar || !similar.length) return null; // no code questions
-    const flagged = similar.filter((x) => x.pairs.length);
-    const name = (i) => h('a', { href: `#s${i}`, text: students[i].name });
-    return h('section', { class: 'r-similar' },
-      h('h2', { text: 'Similar code' }),
-      flagged.length ? flagged.map((qs) => h('div', { class: 'r-sim-q' },
-        h('h3', { text: `Question ${qs.n}` }),
-        h('ul', { class: 'r-sim-list' }, qs.pairs.map((p) => {
-          const codeOf = (i) => { const q = students[i].questions.find((x) => x.id === qs.id); return (q && q.answer) || ''; };
-          const views = h('div', { class: 'r-sim-views', hidden: true });
-          const btn = h('button', { class: 'r-diff-btn', type: 'button', text: 'Compare', 'aria-expanded': 'false' });
-          btn.addEventListener('click', () => {
-            const open = views.hidden;
-            if (open && !views.childElementCount) { views.append(...sideBySide(codeOf(p.a), codeOf(p.b), p.language)); highlight(views); }
-            views.hidden = !open;
-            btn.textContent = open ? 'Hide' : 'Compare';
-            btn.setAttribute('aria-expanded', String(open));
-          });
-          const notes = [`${Math.round(p.score * 100)}% alike`, p.names >= 0.6 ? 'same names' : null,
-            p.comments ? `${p.comments} same ${p.comments === 1 ? 'comment' : 'comments'}` : null].filter(Boolean).join(', ');
-          return h('li', {}, h('div', { class: 'r-sim-row' }, h('span', {}, name(p.a), ' and ', name(p.b)), h('span', { class: 'r-sim-note', text: notes }), btn), views);
-        })))) : h('p', { class: 'r-sim-none', text: 'None found.' }));
+    const rows = similar.flatMap((qs) => qs.pairs.map((p) => {
+      const codeOf = (i) => { const q = students[i].questions.find((x) => x.id === qs.id); return (q && q.answer) || ''; };
+      const note = [`Question ${qs.n}`, `${Math.round(p.score * 100)}% alike`, p.names >= 0.6 ? 'same names' : null,
+        p.comments ? `${p.comments} same ${p.comments === 1 ? 'comment' : 'comments'}` : null].filter(Boolean).join(' · ');
+      return pairRow(students, p.a, p.b, note, () => {
+        const [left, right] = sideBySide(codeOf(p.a), codeOf(p.b), p.language);
+        const col = (i, box) => h('div', { class: 'r-sim-col' }, h('p', { class: 'r-pair-who', text: students[i].name }), box);
+        return [h('div', { class: 'r-sim-views' }, col(p.a, left), col(p.b, right))];
+      });
+    }));
+    return pairSection('r-sim-code-section', 'Similar code', rows);
   }
 
   // ---------- the same wrong answers (server: samewrong.js) ----------
-  // Each flagged pair: how many wrong answers they share, and which, on demand.
   function sameWrong(students, pairs, quiz) {
     if (!pairs) return null; // no choice, short answer or output questions
-    const name = (i) => h('a', { href: `#s${i}`, text: students[i].name });
-    return h('section', { class: 'r-similar r-same-wrong' },
-      h('h2', { text: 'Same wrong answers' }),
-      pairs.length ? h('ul', { class: 'r-sim-list' }, pairs.map((p) => {
-        const views = h('ul', { class: 'r-same-list', hidden: true }, p.same.map((x) => h('li', {},
-          h('span', { class: 'r-same-n', text: `Question ${x.n}` }),
-          x.choices ? x.choices.map((c, i) => [i ? ', ' : '', inline(c, quiz.language)]) : h('code', { text: x.text }),
-          h('span', { class: 'r-sim-note', text: x.of > 2 ? ` (${x.of} gave this)` : ' (only these two)' }))));
-        const btn = h('button', { class: 'r-diff-btn', type: 'button', text: 'Show', 'aria-expanded': 'false' });
-        btn.addEventListener('click', () => {
-          const open = views.hidden;
-          views.hidden = !open;
-          btn.textContent = open ? 'Hide' : 'Show';
-          btn.setAttribute('aria-expanded', String(open));
-          if (open) highlight(views);
-        });
-        return h('li', {}, h('div', { class: 'r-sim-row' }, h('span', {}, name(p.a), ' and ', name(p.b)),
-          h('span', { class: 'r-sim-note', text: `${p.same.length} the same: ${p.same.map((x) => x.n).join(', ')}` }), btn), views);
-      })) : h('p', { class: 'r-sim-none', text: 'None found.' }));
+    const rows = pairs.map((p) => pairRow(students, p.a, p.b, `${p.same.length} the same: ${p.same.map((x) => x.n).join(', ')}`, () => [
+      h('table', { class: 'r-table r-same-table' },
+        h('thead', {}, h('tr', {}, h('th', { class: 'num', text: 'Question' }), h('th', { text: 'Their answer' }), h('th', { class: 'num', text: 'Gave it' }))),
+        h('tbody', {}, p.same.map((x) => h('tr', {},
+          h('td', { class: 'num', text: String(x.n) }),
+          h('td', {}, x.choices ? x.choices.map((c, i) => [i ? ', ' : '', inline(c, quiz.language)]) : h('code', { text: x.text })),
+          h('td', { class: 'num', text: x.of > 2 ? `${x.of} students` : 'Only these two' }))))),
+    ]));
+    return pairSection('r-same-wrong', 'Same wrong answers', rows);
   }
 
   window.BQReport = { question, student, classOverview, similarCode, sameWrong, highlight, h };

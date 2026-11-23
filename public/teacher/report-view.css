@@ -107,8 +107,6 @@
 .r-view .r-compare.stacked { grid-template-columns: minmax(0, 1fr); }
 /* differences between a code answer and the reference */
 .r-view .r-diff-row { margin-top: 8px; }
-.r-view .r-diff-btn { padding: 4px 10px; font: 600 13px system-ui, sans-serif; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
-.r-view .r-diff-btn:hover { background: var(--soft); }
 .r-view pre.r-diff { padding: 6px 0; }
 .r-view .d-line { display: block; padding: 0 12px 0 0; }
 .r-view .d-sign { display: inline-block; width: 24px; text-align: center; color: var(--ink-2); user-select: none; }
@@ -207,19 +205,36 @@
 .r-view .r-explain .r-label { margin-top: 0; }
 
 /* Similar code (class report) */
-.r-view .r-similar { display: grid; gap: 10px; margin-top: 28px; }
-.r-view .r-sim-q h3 { margin: 6px 0; font-size: 15px; }
-.r-view .r-sim-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.r-view .r-sim-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
-.r-view .r-sim-note { color: var(--ink-2); }
-.r-view .r-sim-views { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 8px; }
-.r-view .r-sim-views[hidden] { display: none; }
-.r-view .r-sim-code { margin: 0; }
-.r-view .r-sim-line { display: block; min-height: 1.5em; }
-.r-view .r-same-list { list-style: none; margin: 6px 0 0; padding: 0 0 0 14px; display: grid; gap: 4px; }
-.r-view .r-same-list[hidden] { display: none; }
-.r-view .r-same-n { margin-right: 8px; color: var(--ink-2); }
-.r-view .r-sim-line.same { background: color-mix(in srgb, var(--warn, #b26b00) 18%, transparent); }
-.r-view .r-sim-none { color: var(--ink-2); }
-@media (max-width: 700px) { .r-view .r-sim-views { grid-template-columns: minmax(0, 1fr); } }
-.r-view .r-same-wrong { margin-bottom: 32px; }
+
+/* Diff and Show buttons: one small size everywhere */
+.r-view .r-diff-btn { height: 32px; padding: 0 12px; font: 600 13px system-ui, sans-serif; color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.r-view .r-diff-btn:hover { background: var(--soft); }
+/* Similar code and Same wrong answers: one list of pairs each, set like the tables above them. Names on the
+   left, what they share on the right, Show at the end of every row in the same place. */
+.r-view .r-similar { margin-top: 36px; }
+.r-view .r-similar h2 { margin: 0 0 8px; font-size: 17px; }
+.r-view .r-pairs { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); font-size: 14px; }
+.r-view .r-pair { border-bottom: 1px solid var(--line); }
+.r-view .r-pair-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 16px; min-height: 48px; padding: 6px 8px; }
+.r-view .r-pair-names { min-width: 0; overflow-wrap: anywhere; }
+.r-view .r-sim-note { color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+.r-view .r-pair-detail { padding: 4px 8px 20px; }
+.r-view .r-pair-detail[hidden] { display: none; }
+.r-view .r-sim-none { margin: 0; padding: 12px 8px; color: var(--ink-2); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 14px; }
+/* the two answers side by side, each named, lines they share marked */
+.r-view .r-sim-views { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.r-view .r-sim-col { min-width: 0; display: grid; gap: 6px; align-content: start; }
+.r-view .r-pair-who { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.r-view .r-sim-code { margin: 0; font-size: 13px; white-space: pre; overflow-x: auto; }
+.r-view .r-sim-line { display: block; min-height: 1.5em; width: max-content; min-width: 100%; }
+.r-view .r-sim-line.same { background: color-mix(in srgb, var(--warn, #b26b00) 12%, transparent); }
+.r-view .r-same-table { margin: 0; }
+.r-view .r-same-table th.num, .r-view .r-same-table td.num { width: 1%; }
+.r-view .r-same-wrong { margin-bottom: 40px; }
+@media (max-width: 640px) {
+  .r-view .r-pair-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }
+  .r-view .r-sim-note { grid-column: 1; grid-row: 2; text-align: left; }
+  .r-view .r-pair-row .r-diff-btn { grid-column: 2; grid-row: 1 / span 2; }
+  .r-view .r-sim-views { grid-template-columns: minmax(0, 1fr); }
+}
+.r-view .r-same-table tbody tr:last-child td { border-bottom: 0; } /* the pair's own line closes it */
