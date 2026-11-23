@@ -1,9 +1,9 @@
 ---
 name: arenguidesign
-description: Arreng's UI design rules for building or changing any user interface (pages, screens, dialogs, tables, forms, menus, reports) - no slogans or taglines, no pill or badge statuses, one consistent set of control sizes and spacing, no scrolling unless the content needs it, few visible buttons with the rest under a menu, layouts anyone can pick up without help, and balanced alignment with breathing room. Use whenever you design, build, restyle, clean up or review UI, even small changes like adding a button, a column or a dialog, and before calling any UI work done.
+description: Areng's UI design rules for building or changing any user interface (pages, screens, dialogs, tables, forms, menus, reports), grounded in minimalist and intuitive design (Nielsen's heuristics, Don Norman, Dieter Rams, Hick's and Fitts's laws, Gestalt) - no slogans or taglines, no pill or badge statuses, one consistent set of control sizes and spacing, no scrolling unless the content needs it, few visible buttons with the rest under a menu, layouts anyone can pick up without help, and balanced alignment with breathing room. Use whenever you design, build, restyle, clean up or review UI, even small changes like adding a button, a column or a dialog, and before calling any UI work done.
 ---
 
-# arenguidesign: good UI, the Arreng way
+# arenguidesign: good UI, the Areng way
 
 The goal is UI that someone picks up and uses without being told how, and that looks calm and
 deliberate. Every rule here serves that. When a rule and the goal disagree, the goal wins, but
@@ -99,7 +99,83 @@ it, so removing things comes before styling them.
 - **Same width for things that stack.** A list under a form is the form's width, not its own.
 - **Line lengths stay readable** (about 60-80 characters for prose).
 
-## 8. Verify before calling it done
+## 8. The principles underneath
+
+The rules above come from these. When a case isn't covered, reason from them.
+
+### Minimalist design: less, but better
+
+- **Every element earns its place** (Dieter Rams: "as little design as possible", "less, but
+  better"). For each thing on screen ask: does the user need it here, now? If not, cut it or fold it
+  away.
+- **Every extra bit of information competes with what matters** (Nielsen, heuristic 8: aesthetic
+  and minimalist design). Leave out what's irrelevant or rarely needed; rarely needed goes behind a
+  menu or a collapsed section.
+- **Make hierarchy with scale, weight, contrast and space, not decoration.** No borders, shadows,
+  colors or icons that don't carry meaning. Keep the palette small: color means something (red bad,
+  green done, accent for actions).
+- **Whitespace is part of the design.** Negative space groups things and points the eye; it isn't
+  wasted room.
+- **Minimal isn't hidden.** Flat design can strip the cues that say "you can click this". Buttons
+  look like buttons, links like links, fields like fields. Never hide the main action behind an
+  unlabeled icon to look clean.
+- **Move complexity into the system, not onto the user** (Tesler's law). Good defaults, automatic
+  saving, smart handling of edge cases, so the user has less to decide.
+- **Motion only explains change**, subtle and brief, never for show.
+- **Consistent to the last detail** (Rams). Unfinished corners, uneven gaps and one-off styles are
+  what make minimal UI look broken instead of calm.
+
+### Intuitive design: usable without being told how
+
+- **Signifiers show what can be done** (Don Norman). Pressable things look pressable, editable
+  things look editable, draggable things have a grip. If people have to guess, add a cue, not a
+  paragraph.
+- **Mapping: controls sit by what they change.** A row's actions live in that row; a setting sits
+  next to what it affects; order on screen matches order of use.
+- **Visibility of system status** (Nielsen 1). Every action gets a response at once ("Saving…",
+  "Saved", a disabled button while it works), and the state is always visible (Open, Closed,
+  Invalidated). Under 0.1s feels instant; past about 1s show progress.
+- **Speak the user's language** (Nielsen 2: match the real world). "Let back in", not "reset
+  token". The user's words, the user's order of things.
+- **Give people a way out** (Nielsen 3: user control and freedom). Cancel, Back, Undo and Escape
+  always work; nothing traps them.
+- **Consistency and standards** (Nielsen 4, Jakob's law). People spend most of their time in other
+  apps, so work the way those do: same patterns for the same jobs, same words for the same things.
+- **Prevent errors before reporting them** (Nielsen 5). Disable what can't be done right now, offer
+  choices instead of free typing where you can, confirm what can't be undone.
+- **Recognition rather than recall** (Nielsen 6). Show the options; don't make people remember them.
+  Icons get labels or tooltips, and what was chosen stays visible.
+- **Fast paths for experts, hidden from beginners** (Nielsen 7). Keyboard shortcuts and bulk actions
+  are welcome as long as the simple path stays simple.
+- **Errors in plain words, with the fix** (Nielsen 9): what happened and what to do, next to where
+  it happened. No codes, no blame.
+- **The best help is not needing it** (Nielsen 10). If help is needed, it's short, about the task,
+  and right where it's needed.
+- **Conceptual model:** the screen should make the way the thing works obvious. When what users
+  expect matches what happens, it feels intuitive; when it doesn't, no amount of text fixes it.
+
+### Laws to design by
+
+- **Hick's law:** the more choices, the longer the decision. Show fewer options at a time, use good
+  defaults, and disclose the rest progressively (menus, steps, collapsed sections).
+- **Fitts's law:** big, close targets are faster to hit. Make frequent actions large and near where
+  attention already is; touch targets at least 40px (never under 24px); keep destructive actions
+  away from frequent ones.
+- **Gestalt grouping:** things that are close (proximity), look alike (similarity), share a box
+  (common region) or line up (continuity) read as one group. Use spacing first to group, then
+  borders only if spacing isn't enough. Things that look the same must do the same.
+- **Chunking (Miller's law):** break long forms and lists into small, labeled groups.
+- **Aesthetic-usability effect:** polished UI feels easier and is forgiven more, which is exactly
+  why polish mustn't cover real problems. Test it, don't just admire it.
+
+Further reading: [Nielsen's 10 usability heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/),
+[aesthetic and minimalist design](https://www.nngroup.com/articles/aesthetic-minimalist-design/),
+[characteristics of minimalism](https://www.nngroup.com/articles/characteristics-minimalism/),
+[Don Norman's principles](https://uxmag.com/articles/understanding-don-normans-principles-of-interaction),
+[Laws of UX](https://lawsofux.com/),
+[Dieter Rams' ten principles](https://ixdf.org/literature/article/dieter-rams-10-timeless-commandments-for-good-design).
+
+## 9. Verify before calling it done
 
 Look at it, don't just reason about it:
 
@@ -129,6 +205,9 @@ Look at it, don't just reason about it:
    - [ ] Edges align; nothing is a few pixels off; sections have breathing room
    - [ ] Keyboard, focus, screen-reader labels, dark mode and phone width all work
    - [ ] Names and patterns match the rest of the app
+   - [ ] Every element earns its place; nothing is there just to decorate
+   - [ ] What can be clicked looks clickable; every action shows feedback right away
+   - [ ] There's always a way out (Cancel, Back, Escape) and errors say how to fix them
 
 If a project has its own UI rules (an AGENTS.md or CLAUDE.md), follow both; where they conflict,
 the project's rules win.
