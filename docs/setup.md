@@ -51,6 +51,11 @@ picks their own the first time they sign in.
 
 - **Reset password** gives a teacher a new temporary password and signs them out.
 - **Disable** stops someone signing in, and keeps their quizzes and results.
+- **Passkeys:** once signed in, open **Password** and **Add a passkey**, then sign in with
+  **Sign in with a passkey**. They need [HTTPS](#https-and-a-domain) (or `localhost`), and a passkey
+  that supports PRF, which unlocks their quizzes (iCloud Keychain, Google Password Manager and most
+  security keys do; one that doesn't is turned away when it's added). Admin with the password in
+  `.env` gets a **Passkeys** button instead.
 
 ## Making quizzes and classes
 
@@ -165,6 +170,7 @@ HTTPS:
 Caddy gets the certificate on its own. Why bother:
 - Over plain HTTP, the teacher password and student IDs cross the network unencrypted.
 - School filters often block bare IPs.
+- Passkeys only work on HTTPS.
 - Exam mode is stronger on HTTPS. Browsers only let an HTTPS page check for a second display, hold
   Alt+Tab and the Windows key during the quiz, and keep the screen from locking.
 

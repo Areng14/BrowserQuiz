@@ -80,11 +80,17 @@ function rekeyOwned(ownerId, oldKey, newKey) {
 
 // A teacher's first key: wrapped with their password and with a new recovery code, which goes back to
 // them once. Anything they already had gets sealed with it. (Admin's quizzes from when its key came
-// from .env move to the new key, so .env no longer opens them.)
+// from .env move to the new key, so .env no longer opens them.) Their passkeys go: they hold the old key
+// (or none, for admin from .env), so they'd sign in to quizzes they can't open.
 async function createKey(teacherId, password) {
   const key = V.newKey();
   const code = V.recoveryCode();
-  q('UPDATE teachers SET key_wrap = ?, rec_wrap = ? WHERE id = ?').run(await V.wrapKey(key, password), await V.wrapKey(key, V.normCode(code)), teacherId);
+  const keyWrap = await V.wrapKey(key, password);
+  const recWrap = await V.wrapKey(key, V.normCode(code));
+  tx(() => {
+    q('UPDATE teachers SET key_wrap = ?, rec_wrap = ? WHERE id = ?').run(keyWrap, recWrap, teacherId);
+    q('DELETE FROM passkeys WHERE teacher_id = ?').run(teacherId);
+  });
   V.keyring.set(teacherId, key);
   const old = V.legacyAdminKey(teacherId);
   if (old) rekeyOwned(teacherId, old, key);

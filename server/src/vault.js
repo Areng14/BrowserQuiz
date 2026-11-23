@@ -56,6 +56,17 @@ async function unwrapKey(wrapped, secret) {
 }
 const newKey = () => crypto.randomBytes(32);
 
+// A key wrapped for a passkey (passkeys.js): sealed with a key derived from what the passkey's PRF gives
+// (32 bytes the authenticator only hands over after a fingerprint, face or PIN). The AAD names the
+// passkey and its teacher, so a wrap can't be moved to another passkey or account.
+const prfKey = (prf) => Buffer.from(crypto.hkdfSync('sha256', prf, Buffer.alloc(0), 'browserquiz passkey quiz key', 32));
+const passkeyAad = (teacherId, credId) => `passkey:${teacherId}:${credId}`;
+const wrapKeyPrf = (key, prf, aad) => 'v1:' + seal(prfKey(prf), key, aad).toString('base64');
+function unwrapKeyPrf(wrapped, prf, aad) {
+  if (!wrapped || !Buffer.isBuffer(prf) || prf.length !== 32) return null;
+  try { return open(prfKey(prf), Buffer.from(String(wrapped).slice(3), 'base64'), aad); } catch (e) { return null; }
+}
+
 // 20 letters and digits (100 bits) in groups of 4. Dashes, spaces and case don't matter when typed back.
 function recoveryCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -89,5 +100,5 @@ const adminPasswordFromEnv = () => adminFromEnv;
 
 module.exports = {
   keyring, seal, open, sealText, openText, quizAad, assetAad, wrapKey, unwrapKey, newKey,
-  recoveryCode, normCode, setAdmin, keyFor, needKey, isAdmin, legacyAdminKey, adminPasswordFromEnv,
+  passkeyAad, wrapKeyPrf, unwrapKeyPrf, recoveryCode, normCode, setAdmin, keyFor, needKey, isAdmin, legacyAdminKey, adminPasswordFromEnv,
 };
