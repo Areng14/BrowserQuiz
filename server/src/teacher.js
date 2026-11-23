@@ -883,7 +883,7 @@ module.exports = function teacherRoutes(r) {
       // SEB opens the quiz where students join (on localhost: this computer's network address).
       const origin = joinOrigin(req);
       if (!origin) throw new HttpError(400, 'bad_host', "Students can't reach localhost. Start BrowserQuiz with the setup script, or open the dashboard at this computer's network address, then start the quiz again.");
-      const made = makeSebConfig(origin, code);
+      const made = makeSebConfig(origin, code, undefined, { mute: body.sebMute !== false });
       sebKey = made.key;
       sebConfig = made.xml;
       sebQuit = made.quitPassword;

@@ -11,9 +11,12 @@ const crypto = require('crypto');
 // no other apps, no address bar, one display, no screenshots.
 // A quit password is what makes SEB lock the device: without one, SEB on an iPad opens the quiz without
 // Assessment Mode. The teacher sees it on the live run page.
-function settingsFor(origin, code, quitPassword) {
+// mute: SEB mutes the computer's sound when it starts (music or a video left playing in another app),
+// unless the teacher turns it off, say for a student who uses a screen reader.
+function settingsFor(origin, code, quitPassword, { mute = true } = {}) {
   return {
     allowPreferencesWindow: false, // students can't open SEB's settings
+    ...(mute ? { audioMute: true } : {}),
     allowQuit: true, // a stuck student can still get out, with the teacher's quit password (logged as leaving the quiz)
     browserWindowWebView: 3, // macOS: the modern WebKit, which the code editor needs
     ...(quitPassword ? { hashedQuitPassword: crypto.createHash('sha256').update(quitPassword).digest('hex') } : {}),
@@ -83,8 +86,8 @@ function newQuitPassword() {
   return Array.from(crypto.randomBytes(10), (b) => abc[b % abc.length]).join('');
 }
 
-function makeConfig(origin, code, quitPassword = newQuitPassword()) {
-  const settings = settingsFor(origin, code, quitPassword);
+function makeConfig(origin, code, quitPassword = newQuitPassword(), opts = {}) {
+  const settings = settingsFor(origin, code, quitPassword, opts);
   return { xml: plist(settings), key: configKey(settings), quitPassword };
 }
 

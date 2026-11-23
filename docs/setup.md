@@ -110,6 +110,10 @@ can't require it.)
    the page links to SEB's download page. The quiz's page also has the SEB link and the `.seb` file,
    to post or hand out.
 
+SEB mutes the computer's sound while the quiz is open, so music or a video left playing in another app
+goes quiet. Turn off **Mute the computer's sound** when you start the quiz if a student uses a screen
+reader.
+
 When students turn in, **Quit Safe Exam Browser** closes it. A stuck student can also quit with the
 **SEB quit password** on the quiz's page; that counts as leaving the quiz.
 

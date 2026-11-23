@@ -507,10 +507,10 @@
     const sebOwn = h('details', { class: 't-seb' }, h('summary', { text: 'Use my own .seb file' }),
       h('label', { class: 'field', for: 'seb-key' }, h('span', { class: 'field-label', text: 'Config Key (SEB Config Tool, Exam tab)' }), sebKey));
     sebOwn.hidden = true;
-    sebOwn.addEventListener('toggle', () => { if (sebOwn.open) sebKey.focus(); });
+    sebOwn.addEventListener('toggle', () => { if (sebOwn.open) sebKey.focus(); muteRow.hidden = mode !== 'seb' || sebOwn.open; }); // their own file has its own sound setting
     const modeCards = MODES.map((m) => {
       const input = h('input', { type: 'radio', name: 'mode', id: 'mode-' + m.id, value: m.id, checked: m.id === mode });
-      input.addEventListener('change', () => { mode = m.id; sebOwn.hidden = mode !== 'seb'; });
+      input.addEventListener('change', () => { mode = m.id; sebOwn.hidden = mode !== 'seb'; muteRow.hidden = mode !== 'seb' || sebOwn.open; });
       return h('label', { class: 't-mode', for: 'mode-' + m.id, 'data-level': String(m.level) }, input,
         h('span', { class: 't-mode-title', text: m.title }),
         h('span', { class: 't-mode-sec' },
@@ -518,6 +518,10 @@
           m.security));
     });
     const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', class: 't-switch', role: 'switch', checked: true });
+    // SEB only: mute the computer's sound (other apps and tabs included) while the quiz is open
+    const sebMute = h('input', { type: 'checkbox', id: 'seb-mute', class: 't-switch', role: 'switch', checked: true });
+    const muteRow = h('label', { class: 't-check t-switch-row', for: 'seb-mute' }, sebMute, h('span', { text: "Mute the computer's sound" }));
+    muteRow.hidden = true;
     const startMsg = h('p', { class: 't-error', role: 'alert' });
     const ready = data.quizzes.length && data.rosters.length;
     const startBtn = h('button', { class: 'btn primary t-start', type: 'button', text: 'Start quiz', disabled: !ready });
@@ -529,7 +533,7 @@
       startMsg.textContent = '';
       try {
         const own = mode === 'seb' && sebOwn.open && sebKey.value.trim();
-        const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked, practice: mode === 'practice', seb: mode === 'seb', sebKey: own || null });
+        const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked, practice: mode === 'practice', seb: mode === 'seb', sebKey: own || null, sebMute: sebMute.checked });
         showRun(r.id);
       } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
     });
@@ -541,6 +545,7 @@
         h('div', { class: 't-start-form' },
           h('div', { class: 't-row' }, quizSel.el, rosterSel.el),
           h('fieldset', { class: 't-modes' }, h('legend', { class: 'field-label', text: 'Mode' }), modeCards),
+          muteRow,
           sebOwn,
           h('label', { class: 't-check t-switch-row', for: 'ip-lock' }, ipLock, h('span', { text: 'Only students on my current network' })),
           h('div', { class: 't-row t-start-row' }, startBtn, startMsg), runner)),
