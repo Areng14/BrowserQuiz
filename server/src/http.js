@@ -24,6 +24,11 @@ function clientIp(req) {
   }
   return String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
 }
+// The client's address, when it can be told: behind a proxy we don't trust (TRUST_PROXY off, but an
+// X-Forwarded-For came in) every request looks like the proxy's, so null. For pinning an attempt.
+function trustedIp(req) {
+  return TRUST_PROXY || !req.headers['x-forwarded-for'] ? clientIp(req) : null;
+}
 // "Only this network" check. The lock holds the teacher's address from when they started the quiz.
 // - Same address: hosted off campus, the whole school shares one public IP.
 // - Both private (10.x, 192.168.x, fd00::...): self-hosted on the school LAN, which is itself the boundary.
@@ -201,6 +206,6 @@ const newToken = () => crypto.randomBytes(32).toString('base64url');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 module.exports = {
-  HttpError, clientIp, sameNetwork, isHttps, siteOrigin, cookies, setCookie, send, json, readBody, readJson, router, serveStatic, limiter,
+  HttpError, clientIp, trustedIp, sameNetwork, isHttps, siteOrigin, cookies, setCookie, send, json, readBody, readJson, router, serveStatic, limiter,
   sha256, newToken, sleep, SECURITY, PAGE_CSP,
 };

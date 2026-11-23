@@ -11,7 +11,7 @@ const { runSamples } = require('./coderun');
 const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } = require('./grade');
 const { fillTemplate } = require('./quizfile');
 const C = require('./corrections');
-const { HttpError, clientIp, sameNetwork, isHttps, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
+const { HttpError, clientIp, trustedIp, sameNetwork, isHttps, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
 
 const PEPPER = process.env.ID_PEPPER || '';
 const joinFails = limiter(20, 60000);
@@ -89,8 +89,9 @@ function openRun(runId, req) {
 
 // Pinned to the network they started on: no carrying on from home or a phone's hotspot, even in the
 // same browser, until the teacher lets them back in (which moves the pin to where they sign in).
+// ip: trustedIp, null when the address can't be told (then there's no pin to check).
 function checkPin(a, run, ip) {
-  if (a.status !== 'active' || run.mode === 'practice' || !a.pinIp || sameNetwork(ip, a.pinIp)) return;
+  if (a.status !== 'active' || run.mode === 'practice' || !a.pinIp || !ip || sameNetwork(ip, a.pinIp)) return;
   if (!a.flagged.has('pin')) { a.flagged.add('pin'); store.record(a, 'left-network', ip, store.getQuiz(run.quiz_id)); }
   throw new HttpError(403, 'other_network');
 }
@@ -111,7 +112,7 @@ function current(req, { mustBeOpen = true } = {}) {
     if (a.status === 'active' && !a.flagged.has('net')) { a.flagged.add('net'); store.record(a, 'other-network', ip, store.getQuiz(run.quiz_id)); }
     throw new HttpError(403, 'wrong_network');
   }
-  checkPin(a, run, ip);
+  checkPin(a, run, trustedIp(req));
   const ua = String(req.headers['user-agent'] || '').slice(0, 300);
   if (a.status === 'active' && a.userAgent && ua !== a.userAgent && !a.flagged.has('ua')) {
     a.flagged.add('ua');
@@ -364,8 +365,8 @@ module.exports = function studentRoutes(r) {
         if (existing.letIn && now - existing.letIn < 10 * 60000) {
           existing.letIn = 0;
           existing.resumeOk = true;
-          if (existing.status === 'active' && run.mode !== 'practice') { existing.pinIp = clientIp(req); existing.flagged.delete('pin'); store.save(existing); }
-        } else checkPin(existing, run, clientIp(req));
+          if (existing.status === 'active' && run.mode !== 'practice') { existing.pinIp = trustedIp(req); existing.flagged.delete('pin'); store.save(existing); }
+        } else checkPin(existing, run, trustedIp(req));
         return json(res, 200, { ok: true, run: run.corrects ? runInfo(run, store.getQuiz(run.quiz_id), student.id) : undefined });
       }
       // A student who lost their cookie before starting can sign in again. After that, only if the teacher
@@ -376,7 +377,7 @@ module.exports = function studentRoutes(r) {
       if (letIn) {
         existing.letIn = 0;
         existing.resumeOk = true;
-        if (existing.status === 'active' && run.mode !== 'practice') { existing.pinIp = clientIp(req); existing.flagged.delete('pin'); store.save(existing); }
+        if (existing.status === 'active' && run.mode !== 'practice') { existing.pinIp = trustedIp(req); existing.flagged.delete('pin'); store.save(existing); }
       }
       if (run.mode === 'practice' && existing.status === 'waiting') { existing.status = 'admitted'; store.save(existing); }
       existing.tokenHash = sha256(token);
@@ -414,7 +415,7 @@ module.exports = function studentRoutes(r) {
       } else a.layout = store.makeLayout(quiz);
       a.status = 'active';
       a.startedAt = now;
-      if (!a.practice) a.pinIp = clientIp(req); // the network it's pinned to (current)
+      if (!a.practice) a.pinIp = trustedIp(req); // the network it's pinned to (current); none when it can't be told
       a.deadline = quiz.timeLimitMin && !run.corrects ? now + quiz.timeLimitMin * 60000 : null;
       a.lastBeat = now;
       store.logEvent(a, 'start', 'info', null);
