@@ -16,6 +16,8 @@
     extension: 'Extension on the page', 'spoofed-checks': 'Extension hides leaving the window', 'no-frames': 'Quiz not on screen, no leave reported',
     'scripted-input': 'Typed by a script', viewport: 'Side panel or DevTools open', setup: 'Computer',
   };
+  // Browsers only offer passkeys on HTTPS (and localhost), so plain-http installs don't show them.
+  const PASSKEYS = !!(window.PublicKeyCredential && window.isSecureContext && navigator.credentials);
   let pollTimer = 0;
   let tickTimer = 0;
   let selected = null;
@@ -49,7 +51,11 @@
     try { data = await res.json(); } catch (e) { /* no body */ }
     if (res.status === 401 && data && data.error === 'login') { showLogin(); throw new Error('login'); }
     if (res.status === 403 && data && data.error === 'must_change') { showSetPassword(true); throw new Error('login'); }
-    if (!res.ok) throw new Error((data && data.message) || (data && data.error) || `Request failed (${res.status})`);
+    if (!res.ok) {
+      const err = new Error((data && data.message) || (data && data.error) || `Request failed (${res.status})`);
+      err.code = data && data.error;
+      throw err;
+    }
     return data;
   }
   const post = (path, body) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
@@ -71,10 +77,12 @@
     return b;
   }
   let who = null; // the signed-in teacher, from /api/t/me
+  // Password and passkeys. Admin's password in .env is changed there, so admin only gets passkeys.
+  const accountBtn = () => (!who || (who.passwordFromEnv && !PASSKEYS) ? null
+    : h('button', { class: 'btn small', type: 'button', text: who.passwordFromEnv ? 'Passkeys' : 'Password', onclick: () => showSetPassword(false) }));
   function bar(...left) {
     return h('header', { class: 't-bar' }, h('span', { class: 'grow' }, ...left),
-      who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null, themeButton(),
-      who && !who.passwordFromEnv ? h('button', { class: 'btn small', type: 'button', text: 'Password', onclick: () => showSetPassword(false) }) : null,
+      who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null, themeButton(), accountBtn(),
       h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } }));
   }
   // A new page: the tab title names it, and reading starts at its heading unless the page focused a field.
@@ -113,12 +121,14 @@
     const pw = h('input', { class: 'input', type: 'password', id: 'pw', autocomplete: 'current-password' });
     const msg = h('p', { class: 't-error', role: 'alert' });
     const btn = h('button', { class: 'btn primary', type: 'submit', text: 'Sign in' });
+    const pk = PASSKEYS ? h('button', { class: 'btn', type: 'button', text: 'Sign in with a passkey' }) : null;
+    if (pk) pk.addEventListener('click', () => passkeySignIn(pk, msg));
     const form = h('form', { class: 't-login' },
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
       h('h1', { text: 'Teacher sign in' }),
       h('label', { class: 'field', for: 'user' }, h('span', { class: 'field-label', text: 'Username' }), user),
       h('label', { class: 'field', for: 'pw' }, h('span', { class: 'field-label', text: 'Password' }), pw),
-      btn, msg);
+      btn, pk, msg);
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       btn.disabled = true; msg.textContent = '';
@@ -130,6 +140,10 @@
 
   // A teacher on a temporary password picks their own before anything else (first), or changes it later.
   async function showSetPassword(first) {
+    if (!first && who && who.passwordFromEnv) {
+      mount(h('main', {}, passkeysSection(true), h('div', { class: 't-pk' }, h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => showHome() })))));
+      return;
+    }
     // After an admin reset, with the quiz key not in memory: the recovery code keeps their quizzes.
     let recover = false;
     if (first) { try { const me = await api('/api/t/me'); recover = !!(me.teacher && me.teacher.needsRecovery); } catch (e) { return; } }
@@ -163,8 +177,116 @@
         if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else showHome();
       } catch (ex) { msg.textContent = ex.message; btn.disabled = false; }
     });
-    mount(h('main', {}, form));
+    mount(h('main', {}, form, !first && PASSKEYS ? passkeysSection(false) : null));
     cur.focus();
+  }
+
+  // ---------- passkeys ----------
+  const b64e = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const b64d = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+  const cancelled = (e) => e && (e.name === 'NotAllowedError' || e.name === 'AbortError'); // closed the browser's prompt
+  const prfOut = (cred) => { const x = cred.getClientExtensionResults().prf; return x && x.results && x.results.first ? b64e(x.results.first) : null; };
+  const signed = (cred) => ({ id: b64e(cred.rawId), clientDataJSON: b64e(cred.response.clientDataJSON), authenticatorData: b64e(cred.response.authenticatorData), signature: b64e(cred.response.signature) });
+  // A passkey the server doesn't keep: the passkey manager stops offering it, where the browser can.
+  const forget = (rpId, credentialId) => {
+    try { if (PublicKeyCredential.signalUnknownCredential) PublicKeyCredential.signalUnknownCredential({ rpId, credentialId }).catch(() => {}); } catch (e) { /* not supported */ }
+  };
+
+  async function passkeySignIn(btn, msg) {
+    btn.disabled = true;
+    msg.textContent = '';
+    try {
+      const o = await post('/api/t/passkeys/login-options');
+      let cred;
+      try {
+        cred = await navigator.credentials.get({ publicKey: {
+          challenge: b64d(o.challenge), rpId: o.rpId, allowCredentials: [], userVerification: 'required', timeout: 120000,
+          extensions: { prf: { eval: { first: b64d(o.prfSalt) } } },
+        } });
+      } catch (e) { if (cancelled(e)) return; throw e; }
+      try {
+        await post('/api/t/passkeys/login', Object.assign(signed(cred), { userHandle: cred.response.userHandle ? b64e(cred.response.userHandle) : null, prf: prfOut(cred) }));
+      } catch (e) { if (e.code === 'unknown_passkey') forget(o.rpId, b64e(cred.rawId)); throw e; }
+      route();
+    } catch (ex) {
+      msg.textContent = ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message;
+    } finally { btn.disabled = false; }
+  }
+
+  // create(), then, if that gave no PRF output (it usually doesn't), get() on just the new passkey for
+  // it: a second touch. The quiz key is sealed with it, so a passkey without PRF can't be added (except
+  // by admin with the password in .env). null: the teacher closed the browser's prompt.
+  async function addPasskey() {
+    const o = await post('/api/t/passkeys/add-options');
+    const salt = b64d(o.prfSalt);
+    let cred;
+    try {
+      cred = await navigator.credentials.create({ publicKey: {
+        rp: { id: o.rpId, name: 'BrowserQuiz' },
+        user: { id: b64d(o.user.id), name: o.user.name, displayName: o.user.displayName },
+        challenge: b64d(o.challenge),
+        pubKeyCredParams: [-7, -8, -257].map((alg) => ({ type: 'public-key', alg })),
+        authenticatorSelection: { residentKey: 'required', requireResidentKey: true, userVerification: 'required' },
+        excludeCredentials: o.exclude.map((id) => ({ type: 'public-key', id: b64d(id) })),
+        attestation: 'none', timeout: 120000, extensions: { prf: { eval: { first: salt } } },
+      } });
+    } catch (e) {
+      if (cancelled(e)) return null;
+      if (e.name === 'InvalidStateError') throw new Error('That passkey is already added.');
+      throw e;
+    }
+    const id = b64e(cred.rawId);
+    const body = {
+      create: { id, clientDataJSON: b64e(cred.response.clientDataJSON), attestationObject: b64e(cred.response.attestationObject) },
+      get: null, prf: prfOut(cred), attachment: cred.authenticatorAttachment || null,
+    };
+    const noPrf = () => { forget(o.rpId, id); return new Error("This passkey can't unlock your quizzes. Try another."); };
+    if (o.needPrf && !body.prf) {
+      const ext = cred.getClientExtensionResults().prf;
+      if (!ext || ext.enabled === false) throw noPrf();
+      let got;
+      try {
+        got = await navigator.credentials.get({ publicKey: {
+          challenge: b64d(o.getChallenge), rpId: o.rpId, allowCredentials: [{ type: 'public-key', id: cred.rawId }],
+          userVerification: 'required', timeout: 120000, extensions: { prf: { eval: { first: salt } } },
+        } });
+      } catch (e) { forget(o.rpId, id); if (cancelled(e)) return null; throw e; }
+      body.prf = prfOut(got);
+      if (!body.prf) throw noPrf();
+      body.get = signed(got);
+    }
+    try { return await post('/api/t/passkeys/add', body); } catch (e) { if (e.code && e.code !== 'taken') forget(o.rpId, id); throw e; }
+  }
+
+  // The signed-in teacher's passkeys: each one's name, when it was added and last used, and Remove.
+  function passkeysSection(top) {
+    const list = h('ul', { class: 't-pk-list' });
+    list.hidden = true;
+    const msg = h('p', { class: 't-error', role: 'alert' });
+    const add = h('button', { class: 'btn', type: 'button', text: 'Add a passkey' });
+    const paint = (keys) => {
+      list.hidden = !keys.length;
+      list.replaceChildren(...keys.map((k) => h('li', {},
+        h('span', { class: 't-pk-what' }, h('span', { class: 't-pk-name', text: k.name }),
+          h('span', { class: 't-small t-muted t-pk-meta' },
+            h('span', { text: `Added ${new Date(k.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}` }), ' · ',
+            h('span', { text: k.lastUsedAt ? `Last used ${date(k.lastUsedAt)}` : 'Not used yet' }))),
+        h('button', { class: 'btn small', type: 'button', text: 'Remove', 'aria-label': `Remove ${k.name}`, onclick: async () => {
+          if (!confirm(`Remove ${k.name}?`)) return;
+          msg.textContent = '';
+          try { paint((await post(`/api/t/passkeys/${encodeURIComponent(k.id)}/delete`)).passkeys); } catch (e) { if (e.message !== 'login') msg.textContent = e.message; }
+        } }))));
+    };
+    add.addEventListener('click', async () => {
+      add.disabled = true;
+      msg.textContent = '';
+      try { const r = await addPasskey(); if (r) paint(r.passkeys); } catch (e) { if (e.message !== 'login') msg.textContent = e.message; }
+      add.disabled = false;
+    });
+    api('/api/t/passkeys').then((r) => paint(r.passkeys)).catch(() => {});
+    return h('section', { class: top ? 't-pk t-pk-top' : 't-pk', 'aria-labelledby': 'pk-title' },
+      top ? h('p', { class: 'eyebrow', text: 'BrowserQuiz' }) : null,
+      h(top ? 'h1' : 'h2', { id: 'pk-title', text: 'Passkeys' }), list, h('div', {}, add), msg);
   }
 
   // Shown once, when a teacher's quiz key is made: the only way back to their quizzes without the password.
@@ -305,8 +427,7 @@
           t.id === 'current' && live > 1 ? h('span', { class: 't-badge', title: `${live} open`, 'aria-label': `${live} open`, text: String(live) }) : null))),
         h('div', { class: 't-side-foot' },
           who ? h('span', { class: 't-small t-muted t-who', text: who.name }) : null,
-          h('div', { class: 't-side-btns' }, themeButton(),
-            who && !who.passwordFromEnv ? h('button', { class: 'btn small', type: 'button', text: 'Password', onclick: () => showSetPassword(false) }) : null,
+          h('div', { class: 't-side-btns' }, themeButton(), accountBtn(),
             h('button', { class: 'btn small', type: 'button', text: 'Sign out', onclick: async () => { await post('/api/t/logout'); who = null; showLogin(); } })))),
       h('main', { class: 't-main' }, ...content),
       h('footer', { class: 't-foot' }, ghLink())); // at the bottom of the page, or after it when it's long

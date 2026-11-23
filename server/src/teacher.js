@@ -48,6 +48,7 @@ function keyState(me) {
 }
 const keyChecks = new Map(); // teacher id -> times they had a key checked
 const { HttpError, clientIp, isHttps, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
+const PK = require('./passkeys');
 const { makeConfig: makeSebConfig } = require('./seb');
 const A = require('./accounts');
 const V = require('./vault');
@@ -61,7 +62,7 @@ const LET_IN_MS = 10 * 60000; // how long "Let back in" stays open
 function requireTeacher(req, opts = {}) {
   const tok = cookies(req)[TCH];
   if (!tok) throw new HttpError(401, 'login');
-  const row = q(`SELECT s.created_at, t.id, t.username, t.name, t.role, t.disabled, t.must_change FROM sessions s
+  const row = q(`SELECT s.created_at, s.passkey, t.id, t.username, t.name, t.role, t.disabled, t.must_change FROM sessions s
     JOIN teachers t ON t.id = s.teacher_id WHERE s.token_hash = ?`).get(sha256(tok));
   if (!row || row.disabled || Date.now() - row.created_at > SESSION_MS) throw new HttpError(401, 'login');
   if (row.must_change && !opts.setup) throw new HttpError(403, 'must_change');
@@ -332,6 +333,14 @@ function retireRoster(id) {
 const rosterStudentsForRun = (run) => q(`SELECT id, name FROM roster_students WHERE roster_id = ?
   AND (removed = 0 OR id IN (SELECT student_id FROM attempts WHERE run_id = ?)) ORDER BY name`).all(run.roster_id, run.id);
 
+// Signed in, by password or passkey: the session cookie.
+function startSession(req, res, teacherId, passkey) {
+  const token = newToken();
+  q('INSERT INTO sessions (token_hash, created_at, teacher_id, passkey) VALUES (?, ?, ?, ?)').run(sha256(token), Date.now(), teacherId, passkey ? 1 : 0);
+  q('DELETE FROM sessions WHERE created_at < ?').run(Date.now() - SESSION_MS);
+  setCookie(req, res, TCH, token, SESSION_MS / 1000);
+}
+
 // Password guesses: each address gets 10 a minute and everyone together 60, counted before the check so
 // firing them all at once doesn't help. A spent budget only blocks new sign-ins for a minute; teachers already
 // signed in keep working, and the right password refunds its try.
@@ -373,10 +382,7 @@ module.exports = function teacherRoutes(r) {
         else q('UPDATE teachers SET must_change = 1 WHERE id = ?').run(teacher.id); // can't unlock: recovery code needed
       } else recoveryCode = await A.createKey(teacher.id, String(body.password));
     }
-    const token = newToken();
-    q('INSERT INTO sessions (token_hash, created_at, teacher_id) VALUES (?, ?, ?)').run(sha256(token), Date.now(), teacher.id);
-    q('DELETE FROM sessions WHERE created_at < ?').run(Date.now() - SESSION_MS);
-    setCookie(req, res, TCH, token, SESSION_MS / 1000);
+    startSession(req, res, teacher.id, false);
     json(res, 200, { ok: true, recoveryCode });
   });
 
@@ -396,7 +402,8 @@ module.exports = function teacherRoutes(r) {
         passwordFromEnv: me.role === 'admin' && V.adminPasswordFromEnv(),
         // After a reset: their recovery code keeps their quizzes (the key in memory doesn't count, or the
         // temporary password alone would open them).
-        needsRecovery: !!me.must_change && !!A.byId(me.id).key_wrap,
+        // A passkey sign-in unlocked it, though: only the teacher has that.
+        needsRecovery: !!me.must_change && !!A.byId(me.id).key_wrap && !(me.passkey && V.keyFor(me.id)),
       },
     });
   });
@@ -412,8 +419,9 @@ module.exports = function teacherRoutes(r) {
     if (!(await A.checkPassword(String(body.current || ''), t.pw_hash))) throw new HttpError(400, 'bad_password', 'The current password is wrong.');
     // The quiz key moves to the new password. It's in memory, or the old password or the recovery code
     // opens it; "start over" drops quizzes nobody can open any more. After an admin reset (must_change),
-    // the key in memory doesn't count: whoever has the temporary password needs the recovery code too.
-    let key = t.must_change ? null : V.keyFor(me.id);
+    // the key in memory doesn't count: whoever has the temporary password needs the recovery code too,
+    // unless this session's passkey unlocked it.
+    let key = t.must_change && !me.passkey ? null : V.keyFor(me.id);
     if (!key && t.key_wrap) key = await V.unwrapKey(t.key_wrap, String(body.current || ''));
     if (!key && t.key_wrap && body.recoveryCode) key = await V.unwrapKey(t.rec_wrap, V.normCode(body.recoveryCode));
     if (!key && t.key_wrap && !body.startOver) {
@@ -430,6 +438,108 @@ module.exports = function teacherRoutes(r) {
     q('DELETE FROM sessions WHERE teacher_id = ? AND token_hash != ?').run(me.id, sha256(cookies(req)[TCH]));
     audit(me, 'change-password', null, null);
     json(res, 200, { ok: true, recoveryCode });
+  });
+
+  // ---------- passkeys (passkeys.js) ----------
+  // Each one holds the teacher's quiz key sealed with its PRF output, so signing in with it unlocks
+  // their quizzes like a password does. Admin's key comes from .env while its password does: nothing
+  // to seal there, so no PRF needed.
+  const envAdmin = (t) => t.role === 'admin' && V.adminPasswordFromEnv();
+  const passkeyList = (me) => q('SELECT id, name, created_at, last_used_at FROM passkeys WHERE teacher_id = ? ORDER BY created_at').all(me.id)
+    .map((x) => ({ id: x.id, name: x.name, createdAt: x.created_at, lastUsedAt: x.last_used_at }));
+  const MAX_PASSKEYS = 20;
+  const pkBad = () => new HttpError(400, 'bad_passkey', "That passkey didn't work.");
+
+  r.get('/api/t/passkeys', (req, res) => {
+    const me = requireTeacher(req);
+    json(res, 200, { passkeys: passkeyList(me) });
+  });
+
+  // Adding one: create() with these, then, if create() gave no PRF output, get() on the new passkey with
+  // getChallenge. Both go to /add in one request.
+  r.post('/api/t/passkeys/add-options', async (req, res) => {
+    const me = requireTeacher(req);
+    const { rpId } = PK.site(req);
+    // The user handle passkeys carry: random, the same for all of a teacher's passkeys.
+    if (!A.byId(me.id).pk_user) q('UPDATE teachers SET pk_user = ? WHERE id = ? AND pk_user IS NULL').run(crypto.randomBytes(16).toString('base64url'), me.id);
+    json(res, 200, {
+      rpId, user: { id: A.byId(me.id).pk_user, name: me.username, displayName: me.name },
+      challenge: PK.newChallenge('add', me.id), getChallenge: PK.newChallenge('add-get', me.id),
+      exclude: q('SELECT id FROM passkeys WHERE teacher_id = ?').all(me.id).map((x) => x.id),
+      prfSalt: PK.PRF_SALT.toString('base64url'), needPrf: !envAdmin(me),
+    });
+  });
+
+  r.post('/api/t/passkeys/add', async (req, res) => {
+    const me = requireTeacher(req);
+    const body = await readJson(req, 96 * 1024);
+    const ctx = { ...PK.site(req), teacherId: me.id };
+    const cred = PK.readCreate(body.create, ctx, 'add');
+    let signCount = cred.signCount;
+    if (body.get != null) {
+      const g = typeof body.get === 'object' ? body.get : {};
+      const raw = PK.clientData(g.clientDataJSON, 'webauthn.get', 'add-get', me.id, ctx.origin);
+      if (g.id !== cred.id) throw pkBad();
+      signCount = Math.max(signCount, PK.checkAssertion(g, raw, cred.publicKey, ctx.rpId));
+    }
+    const prf = PK.prfOf(body.prf);
+    if (!prf && !envAdmin(me)) throw new HttpError(400, 'no_prf', "This passkey can't unlock your quizzes. Try another.");
+    if (q('SELECT 1 FROM passkeys WHERE id = ?').get(cred.id)) throw new HttpError(400, 'taken', 'That passkey is already added.');
+    if (q('SELECT COUNT(*) AS n FROM passkeys WHERE teacher_id = ?').get(me.id).n >= MAX_PASSKEYS) throw new HttpError(400, 'too_many_passkeys', `That's ${MAX_PASSKEYS} passkeys. Remove one first.`);
+    const keyWrap = envAdmin(me) ? null : V.wrapKeyPrf(V.needKey(me.id), prf, V.passkeyAad(me.id, cred.id));
+    const name = PK.passkeyName(cred.aaguid, body.attachment, req.headers['user-agent']);
+    q('INSERT INTO passkeys (id, teacher_id, public_key, sign_count, name, created_at, key_wrap) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(cred.id, me.id, cred.publicKey, signCount, name, Date.now(), keyWrap);
+    audit(me, 'add-passkey', null, name);
+    json(res, 200, { ok: true, passkeys: passkeyList(me) });
+  });
+
+  r.post('/api/t/passkeys/:id/delete', async (req, res, p) => {
+    const me = requireTeacher(req);
+    const row = PK.credIdOk(p.id) ? q('SELECT id, name FROM passkeys WHERE id = ? AND teacher_id = ?').get(p.id, me.id) : null;
+    if (!row) throw new HttpError(404, 'not_found');
+    q('DELETE FROM passkeys WHERE id = ? AND teacher_id = ?').run(row.id, me.id);
+    audit(me, 'remove-passkey', null, row.name);
+    json(res, 200, { ok: true, passkeys: passkeyList(me) });
+  });
+
+  // Sign-in: any passkey for this site (they're discoverable), so no username first.
+  r.post('/api/t/passkeys/login-options', async (req, res) => {
+    const mine = loginBucket('pk:' + clientIp(req), 20, 3000);
+    if (mine.n < 1) throw new HttpError(429, 'too_many');
+    mine.n--;
+    const { rpId } = PK.site(req);
+    json(res, 200, { rpId, challenge: PK.newChallenge('login', null), prfSalt: PK.PRF_SALT.toString('base64url') });
+  });
+
+  // Counted against the same budgets as password sign-in. Then like it: their quiz key is unlocked (with
+  // the PRF output instead of the password) and they get the same session.
+  r.post('/api/t/passkeys/login', async (req, res) => {
+    const body = await readJson(req, 16 * 1024);
+    const mine = loginBucket('ip:' + clientIp(req), 10, 6000);
+    const all = loginBucket('all', 60, 1000);
+    if (mine.n < 1 || all.n < 1) throw new HttpError(429, 'too_many');
+    mine.n--;
+    all.n--;
+    const { origin, rpId } = PK.site(req);
+    const raw = PK.clientData(body.clientDataJSON, 'webauthn.get', 'login', null, origin);
+    const pk = PK.credIdOk(body.id) ? q('SELECT * FROM passkeys WHERE id = ?').get(body.id) : null;
+    if (!pk) throw new HttpError(400, 'unknown_passkey', "That passkey isn't set up here. Sign in with your password.");
+    const teacher = A.byId(pk.teacher_id);
+    if (!teacher || teacher.disabled) throw pkBad();
+    if (body.userHandle != null && body.userHandle !== teacher.pk_user) throw pkBad();
+    const count = PK.checkAssertion(body, raw, Buffer.from(pk.public_key), rpId);
+    if (!PK.countOk(pk.sign_count, count)) throw pkBad();
+    if (!envAdmin(teacher)) {
+      const key = V.unwrapKeyPrf(pk.key_wrap, PK.prfOf(body.prf), V.passkeyAad(teacher.id, pk.id));
+      if (!key) throw new HttpError(400, 'needs_password', "This passkey can't unlock your quizzes. Sign in with your password.");
+      V.keyring.set(teacher.id, key);
+    }
+    q('UPDATE passkeys SET sign_count = ?, last_used_at = ? WHERE id = ?').run(count, Date.now(), pk.id);
+    mine.n = Math.min(mine.cap, mine.n + 1);
+    all.n = Math.min(all.cap, all.n + 1);
+    startSession(req, res, teacher.id, true);
+    json(res, 200, { ok: true, recoveryCode: null });
   });
 
   // ---------- teacher accounts (admin) ----------

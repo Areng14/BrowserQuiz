@@ -66,6 +66,14 @@ function isHttps(req) {
   return TRUST_PROXY && String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
 }
 
+// This site's own origin as the browser names it (https://quiz.example.org), from the Host header. null
+// for a Host that isn't a plain name[:port].
+function siteOrigin(req) {
+  const host = String(req.headers.host || '');
+  if (!/^[A-Za-z0-9.-]{1,253}(:\d{1,5})?$/.test(host)) return null;
+  try { return new URL(`${isHttps(req) ? 'https' : 'http'}://${host}`).origin; } catch (e) { return null; }
+}
+
 function cookies(req) {
   const out = Object.create(null);
   for (const part of String(req.headers.cookie || '').split(';')) {
@@ -193,6 +201,6 @@ const newToken = () => crypto.randomBytes(32).toString('base64url');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 module.exports = {
-  HttpError, clientIp, sameNetwork, isHttps, cookies, setCookie, send, json, readBody, readJson, router, serveStatic, limiter,
+  HttpError, clientIp, sameNetwork, isHttps, siteOrigin, cookies, setCookie, send, json, readBody, readJson, router, serveStatic, limiter,
   sha256, newToken, sleep, SECURITY, PAGE_CSP,
 };

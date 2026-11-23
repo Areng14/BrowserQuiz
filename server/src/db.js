@@ -100,6 +100,17 @@ db.exec('CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT)'); // 
 addColumn('attempts', 'away_ms', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('attempts', 'away_max', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('attempts', 'restore_strikes', 'INTEGER');
+// Passkeys (passkeys.js): id is the credential id, public_key its SPKI DER. key_wrap is the teacher's quiz
+// key sealed with what the passkey's PRF gives (vault.js); null for admin while its key comes from .env.
+// pk_user is the random user handle a teacher's passkeys carry. A session's passkey flag: it was made
+// by one, so its quiz key in memory counts after an admin reset (the temporary password alone doesn't).
+db.exec(`CREATE TABLE IF NOT EXISTS passkeys (
+  id TEXT PRIMARY KEY, teacher_id TEXT NOT NULL REFERENCES teachers(id) ON DELETE CASCADE, public_key BLOB NOT NULL,
+  sign_count INTEGER NOT NULL DEFAULT 0, name TEXT NOT NULL, created_at INTEGER NOT NULL, last_used_at INTEGER, key_wrap TEXT
+);
+CREATE INDEX IF NOT EXISTS passkeys_teacher ON passkeys(teacher_id);`);
+addColumn('teachers', 'pk_user', 'TEXT');
+addColumn('sessions', 'passkey', 'INTEGER NOT NULL DEFAULT 0');
 db.exec(`CREATE INDEX IF NOT EXISTS quizzes_owner ON quizzes(owner_id);
 CREATE INDEX IF NOT EXISTS rosters_owner ON rosters(owner_id);
 CREATE INDEX IF NOT EXISTS runs_owner ON runs(owner_id);`);
