@@ -1280,6 +1280,7 @@
       try { data = await api(`/api/t/runs/${runId}/live`); } catch (e) { return; }
       const run = data.run;
       lastRun = run;
+      notice(data.students);
       corrBtn.hidden = run.practice || !!run.corrections; // an exam's, once
       code.textContent = run.code;
       document.title = `${run.code} · ${run.title} – BrowserQuiz`;
@@ -1525,8 +1526,64 @@
     }
 
     const corrBtn = h('button', { class: 'btn', type: 'button', text: 'Corrections', hidden: true, onclick: () => correctionsDialog(runId, lastRun) });
+
+    // Notifications: a strike, an invalidation, or a sign-in to look at, as it happens. On this page always
+    // (a toast; clicking it opens the student). As the computer's own notification too, and a buzz on a
+    // phone, once the teacher turns them on (⋯ menu), for when this tab isn't in front.
+    const toasts = h('div', { class: 't-toasts', 'aria-live': 'polite' });
+    const openStudent = (id) => { selected = id; lastDetail = ''; showDetail(id); refresh(); };
+    const notifyKey = 'bq-notify';
+    const notifyOn = () => { try { return localStorage.getItem(notifyKey) === '1' && 'Notification' in window && Notification.permission === 'granted'; } catch (e) { return false; } };
+    const notifyBtn = h('button', { class: 'btn', type: 'button' });
+    const paintNotify = () => { notifyBtn.textContent = notifyOn() ? 'Notifications: on' : 'Notifications: off'; };
+    notifyBtn.addEventListener('click', async () => {
+      if (notifyOn()) { try { localStorage.setItem(notifyKey, '0'); } catch (e) { /* off for this page */ } paintNotify(); return; }
+      if (!('Notification' in window)) { ask.notice({ title: "This browser can't show notifications" }); return; }
+      if (Notification.permission !== 'granted' && (await Notification.requestPermission()) !== 'granted') {
+        ask.notice({ title: 'Notifications are blocked', text: "Allow them for this site in the browser's settings, then turn them on here." });
+        return;
+      }
+      try { localStorage.setItem(notifyKey, '1'); } catch (e) { /* not remembered */ }
+      paintNotify();
+    });
+    paintNotify();
+    function toast(id, kind, title, text) {
+      const card = h('div', { class: `t-toast ${kind}` });
+      const go = h('button', { class: 't-toast-main', type: 'button', onclick: () => { card.remove(); openStudent(id); } }, h('b', { text: title }), h('span', { text }));
+      const x = h('button', { class: 'btn small ghost t-toast-x', type: 'button', 'aria-label': 'Dismiss', onclick: () => card.remove() }, icon(ICONS.x, 16));
+      card.append(go, x);
+      toasts.append(card);
+      while (toasts.childElementCount > 4) toasts.firstChild.remove();
+      setTimeout(() => card.remove(), 12000);
+      if (!notifyOn()) return;
+      if (navigator.vibrate) navigator.vibrate(200);
+      if (!document.hidden && document.hasFocus()) return; // in front: the toast is enough
+      try {
+        const n = new Notification(title, { body: text, tag: `${id}:${kind}`, icon: '/icon-180.png' });
+        n.onclick = () => { window.focus(); n.close(); openStudent(id); };
+      } catch (e) { /* phones want a service worker for these: the buzz and the toast still came */ }
+    }
+    const seen = new Map(); // attempt id -> { strikes, bad, checks }, as of the last poll
+    let firstLook = true;
+    function notice(students) {
+      for (const s of students) {
+        const a = s.attempt;
+        if (!a) continue;
+        const was = seen.get(a.id);
+        const now = { strikes: a.strikes || 0, bad: a.integrity === 'invalidated', checks: (a.checks || []).length };
+        seen.set(a.id, now);
+        if (firstLook) continue; // what was already there when the page opened isn't news
+        if (now.bad && !(was && was.bad)) toast(a.id, 'bad', `${s.name} was invalidated`, LABEL[a.reason] || a.reason || '');
+        else if (was && now.strikes > was.strikes) toast(a.id, 'bad', `${s.name}: ${LABEL[a.lastStrike] || 'Left the quiz'}`, `Strike ${now.strikes}`);
+        if (now.checks > (was ? was.checks : 0)) {
+          const c = a.checks[a.checks.length - 1];
+          toast(a.id, 'check', `${s.name}: check their computer`, checkWhy(c));
+        }
+      }
+      firstLook = false;
+    }
     // Close quiz stays out; the rest is under ⋯.
-    const runMenu = moreMenu('More for this quiz', 'run:more', () => [lockBtn,
+    const runMenu = moreMenu('More for this quiz', 'run:more', () => [lockBtn, notifyBtn,
       ...(lastRun && lastRun.sebFile && lastRun.status === 'open' && sebParts ? sebParts : []),
       exportLink, classReport, corrBtn.hidden ? null : corrBtn], () => refresh());
     detail.className = 't-detail-host';
@@ -1538,7 +1595,7 @@
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
           howTo, quitPw,
           h('div', { class: 't-row t-run-acts' }, admitAll, aiBtn, toggle, runMenu), aiMsg,
-          failedBox, summary),
+          failedBox, summary, toasts),
         h('div', { class: 't-livegrid' }, h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },
           h('thead', {}, h('tr', {}, heads(['Student', 'Status', 'Integrity', 'Strikes', 'Progress', 'Time left', 'Score'], ['Strikes', 'Progress', 'Time left', 'Score']), actionsHead())),
           tbody)),

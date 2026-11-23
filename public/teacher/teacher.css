@@ -702,3 +702,16 @@ th .qe-gridcell { font: 600 13px var(--font); }
 .qe-choice > .input.t-points { height: 40px; min-height: 40px; } /* a rubric item's points, as tall as its text */
 .qe-cell .qe-tool { min-height: 30px; } /* a trace column's remove button, as tall as its name */
 @media (pointer: coarse) { .qe-tool { min-height: 40px; min-width: 40px; } .qe-grip { min-width: 40px; } }
+
+/* Notifications on the live page (teacher.js notice): bottom right, a few at most, gone after a while.
+   The edge says how bad (red: a strike, amber: a sign-in to check); the words say what. */
+.t-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: grid; gap: 8px; width: min(380px, calc(100vw / var(--zoom, 1) - 32px)); }
+.t-toasts:empty { display: none; }
+.t-toast { display: flex; align-items: center; gap: 6px; padding: 10px 8px 10px 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-left: 4px solid var(--bad); border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14); }
+.t-toast.check { border-left-color: var(--warn); }
+.t-toast-main { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 0; font: inherit; text-align: left; color: inherit; background: none; border: 0; cursor: pointer; }
+.t-toast-main b { overflow-wrap: anywhere; }
+.t-toast-main span { font-size: 13px; color: var(--ink-2); }
+.t-toast-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.btn.t-toast-x { flex: none; width: 34px; padding: 0; }
+@media (max-width: 820px) { .t-toasts { left: 16px; right: 16px; width: auto; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); } }

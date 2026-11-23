@@ -1123,6 +1123,10 @@ module.exports = function teacherRoutes(r) {
       if (!checks.has(e.attempt_id)) checks.set(e.attempt_id, []);
       checks.get(e.attempt_id).push({ type: e.type, detail: e.detail });
     }
+    // what each student's latest strike was, for the teacher's notifications (teacher.js notice)
+    const lastStrike = new Map();
+    for (const e of q(`SELECT e.attempt_id, e.type FROM events e JOIN attempts a ON a.id = e.attempt_id
+      WHERE a.run_id = ? AND a.archived = 0 AND e.severity = 'violation' ORDER BY e.id`).all(run.id)) lastStrike.set(e.attempt_id, e.type);
     json(res, 200, {
       run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, sebQuit: run.seb_quit || null, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin,
         corrections: run.corrects ? { earnBack: run.earn_back, why: !!run.ask_why } : null,
@@ -1132,6 +1136,7 @@ module.exports = function teacherRoutes(r) {
       students: roster.map((s) => {
         const row = liveRow(s, byStudent.get(s.id), quiz, run);
         if (row.attempt && checks.has(row.attempt.id)) row.attempt.checks = checks.get(row.attempt.id);
+        if (row.attempt && lastStrike.has(row.attempt.id)) row.attempt.lastStrike = lastStrike.get(row.attempt.id);
         return row;
       }),
       ai: { on: !!aiKeyOf(me), job: aiJobs.get(run.id) || null },
