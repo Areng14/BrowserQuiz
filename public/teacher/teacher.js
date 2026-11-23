@@ -1238,7 +1238,13 @@
     // only the students waiting when the checklist opens: anyone who joins while it's up waits for the next round
     const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Start quiz', onclick: () => {
       const ids = waitingIds.slice();
-      beforeAdmit(runId, ids.length, null, () => act(`/api/t/runs/${runId}/admit-all`, { ids }), waitingFlagged.slice(), waitingReading);
+      beforeAdmit(runId, ids.length, null, async () => {
+        await act(`/api/t/runs/${runId}/admit-all`, { ids });
+        // the button goes away once nobody's waiting: keep keyboard focus in the table, not lost on the page
+        const lost = !document.activeElement || document.activeElement === document.body || document.activeElement === admitAll;
+        const first = tbody.querySelector('.t-rowhead .t-link');
+        if (admitAll.hidden && lost && first) first.focus({ preventScroll: true });
+      }, waitingFlagged.slice(), waitingReading);
     } });
     // AI grading: everything waiting for the teacher in this run, sent to Claude (server: aigrade.js).
     const aiBtn = h('button', { class: 'btn', type: 'button', hidden: true });
@@ -1258,7 +1264,7 @@
 
     async function act(path, body) {
       try { await post(path, body); } catch (e) { alertBox(e.message); }
-      refresh();
+      return refresh();
     }
     function alertBox(msg) { detail.prepend(h('p', { class: 't-error', text: msg })); }
     // Ends one student's quiz: their answers are turned in and they see "Your teacher ended your quiz".
