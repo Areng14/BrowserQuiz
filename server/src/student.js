@@ -121,7 +121,7 @@ function current(req, { mustBeOpen = true } = {}) {
 }
 
 function publicQuiz(quiz, layout) {
-  const byId = new Map(quiz.questions.map((qq) => [qq.id, qq]));
+  const byId = new Map(store.quizFor(quiz, layout).questions.map((qq) => [qq.id, qq])); // with their random values
   const used = new Set(layout.order.flatMap((id) => [].concat(byId.get(id).shared || []))); // shared material their questions use
   return {
     title: quiz.title,

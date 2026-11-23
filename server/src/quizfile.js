@@ -112,6 +112,55 @@ function checkArgs(where, params, args, D) {
   });
 }
 
+// ---------- random values ----------
+// A question's `vars`: rows of values ({ "x": 7, "out": "1" }). Each student gets one row, put in for
+// {{x}} everywhere in the question's text, answers included, so different students see different numbers.
+// Not on code, fill or essay questions: their hidden tests, runs and grading don't change per student.
+const VAR_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,19}$/;
+const VAR_REF = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
+const VAR_TYPES = new Set(['single', 'multi', 'text', 'output', 'trace']);
+function putVars(v, row) {
+  if (typeof v === 'string') return v.replace(VAR_REF, (m, name) => (Object.hasOwn(row, name) ? row[name] : m));
+  if (Array.isArray(v)) return v.map((x) => putVars(x, row));
+  if (v && typeof v === 'object') {
+    const out = {};
+    for (const [k, x] of Object.entries(v)) if (k !== 'vars') out[k] = putVars(x, row);
+    return out;
+  }
+  return v;
+}
+function checkVars(where, q, type) {
+  if (!VAR_TYPES.has(type)) fail(`${where}: random values (vars) work on single, multi, text, output and trace questions.`);
+  const rows = q.vars;
+  if (!Array.isArray(rows) || rows.length < 2 || rows.length > 30) fail(`${where}: vars must be a list of 2 to 30 rows, like [{ "x": 3 }, { "x": 5 }].`);
+  let names = null;
+  const out = rows.map((row, r) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) fail(`${where}: vars row ${r + 1} must be an object, like { "x": 3 }.`);
+    const keys = Object.keys(row);
+    if (!keys.length || keys.length > 10) fail(`${where}: each vars row needs 1 to 10 values.`);
+    for (const k of keys) if (!VAR_NAME.test(k)) fail(`${where}: "${k}" in vars isn't a name (letters, digits and _, starting with a letter).`);
+    if (names && (keys.length !== names.length || keys.some((k) => !names.includes(k)))) fail(`${where}: every vars row needs the same names (${names.join(', ')}).`);
+    names = names || keys;
+    const clean = {};
+    for (const k of keys) {
+      const v = row[k];
+      if (!['string', 'number', 'boolean'].includes(typeof v)) fail(`${where}: vars row ${r + 1}: "${k}" must be text or a number.`);
+      clean[k] = String(v).slice(0, 200);
+    }
+    return clean;
+  });
+  const used = new Set();
+  const scan = (v) => {
+    if (typeof v === 'string') for (const m of v.matchAll(VAR_REF)) used.add(m[1]);
+    else if (Array.isArray(v)) v.forEach(scan);
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) if (k !== 'vars') scan(x);
+  };
+  scan(q);
+  if (!used.size) fail(`${where}: it has vars, but nothing uses them. Write {{${names[0]}}} where a value goes.`);
+  for (const n of used) if (!names.includes(n)) fail(`${where}: {{${n}}} isn't one of its vars (${names.join(', ')}).`);
+  return out;
+}
+
 // ---------- quiz ----------
 function normalizeQuiz(raw, assetNames) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('quiz.json must be an object.');
@@ -176,55 +225,70 @@ function normalizeQuiz(raw, assetNames) {
     ids.add(id);
     const type = q.type || 'single';
     if (!PART_TYPES.includes(type)) fail(`${where}: type must be single, multi, text, code, output, trace, fill or essay.`);
-    if (typeof q.prompt !== 'string' || !q.prompt.trim()) fail(`${where}: prompt is required.`);
-    const out = { id, type, prompt: q.prompt.slice(0, 10000), points: Number(q.points) > 0 ? Math.min(1000, Number(q.points)) : 1 };
-    // An optional short name. Students see it once the quiz has started.
-    const name = typeof q.name === 'string' ? q.name.replace(/\s+/g, ' ').trim().slice(0, 80) : '';
-    if (name) out.name = name;
-    // The shared material it uses: one id, or a list of up to 3 (shown in that order).
-    if (q.shared != null && q.shared !== '') {
-      const sids = [...new Set((Array.isArray(q.shared) ? q.shared : [q.shared]).map(String).filter(Boolean))];
-      if (sids.length > 3) fail(`${where}: a question can use up to 3 shared materials.`);
-      for (const sid of sids) if (!(quiz.shared || []).some((m) => m.id === sid)) fail(`${where}: shared "${sid}" isn't one of the quiz's shared materials.`);
-      if (sids.length) out.shared = sids.length === 1 ? sids[0] : sids;
-    }
-    imageOf(where, q, out);
-    // Why the answer is right (Markdown): in the practice review after turning in, and in reports.
-    if (q.explanation != null && typeof q.explanation !== 'string') fail(`${where}: explanation must be text.`);
-    if (typeof q.explanation === 'string' && q.explanation.trim()) out.explanation = q.explanation.trim().slice(0, 4000);
-    // A question pool: each student gets some of its questions, picked at random (quiz.pools says how many).
-    if (q.pool != null && q.pool !== '') {
-      const pool = String(q.pool);
-      if (!QID.test(pool) || ['__proto__', 'constructor', 'prototype'].includes(pool)) fail(`${where}: pool "${pool}" can only use letters, digits, - and _.`);
-      out.pool = pool;
-    }
-    if (type === 'text') {
-      const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
-      if (!ans.length || ans.some((a) => typeof a !== 'string' || !a.trim())) fail(`${where}: answer must be a string or a list of strings.`);
-      out.answer = ans.map((a) => String(a).slice(0, 500));
-      // /like this/ is a pattern: it has to be a working regex that doesn't accept a blank answer.
-      for (const a of out.answer) {
-        const t = a.trim();
-        if (!/^\/.+\/$/s.test(t)) continue;
-        let re;
-        try { re = new RegExp(t.slice(1, -1), 'i'); } catch (e) { fail(`${where}: the pattern ${t} isn't a valid regex: ${e.message}`); }
-        if (re.test('')) fail(`${where}: the pattern ${t} matches an empty answer. Make it need some text.`);
+    // The question from its raw form. Run once as written, and once per row of random values to check them.
+    const build = (q) => {
+      if (typeof q.prompt !== 'string' || !q.prompt.trim()) fail(`${where}: prompt is required.`);
+      const out = { id, type, prompt: q.prompt.slice(0, 10000), points: Number(q.points) > 0 ? Math.min(1000, Number(q.points)) : 1 };
+      // An optional short name. Students see it once the quiz has started.
+      const name = typeof q.name === 'string' ? q.name.replace(/\s+/g, ' ').trim().slice(0, 80) : '';
+      if (name) out.name = name;
+      // The shared material it uses: one id, or a list of up to 3 (shown in that order).
+      if (q.shared != null && q.shared !== '') {
+        const sids = [...new Set((Array.isArray(q.shared) ? q.shared : [q.shared]).map(String).filter(Boolean))];
+        if (sids.length > 3) fail(`${where}: a question can use up to 3 shared materials.`);
+        for (const sid of sids) if (!(quiz.shared || []).some((m) => m.id === sid)) fail(`${where}: shared "${sid}" isn't one of the quiz's shared materials.`);
+        if (sids.length) out.shared = sids.length === 1 ? sids[0] : sids;
       }
-      out.caseSensitive = !!q.caseSensitive;
-    } else if (type === 'single' || type === 'multi') {
-      if (!Array.isArray(q.choices) || q.choices.length < 2 || q.choices.length > 8) fail(`${where}: needs 2 to 8 choices.`);
-      out.choices = q.choices.map((c) => String(c).slice(0, 2000));
-      const ans = type === 'single' ? [q.answer] : q.answer;
-      if (!Array.isArray(ans) || !ans.length || ans.some((a) => !Number.isInteger(a) || a < 0 || a >= out.choices.length)) {
-        fail(`${where}: answer must be ${type === 'single' ? 'one choice index' : 'a list of choice indexes'}, counting from 0.`);
+      imageOf(where, q, out);
+      // Why the answer is right (Markdown): in the practice review after turning in, and in reports.
+      if (q.explanation != null && typeof q.explanation !== 'string') fail(`${where}: explanation must be text.`);
+      if (typeof q.explanation === 'string' && q.explanation.trim()) out.explanation = q.explanation.trim().slice(0, 4000);
+      // A question pool: each student gets some of its questions, picked at random (quiz.pools says how many).
+      if (q.pool != null && q.pool !== '') {
+        const pool = String(q.pool);
+        if (!QID.test(pool) || ['__proto__', 'constructor', 'prototype'].includes(pool)) fail(`${where}: pool "${pool}" can only use letters, digits, - and _.`);
+        out.pool = pool;
       }
-      out.answer = type === 'single' ? q.answer : [...new Set(q.answer)].sort((a, b) => a - b);
-      if (q.shuffleChoices === false) out.shuffleChoices = false; // e.g. "I only", "I and II", ... in order
-      if (type === 'multi' && q.partialCredit === true) out.partialCredit = true; // right picks earn, wrong ones take back
-    } else if (type === 'code') {
-      Object.assign(out, normalizeCode(where, q));
-    } else {
-      Object.assign(out, normalizeNewType(where, type, q, quiz.language, out.points));
+      if (type === 'text') {
+        const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
+        if (!ans.length || ans.some((a) => typeof a !== 'string' || !a.trim())) fail(`${where}: answer must be a string or a list of strings.`);
+        out.answer = ans.map((a) => String(a).slice(0, 500));
+        // /like this/ is a pattern: it has to be a working regex that doesn't accept a blank answer.
+        for (const a of out.answer) {
+          const t = a.trim();
+          if (!/^\/.+\/$/s.test(t)) continue;
+          let re;
+          try { re = new RegExp(t.slice(1, -1), 'i'); } catch (e) { fail(`${where}: the pattern ${t} isn't a valid regex: ${e.message}`); }
+          if (re.test('')) fail(`${where}: the pattern ${t} matches an empty answer. Make it need some text.`);
+        }
+        out.caseSensitive = !!q.caseSensitive;
+      } else if (type === 'single' || type === 'multi') {
+        if (!Array.isArray(q.choices) || q.choices.length < 2 || q.choices.length > 8) fail(`${where}: needs 2 to 8 choices.`);
+        out.choices = q.choices.map((c) => String(c).slice(0, 2000));
+        const ans = type === 'single' ? [q.answer] : q.answer;
+        if (!Array.isArray(ans) || !ans.length || ans.some((a) => !Number.isInteger(a) || a < 0 || a >= out.choices.length)) {
+          fail(`${where}: answer must be ${type === 'single' ? 'one choice index' : 'a list of choice indexes'}, counting from 0.`);
+        }
+        out.answer = type === 'single' ? q.answer : [...new Set(q.answer)].sort((a, b) => a - b);
+        if (q.shuffleChoices === false) out.shuffleChoices = false; // e.g. "I only", "I and II", ... in order
+        if (type === 'multi' && q.partialCredit === true) out.partialCredit = true; // right picks earn, wrong ones take back
+      } else if (type === 'code') {
+        Object.assign(out, normalizeCode(where, q));
+      } else {
+        Object.assign(out, normalizeNewType(where, type, q, quiz.language, out.points));
+      }
+      return out;
+    };
+    const rows = q.vars != null ? checkVars(where, q, type) : null;
+    const out = build(q);
+    if (rows) {
+      out.vars = rows;
+      rows.forEach((row, r) => {
+        try { build(putVars(q, row)); } catch (e) {
+          if (e instanceof QuizError) fail(`${where}, random values row ${r + 1}: ${e.message.replace(/^Question \d+: /, '')}`);
+          throw e;
+        }
+      });
     }
     quiz.questions.push(out);
   });
@@ -634,4 +698,4 @@ function normalizeCode(where, q) {
   return out;
 }
 
-module.exports = { loadQuizFile, normalizeQuiz, markdownImages, checkValue, elementType, isRange, rangeLength, QuizError, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };
+module.exports = { loadQuizFile, normalizeQuiz, putVars, markdownImages, checkValue, elementType, isRange, rangeLength, QuizError, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };

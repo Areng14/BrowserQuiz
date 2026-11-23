@@ -787,6 +787,24 @@
       el.addEventListener('input', () => { on(el.value); touch(q); });
       return el;
     };
+    // Random values: a little table, names on the first line, then a row of values per line. Each student
+    // gets one row, put in for {{name}} in the question (server: quizfile.js checkVars).
+    const VAR_TYPES = new Set(['single', 'multi', 'text', 'output', 'trace']);
+    const cells = (line) => [...line.matchAll(/\s*("(?:[^"]|"")*"|[^,]*)\s*(?:,|$)/g)].map((m) => m[1]).slice(0, -1)
+      .map((c) => (/^".*"$/.test(c) ? c.slice(1, -1).replace(/""/g, '"') : c.trim()));
+    const varsText = (rows) => {
+      if (!Array.isArray(rows) || !rows.length) return '';
+      const names = Object.keys(rows[0]);
+      const cell = (v) => (/[",]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+      return [names.join(', '), ...rows.map((r) => names.map((n) => cell(r[n] ?? '')).join(', '))].join('\n');
+    };
+    const varsEditor = (q) => field('Random values: names, then one row per line. Each student gets a row; write {{name}} where it goes',
+      area(q, varsText(q.vars), (v) => {
+        const lines = v.split('\n').filter((l) => l.trim());
+        if (lines.length < 2) { delete q.vars; return; }
+        const names = cells(lines[0]);
+        q.vars = lines.slice(1).map((l) => { const vals = cells(l); return Object.fromEntries(names.map((n, k) => [n, vals[k] ?? ''])); });
+      }, { rows: 3, placeholder: 'x, y, out\n7, 2, 1\n9, 4, 1' }));
     const area = (q, value, on, attrs) => {
       const el = h('textarea', Object.assign({ class: 'input qe-area', spellcheck: 'false', rows: 2 }, attrs || {}));
       el.value = value || '';
@@ -1001,7 +1019,11 @@
     }
 
     // What the student gets, redrawn as you type.
-    function studentView(q) {
+    // With random values, the preview shows the first row's.
+    const firstRow = (v, row) => (typeof v === 'string' ? v.replace(/\{\{\s*([A-Za-z_]\w*)\s*\}\}/g, (m, n) => (Object.hasOwn(row, n) ? String(row[n]) : m))
+      : Array.isArray(v) ? v.map((x) => firstRow(x, row)) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'vars' && k !== '_ui').map(([k, x]) => [k, firstRow(x, row)])) : v);
+    function studentView(q0) {
+      const q = Array.isArray(q0.vars) && q0.vars[0] ? Object.assign(firstRow(q0, q0.vars[0]), { _ui: q0._ui }) : q0;
       const md = window.BQ && window.BQ.md;
       const out = [];
       const opts = { lang: quiz.language, assetUrl: assetSrc };
@@ -1424,8 +1446,8 @@
       const explanation = field('Explanation', area(q, q.explanation || '', (v) => { if (v.trim()) q.explanation = v; else delete q.explanation; },
         { rows: 2, spellcheck: 'true', placeholder: 'Optional. Shown with the answer after a practice quiz.' }));
       // Pools and shared material: most questions have neither, so they're folded away until used
-      const more = h('details', { class: 'qe-more', open: !!(q.pool || q.shared) }, h('summary', { text: 'More options' }),
-        h('div', { class: 'qe-stack' }, pool, sharedEditor(q, i)));
+      const more = h('details', { class: 'qe-more', open: !!(q.pool || q.shared || q.vars) }, h('summary', { text: 'More options' }),
+        h('div', { class: 'qe-stack' }, pool, sharedEditor(q, i), VAR_TYPES.has(q.type) ? varsEditor(q) : null));
       const main = h('div', { class: 'qe-stack' },
         card(null, name, promptEditor(q)),
         answer.length ? card(answerTitle, ...answer) : null,

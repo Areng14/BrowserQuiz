@@ -94,6 +94,25 @@ picked at random, so a neighbor's screen doesn't help:
 | `shared` | none | The `id` of a shared material this question uses, or a list of up to 3 (`["s1", "s2"]`), shown in that order |
 | `explanation` | none | Why the answer is right (Markdown, up to 4000 characters). Students see it with the answer in a practice quiz's review, after turning it in; never during a quiz. It's in reports, and AI grading reads it as your notes |
 | `pool` | none | A question pool's name (letters, digits, `-`, `_`): each student gets some of the pool's questions (see Question pools) |
+| `vars` | none | Random values: 2 to 30 rows of values, and each student gets one row (below). `single`, `multi`, `text`, `output` and `trace` only |
+
+**Random values** (`vars`) give different students different numbers in the same question, so
+copying a neighbor's answer or a classmate's from an earlier period doesn't work. Each row is one
+version of the question; `{{name}}` anywhere in the question's text (prompt, code, choices,
+answers, explanation, trace cells) is replaced with the student's row. Work each row's answer out
+and put it in the row too:
+
+```json
+{ "type": "output", "prompt": "What does this print?",
+  "code": "int x = {{x}};\nint y = {{y}};\nSystem.out.println(x % y);",
+  "answer": "{{out}}",
+  "vars": [{ "x": 7, "y": 2, "out": 1 }, { "x": 11, "y": 3, "out": 2 }, { "x": 17, "y": 5, "out": 2 }] }
+```
+
+Every row needs the same names (letters, digits and `_`, up to 10), and every `{{name}}` must be
+one of them. Each row is checked like a question of its own when the quiz is uploaded. Reports
+show each student their own version; the preview shows the first row. Code, fill and essay
+questions can't have them.
 
 **Prompts** (and shared material) use Markdown:
 - paragraphs (blank line between)

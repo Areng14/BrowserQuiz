@@ -247,6 +247,7 @@ function getQuizRow(me, id) {
 function quizSource(quiz) {
   const out = { format: 1, title: quiz.title, timeLimitMin: quiz.timeLimitMin, language: quiz.language,
     shuffleQuestions: quiz.shuffleQuestions, shuffleChoices: quiz.shuffleChoices, integrity: quiz.integrity };
+  if (quiz.lockParts) out.lockParts = true;
   if (Object.keys(quiz.directions || {}).length) out.directions = quiz.directions;
   if (quiz.shared && quiz.shared.length) out.shared = quiz.shared;
   if (quiz.sections && quiz.sections.length) out.sections = quiz.sections;
@@ -255,6 +256,7 @@ function quizSource(quiz) {
     const o = { id: qq.id, type: qq.type, prompt: qq.prompt, points: qq.points };
     if (qq.name) o.name = qq.name;
     if (qq.pool) o.pool = qq.pool;
+    if (qq.vars) o.vars = qq.vars;
     if (qq.explanation) o.explanation = qq.explanation;
     if (qq.shared) o.shared = qq.shared;
     if (qq.image) { o.image = qq.image; if (qq.imageAlt) o.imageAlt = qq.imageAlt; }
@@ -384,6 +386,11 @@ function loginBucket(key, cap, refillMs) {
   b.at = now;
   loginBuckets.set(key, b);
   return b;
+}
+
+// The preview's layout: the quiz as written, choices unshuffled, the first row of any random values.
+function previewLayout(quiz) {
+  return { order: quiz.questions.map((qq) => qq.id), perms: Object.fromEntries(quiz.questions.filter((qq) => qq.choices).map((qq) => [qq.id, qq.choices.map((_, i) => i)])), vars: {} };
 }
 
 module.exports = function teacherRoutes(r) {
@@ -630,8 +637,7 @@ module.exports = function teacherRoutes(r) {
   r.get('/api/t/quizzes/:id/preview', (req, res, p) => {
     const me = requireTeacher(req);
     const quiz = store.getQuiz(getQuizRow(me, p.id).id);
-    const layout = { order: quiz.questions.map((qq) => qq.id), perms: Object.fromEntries(quiz.questions.filter((qq) => qq.choices).map((qq) => [qq.id, qq.choices.map((_, i) => i)])) };
-    json(res, 200, { quiz: publicQuiz(quiz, layout), deadline: null, now: Date.now(), saved: {} });
+    json(res, 200, { quiz: publicQuiz(quiz, previewLayout(quiz)), deadline: null, now: Date.now(), saved: {} });
   });
 
   r.post('/api/t/quizzes/:id/run', async (req, res, p) => {
@@ -653,7 +659,7 @@ module.exports = function teacherRoutes(r) {
     const body = await readJson(req, 1024 * 1024);
     const quiz = store.getQuiz(getQuizRow(me, p.id).id);
     const answers = cleanAnswers(quiz, null, body.answers);
-    const auto = gradeAuto(quiz, null, answers);
+    const auto = gradeAuto(quiz, previewLayout(quiz), answers); // random values: the first row, as the preview shows
     const questions = await Promise.all(quiz.questions.map(async (qq, i) => {
       if (qq.type === 'essay') return { n: i + 1, id: qq.id, points: null, max: qq.points, manual: true };
       if (!isRun(qq)) return { n: i + 1, id: qq.id, points: auto.detail[qq.id].points, max: qq.points };

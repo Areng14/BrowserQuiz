@@ -48,6 +48,11 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
 - **Prompts** say exactly what's asked, including edge cases ("return 0 for an empty array").
   No flavor text, no hints, nothing that gives away the answer. Put code in backticks or
   fenced blocks.
+- **Random values:** only when asked ("different numbers for each student"). Put `"vars"`, 3 to 6
+  rows like `{ "x": 7, "y": 2, "out": 1 }`, on a `single`, `multi`, `text`, `output` or `trace`
+  question and write `{{x}}` where each value goes, answers included. Work out every row's answer
+  yourself and check each one: a wrong row is a wrong answer key for some students.
+- **Locked parts:** `"lockParts": true` only when asked that students can't go back to earlier parts.
 - **Question pools:** only when asked ("each student gets 2 of these 5"). Give those questions the same
   `"pool"`, set `"pools": { "<name>": 2 }`, and make them worth the same, of one type, next to each
   other and about as hard as each other.

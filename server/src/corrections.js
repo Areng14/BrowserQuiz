@@ -25,9 +25,11 @@ function plan(quiz, exam, askWhy) {
   const mine = store.quizFor(quiz, exam.layout).questions;
   const seen = new Set(exam.layout.order);
   const used = new Set();
-  const fresh = store.makeLayout(quiz).perms; // choice orders for questions they haven't seen
+  const made = store.makeLayout(quiz);
+  const fresh = made.perms; // choice orders (and random values) for questions they haven't seen
   const order = [];
   const perms = {};
+  const vars = {};
   const fix = {};
   const answers = {};
   for (const qq of mine) {
@@ -41,15 +43,19 @@ function plan(quiz, exam, askWhy) {
     }
     used.add(id);
     order.push(id);
-    if (isNew) { if (fresh[id]) perms[id] = fresh[id]; } else {
-      // the same question, as they had it: same choice order, their answer filled in
+    if (isNew) {
+      if (fresh[id]) perms[id] = fresh[id];
+      if (made.vars && made.vars[id] != null) vars[id] = made.vars[id];
+    } else {
+      // the same question, as they had it: same choice order and values, their answer filled in
       if (exam.layout.perms && exam.layout.perms[id]) perms[id] = exam.layout.perms[id];
+      if (exam.layout.vars && exam.layout.vars[id] != null) vars[id] = exam.layout.vars[id];
       if (exam.answers && exam.answers[id] != null) answers[id] = exam.answers[id];
     }
     fix[id] = { from: qq.id, old: sc.points, max: qq.points, fresh: isNew };
   }
   if (!order.length) return null;
-  return { layout: { order, perms, subset: true, fix, why: !!askWhy, exam: exam.id }, answers };
+  return { layout: Object.assign({ order, perms, subset: true, fix, why: !!askWhy, exam: exam.id }, Object.keys(vars).length ? { vars } : {}), answers };
 }
 
 // For the start screen: their score on the quiz, and how many questions and points they have to correct.

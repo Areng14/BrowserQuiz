@@ -2,7 +2,7 @@
 // Talks to the sandboxed runner: Run (sample tests), grading (hidden tests), and checking
 // a quiz's reference solutions at upload time.
 const H = require('./harness');
-const { checkValue, QuizError, normOutput } = require('./quizfile');
+const { checkValue, QuizError, normOutput, putVars } = require('./quizfile');
 const { autoRubric } = require('./rubric');
 const B = require('./bans');
 
@@ -186,16 +186,22 @@ async function checkOutputs(quiz) {
   const problems = [];
   for (const [i, q] of quiz.questions.entries()) {
     if (q.type !== 'output') continue;
-    const label = `Question ${i + 1}`;
-    const res = await callRunner(H.buildSnippetJob(q.language, q.code), 5000, 256);
-    const err = String(res.stderr || res.stdout || '').replace(/\/jobs\/(?:\d+\/)?[^/\s]+\//g, '').trim().slice(0, 400);
-    if (res.status === 'compile_error') { problems.push(`${label}: the code doesn't compile: ${err}`); continue; }
-    if (res.status === 'timeout') { problems.push(`${label}: the code ran out of time.`); continue; }
-    if (res.status !== 'ok' || res.exitCode) { problems.push(`${label}: the code crashed: ${err}`); continue; }
-    const printed = normOutput(res.stdout);
-    if (!printed) { problems.push(`${label}: the code doesn't print anything.`); continue; }
-    if (q.answer == null) q.answer = printed.slice(0, 5000);
-    else if (q.answer !== printed) problems.push(`${label}: the code prints ${JSON.stringify(printed.slice(0, 200))}, but the answer says ${JSON.stringify(q.answer.slice(0, 200))}.`);
+    // With random values, every row is run and has to print its own answer.
+    for (const [r, row] of (q.vars || [null]).entries()) {
+      const v = row ? putVars(q, row) : q;
+      const label = row ? `Question ${i + 1}, random values row ${r + 1}` : `Question ${i + 1}`;
+      if (row && q.answer == null) { problems.push(`Question ${i + 1}: with random values, give the answer as {{name}} and put each row's in the row.`); break; }
+      const res = await callRunner(H.buildSnippetJob(v.language, v.code), 5000, 256);
+      const err = String(res.stderr || res.stdout || '').replace(/\/jobs\/(?:\d+\/)?[^/\s]+\//g, '').trim().slice(0, 400);
+      if (res.status === 'compile_error') { problems.push(`${label}: the code doesn't compile: ${err}`); continue; }
+      if (res.status === 'timeout') { problems.push(`${label}: the code ran out of time.`); continue; }
+      if (res.status !== 'ok' || res.exitCode) { problems.push(`${label}: the code crashed: ${err}`); continue; }
+      const printed = normOutput(res.stdout);
+      if (!printed) { problems.push(`${label}: the code doesn't print anything.`); continue; }
+      const want = row ? normOutput(v.answer) : q.answer;
+      if (want == null) q.answer = printed.slice(0, 5000);
+      else if (want !== printed) problems.push(`${label}: the code prints ${JSON.stringify(printed.slice(0, 200))}, but the answer says ${JSON.stringify(want.slice(0, 200))}.`);
+    }
   }
   if (problems.length) throw new QuizError('The output check failed:\n- ' + problems.slice(0, 20).join('\n- '));
 }

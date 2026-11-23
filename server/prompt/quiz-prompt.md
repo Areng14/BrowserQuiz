@@ -49,7 +49,9 @@ use the defaults for the rest and start writing.
    - **Mixed:** start easy and end hard.
 2. Order the questions by type: single, multi, text, output, trace, fill, code, essay. For AP-style
    "what is printed" questions use `output`, and for tracing loops use `trace`. Use question pools
-   only if I ask for them.
+   only if I ask for them. Use random values (`vars`, see the format) only if I ask for them: give
+   3 to 6 rows, and work out each row's answer and put it in the row.
+   Set `"lockParts": true` only if I ask that students can't go back to earlier parts.
 3. Give every question an `explanation`: one or two sentences on why the right answer is right,
    and for multiple choice, the mistake behind the likeliest wrong choice. Students read it after a
    practice quiz, so teach, don't just restate the answer.

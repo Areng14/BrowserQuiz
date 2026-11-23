@@ -4,6 +4,7 @@
 const crypto = require('node:crypto');
 const { q } = require('./db');
 const V = require('./vault');
+const { putVars, normOutput } = require('./quizfile');
 
 // ---------- quizzes ----------
 // Quizzes and their images are sealed with their teacher's key (vault.js). Reading one needs that key:
@@ -231,16 +232,33 @@ function makeLayout(quiz) {
     const idx = qq.choices.map((_, i) => i);
     perms[qq.id] = quiz.shuffleChoices && qq.shuffleChoices !== false ? shuffle(idx) : idx;
   }
-  return { order, perms };
+  // Random values: which row of each question's vars this student gets.
+  const vars = {};
+  for (const qq of quiz.questions) if (qq.vars) vars[qq.id] = crypto.randomInt(qq.vars.length);
+  return Object.keys(vars).length ? { order, perms, vars } : { order, perms };
+}
+// A question with random values, as the student with row `r` of them sees it (the first row without one).
+function withVars(qq, r) {
+  const out = putVars(qq, qq.vars[r] || qq.vars[0]);
+  if (out.type === 'output') out.answer = normOutput(out.answer);
+  return out;
 }
 
 // What one student was given. With question pools their layout picks some of each pool's questions, and
 // the rest aren't theirs to answer, grade or report; corrections give them only what they missed.
 // Otherwise (or before they start): the whole quiz.
 function quizFor(quiz, layout) {
-  if (!quiz || !layout || !Array.isArray(layout.order) || (!quiz.pools && !layout.subset)) return quiz; // subset: corrections
-  const mine = new Set(layout.order);
-  return Object.assign({}, quiz, { questions: quiz.questions.filter((qq) => mine.has(qq.id)) });
+  if (!quiz || !layout || !Array.isArray(layout.order)) return quiz;
+  const vars = quiz.questions.some((qq) => qq.vars);
+  if (!quiz.pools && !layout.subset && !vars) return quiz; // subset: corrections
+  const mine = quiz.pools || layout.subset ? new Set(layout.order) : null;
+  const rows = layout.vars || {};
+  const questions = [];
+  for (const qq of quiz.questions) {
+    if (mine && !mine.has(qq.id)) continue;
+    questions.push(qq.vars ? withVars(qq, rows[qq.id]) : qq);
+  }
+  return Object.assign({}, quiz, { questions });
 }
 // How many questions, and points, each student gets: all of them, less what the pools leave out.
 function perStudent(quiz) {
