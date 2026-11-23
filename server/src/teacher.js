@@ -14,6 +14,7 @@ const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
 const W = require('./watch');
 const { similarCode } = require('./similar');
+const { sameWrong } = require('./samewrong');
 const C = require('./corrections');
 const AI = require('./aigrade');
 const AICSV = require('./aicsv');
@@ -1098,6 +1099,7 @@ module.exports = function teacherRoutes(r) {
     json(res, 200, {
       quiz: reportQuiz(quiz, run.quiz_id), students: rows.map((x, i) => studentReport(quiz, attempts[i], x.name)),
       similar: similarCode(quiz, attempts.map((attempt, who) => ({ who, attempt }))), // who: a place in students
+      sameWrong: sameWrong(quiz, attempts.map((attempt, who) => ({ who, attempt }))),
     });
   });
 

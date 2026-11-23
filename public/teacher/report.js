@@ -6,7 +6,7 @@
   const status = document.getElementById('r-status');
   const printBtn = document.getElementById('r-print');
   const jump = document.getElementById('r-jump');
-  const { student, classOverview, similarCode, highlight, h } = window.BQReport;
+  const { student, classOverview, similarCode, sameWrong, highlight, h } = window.BQReport;
 
   async function load() {
     const params = new URLSearchParams(location.search);
@@ -26,7 +26,7 @@
     const assetUrl = practice ? (p) => '/asset/' + String(p).split('/').map(encodeURIComponent).join('/') : null;
     const many = data.students.length > 1;
     const pages = data.students.map((s, i) => student(data.quiz, s, { assetUrl, key: `s${i}` }));
-    root.replaceChildren(...(many ? [classOverview(data.quiz, data.students), similarCode(data.students, data.similar)].filter(Boolean) : []), ...pages);
+    root.replaceChildren(...(many ? [classOverview(data.quiz, data.students), similarCode(data.students, data.similar), sameWrong(data.students, data.sameWrong, data.quiz)].filter(Boolean) : []), ...pages);
     if (many) {
       jump.replaceChildren(h('option', { value: '', text: 'Jump to a student' }), ...data.students.map((s, i) => h('option', { value: `s${i}`, text: s.name })));
       jump.hidden = false;

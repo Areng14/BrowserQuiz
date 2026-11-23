@@ -6,13 +6,13 @@
   const THEME_KEY = 'bq-theme';
   const LABEL = {
     join: 'Signed in', admit: 'Admitted', start: 'Started the quiz', submit: 'Submitted', run: 'Ran examples', reload: 'Reopened mid-quiz',
-    restore: 'Restored by teacher', invalidate: 'Invalidated by teacher', blur: 'Left the quiz window', hidden: 'Tab hidden',
+    restore: 'Un-invalidated by teacher', automation: 'Browser run by a script', 'virtual-machine': 'Virtual machine or remote desktop', 'software-graphics': 'No graphics card (VM or remote desktop?)', invalidate: 'Invalidated by teacher', blur: 'Left the quiz window', hidden: 'Tab hidden',
     'fullscreen-exit': 'Left fullscreen', return: 'Came back', 'mouse-left': 'Cursor left the page', copy: 'Copy blocked',
     paste: 'Outside paste blocked', contextmenu: 'Right-click', 'blocked-key': 'Blocked key', 'print-screen': 'Print Screen',
     resize: 'Window resized', 'unfocused-beat': 'Heartbeat: not focused', 'heartbeat-lost': 'Connection lost', reconnect: 'Reconnected',
     resume: 'Continued on a new computer', 'let-in': 'Let back in by teacher', extend: 'Extra time', grade: 'Graded by teacher', 'ai-grade': 'Graded by AI',
     'extended-display': 'Second display', 'bulk-insert': 'Large insert in editor', 'inhuman-typing': 'Typing faster than a person',
-    'late-submit': 'Submitted late', exit: 'Exited the quiz', 'other-network': 'Request from another network', 'other-device': 'Request from another browser',
+    'late-submit': 'Submitted late', exit: 'Exited the quiz', 'other-network': 'Request from another network', 'left-network': 'Tried to continue from another network', 'other-device': 'Request from another browser',
     extension: 'Extension on the page', 'spoofed-checks': 'Extension hides leaving the window', 'no-frames': 'Quiz not on screen, no leave reported',
     'scripted-input': 'Typed by a script', viewport: 'Side panel or DevTools open', setup: 'Computer',
   };

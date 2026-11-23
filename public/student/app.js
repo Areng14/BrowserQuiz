@@ -28,6 +28,7 @@
     bad_code: 'No open quiz with that code.',
     run_closed: 'This quiz is closed.',
     wrong_network: 'This quiz only opens from the school network.',
+    other_network: 'This quiz is locked to the network you started it on. Ask your teacher.',
     too_many: 'Too many tries. Wait a minute.',
     bad_id: 'Wrong student ID for that name.',
     name_locked: 'Too many wrong IDs. Wait 30 seconds.',
@@ -49,7 +50,7 @@
   function freshState() {
     return {
       run: null, me: null, quiz: null, idx: 0, answers: {}, deadline: 0, skew: 0,
-      monitor: null, models: {}, editor: null, editorSubs: [], parts: [], partsSeen: new Set(), dirOpen: false,
+      monitor: null, models: {}, editor: null, editorSubs: [], parts: [], partsSeen: new Set(), locked: 0, dirOpen: false,
       timer: 0, poll: 0, done: false, runBusy: false, results: {}, el: null, warned: {}, saveState: 'saved',
       marks: null, kept: new Map(),
     };
@@ -487,6 +488,7 @@
       } catch (e) {
         if (e.code === 'run_closed') { clearInterval(S.poll); screenClosed(); }
         else if (e.code === 'no_attempt') { clearInterval(S.poll); signedOut(); }
+        else if (e.code === 'other_network') { clearInterval(S.poll); S = freshState(); screenJoin(ERRORS.other_network); }
         // anything else: keep polling
       }
     };
@@ -676,6 +678,7 @@
     S.quiz = r.quiz;
     S.deadline = r.deadline || 0;
     S.skew = r.now ? r.now - Date.now() : 0;
+    S.locked = r.locked || 0;
     S.answers = restoreAnswers(r.saved || {});
     loadMarks();
     loadScratch();
@@ -756,6 +759,7 @@
     if (S.done || !S.el) return;
     if (err && err.code === 'run_closed') return endQuiz('ended');
     if (err && err.code === 'no_attempt') return leaveQuiz(signedOut);
+    if (err && err.code === 'other_network') return leaveQuiz(() => screenJoin(ERRORS.other_network));
     if (failures >= 2) setOnline(false);
   }
   function setOnline(ok) {
@@ -870,8 +874,11 @@
   function screenQuiz() {
     S.parts = buildParts(S.quiz.questions);
     S.idx = 0;
+    // back after a reload in a quiz with locked parts: start at the first part that isn't done
+    const open = lockOn() && S.locked ? S.parts.find((p) => p.n > S.locked) : null;
+    if (open) { S.idx = open.start; S.introOpen = false; for (const p of S.parts) if (p.n <= S.locked) S.partsSeen.add(p.n); }
     S.dirOpen = true;
-    S.introOpen = true; // the first page also shows what's on the quiz and its directions
+    if (!open) S.introOpen = true; // the first page also shows what's on the quiz and its directions
     const timer = h('span', { class: 'timer', role: 'timer', 'aria-label': 'Time left' });
     const save = h('span', { class: 'save-state' }); // not a live region: it flips with every keystroke
     const live = h('div', { class: 'sr-only', 'aria-live': 'polite', 'aria-atomic': 'true' });
@@ -920,8 +927,17 @@
     startTimer();
   }
 
+  // Locked parts (quiz.lockParts): going on to a later part finishes every part before it, for good, once
+  // they say so. The server keeps those answers as they were. Not while a teacher watches.
+  function lockOn() { return !!(S.quiz && S.quiz.lockParts && !cfg.watch); }
+  function lockedAt(i) { return lockOn() && S.locked > 0 && !!partOf(i) && partOf(i).n <= S.locked; }
   function go(i) {
-    if (i < 0 || i >= S.quiz.questions.length) return;
+    if (i < 0 || i >= S.quiz.questions.length || lockedAt(i)) return;
+    const done = lockOn() ? partOf(i).n - 1 : 0;
+    if (done > S.locked) return confirmFinishParts(done, () => goNow(i));
+    goNow(i);
+  }
+  function goNow(i) {
     S.reviewOpen = false;
     S.idx = i;
     S.dirOpen = !S.partsSeen.has(partOf(i).n);
@@ -974,7 +990,7 @@
       return;
     }
     S.el.jump.hidden = false;
-    S.el.prev.disabled = S.idx === 0;
+    S.el.prev.disabled = S.idx === 0 || lockedAt(S.idx - 1);
     const last = S.idx === total - 1;
     S.el.next.textContent = S.dirOpen ? 'Continue' : last ? 'Review' : 'Next';
     S.el.next.className = 'btn' + (last && !S.dirOpen ? ' primary' : '');
@@ -1840,6 +1856,41 @@
     release = holdFocus(backdrop, close);
     keep.focus();
   }
+  // Moving on from part `n` (and any before it) in a quiz with locked parts.
+  function confirmFinishParts(n, then) {
+    if (!S.el || S.el.wrap.querySelector('.modal-backdrop')) return;
+    const opener = document.activeElement;
+    let backdrop;
+    let release = null;
+    const close = () => { backdrop.remove(); release(false); if (opener && opener.isConnected) opener.focus(); };
+    const parts = S.parts.filter((p) => p.n > S.locked && p.n <= n);
+    const what = parts.length === 1 ? parts[0].title : `${parts.length} parts`;
+    const msg = h('p', { class: 'error', role: 'alert' });
+    const stay = h('button', { class: 'btn', type: 'button', text: 'Keep working', onclick: close });
+    const move = h('button', { class: 'btn primary', type: 'button', text: 'Move on', onclick: async () => {
+      move.disabled = true;
+      try {
+        S.locked = cfg.preview ? n : (await api.partDone(n, serializeAnswers())).locked;
+        if (S.monitor) S.monitor.answersDirty = false;
+      } catch (e) {
+        msg.textContent = errorText(e);
+        move.disabled = false;
+        return;
+      }
+      backdrop.remove();
+      release(false);
+      then();
+    } });
+    backdrop = h('div', { class: 'modal-backdrop' },
+      h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'lock-title' },
+        h('h2', { id: 'lock-title', text: `Done with ${what}?` }),
+        h('p', { text: "You can't come back to change these answers." }),
+        msg,
+        h('div', { class: 'modal-actions' }, stay, move)));
+    S.el.wrap.append(backdrop);
+    release = holdFocus(backdrop, close);
+    stay.focus();
+  }
   // Typed through the browser where it can be, so undo works.
   function insertText(ta, text) {
     if (document.execCommand && document.execCommand('insertText', false, text)) return;
@@ -1964,7 +2015,7 @@
       type: 'button', class: 'sheet-dot' + (done ? ' answered' : '') + (here ? ' current' : '') + (marked ? ' marked' : ''),
       'aria-label': `Question ${i + 1}${q.name ? `, ${q.name}` : ''}${done ? ', answered' : ''}${marked ? ', marked for review' : ''}`, 'aria-current': here ? 'step' : null,
       title: q.name ? `${i + 1}. ${q.name}` : null,
-      text: String(i + 1), onclick: () => onPick(i),
+      text: String(i + 1), onclick: () => onPick(i), disabled: lockedAt(i) || null,
     });
   }
   function renderSheet() {
@@ -2225,6 +2276,7 @@
         if (S.done) return;
         if (e.code === 'no_attempt') return leaveQuiz(signedOut);
         if (e.code === 'run_closed') return finishQuiz('ended');
+        if (e.code === 'other_network') return leaveQuiz(() => screenJoin(ERRORS.other_network));
         if (tries === 1) ov.failed();
         const delay = Math.min(2000 * 2 ** tries, 15000);
         await new Promise((resolve) => {

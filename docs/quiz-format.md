@@ -32,6 +32,7 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `language` | `"java"` | `"java"`, `"python"`, `"javascript"`, `"typescript"`, `"c"`, `"cpp"`, `"csharp"`, `"go"`, `"rust"` or `"none"`: how `inline code` and unlabeled code blocks are highlighted. `"none"` leaves them plain, for quizzes that aren't about code (networking, math); blocks labeled ```` ```java ```` still get colors. Output, trace and fill questions then default to Java |
 | `shuffleQuestions` | `true` | Shuffle order per student, within each part (see below) |
 | `shuffleChoices` | `true` | Shuffle multiple choice options per student |
+| `lockParts` | `false` | Once a student moves on to a later part, the parts before it are final: they can't go back to them. The page asks first. Not in corrections |
 | `integrity.graceStrikes` | `1` | Times a student can leave the window before the attempt is invalidated (0–10). The default lets one slip go; 0 invalidates on the first. |
 | `directions` | built in | `"quiz"`: your own directions for the whole quiz (Markdown), shown before it starts and with each part's. The type keys replace that part's directions: `{ "quiz": "No calculators.", "single": "...", "code": "..." }` |
 | `shared` | none | Shared material that several questions use (below) |

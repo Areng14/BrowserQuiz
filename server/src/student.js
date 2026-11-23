@@ -87,6 +87,14 @@ function openRun(runId, req) {
   return run;
 }
 
+// Pinned to the network they started on: no carrying on from home or a phone's hotspot, even in the
+// same browser, until the teacher lets them back in (which moves the pin to where they sign in).
+function checkPin(a, run, ip) {
+  if (a.status !== 'active' || run.mode === 'practice' || !a.pinIp || sameNetwork(ip, a.pinIp)) return;
+  if (!a.flagged.has('pin')) { a.flagged.add('pin'); store.record(a, 'left-network', ip, store.getQuiz(run.quiz_id)); }
+  throw new HttpError(403, 'other_network');
+}
+
 // The attempt behind this browser's cookie, plus its run and quiz.
 function current(req, { mustBeOpen = true } = {}) {
   const a = store.attemptByToken(cookies(req)[ATT]);
@@ -103,6 +111,7 @@ function current(req, { mustBeOpen = true } = {}) {
     if (a.status === 'active' && !a.flagged.has('net')) { a.flagged.add('net'); store.record(a, 'other-network', ip, store.getQuiz(run.quiz_id)); }
     throw new HttpError(403, 'wrong_network');
   }
+  checkPin(a, run, ip);
   const ua = String(req.headers['user-agent'] || '').slice(0, 300);
   if (a.status === 'active' && a.userAgent && ua !== a.userAgent && !a.flagged.has('ua')) {
     a.flagged.add('ua');
@@ -120,6 +129,7 @@ function publicQuiz(quiz, layout) {
     language: quiz.language,
     directions: quiz.directions,
     sections: sectionStarts(quiz, layout),
+    lockParts: locks(quiz, layout) || undefined,
     // corrections: how each went on the exam (or that it's a new one from its pool), and the "What went wrong?" box
     corrections: layout.fix ? { why: !!layout.why, fix: Object.fromEntries(Object.entries(layout.fix).map(([id, f]) => [id, { points: f.old, max: f.max, fresh: !!f.fresh }])) } : undefined,
     shared: Object.fromEntries((quiz.shared || []).filter((m) => used.has(m.id)).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
@@ -181,6 +191,37 @@ function sectionStarts(quiz, layout) {
   return out;
 }
 
+// Locked parts (quiz.lockParts): once a student moves on from a part, its answers are final. Parts are
+// worked out as the student's page does (app.js partsFor): each section, or else each run of questions
+// of one type, in the student's own order. Not in corrections, which are their own few questions.
+const locks = (quiz, layout) => !!(quiz.lockParts && layout && !layout.subset && !layout.fix);
+function partsOf(quiz, layout) {
+  const qs = store.quizFor(quiz, layout).questions;
+  const typeOf = new Map(qs.map((qq) => [qq.id, qq.type]));
+  const starts = new Set(sectionStarts(quiz, layout).map((s) => s.start));
+  const part = new Map(); // question id -> part number (from 1)
+  let n = 0;
+  let type = null;
+  let section = false;
+  layout.order.forEach((id, i) => {
+    const t = typeOf.get(id);
+    if (starts.has(i)) { n++; section = true; type = t; } else if (!n || (!section && t !== type)) { n++; section = false; type = t; }
+    part.set(id, n);
+  });
+  return { part, count: n };
+}
+// Answers coming in, with the finished parts' kept as they were.
+function keepLocked(quiz, a, next) {
+  if (!locks(quiz, a.layout) || !a.layout.locked) return next;
+  const { part } = partsOf(quiz, a.layout);
+  for (const [id, n] of part) {
+    if (n > a.layout.locked) continue;
+    if (a.answers && Object.hasOwn(a.answers, id)) next[id] = a.answers[id];
+    else delete next[id];
+  }
+  return next;
+}
+
 function runInfo(run, quiz, studentId) {
   const corr = run.corrects ? Object.assign({ corrections: true, timeLimitMin: 0 }, studentId ? C.preview(run, quiz, studentId) : { questionCount: null, points: null }) : null;
   return Object.assign(runInfoBase(run, quiz), corr || {});
@@ -207,7 +248,7 @@ const pastDeadline = (a, now) => !!a.deadline && now > a.deadline + ANSWER_GRACE
 function submit(a, quiz, answers, why) {
   if (a.status !== 'active') return;
   const now = Date.now();
-  if (answers && !pastDeadline(a, now)) a.answers = cleanAnswers(quiz, a.layout, answers);
+  if (answers && !pastDeadline(a, now)) a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, answers));
   if (a.deadline && now > a.deadline + 30000 && why === 'student') store.record(a, 'late-submit', Math.round((now - a.deadline) / 1000) + 's late', quiz);
   store.back(a, now); // turned in while out of the window: the time away stops here
   a.status = 'submitted';
@@ -318,13 +359,25 @@ module.exports = function studentRoutes(r) {
     const existing = existingRow ? store.getAttempt(existingRow.id) : null;
     const token = newToken();
     if (existing) {
-      if (mine && mine.id === existing.id) return json(res, 200, { ok: true, run: run.corrects ? runInfo(run, store.getQuiz(run.quiz_id), student.id) : undefined });
+      if (mine && mine.id === existing.id) {
+        // Same browser. Let back in moves the pin here; otherwise it has to be on the pinned network.
+        if (existing.letIn && now - existing.letIn < 10 * 60000) {
+          existing.letIn = 0;
+          existing.resumeOk = true;
+          if (existing.status === 'active' && run.mode !== 'practice') { existing.pinIp = clientIp(req); existing.flagged.delete('pin'); store.save(existing); }
+        } else checkPin(existing, run, clientIp(req));
+        return json(res, 200, { ok: true, run: run.corrects ? runInfo(run, store.getQuiz(run.quiz_id), student.id) : undefined });
+      }
       // A student who lost their cookie before starting can sign in again. After that, only if the teacher
       // pressed "Let back in" (crashed PC, new seat): they pick up the same attempt, answers and clock.
       // Practice runs aren't monitored, so signing in again anywhere is fine.
       const letIn = run.mode === 'practice' || (existing.letIn && now - existing.letIn < 10 * 60000);
       if (existing.status !== 'waiting' && existing.status !== 'admitted' && !letIn) throw new HttpError(409, 'already_started');
-      if (letIn) { existing.letIn = 0; existing.resumeOk = true; }
+      if (letIn) {
+        existing.letIn = 0;
+        existing.resumeOk = true;
+        if (existing.status === 'active' && run.mode !== 'practice') { existing.pinIp = clientIp(req); existing.flagged.delete('pin'); store.save(existing); }
+      }
       if (run.mode === 'practice' && existing.status === 'waiting') { existing.status = 'admitted'; store.save(existing); }
       existing.tokenHash = sha256(token);
       q('UPDATE attempts SET token_hash = ?, ip = ?, user_agent = ? WHERE id = ?').run(existing.tokenHash, clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), existing.id);
@@ -361,6 +414,7 @@ module.exports = function studentRoutes(r) {
       } else a.layout = store.makeLayout(quiz);
       a.status = 'active';
       a.startedAt = now;
+      if (!a.practice) a.pinIp = clientIp(req); // the network it's pinned to (current)
       a.deadline = quiz.timeLimitMin && !run.corrects ? now + quiz.timeLimitMin * 60000 : null;
       a.lastBeat = now;
       store.logEvent(a, 'start', 'info', null);
@@ -376,7 +430,7 @@ module.exports = function studentRoutes(r) {
       a.beatLost = false;
     }
     // Saved answers go back in the student's own positional order.
-    json(res, 200, { quiz: publicQuiz(quiz, a.layout), deadline: a.deadline, now, saved: a.answers || {} });
+    json(res, 200, { quiz: publicQuiz(quiz, a.layout), deadline: a.deadline, now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0 });
   });
 
   r.post('/api/event', async (req, res) => {
@@ -445,7 +499,7 @@ module.exports = function studentRoutes(r) {
         a.edits += edits.length;
       }
       // autosave stops at time's up; only the final submit gets the grace, for its trip over the network
-      if (body.answers && !(a.deadline && now > a.deadline)) a.answers = cleanAnswers(quiz, a.layout, body.answers);
+      if (body.answers && !(a.deadline && now > a.deadline)) a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers));
       store.save(a);
     }
     // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
@@ -498,6 +552,21 @@ module.exports = function studentRoutes(r) {
     store.logEvent(store.getAttempt(id), 'join', 'info', 'practice again');
     setCookie(req, res, ATT, token, 12 * 3600);
     json(res, 200, { ok: true });
+  });
+
+  // Done with a part, in a quiz with locked parts: it (and every part before it) is final. Their latest
+  // answers come along, so nothing typed just before moving on is lost.
+  r.post('/api/part-done', async (req, res) => {
+    const body = await readJson(req, 1024 * 1024);
+    const { a, quiz } = current(req);
+    if (a.status !== 'active') throw new HttpError(403, 'run_closed');
+    if (!locks(quiz, a.layout)) throw new HttpError(400, 'not_locked');
+    const n = Number(body.part);
+    if (!Number.isInteger(n) || n < 1 || n > partsOf(quiz, a.layout).count) throw new HttpError(400, 'bad_part');
+    if (body.answers && !pastDeadline(a, Date.now())) a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers));
+    a.layout.locked = Math.max(a.layout.locked || 0, n);
+    store.save(a);
+    json(res, 200, { locked: a.layout.locked });
   });
 
   r.post('/api/submit', async (req, res) => {

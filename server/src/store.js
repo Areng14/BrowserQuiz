@@ -50,13 +50,15 @@ const CLIENT_EVENTS = {
   // read-aloud toolbar), and the teacher is the one who can ask.
   'extension': 'warning', 'spoofed-checks': 'warning', 'no-frames': 'warning', 'scripted-input': 'warning', 'viewport': 'warning',
   'setup': 'info',
+  // also evidence only: a scripted browser, or the quiz running in a virtual machine or remote desktop
+  'automation': 'warning', 'virtual-machine': 'warning', 'software-graphics': 'info',
 };
 // Events only the server records.
 // A lost heartbeat is only a warning: school wifi drops, and actually leaving the window is caught by
 // blur/hidden, which the client queues while offline and delivers when it reconnects.
 const SERVER_EVENTS = {
   'reload': 'violation', 'unfocused-beat': 'violation',
-  'heartbeat-lost': 'warning', 'late-submit': 'warning', 'other-network': 'warning', 'other-device': 'warning',
+  'heartbeat-lost': 'warning', 'late-submit': 'warning', 'other-network': 'warning', 'other-device': 'warning', 'left-network': 'warning',
   'join': 'info', 'admit': 'info', 'start': 'info', 'submit': 'info', 'run': 'info', 'reconnect': 'info', 'resume': 'info',
   'restore': 'info', 'invalidate': 'info', 'let-in': 'info', 'extend': 'info', 'grade': 'info',
 };
@@ -78,7 +80,7 @@ function fromRow(r) {
     layout: r.layout ? JSON.parse(r.layout) : null, answers: r.answers ? JSON.parse(r.answers) : {},
     result: r.result ? JSON.parse(r.result) : null, ip: r.ip, userAgent: r.user_agent, edits: r.edits,
     archived: !!r.archived, createdAt: r.created_at,
-    awayMs: r.away_ms || 0, awayMax: r.away_max || 0, restoreStrikes: r.restore_strikes,
+    awayMs: r.away_ms || 0, awayMax: r.away_max || 0, restoreStrikes: r.restore_strikes, pinIp: r.pin_ip || null,
     // runtime only
     awaySince: 0, away: false, burstStart: 0, beatLost: false, eventCount: null, warnWindow: new Map(), flagged: new Set(),
   };
@@ -101,10 +103,10 @@ function attemptByToken(token) {
 function save(a) {
   q(`UPDATE attempts SET status = ?, integrity = ?, strikes = ?, warnings = ?, reason = ?, invalidated_at = ?, started_at = ?,
      deadline = ?, submitted_at = ?, last_beat = ?, layout = ?, answers = ?, result = ?, edits = ?, archived = ?,
-     away_ms = ?, away_max = ?, restore_strikes = ? WHERE id = ?`).run(
+     away_ms = ?, away_max = ?, restore_strikes = ?, pin_ip = ? WHERE id = ?`).run(
     a.status, a.integrity, a.strikes, a.warnings, a.reason, a.invalidatedAt, a.startedAt, a.deadline, a.submittedAt,
     a.lastBeat, a.layout ? JSON.stringify(a.layout) : null, JSON.stringify(a.answers || {}), a.result ? JSON.stringify(storedResult(a.result)) : null,
-    a.edits || 0, a.archived ? 1 : 0, a.awayMs || 0, a.awayMax || 0, a.restoreStrikes == null ? null : a.restoreStrikes, a.id,
+    a.edits || 0, a.archived ? 1 : 0, a.awayMs || 0, a.awayMax || 0, a.restoreStrikes == null ? null : a.restoreStrikes, a.pinIp || null, a.id,
   );
 }
 function forget(id) { attempts.delete(id); }

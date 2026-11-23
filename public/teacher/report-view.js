@@ -500,5 +500,30 @@
         })))) : h('p', { class: 'r-sim-none', text: 'None found.' }));
   }
 
-  window.BQReport = { question, student, classOverview, similarCode, highlight, h };
+  // ---------- the same wrong answers (server: samewrong.js) ----------
+  // Each flagged pair: how many wrong answers they share, and which, on demand.
+  function sameWrong(students, pairs, quiz) {
+    if (!pairs) return null; // no choice, short answer or output questions
+    const name = (i) => h('a', { href: `#s${i}`, text: students[i].name });
+    return h('section', { class: 'r-similar r-same-wrong' },
+      h('h2', { text: 'Same wrong answers' }),
+      pairs.length ? h('ul', { class: 'r-sim-list' }, pairs.map((p) => {
+        const views = h('ul', { class: 'r-same-list', hidden: true }, p.same.map((x) => h('li', {},
+          h('span', { class: 'r-same-n', text: `Question ${x.n}` }),
+          x.choices ? x.choices.map((c, i) => [i ? ', ' : '', inline(c, quiz.language)]) : h('code', { text: x.text }),
+          h('span', { class: 'r-sim-note', text: x.of > 2 ? ` (${x.of} gave this)` : ' (only these two)' }))));
+        const btn = h('button', { class: 'r-diff-btn', type: 'button', text: 'Show', 'aria-expanded': 'false' });
+        btn.addEventListener('click', () => {
+          const open = views.hidden;
+          views.hidden = !open;
+          btn.textContent = open ? 'Hide' : 'Show';
+          btn.setAttribute('aria-expanded', String(open));
+          if (open) highlight(views);
+        });
+        return h('li', {}, h('div', { class: 'r-sim-row' }, h('span', {}, name(p.a), ' and ', name(p.b)),
+          h('span', { class: 'r-sim-note', text: `${p.same.length} the same: ${p.same.map((x) => x.n).join(', ')}` }), btn), views);
+      })) : h('p', { class: 'r-sim-none', text: 'None found.' }));
+  }
+
+  window.BQReport = { question, student, classOverview, similarCode, sameWrong, highlight, h };
 })();

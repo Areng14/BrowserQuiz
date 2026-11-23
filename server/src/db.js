@@ -105,6 +105,8 @@ db.exec('CREATE TABLE IF NOT EXISTS settings (k TEXT PRIMARY KEY, v TEXT)'); // 
 addColumn('attempts', 'away_ms', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('attempts', 'away_max', 'INTEGER NOT NULL DEFAULT 0');
 addColumn('attempts', 'restore_strikes', 'INTEGER');
+// The network the student started on: the attempt can't be continued from another (student.js current).
+addColumn('attempts', 'pin_ip', 'TEXT');
 db.exec(`CREATE INDEX IF NOT EXISTS quizzes_owner ON quizzes(owner_id);
 CREATE INDEX IF NOT EXISTS rosters_owner ON rosters(owner_id);
 CREATE INDEX IF NOT EXISTS runs_owner ON runs(owner_id);`);

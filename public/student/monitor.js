@@ -64,6 +64,19 @@
     return !!(el && el.closest && el.closest('input, textarea, .monaco-editor, [data-answer-field]'));
   }
 
+  // The graphics card's name as WebGL reports it ("ANGLE (NVIDIA ...)", "VMware SVGA 3D"), or null.
+  function graphicsName() {
+    try {
+      const gl = document.createElement('canvas').getContext('webgl');
+      if (!gl) return null;
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const name = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+      const lose = gl.getExtension('WEBGL_lose_context');
+      if (lose) lose.loseContext();
+      return name ? String(name) : null;
+    } catch (e) { return null; }
+  }
+
   class Monitor {
     /**
      * @param {object} api   BQ.api (event, beat)
@@ -124,6 +137,13 @@
       if (this.opts.fullscreen) parts.push(this.opts.keysHeld && this.opts.keysHeld() ? 'Alt+Tab and Windows key held' : 'Alt+Tab and Windows key not held');
       if (!window.isSecureContext) parts.push('not HTTPS');
       this.report('setup', parts.join(', '));
+      // A browser driven by a script (Selenium, Playwright, Puppeteer) says so in navigator.webdriver.
+      if (navigator.webdriver) this.report('automation', 'navigator.webdriver is set');
+      // A virtual machine's or remote desktop's graphics: the quiz may not be on the screen in front of them.
+      const gpu = graphicsName();
+      const vm = gpu && /VMware|VirtualBox|SVGA3D|Parallels|QEMU|virgl|Hyper-V|Microsoft Basic Render|Citrix|Remote Desktop|RDPUDD/i.exec(gpu);
+      if (vm) this.report('virtual-machine', gpu.slice(0, 120));
+      else if (gpu && /SwiftShader|llvmpipe|softpipe|Software Rasterizer/i.test(gpu)) this.report('software-graphics', gpu.slice(0, 120));
     }
 
     report(type, detail) {
