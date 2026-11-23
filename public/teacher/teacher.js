@@ -6,7 +6,7 @@
   const ask = window.BQAsk; // our own confirm, notice and prompt (ask.js)
   const THEME_KEY = 'bq-theme';
   const LABEL = {
-    join: 'Signed in', admit: 'Admitted', start: 'Started the quiz', submit: 'Submitted', run: 'Ran examples', reload: 'Reopened mid-quiz',
+    join: 'Signed in', ready: 'Agreed to the rules, waiting in full screen', admit: 'Started by you', start: 'Started the quiz', submit: 'Submitted', run: 'Ran examples', reload: 'Reopened mid-quiz',
     restore: 'Un-invalidated by teacher', automation: 'Browser run by a script', 'virtual-machine': 'Virtual machine or remote desktop', 'software-graphics': 'No graphics card (VM or remote desktop?)', invalidate: 'Invalidated by teacher', blur: 'Left the quiz window', hidden: 'Tab hidden',
     'fullscreen-exit': 'Left fullscreen', return: 'Came back', 'mouse-left': 'Cursor left the page', copy: 'Copy blocked',
     paste: 'Outside paste blocked', contextmenu: 'Right-click', 'blocked-key': 'Blocked key', 'print-screen': 'Print Screen',
@@ -827,8 +827,9 @@
   function statusCell(s) {
     if (!s.attempt) return h('td', { class: 't-muted', text: 'Not joined' });
     const a = s.attempt;
-    if (a.status === 'waiting') return h('td', { class: 'st-waiting', text: 'Waiting' });
-    if (a.status === 'admitted') return h('td', { text: 'Admitted' });
+    // Waiting for the start: reading the rules, or agreed and in full screen (Ready)
+    if (a.status === 'waiting') return a.ready ? h('td', { class: 'st-good', text: 'Ready' }) : h('td', { class: 'st-waiting', text: 'Reading the rules' });
+    if (a.status === 'admitted') return h('td', { text: 'Starting' });
     // a heartbeat every few seconds; much longer without one and they've lost their connection
     if (a.status === 'active') return a.lastBeatAgo > 15000 ? h('td', { class: 't-late', text: `No signal for ${mmss(a.lastBeatAgo)}` }) : h('td', { text: 'In progress' });
     return h('td', { class: 'st-good', text: 'Submitted' });
@@ -1012,10 +1013,11 @@
   // used): one more item, asked every time, saying why.
   const admitChecked = new Set(); // run ids
   const checkWhy = (c) => (c.type === 'same-browser' ? `Same browser as ${c.detail}` : `New network: ${c.detail}`);
-  function beforeAdmit(runId, n, name, go, flagged = []) {
+  // reading: how many of them haven't agreed to the rules yet (they start as soon as they do)
+  function beforeAdmit(runId, n, name, go, flagged = [], reading = 0) {
     if (name && admitChecked.has(runId) && !flagged.length) { go(); return; }
     const dlg = h('dialog', { class: 't-dialog t-admit', 'aria-labelledby': 't-admit-title' });
-    const ok = h('button', { class: 'btn primary', type: 'button', text: name ? `Admit ${name}` : `Admit ${plural(n, 'student')}`, disabled: true });
+    const ok = h('button', { class: 'btn primary', type: 'button', text: name ? `Start ${name}` : `Start ${plural(n, 'student')}`, disabled: true });
     const items = ['Each student is who they signed in as', 'Desks are clear: no phones, notes or other screens'];
     if (flagged.length) items.push(flagged.length === 1 ? `${flagged[0].name} is at the right computer` : `${plural(flagged.length, 'student')} below are at the right computers`);
     const boxes = items.map((text, i) => h('input', { type: 'checkbox', id: `t-admit-${i}` }));
@@ -1027,8 +1029,9 @@
       flagged.length > 1 ? h('b', { text: `${f.name}: ` }) : null, f.checks.map(checkWhy).join('; ')))) : null;
     if (why) boxes[boxes.length - 1].setAttribute('aria-describedby', 't-admit-why');
     dlg.append(
-      h('header', { class: 't-dialog-head' }, h('h2', { id: 't-admit-title', text: 'Before you admit' }), x),
-      h('div', { class: 't-admit-list' }, items.map((text, i) => h('label', { class: 't-check', for: `t-admit-${i}` }, boxes[i], h('span', { text }))), why),
+      h('header', { class: 't-dialog-head' }, h('h2', { id: 't-admit-title', text: 'Before you start' }), x),
+      h('div', { class: 't-admit-list' }, items.map((text, i) => h('label', { class: 't-check', for: `t-admit-${i}` }, boxes[i], h('span', { text }))), why,
+        reading ? h('p', { class: 't-admit-note', text: `${plural(reading, 'student')} still reading the rules ${reading === 1 ? 'starts' : 'start'} as soon as ${reading === 1 ? 'they agree' : 'they agree'}.` }) : null),
       h('footer', { class: 't-dialog-foot' }, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => dlg.close() }), ok));
     dlg.addEventListener('close', () => dlg.remove());
     root.append(dlg);
@@ -1230,10 +1233,12 @@
     let lastRun = null; // the run as of the last refresh (for Corrections)
     let waitingIds = [];
     let waitingFlagged = []; // waiting students whose sign-in needs a look (beforeAdmit)
+    let waitingReading = 0; // and how many of them haven't agreed to the rules yet
+    let begun = false; // anyone started yet (rows get their own Start only after)
     // only the students waiting when the checklist opens: anyone who joins while it's up waits for the next round
-    const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => {
+    const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Start quiz', onclick: () => {
       const ids = waitingIds.slice();
-      beforeAdmit(runId, ids.length, null, () => act(`/api/t/runs/${runId}/admit-all`, { ids }), waitingFlagged.slice());
+      beforeAdmit(runId, ids.length, null, () => act(`/api/t/runs/${runId}/admit-all`, { ids }), waitingFlagged.slice(), waitingReading);
     } });
     // AI grading: everything waiting for the teacher in this run, sent to Claude (server: aigrade.js).
     const aiBtn = h('button', { class: 'btn', type: 'button', hidden: true });
@@ -1285,13 +1290,18 @@
       code.textContent = run.code;
       document.title = `${run.code} · ${run.title} – BrowserQuiz`;
       const count = (f) => data.students.filter((x) => x.attempt && f(x.attempt)).length;
-      const said = [[count((a) => a.status === 'waiting'), 'waiting'], [count((a) => a.status === 'admitted'), 'admitted'], [count((a) => a.status === 'active'), 'working'],
+      const said = [[count((a) => a.status === 'waiting' && a.ready), 'ready'], [count((a) => a.status === 'waiting' && !a.ready), 'reading the rules'], [count((a) => a.status === 'admitted'), 'starting'], [count((a) => a.status === 'active'), 'working'],
         [count((a) => a.status === 'submitted'), 'turned in'], [count((a) => a.integrity === 'invalidated'), 'invalidated']]
         .filter(([n]) => n).map(([n, w]) => `${n} ${w}`).join(', ') || 'Nobody has joined yet';
       if (summary.textContent !== said) summary.textContent = said;
       waitingIds = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting').map((x) => x.attempt.id);
       waitingFlagged = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting' && x.attempt.checks).map((x) => ({ name: x.name, checks: x.attempt.checks }));
+      waitingReading = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting' && !x.attempt.ready).length;
       admitAll.hidden = !waitingIds.length;
+      // before anyone's started it starts the quiz; after, it starts the students who came late, and each
+      // late student's row has its own Start
+      begun = count((a) => a.status === 'admitted' || a.status === 'active' || a.status === 'submitted') > 0;
+      admitAll.textContent = begun ? 'Start everyone waiting' : 'Start quiz';
       // Grade with AI: shown while there's something waiting for the teacher, or while it runs.
       aiWaiting = data.students.reduce((n, x) => n + (x.attempt && x.attempt.status === 'submitted' ? x.attempt.review || 0 : 0), 0);
       const job = data.ai && data.ai.job;
@@ -1349,7 +1359,7 @@
         // In the row: what needs deciding now. The rest is under ⋯.
         const more = [];
         const bad = a && a.integrity === 'invalidated';
-        if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`), a.checks ? [{ name: s.name, checks: a.checks }] : []), { class: 'btn small primary' }));
+        if (a && a.status === 'waiting' && begun) actions.append(btn('Start', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`), a.checks ? [{ name: s.name, checks: a.checks }] : [], a.ready ? 0 : 1), { class: 'btn small primary' }));
         if (bad) actions.append(btn('Un-invalidate', 'restore', () => unInvalidate(a.id, s.name)));
         // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
         // popup doesn't end anyone's quiz without the teacher looking).

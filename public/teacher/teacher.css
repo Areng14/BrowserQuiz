@@ -298,6 +298,7 @@ input[type="file"].input { padding: 6px 10px; }
 /* why a sign-in needs a look: under its item, lined up with the item's text */
 .t-admit-why { display: grid; gap: 4px; margin: -6px 0 0; padding: 0 0 0 26px; list-style: none; font-size: 13px; color: var(--ink-2); }
 .t-admit-why b { color: var(--ink); font-weight: 600; }
+.t-admit-note { margin: 0; font-size: 13px; color: var(--ink-2); }
 /* Our own confirm, notice and prompt (ask.js), in place of the browser's */
 .t-ask { width: min(440px, calc(100vw / var(--zoom, 1) - 32px)); }
 .t-ask-body { display: grid; gap: 14px; padding: 16px 20px 20px; }

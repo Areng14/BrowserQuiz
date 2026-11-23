@@ -454,7 +454,7 @@
         if (got && got.run) Object.assign(S.run, got.run); // corrections: what this student has to correct
         if (got && got.timeLimitMin != null) S.run.timeLimitMin = got.timeLimitMin; // with any extra time they get
         S.me = { name: picked.name };
-        if (run.practice) screenRules(); else screenWait();
+        screenRules();
       } catch (ex) {
         msg.textContent = errorText(ex);
         btn.disabled = false; btn.textContent = 'Continue';
@@ -472,28 +472,51 @@
     return h('div', { class: 'who-card' }, icon, h('div', {}, h('span', { class: 'who-label', text: 'Signed in as' }), h('b', { class: 'who-name', text: S.me.name })));
   }
 
+  // Agreed to the rules: full screen and monitored already, waiting for the teacher to start the quiz.
+  // Their name is on screen, so the teacher can walk the room and see who's who. The status is read out;
+  // the game under it (snake.js) isn't, and goes once the quiz starts.
   function screenWait() {
-    // The status is read out; the game under it (snake.js) isn't, and goes once they're admitted.
-    mount(entry(h('div', { class: 'panel' },
+    const screen = entry(h('div', { class: 'panel' },
       h('div', { class: 'wait-status', role: 'status' },
         h('p', { class: 'eyebrow', text: S.run.title }),
-        h('h1', { text: 'Waiting for your teacher' }),
+        h('h1', { text: 'Waiting for your teacher to start the quiz' }),
         whoCard(),
-        demoHint('Demo: click ', h('b', { text: 'Admit' }), ' in the teacher view.')),
-      BQ.snake ? BQ.snake() : null)));
+        demoHint('Demo: click ', h('b', { text: 'Start' }), ' in the teacher view.')),
+      BQ.snake ? BQ.snake() : null));
+    mount(screen);
+    S.el = { wrap: screen, fsOverlay: null }; // where the lockdown's warnings go until the quiz is on screen
+    if (S.monitor && S.monitor.opts.fullscreen && !document.fullscreenElement && !cfg.demo) showFsOverlay();
     clearInterval(S.poll);
+    let starting = false;
     const check = async () => {
+      if (starting) return;
       try {
         const r = await api.admitStatus();
-        if (r && r.admitted) { clearInterval(S.poll); screenRules(); }
+        if (r && r.admitted) { starting = true; clearInterval(S.poll); startFromWait(); }
       } catch (e) {
-        if (e.code === 'run_closed') { clearInterval(S.poll); screenClosed(); }
-        else if (e.code === 'no_attempt') { clearInterval(S.poll); signedOut(); }
-        else if (e.code === 'other_network') { clearInterval(S.poll); S = freshState(); screenJoin(ERRORS.other_network); }
+        if (e.code === 'run_closed') { clearInterval(S.poll); leaveLockdown(); screenClosed(); }
+        else if (e.code === 'no_attempt') { clearInterval(S.poll); leaveLockdown(); signedOut(); }
+        else if (e.code === 'other_network') { clearInterval(S.poll); leaveLockdown(); S = freshState(); screenJoin(ERRORS.other_network); }
         // anything else: keep polling
       }
     };
     S.poll = setInterval(check, cfg.demo ? 700 : 2000);
+  }
+  // The teacher started it: the questions, on the screen they're already full screen on.
+  async function startFromWait() {
+    for (let tries = 0; ; tries++) {
+      try { enterQuiz(await api.start(), !!S.monitor && S.monitor.opts.fullscreen); return; } catch (ex) {
+        if (ex.code === 'no_attempt') { leaveLockdown(); return signedOut(); }
+        if (ex.code === 'run_closed') { leaveLockdown(); return screenClosed(); }
+        await new Promise((r) => setTimeout(r, Math.min(1000 * 2 ** tries, 8000))); // offline for a moment: keep trying
+      }
+    }
+  }
+  // Out of the waiting screen without a quiz (closed, signed out): monitoring off, full screen off.
+  function leaveLockdown() {
+    if (S.monitor) { S.monitor.disarm(); S.monitor = null; }
+    exitFullscreen();
+    S.el = null;
   }
 
   function prechecks() {
@@ -602,8 +625,8 @@
     if (S.run.practice) return screenPractice(err);
     if (S.run.hasCode) loadMonaco().catch(() => {});
     const mins = S.run.timeLimitMin;
-    const agree = h('input', { type: 'checkbox', id: 'agree' });
-    const btn = h('button', { class: 'btn primary', type: 'button', text: 'Start quiz', disabled: true });
+    // Agreeing turns the lockdown on (full screen, monitoring) and waits for the teacher to start
+    const btn = h('button', { class: 'btn primary', type: 'button', text: 'I agree' });
     const msg = h('p', { class: 'error', role: 'alert', text: err || '' });
     const checkList = h('ul', { class: 'checks', 'aria-label': 'Computer checks' });
     let blocked = false;
@@ -616,13 +639,12 @@
         h('span', { class: 'check-mark ' + (c.ok ? 'ok' : c.soft ? 'soft' : 'bad'), text: c.ok ? 'OK' : c.soft ? 'Note' : 'Fix' }),
         c.label,
         c.note ? h('span', { class: 'check-note', text: c.note }) : null)));
-      if (btn.textContent === 'Start quiz') btn.disabled = !agree.checked || blocked;
+      if (btn.textContent === 'I agree') btn.disabled = blocked;
     }
     renderChecks();
     const onChange = () => { if (!checkList.isConnected) { window.removeEventListener('resize', onChange); return; } renderChecks(); };
     window.addEventListener('resize', onChange);
     if (window.screen && window.screen.addEventListener) window.screen.addEventListener('change', onChange);
-    agree.addEventListener('change', () => { btn.disabled = !agree.checked || blocked; });
 
     // In Safe Exam Browser with our settings there's nothing to leave to: the device is locked until they turn in
     const locked = !!S.run.sebQuit;
@@ -644,13 +666,38 @@
         h('li', { text: 'Pasting from outside the quiz is blocked.' }),
         mins ? h('li', { text: 'The quiz turns itself in when time runs out.' }) : null),
       checkList,
-      h('label', { class: 'agree', for: 'agree' }, agree, h('span', { text: locked ? 'I\'m ready to lock my device and start' : 'I understand that leaving the quiz counts as cheating' })),
       btn, msg,
       cfg.demo && prechecks().some((c) => !c.ok) ? demoHint('Demo: checks are shown but not enforced here.') : null);
 
-    btn.addEventListener('click', () => beginQuiz(btn, msg, 'Start quiz'));
+    btn.addEventListener('click', () => agreeAndWait(btn, msg));
     mount(entry(panel));
-    agree.focus();
+    btn.focus();
+  }
+
+  // "I agree": full screen (it needs this click), the server marks them ready, and the monitoring starts.
+  // Then the waiting screen, or straight in if the teacher already started them.
+  async function agreeAndWait(btn, msg) {
+    btn.disabled = true; btn.textContent = 'One moment…'; msg.textContent = '';
+    const seb = !!S.run.seb; // Safe Exam Browser already runs locked full screen
+    const fsOk = seb ? false : await enterFullscreen();
+    if (!fsOk && !cfg.demo && !seb) {
+      msg.textContent = 'Fullscreen was blocked. Click again.';
+      btn.disabled = false; btn.textContent = 'I agree';
+      return;
+    }
+    let r;
+    try { r = await api.ready(); } catch (ex) {
+      exitFullscreen();
+      if (ex.code === 'no_attempt') return signedOut();
+      if (ex.code === 'run_closed') return screenClosed();
+      msg.textContent = errorText(ex);
+      btn.disabled = false; btn.textContent = 'I agree';
+      return;
+    }
+    if (!S.monitor) S.monitor = makeMonitor(fsOk);
+    if (!S.monitor.armed) S.monitor.arm();
+    if (r && r.admitted) { btn.textContent = 'Starting…'; return startFromWait(); }
+    screenWait();
   }
 
   // Shared by Start and Continue. Fullscreen has to be requested inside the click.
@@ -676,6 +723,12 @@
       btn.disabled = false; btn.textContent = label;
       return;
     }
+    enterQuiz(r, fsOk);
+  }
+
+  // The quiz on screen, from /api/start's answer: after Start (practice), Continue, or the teacher's start.
+  function enterQuiz(r, fsOk) {
+    clearInterval(S.poll);
     S.quiz = r.quiz;
     S.deadline = r.deadline || 0;
     S.skew = r.now ? r.now - Date.now() : 0;
@@ -683,8 +736,16 @@
     S.answers = restoreAnswers(r.saved || {});
     loadMarks();
     loadScratch();
-    S.monitor = new BQ.Monitor(api, {
-      integrity: !practice,
+    if (!S.monitor) S.monitor = makeMonitor(fsOk);
+    screenQuiz();
+    if (!S.monitor.armed) S.monitor.arm();
+    // left full screen while it was starting: the same warning as in the quiz
+    if (S.monitor.opts.fullscreen && !document.fullscreenElement && !cfg.demo) showFsOverlay();
+  }
+
+  function makeMonitor(fsOk) {
+    return new BQ.Monitor(api, {
+      integrity: !S.run.practice,
       fullscreen: fsOk,
       keysHeld: () => keysHeld && !!document.fullscreenElement,
       getAnswers: serializeAnswers,
@@ -700,8 +761,6 @@
       onBeat: onBeat,
       onBeatError: onBeatError,
     });
-    screenQuiz();
-    S.monitor.arm();
   }
 
   // What's on screen, for a teacher watching live: the page, the scroll, the window's size, what's
@@ -2137,7 +2196,7 @@
       h('div', { class: 'fs-card', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'fs-title' },
         h('h2', { id: 'fs-title', text: 'You left fullscreen' }),
         h('p', { text: 'Leaving fullscreen counts as cheating, and your teacher can see that you left. Go back to keep working.' }),
-        h('div', { class: 'row-actions' }, btn, h('button', { class: 'btn', type: 'button', text: 'Exit', onclick: () => openExit() }))));
+        h('div', { class: 'row-actions' }, btn, S.quiz ? h('button', { class: 'btn', type: 'button', text: 'Exit', onclick: () => openExit() }) : null)));
     S.el.fsOverlay = ov;
     S.el.wrap.append(ov);
     S.el.fsRelease = holdFocus(ov);
@@ -2681,8 +2740,9 @@
         if (!r || !r.status) return screenJoin(null, code);
         S.run = r.run;
         S.me = { name: r.name };
-        if (r.status === 'waiting') return screenWait();
-        if (r.status === 'admitted') return screenRules();
+        // not started yet: the rules again (agreeing goes back into lockdown; doing it twice counts as
+        // reopening, server /api/ready)
+        if (r.status === 'waiting' || r.status === 'admitted') return screenRules();
         if (r.status === 'active') return screenContinue();
         return screenJoin(null, code); // turned in already: free to join the next quiz
       }).catch(() => screenJoin(null, code));

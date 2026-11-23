@@ -14,7 +14,7 @@ the Monaco editor, with insane question customizability.
   [Question types](#question-types) section.
 - **Quiz maker.** Live preview, Markdown, LaTeX math, images. Or paste the built-in prompt into an AI
   chat and upload the response.
-- **Live dashboard.** Admit students, give extra time, see who left and for how long, end a quiz.
+- **Live dashboard.** Start everyone at once, give extra time, see who left and for how long, end a quiz.
   Monitor any student's quiz page live, mouse and all.
 - **Grade with AI.** Copy one prompt into ChatGPT, Claude or Gemini and paste the grades back, or drop
   in your own API key and it grades in the background. Every grade comes with its reasons, and you can

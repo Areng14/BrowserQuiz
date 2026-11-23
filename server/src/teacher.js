@@ -191,7 +191,7 @@ function liveRow(student, a, quiz, run) {
     name: student.name,
     timeX,
     attempt: {
-      id: a.id, status: a.status, integrity: a.integrity, strikes: a.strikes, warnings: a.warnings,
+      id: a.id, status: a.status, ready: !!a.readyAt, integrity: a.integrity, strikes: a.strikes, warnings: a.warnings,
       awayMs: (a.awayMs || 0) + store.awayNow(a, Date.now()), awayNow: store.awayNow(a, Date.now()) || null,
       leftAgain: a.integrity === 'restored' && a.restoreStrikes != null ? Math.max(0, a.strikes - a.restoreStrikes) : 0,
       reason: a.reason, invalidatedAt: a.invalidatedAt, lastBeatAgo: a.status === 'active' && a.lastBeat ? Date.now() - a.lastBeat : null,
@@ -1091,6 +1091,7 @@ module.exports = function teacherRoutes(r) {
         if (only && !only.has(row.id)) continue;
         const a = store.getAttempt(row.id);
         a.status = 'admitted';
+        a.admittedAt = Date.now(); // the moment the teacher started them (student.js /api/start)
         store.logEvent(a, 'admit', 'info', null);
         store.save(a);
       }
@@ -1293,7 +1294,7 @@ module.exports = function teacherRoutes(r) {
     const quiz = store.getQuiz(run.quiz_id);
     const note = String(body.note || '').slice(0, 300);
     if (p.action === 'admit') {
-      if (a.status === 'waiting') { a.status = 'admitted'; store.logEvent(a, 'admit', 'info', null); store.save(a); }
+      if (a.status === 'waiting') { a.status = 'admitted'; a.admittedAt = Date.now(); store.logEvent(a, 'admit', 'info', null); store.save(a); }
     } else if (p.action === 'restore') {
       if (a.integrity === 'invalidated') { a.integrity = 'restored'; a.restoreStrikes = a.strikes; store.logEvent(a, 'restore', 'info', note || null); store.save(a); }
     } else if (p.action === 'invalidate') {

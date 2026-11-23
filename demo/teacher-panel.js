@@ -5,7 +5,7 @@
   const BQ = window.BQ;
 
   const LABEL = {
-    join: 'Signed in', admit: 'Admitted by teacher', start: 'Started the quiz', submit: 'Submitted',
+    join: 'Signed in', ready: 'Agreed, waiting in full screen', admit: 'Started by teacher', start: 'Started the quiz', submit: 'Submitted',
     restore: 'Restored by teacher', run: 'Ran examples', reload: 'Reopened mid-quiz',
     blur: 'Left the quiz window', hidden: 'Tab hidden', 'fullscreen-exit': 'Left fullscreen', return: 'Came back',
     'mouse-left': 'Cursor left the page', copy: 'Copy blocked', paste: 'Outside paste blocked', contextmenu: 'Right-click',
@@ -16,7 +16,7 @@
     'scripted-input': 'Typed by a script', viewport: 'Side panel or DevTools open', setup: 'Computer',
   };
   const STATUS = {
-    waiting: ['Waiting to be admitted', 'warn'], admitted: ['Admitted', 'neutral'],
+    waiting: ['Waiting to start', 'warn'], admitted: ['Starting', 'neutral'],
     active: ['In progress', 'neutral'], submitted: ['Submitted', 'good'],
   };
   const INTEGRITY = { clean: ['Clean', 'good'], invalidated: ['Invalidated', 'bad'], restored: ['Restored', 'warn'] };
@@ -47,7 +47,7 @@
     const [sBeat, vBeat] = stat('Last heartbeat');
     const [sRuns, vRuns] = stat('Code runs');
     const reason = h('p', { class: 'tp-reason', hidden: true });
-    const admit = h('button', { class: 'btn small primary', type: 'button', text: 'Admit', onclick: () => t.admit() });
+    const admit = h('button', { class: 'btn small primary', type: 'button', text: 'Start', onclick: () => t.admit() });
     const restore = h('button', { class: 'btn small', type: 'button', text: 'Restore attempt', onclick: () => t.restore() });
     const auto = h('input', { type: 'checkbox', id: 'tp-auto' });
     auto.addEventListener('change', () => t.setAutoAdmit(auto.checked));
@@ -66,7 +66,7 @@
         h('dl', { class: 'tp-stats' }, sStrikes, sWarn, sBeat, sRuns),
         reason,
         h('div', { class: 'tp-actions' }, admit, restore),
-        h('label', { class: 'tp-toggle', for: 'tp-auto' }, auto, h('span', { text: 'Admit students automatically' }))),
+        h('label', { class: 'tp-toggle', for: 'tp-auto' }, auto, h('span', { text: 'Start the quiz automatically' }))),
       h('section', { class: 'tp-card', hidden: true }, h('h3', { text: 'Score' }), score),
       h('section', { class: 'tp-card' }, h('h3', { text: 'Mouse trail' }), canvas, trailNote),
       h('section', { class: 'tp-card' }, h('h3', { text: 'Activity' }), logList)));

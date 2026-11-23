@@ -112,6 +112,9 @@ addColumn('attempts', 'pin_ip', 'TEXT');
 // students signing in from the same browser.
 addColumn('attempts', 'q_time', 'TEXT');
 addColumn('attempts', 'device', 'TEXT');
+// When an exam's student agreed to the rules and went into lockdown, waiting for the teacher to start
+// (student.js /api/ready). Leaving from then on counts, as in the quiz.
+addColumn('attempts', 'ready_at', 'INTEGER');
 // Extra time for one student (an accommodation): their time limit is multiplied by this on every quiz.
 addColumn('roster_students', 'time_x', 'REAL NOT NULL DEFAULT 1');
 // Passkeys (passkeys.js): id is the credential id, public_key its SPKI DER. key_wrap is the teacher's quiz

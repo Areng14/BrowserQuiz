@@ -256,6 +256,17 @@
       if (st.autoAdmit) setTimeout(() => BQ.api.teacher.admit(), 600);
       return { ok: true };
     },
+    // agreed to the rules: waiting in lockdown for the teacher's start (server: /api/ready)
+    async ready() {
+      await delay(150);
+      const a = st.attempt;
+      if (!a) throw fail('no_attempt');
+      if (a.status === 'active') return { admitted: true };
+      if (a.ready) record('reload', 'reopened the waiting screen'); else log('ready', null, 'info');
+      a.ready = true;
+      emit();
+      return { admitted: a.status !== 'waiting' };
+    },
     async admitStatus() {
       await delay(80);
       return { admitted: !!st.attempt && st.attempt.status !== 'waiting' };

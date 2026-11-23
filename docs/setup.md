@@ -85,6 +85,19 @@ To try the example, zip `examples/ap-csa-unit4` and upload it along with `exampl
 node scripts/check-quiz.mjs examples/ap-csa-unit4 --run
 ```
 
+## Giving an exam
+
+1. Pick the quiz and the class on **Give a quiz** and click **Start quiz**. Students join with the code.
+2. Each student signs in, reads the rules and clicks **I agree**. That puts them in full screen and
+   starts the lockdown, and they wait there. Leaving now counts the same as leaving mid-quiz.
+3. Walk around and check screens. The live table says who is **Ready** and who is still
+   **Reading the rules**.
+4. Click **Start quiz** on the live page. Everyone starts together, on one clock; anyone still reading
+   starts as soon as they agree.
+5. Late students get a **Start** button on their row.
+
+Practice and corrections runs skip the wait: students start when they agree.
+
 ## Corrections
 
 After an exam, **Corrections** (on its live page, under More on a phone) starts a practice run of its

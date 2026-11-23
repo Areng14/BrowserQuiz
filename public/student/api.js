@@ -57,6 +57,7 @@
     findNames: (body) => post('/api/names', body),
     attempt: (body) => post('/api/attempt', body),
     admitStatus: () => post('/api/admit-status'),
+    ready: () => post('/api/ready'),
     start: () => post('/api/start'),
     event: (type, detail) => post('/api/event', { type, detail }, true),
     beat: (payload) => post('/api/beat', payload),

@@ -477,6 +477,26 @@ module.exports = function studentRoutes(r) {
     json(res, 200, { ok: true, run: run.corrects ? runInfo(run, store.getQuiz(run.quiz_id), student.id) : undefined, timeLimitMin: run.corrects ? undefined : myLimit(store.getQuiz(run.quiz_id), student.id) });
   });
 
+  // An exam's student agreed to the rules: the page is full screen and monitored, and waits for the
+  // teacher to start the quiz (the teacher's Start admits them, and the page then calls /api/start).
+  // admitted: already started, so the page goes straight in. Opening the waiting screen again (a
+  // reload) counts as leaving, like reopening the quiz.
+  r.post('/api/ready', async (req, res) => {
+    const { a, run, quiz } = current(req);
+    if (a.status === 'submitted') throw new HttpError(403, 'run_closed');
+    if (a.status === 'active') return json(res, 200, { admitted: true });
+    if (run.mode !== 'practice' && !run.corrects) {
+      const now = Date.now();
+      if (a.readyAt) store.record(a, 'reload', 'reopened the waiting screen', quiz);
+      else store.logEvent(a, 'ready', 'info', null);
+      a.readyAt = now;
+      a.lastBeat = now;
+      a.beatLost = false;
+      store.save(a);
+    }
+    json(res, 200, { admitted: a.status === 'admitted' });
+  });
+
   r.post('/api/admit-status', async (req, res) => {
     const { a } = current(req);
     json(res, 200, { admitted: a.status !== 'waiting' });
@@ -498,7 +518,10 @@ module.exports = function studentRoutes(r) {
       a.startedAt = now;
       if (!a.practice) a.pinIp = trustedIp(req); // the network it's pinned to (current); none when it can't be told
       const x = timeX(a.studentId); // extra time for this student
-      a.deadline = quiz.timeLimitMin && !run.corrects ? now + Math.round(quiz.timeLimitMin * x * 60000) : null;
+      // Ready when the teacher pressed Start: everyone's clock starts then, not when each page noticed
+      // (a poll later). Anyone who agreed after that starts their own clock now.
+      const from = a.admittedAt && a.readyAt && a.readyAt <= a.admittedAt && now - a.admittedAt < 15000 ? a.admittedAt : now;
+      a.deadline = quiz.timeLimitMin && !run.corrects ? from + Math.round(quiz.timeLimitMin * x * 60000) : null;
       a.lastBeat = now;
       store.logEvent(a, 'start', 'info', x !== 1 && a.deadline ? `${x}× time` : null);
       noteNewNetwork(a, run, quiz, a.pinIp);
@@ -527,7 +550,7 @@ module.exports = function studentRoutes(r) {
     try { ctx = current(req); } catch (e) { if (e.code === 'locked') throw e; return json(res, 200, { ok: true }); }
     const { a, quiz } = ctx;
     // Violations always count (spending the budget first mustn't hide one); the rest draw on it.
-    if (a.status === 'active' && Object.hasOwn(store.CLIENT_EVENTS, body.type)
+    if (store.watched(a) && Object.hasOwn(store.CLIENT_EVENTS, body.type)
       && (store.CLIENT_EVENTS[body.type] === 'violation' || allow(a.id, Date.now()))) {
       const detail = eventDetail(a, quiz, body.type, body.detail);
       if (detail !== null) store.record(a, body.type, detail, quiz);
@@ -540,10 +563,11 @@ module.exports = function studentRoutes(r) {
     const { a, quiz } = current(req);
     const now = Date.now();
     let live = {};
-    if (a.status === 'active' && !allow(a.id, now)) {
+    const inQuiz = a.status === 'active';
+    if (inQuiz && !allow(a.id, now)) {
       // Over the budget: answered the same, nothing stored.
       live = W.isWatched(a.runId, now) ? { beatMs: W.FAST_BEAT_MS } : {};
-    } else if (a.status === 'active') {
+    } else if (store.watched(a)) { // in the quiz, or waiting for its start in lockdown
       // Events the client couldn't send while offline arrive here, oldest first.
       // Each keeps the time it happened (after the last good heartbeat, in order), so leaving five times
       // while offline is five strikes, not one burst.
@@ -567,6 +591,7 @@ module.exports = function studentRoutes(r) {
       } else {
         store.back(a, now);
       }
+      if (inQuiz) {
       // Mouse samples: [x, y, ms since the last one], and a 4th 1 for a click.
       const pts = (Array.isArray(body.mouse) ? body.mouse.slice(0, 400) : []).filter((p) => Array.isArray(p) && (p.length === 3 || p.length === 4) && p.every(Number.isFinite))
         .map((p) => [Math.max(0, Math.min(1000, p[0] | 0)), Math.max(0, Math.min(1000, p[1] | 0)), Math.max(0, Math.min(60000, p[2] | 0)), p[3] ? 1 : 0]);
@@ -598,6 +623,7 @@ module.exports = function studentRoutes(r) {
       a.viewAt = now;
       // autosave stops at time's up; only the final submit gets the grace, for its trip over the network
       if (body.answers && !(a.deadline && now > a.deadline)) a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers));
+      }
       store.save(a);
     }
     // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.

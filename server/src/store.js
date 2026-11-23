@@ -86,7 +86,7 @@ function fromRow(r) {
     result: r.result ? JSON.parse(r.result) : null, ip: r.ip, userAgent: r.user_agent, edits: r.edits,
     archived: !!r.archived, createdAt: r.created_at,
     awayMs: r.away_ms || 0, awayMax: r.away_max || 0, restoreStrikes: r.restore_strikes, pinIp: r.pin_ip || null,
-    qTime: r.q_time ? JSON.parse(r.q_time) : {}, device: r.device || null,
+    qTime: r.q_time ? JSON.parse(r.q_time) : {}, device: r.device || null, readyAt: r.ready_at || null,
     // runtime only
     awaySince: 0, away: false, burstStart: 0, beatLost: false, eventCount: null, warnWindow: new Map(), flagged: new Set(), viewQ: null, viewAt: 0,
   };
@@ -109,11 +109,11 @@ function attemptByToken(token) {
 function save(a) {
   q(`UPDATE attempts SET status = ?, integrity = ?, strikes = ?, warnings = ?, reason = ?, invalidated_at = ?, started_at = ?,
      deadline = ?, submitted_at = ?, last_beat = ?, layout = ?, answers = ?, result = ?, edits = ?, archived = ?,
-     away_ms = ?, away_max = ?, restore_strikes = ?, pin_ip = ?, q_time = ? WHERE id = ?`).run(
+     away_ms = ?, away_max = ?, restore_strikes = ?, pin_ip = ?, q_time = ?, ready_at = ? WHERE id = ?`).run(
     a.status, a.integrity, a.strikes, a.warnings, a.reason, a.invalidatedAt, a.startedAt, a.deadline, a.submittedAt,
     a.lastBeat, a.layout ? JSON.stringify(a.layout) : null, JSON.stringify(a.answers || {}), a.result ? JSON.stringify(storedResult(a.result)) : null,
     a.edits || 0, a.archived ? 1 : 0, a.awayMs || 0, a.awayMax || 0, a.restoreStrikes == null ? null : a.restoreStrikes, a.pinIp || null,
-    a.qTime && Object.keys(a.qTime).length ? JSON.stringify(a.qTime) : null, a.id,
+    a.qTime && Object.keys(a.qTime).length ? JSON.stringify(a.qTime) : null, a.readyAt || null, a.id,
   );
 }
 function forget(id) { attempts.delete(id); }
@@ -147,6 +147,9 @@ const awayNow = (a, now) => (a.status === 'active' && a.away && a.awaySince ? Ma
 // fullscreen-exit together, unfocused heartbeats) is logged but doesn't stack. The merge window is anchored
 // to the first event of a burst, so leaving every 1.9s still counts every time. `at` is when it happened, for
 // events the client queued while offline: they arrive together but still count one strike per departure.
+// Monitored: taking the quiz, or agreed and waiting in lockdown for the teacher to start it.
+const watched = (a) => a.status === 'active' || (!!a.readyAt && (a.status === 'waiting' || a.status === 'admitted'));
+
 function record(a, type, detail, quiz, at) {
   let severity = (Object.hasOwn(CLIENT_EVENTS, type) && CLIENT_EVENTS[type]) || (Object.hasOwn(SERVER_EVENTS, type) && SERVER_EVENTS[type]);
   if (!severity) return;
@@ -166,7 +169,7 @@ function record(a, type, detail, quiz, at) {
   logEvent(a, type, severity, detail);
   if (type === 'return') back(a, t);
   if (severity === 'warning') a.warnings++;
-  if (severity === 'violation' && a.status === 'active') {
+  if (severity === 'violation' && watched(a)) {
     const merged = a.away || (a.burstStart && Math.abs(t - a.burstStart) < MERGE_MS);
     if (!a.away) a.awaySince = t;
     a.away = true;
@@ -282,6 +285,7 @@ function perStudent(quiz) {
 }
 
 module.exports = {
+  watched,
   getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, back, awayNow, logEvent, makeLayout, quizFor, perStudent, attempts,
   CLIENT_EVENTS, SERVER_EVENTS, quizCache,
 };
