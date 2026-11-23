@@ -1115,13 +1115,25 @@ module.exports = function teacherRoutes(r) {
     const quiz = store.getQuiz(run.quiz_id);
     const roster = rosterStudentsForRun(run);
     const byStudent = new Map(q('SELECT id, student_id FROM attempts WHERE run_id = ? AND archived = 0').all(run.id).map((x) => [x.student_id, store.getAttempt(x.id)]));
+    // Sign-ins to look at before admitting (the checklist asks about these): a network the student hasn't
+    // used before, or a browser another student signed in from.
+    const checks = new Map();
+    for (const e of q(`SELECT e.attempt_id, e.type, e.detail FROM events e JOIN attempts a ON a.id = e.attempt_id
+      WHERE a.run_id = ? AND a.archived = 0 AND e.type IN ('new-network', 'same-browser') ORDER BY e.id`).all(run.id)) {
+      if (!checks.has(e.attempt_id)) checks.set(e.attempt_id, []);
+      checks.get(e.attempt_id).push({ type: e.type, detail: e.detail });
+    }
     json(res, 200, {
       run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, sebQuit: run.seb_quit || null, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin,
         corrections: run.corrects ? { earnBack: run.earn_back, why: !!run.ask_why } : null,
         joinUrl: joinOrigin(req), // where students go (not localhost)
         // an exam's answers still waiting for the teacher: corrections leave those out
         waiting: !run.corrects && run.mode !== 'practice' ? roster.reduce((n, s) => { const a = byStudent.get(s.id); const t = a && a.status === 'submitted' ? totals(a.result, quiz, a.answers, a.layout) : null; return n + (t ? t.pending + t.review : 0); }, 0) : 0 },
-      students: roster.map((s) => liveRow(s, byStudent.get(s.id), quiz, run)),
+      students: roster.map((s) => {
+        const row = liveRow(s, byStudent.get(s.id), quiz, run);
+        if (row.attempt && checks.has(row.attempt.id)) row.attempt.checks = checks.get(row.attempt.id);
+        return row;
+      }),
       ai: { on: !!aiKeyOf(me), job: aiJobs.get(run.id) || null },
     });
   });

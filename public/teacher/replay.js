@@ -68,6 +68,44 @@
     }
     return text;
   }
+  // The code with its colors (report-view's tokens, the report's code colors) and the newest change marked.
+  // m: Monaco, or null to show it plain. Text only ever goes in as text.
+  function paint(el, text, lang, from, to, m) {
+    const R = window.BQReport;
+    let tokens = null;
+    if (m && lang && R && R.tokenClass) { try { tokens = m.editor.tokenize(text, lang); } catch (e) { tokens = null; } }
+    const segs = []; // [start, end, class]
+    let base = 0;
+    text.split('\n').forEach((line, li, lines) => {
+      const lt = tokens ? tokens[li] || [] : [];
+      if (!lt.length) segs.push([base, base + line.length, '']);
+      lt.forEach((t, k) => {
+        const s = base + t.offset;
+        const e = base + (k + 1 < lt.length ? lt[k + 1].offset : line.length);
+        if (e > s) segs.push([s, e, R.tokenClass(t.type)]);
+      });
+      if (li < lines.length - 1) segs.push([base + line.length, base + line.length + 1, '']);
+      base += line.length + 1;
+    });
+    const frag = document.createDocumentFragment();
+    let mark = null;
+    const put = (s, e, cls) => {
+      if (e <= s) return;
+      const piece = text.slice(s, e);
+      const node = cls ? h('span', { class: cls, text: piece }) : document.createTextNode(piece);
+      if (from != null && s >= from && e <= to) {
+        if (!mark) { mark = h('mark'); frag.append(mark); }
+        mark.append(node);
+      } else { mark = null; frag.append(node); }
+    };
+    for (const [s, e, cls] of segs) {
+      if (from == null || e <= from || s >= to) put(s, e, cls);
+      else { put(s, Math.max(s, from), cls); put(Math.max(s, from), Math.min(e, to), cls); put(Math.min(e, to), e, cls); }
+    }
+    if (!text) frag.append(' ');
+    el.replaceChildren(frag);
+  }
+
   function textAt(r, i) {
     let text = r.snaps[Math.floor(i / SNAP)];
     for (let k = Math.floor(i / SNAP) * SNAP + 1; k <= i; k++) text = apply(text, r.steps[k]);
@@ -82,14 +120,17 @@
     const title = h('h2', { id: 'rp-title', text: `Typing replay, question ${n}` });
     const body = h('div', { class: 'rp-body' }, h('p', { class: 'rp-note', text: 'Loading…' }));
     const dlg = h('dialog', { class: 'rp-dialog', 'aria-labelledby': 'rp-title' }, h('header', { class: 'rp-head' }, title, close), body);
+    // the editor's tokenizer, for colors: loading while the replay loads; plain if it can't
+    const monacoP = window.BQReport && window.BQReport.loadMonaco ? window.BQReport.loadMonaco().catch(() => null) : Promise.resolve(null);
     let timer = 0;
     close.addEventListener('click', () => dlg.close());
     dlg.addEventListener('close', () => { clearTimeout(timer); dlg.remove(); if (back && back.isConnected) back.focus({ preventScroll: true }); });
-    document.body.append(dlg);
+    (document.querySelector('.t-app') || document.body).append(dlg); // in the dashboard, under its theme
     dlg.showModal();
     close.focus();
     let all;
     try { all = await load(attemptId); } catch (e) { body.replaceChildren(h('p', { class: 'rp-note', text: e.message })); return; }
+    const M = await monacoP;
     const mine = (all[questionId] || []);
     const langs = [...new Set(mine.filter((e) => typeof e.init === 'string').map((e) => e.l || ''))];
     if (!langs.length) {
@@ -117,10 +158,8 @@
       const s = r.steps[i];
       // the newest change, marked: what was just typed (one piece; several at once aren't marked)
       const one = s && s.ch && s.ch.length === 1 ? s.ch[0] : null;
-      if (one && one[2]) {
-        const from = Math.max(0, Math.min(text.length, one[0]));
-        code.replaceChildren(text.slice(0, from), h('mark', { text: text.slice(from, from + one[2].length) }), text.slice(from + one[2].length));
-      } else code.textContent = text || ' ';
+      const from = one && one[2] ? Math.max(0, Math.min(text.length, one[0])) : null;
+      paint(code, text, lang, from, from == null ? null : from + one[2].length, M);
       const m = code.querySelector('mark');
       if (m && !playingUser) m.scrollIntoView({ block: 'nearest', inline: 'nearest' });
       slider.value = String(i);

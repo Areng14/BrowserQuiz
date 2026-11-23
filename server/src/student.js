@@ -119,16 +119,19 @@ function sameArea(x, y) {
 }
 // A network the student hasn't started a quiz from before (their earlier exams for this teacher, in any
 // class, matched by student ID). Evidence only: a new school address or a phone hotspot explains it too.
-function noteNewNetwork(a, run, quiz) {
-  if (!a.pinIp) return;
+// Checked when they sign in, so the teacher sees it before admitting them (teacher.js liveRow checks),
+// and again at the start in case the address changed in between. Logged once per attempt.
+function noteNewNetwork(a, run, quiz, ip) {
+  if (!ip || run.mode === 'practice' || run.corrects) return;
+  if (q("SELECT 1 FROM events WHERE attempt_id = ? AND type = 'new-network'").get(a.id)) return;
   const me = q('SELECT sid_hash FROM roster_students WHERE id = ?').get(a.studentId);
   if (!me) return;
   const before = q(`SELECT a.pin_ip FROM attempts a JOIN roster_students s ON s.id = a.student_id JOIN runs r ON r.id = a.run_id
     WHERE s.sid_hash = ? AND r.owner_id = ? AND a.run_id != ? AND a.pin_ip IS NOT NULL AND a.archived = 0
     ORDER BY a.started_at DESC LIMIT 50`).all(me.sid_hash, run.owner_id, run.id).map((x) => x.pin_ip);
-  if (!before.length || before.some((ip) => sameArea(ip, a.pinIp))) return;
+  if (!before.length || before.some((x) => sameArea(x, ip))) return;
   const seen = [...new Set(before)].slice(0, 2);
-  store.record(a, 'new-network', `${a.pinIp}, before: ${seen.join(', ')}${new Set(before).size > 2 ? ', …' : ''}`, quiz);
+  store.record(a, 'new-network', `${ip}, before: ${seen.join(', ')}${new Set(before).size > 2 ? ', …' : ''}`, quiz);
 }
 // Two students signing in from the same browser in one quiz (one taking it for the other, or swapping
 // seats): flagged on both, once per pair.
@@ -458,6 +461,7 @@ module.exports = function studentRoutes(r) {
       store.logEvent(existing, 'join', 'info', 'signed in again');
       if (dev) { existing.device = deviceHash(dev); q('UPDATE attempts SET device = ? WHERE id = ?').run(existing.device, existing.id); }
       noteSameBrowser(existing, run, store.getQuiz(run.quiz_id), student.name);
+      noteNewNetwork(existing, run, store.getQuiz(run.quiz_id), trustedIp(req));
     } else {
       const id = crypto.randomUUID();
       // Practice runs skip the waiting room.
@@ -467,6 +471,7 @@ module.exports = function studentRoutes(r) {
       const fresh = store.getAttempt(id);
       store.logEvent(fresh, 'join', 'info', student.name);
       noteSameBrowser(fresh, run, store.getQuiz(run.quiz_id), student.name);
+      noteNewNetwork(fresh, run, store.getQuiz(run.quiz_id), trustedIp(req));
     }
     setCookie(req, res, ATT, token, 12 * 3600);
     json(res, 200, { ok: true, run: run.corrects ? runInfo(run, store.getQuiz(run.quiz_id), student.id) : undefined, timeLimitMin: run.corrects ? undefined : myLimit(store.getQuiz(run.quiz_id), student.id) });
@@ -496,7 +501,7 @@ module.exports = function studentRoutes(r) {
       a.deadline = quiz.timeLimitMin && !run.corrects ? now + Math.round(quiz.timeLimitMin * x * 60000) : null;
       a.lastBeat = now;
       store.logEvent(a, 'start', 'info', x !== 1 && a.deadline ? `${x}× time` : null);
-      if (!a.practice && !run.corrects) noteNewNetwork(a, run, quiz);
+      noteNewNetwork(a, run, quiz, a.pinIp);
       store.save(a);
     } else if (a.resumeOk) {
       a.resumeOk = false;

@@ -1007,20 +1007,28 @@
     (ks.mine || ks.server ? tKey : copyBtn).focus();
   }
   // Before letting students in, a checklist, so the teacher looks up from the screen: Admit stays off until
-  // both are ticked. Admit everyone asks every time; one student's Admit asks the first time in a run.
+  // everything is ticked. Admit everyone asks every time; one student's Admit asks the first time in a run.
+  // flagged: [{ name, checks }] students whose sign-in looks off (a new network, a browser another student
+  // used): one more item, asked every time, saying why.
   const admitChecked = new Set(); // run ids
-  function beforeAdmit(runId, n, name, go) {
-    if (name && admitChecked.has(runId)) { go(); return; }
+  const checkWhy = (c) => (c.type === 'same-browser' ? `Same browser as ${c.detail}` : `New network: ${c.detail}`);
+  function beforeAdmit(runId, n, name, go, flagged = []) {
+    if (name && admitChecked.has(runId) && !flagged.length) { go(); return; }
     const dlg = h('dialog', { class: 't-dialog t-admit', 'aria-labelledby': 't-admit-title' });
     const ok = h('button', { class: 'btn primary', type: 'button', text: name ? `Admit ${name}` : `Admit ${plural(n, 'student')}`, disabled: true });
     const items = ['Each student is who they signed in as', 'Desks are clear: no phones, notes or other screens'];
+    if (flagged.length) items.push(flagged.length === 1 ? `${flagged[0].name} is at the right computer` : `${plural(flagged.length, 'student')} below are at the right computers`);
     const boxes = items.map((text, i) => h('input', { type: 'checkbox', id: `t-admit-${i}` }));
     for (const cb of boxes) cb.addEventListener('change', () => { ok.disabled = !boxes.every((x) => x.checked); });
     ok.addEventListener('click', () => { admitChecked.add(runId); dlg.close(); go(); });
     const x = h('button', { class: 'btn small ghost t-dialog-x', type: 'button', 'aria-label': 'Close', onclick: () => dlg.close() }, icon(ICONS.x, 18));
+    // why each flagged sign-in needs a look, under its item
+    const why = flagged.length ? h('ul', { class: 't-admit-why', id: 't-admit-why' }, flagged.map((f) => h('li', {},
+      flagged.length > 1 ? h('b', { text: `${f.name}: ` }) : null, f.checks.map(checkWhy).join('; ')))) : null;
+    if (why) boxes[boxes.length - 1].setAttribute('aria-describedby', 't-admit-why');
     dlg.append(
       h('header', { class: 't-dialog-head' }, h('h2', { id: 't-admit-title', text: 'Before you admit' }), x),
-      h('div', { class: 't-admit-list' }, items.map((text, i) => h('label', { class: 't-check', for: `t-admit-${i}` }, boxes[i], h('span', { text })))),
+      h('div', { class: 't-admit-list' }, items.map((text, i) => h('label', { class: 't-check', for: `t-admit-${i}` }, boxes[i], h('span', { text }))), why),
       h('footer', { class: 't-dialog-foot' }, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => dlg.close() }), ok));
     dlg.addEventListener('close', () => dlg.remove());
     root.append(dlg);
@@ -1221,10 +1229,11 @@
     let lastDetail = '';
     let lastRun = null; // the run as of the last refresh (for Corrections)
     let waitingIds = [];
+    let waitingFlagged = []; // waiting students whose sign-in needs a look (beforeAdmit)
     // only the students waiting when the checklist opens: anyone who joins while it's up waits for the next round
     const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Admit everyone waiting', onclick: () => {
       const ids = waitingIds.slice();
-      beforeAdmit(runId, ids.length, null, () => act(`/api/t/runs/${runId}/admit-all`, { ids }));
+      beforeAdmit(runId, ids.length, null, () => act(`/api/t/runs/${runId}/admit-all`, { ids }), waitingFlagged.slice());
     } });
     // AI grading: everything waiting for the teacher in this run, sent to Claude (server: aigrade.js).
     const aiBtn = h('button', { class: 'btn', type: 'button', hidden: true });
@@ -1280,6 +1289,7 @@
         .filter(([n]) => n).map(([n, w]) => `${n} ${w}`).join(', ') || 'Nobody has joined yet';
       if (summary.textContent !== said) summary.textContent = said;
       waitingIds = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting').map((x) => x.attempt.id);
+      waitingFlagged = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting' && x.attempt.checks).map((x) => ({ name: x.name, checks: x.attempt.checks }));
       admitAll.hidden = !waitingIds.length;
       // Grade with AI: shown while there's something waiting for the teacher, or while it runs.
       aiWaiting = data.students.reduce((n, x) => n + (x.attempt && x.attempt.status === 'submitted' ? x.attempt.review || 0 : 0), 0);
@@ -1338,7 +1348,7 @@
         // In the row: what needs deciding now. The rest is under ⋯.
         const more = [];
         const bad = a && a.integrity === 'invalidated';
-        if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`)), { class: 'btn small primary' }));
+        if (a && a.status === 'waiting') actions.append(btn('Admit', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`), a.checks ? [{ name: s.name, checks: a.checks }] : []), { class: 'btn small primary' }));
         if (bad) actions.append(btn('Un-invalidate', 'restore', () => unInvalidate(a.id, s.name)));
         // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
         // popup doesn't end anyone's quiz without the teacher looking).

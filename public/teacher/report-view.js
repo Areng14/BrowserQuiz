@@ -544,5 +544,5 @@
     return pairSection('r-fast', 'Fast right answers', items);
   }
 
-  window.BQReport = { question, student, classOverview, similarCode, sameWrong, fastRight, highlight, h };
+  window.BQReport = { question, student, classOverview, similarCode, sameWrong, fastRight, highlight, h, loadMonaco, tokenClass };
 })();
