@@ -446,6 +446,7 @@
     grip: ['M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01'],
     plus: ['M12 5v14', 'M5 12h14'],
     copy: ['M9 9h11v11H9z', 'M5 15H4V4h11v1'],
+    download: ['M12 4v11', 'M7 10l5 5 5-5', 'M5 20h14'],
     trash: ['M3 6h18', 'M8 6V4h8v2', 'M19 6l-1 14H6L5 6', 'M10 11v6', 'M14 11v6'],
     chevron: ['M6 9l6 6 6-6'],
     dots: ['M5 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z', 'M12 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z', 'M19 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z'], // filled (rowMenu)
@@ -612,7 +613,7 @@
       try { await api('/api/t/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() }); showHome(); } catch (e) { quizMsg.textContent = e.message; quizBtn.disabled = false; quizBtn.textContent = 'Upload .quiz'; }
     });
     return h('section', { class: 't-section' },
-      h('div', { class: 't-head' }, h('h1', { text: 'Quizzes' }),
+      h('div', { class: 't-head t-head-wrap' }, h('h1', { text: 'Quizzes' }),
         copyPromptBtn(),
         h('button', { class: 'btn small primary', type: 'button', text: 'New quiz', onclick: () => openQuiz(null) })),
       data.quizzes.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
@@ -758,7 +759,8 @@
   }
 
   // The AI prompt goes on the clipboard, ready to paste into a chatbot. It's fetched ahead of time so
-  // the copy happens right in the click. If copying is blocked, it downloads instead.
+  // the copy happens right in the click. If copying is blocked, it downloads instead. It's long, and some
+  // chats cap what you can paste (Copilot), so it also comes as a file to attach, from the button beside it.
   function copyPromptBtn() {
     const url = `/api/t/quiz-prompt`;
     const btn = h('button', { class: 'btn small', type: 'button', text: 'Copy AI prompt' });
@@ -775,7 +777,8 @@
         location.href = url;
       }
     });
-    return btn;
+    const file = h('a', { class: 'btn small t-split-icon', href: url, download: 'BrowserQuiz quiz prompt.txt', 'aria-label': 'Download the AI prompt as a file', title: 'Download as a file' }, icon(ICONS.download, 16));
+    return h('span', { class: 't-split' }, btn, file);
   }
   async function copyText(text) {
     if (navigator.clipboard && window.isSecureContext) {

@@ -72,7 +72,8 @@ picks their own the first time they sign in.
   (`Ava Martinez, 204511, 1.5x`). It applies from the next quiz they start, and their clock and the
   live page show it.
 - **With an AI chat (ChatGPT, Claude, …):** click **Copy AI prompt** on the Quizzes tab, paste it into
-  the chat, and fill in the blanks at the top.
+  the chat, and fill in the blanks at the top. If the chat won't take something that long (Copilot),
+  download it with the button beside it and attach the file instead.
   - AIs that can make files hand back a `.quiz` (images included) to upload.
   - Others give a `quiz.json`: upload it, or paste it under New quiz and add any images there.
 - **With an AI coding assistant in this repo:** it follows `AGENTS.md` and the Claude Code skill. It

@@ -250,6 +250,16 @@ input[type="file"].input { padding: 6px 10px; }
 .t-dialog-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 18px; }
 .t-dialog-x { flex: none; width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-2); }
 .btn.small.t-dialog-x { padding: 0; }
+/* two buttons joined into one: the main action, and a second way to do it */
+.t-split { display: inline-flex; }
+.t-split > .btn:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.t-split > .btn + .btn { margin-left: -1px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.t-split > .btn:focus-visible { position: relative; z-index: 1; }
+.t-split > .btn { white-space: nowrap; }
+.btn.t-split-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
+@media (pointer: coarse) { .btn.t-split-icon { width: 40px; } }
+/* a heading with more buttons than fit beside it on a phone: the buttons go under it */
+@media (max-width: 420px) { .t-head.t-head-wrap { flex-wrap: wrap; row-gap: 12px; } .t-head.t-head-wrap > h1 { flex-basis: 100%; } }
 .t-dialog-x svg { flex: none; width: 18px; height: 18px; }
 .t-dialog-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--soft); }
 .t-dialog-foot .t-ai-count { margin-right: auto; }
