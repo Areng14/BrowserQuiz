@@ -964,7 +964,7 @@
     const prev = h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => go(S.reviewOpen ? S.quiz.questions.length - 1 : S.idx - 1) });
     const next = h('button', { class: 'btn', type: 'button' });
     next.addEventListener('click', () => {
-      if (S.reviewOpen) return timedExam() ? openGame() : openSubmit();
+      if (S.reviewOpen) return openSubmit();
       if (S.dirOpen) return closeDirections();
       if (S.idx === S.quiz.questions.length - 1) return openReview();
       go(S.idx + 1);
@@ -1052,10 +1052,10 @@
     const total = S.quiz.questions.length;
     if (S.reviewOpen) {
       S.el.prev.disabled = false;
-      // a timed exam turns in by itself when time is up: no turning in early, a game instead while they wait
-      S.el.next.textContent = timedExam() ? 'Play snake' : 'Submit';
+      // a timed exam turns in by itself when time is up: no turning in early
+      S.el.next.textContent = timedExam() ? 'Turns in when time is up' : 'Submit';
       S.el.next.className = timedExam() ? 'btn' : 'btn primary';
-      S.el.next.disabled = false;
+      S.el.next.disabled = timedExam();
       S.el.jump.hidden = true;
       document.title = `Check your work – ${S.quiz.title}`;
       if (S.el.hlBar) S.el.hlBar.hide();
@@ -2160,8 +2160,21 @@
     const marked = qs.filter(isMarked).length;
     return h('div', { class: 'qview review' },
       h('h1', { id: 'q-heading', tabindex: '-1', text: 'Check your work' }),
-      h('p', { class: 'muted', text: `${done} of ${plural(qs.length, 'question')} answered${marked ? `, ${marked} for review` : ''}.${timedExam() ? ' Turns in when time is up.' : ''}` }),
-      ...questionGrid(go));
+      h('p', { class: 'muted', text: `${done} of ${plural(qs.length, 'question')} answered${marked ? `, ${marked} for review` : ''}.` }),
+      ...questionGrid(go),
+      timedExam() && !cfg.watch && BQ.snake ? gameCard() : null);
+  }
+  // Done before time is up: a small card for snake under the questions. Play opens it in a dialog.
+  function gameCard() {
+    let best = 0;
+    try { best = Number(localStorage.getItem('bq-snake-best')) || 0; } catch (e) { /* none yet */ }
+    const glyph = svgEl('svg', { class: 'game-glyph', viewBox: '0 0 44 16', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'aria-hidden': 'true' });
+    [[1, false], [16, false], [31, true]].forEach(([x, head]) => glyph.append(svgEl('rect', { x, y: 2, width: 12, height: 12, rx: 3, fill: head ? 'currentColor' : 'none' })));
+    glyph.append(svgEl('path', { d: 'M13 8h3M28 8h3', 'stroke-linecap': 'round' }));
+    return h('div', { class: 'game-card' },
+      glyph,
+      h('div', { class: 'game-card-text' }, h('strong', { text: 'Snake' }), best ? h('span', { text: `Best: ${best}` }) : null),
+      h('button', { class: 'btn', type: 'button', text: 'Play', onclick: openGame }));
   }
   // Done before time is up on a timed exam: snake (snake.js) in a dialog, while they wait. Still in the quiz.
   function openGame() {

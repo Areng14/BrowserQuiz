@@ -569,7 +569,12 @@ h1[tabindex="-1"]:focus { outline: none; }
 .scratch-grip:hover::after, .scratch-grip.dragging::after, .scratch-grip:focus-visible::after { background: var(--accent); }
 .scratch-grip:focus-visible { outline: none; }
 
-/* Snake, from the review page of a timed exam while it waits for time to run out */
+/* Snake, from the review page of a timed exam while it waits for time to run out: a small card, and the
+   game in a dialog */
+.game-card { display: flex; align-items: center; gap: 14px; width: min(100%, 360px); margin-top: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+.game-glyph { flex: none; width: 44px; height: 16px; color: var(--accent); }
+.game-card-text { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.game-card-text span { font-size: 13px; color: var(--ink-2); }
 .game-modal { width: min(100%, 480px); gap: 12px; }
 .game-modal .snake { margin: 0 auto; }
 
