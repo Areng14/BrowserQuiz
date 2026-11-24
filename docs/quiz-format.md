@@ -33,7 +33,7 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `shuffleQuestions` | `true` | Shuffle order per student, within each part (see below) |
 | `shuffleChoices` | `true` | Shuffle multiple choice options per student |
 | `lockParts` | `false` | Once a student moves on to a later part, the parts before it are final: they can't go back to them. The page asks first. Not in corrections |
-| `turnInEarly` | `false` | A timed exam turns in when time is up. `true` lets students turn it in before that |
+| `turnInEarly` | `false` | A timed exam turns in when time is up. `true` lets students turn it in before that. Students with extra time can always turn in once the normal time is up |
 | `integrity.graceStrikes` | | No longer used: the first time a student leaves the window invalidates the attempt. Older quizzes may still have it. |
 | `directions` | built in | `"quiz"`: your own directions for the whole quiz (Markdown), shown before it starts and with each part's. The type keys replace that part's directions: `{ "quiz": "No calculators.", "single": "...", "code": "..." }` |
 | `shared` | none | Shared material that several questions use (below) |

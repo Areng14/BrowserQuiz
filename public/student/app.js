@@ -741,6 +741,7 @@
     S.tag = r.tag || ''; // this attempt: a reset or a second try starts with no marks or scratch work
     S.quiz = r.quiz;
     S.deadline = r.deadline || 0;
+    S.turnInAt = r.turnInAt || 0;
     S.skew = r.now ? r.now - Date.now() : 0;
     S.locked = r.locked || 0;
     S.answers = restoreAnswers(r.saved || {});
@@ -1047,18 +1048,23 @@
     if (S.monitor) S.monitor.selectionProvider = null;
   }
 
+  // A timed exam turns in by itself when time is up: no turning in early (extra time can, after the normal time)
+  function reviewButtons() {
+    const locked = timedExam();
+    S.el.next.textContent = locked ? 'Turns in when time is up' : 'Submit';
+    S.el.next.className = locked ? 'btn' : 'btn primary';
+    S.el.next.disabled = locked;
+    S.el.gameBtn.hidden = !(locked && !cfg.watch && BQ.snake);
+  }
+
   function renderQuestion() {
     disposeEditor();
     const q = S.quiz.questions[S.idx];
     const total = S.quiz.questions.length;
     if (S.reviewOpen) {
       S.el.prev.disabled = false;
-      // a timed exam turns in by itself when time is up: no turning in early
-      S.el.next.textContent = timedExam() ? 'Turns in when time is up' : 'Submit';
-      S.el.next.className = timedExam() ? 'btn' : 'btn primary';
-      S.el.next.disabled = timedExam();
+      reviewButtons();
       S.el.jump.hidden = true;
-      S.el.gameBtn.hidden = !(timedExam() && !cfg.watch && BQ.snake);
       document.title = `Check your work – ${S.quiz.title}`;
       if (S.el.hlBar) S.el.hlBar.hide();
       S.el.main.classList.remove('code-fit', 'split-fit');
@@ -2345,6 +2351,12 @@
         }
       }
       if (left <= 0 && !cfg.watch) submitNow('time');
+      const locked = timedExam(); // the class's time is up and they have extra: they can turn in now
+      if (S.lockedIn && !locked && left > 0) {
+        if (S.reviewOpen) reviewButtons();
+        if (!cfg.watch) toast('You can turn in now.', 6000);
+      }
+      S.lockedIn = locked;
     };
     tick();
     S.timer = setInterval(tick, 250);
@@ -2504,7 +2516,8 @@
     S.el.next.click();
   }
 
-  const timedExam = () => !!(S.run && !S.run.practice && S.deadline && !(S.quiz && S.quiz.turnInEarly));
+  const timedExam = () => !!(S.run && !S.run.practice && S.deadline && !(S.quiz && S.quiz.turnInEarly)
+    && !(S.turnInAt && S.turnInAt < S.deadline && Date.now() + S.skew >= S.turnInAt));
   function openSubmit() {
     if (timedExam()) return;
     const missing = S.quiz.questions.map((q, i) => (isAnswered(q) ? null : i + 1)).filter(Boolean);
@@ -2766,6 +2779,7 @@
     S.quiz = r.quiz;
     S.run = { title: r.quiz.title, timeLimitMin: 0, questionCount: r.quiz.questions.length, outline: r.quiz.questions.map((q, i) => ({ type: q.type, points: q.points, name: q.name, n: i + 1 })), quizDirections: (r.quiz.directions && r.quiz.directions.quiz) || '', sections: r.quiz.sections || [], hasCode: r.quiz.questions.some((q) => q.type === 'code') };
     S.deadline = r.deadline || 0;
+    S.turnInAt = r.turnInAt || 0;
     S.skew = r.now ? r.now - Date.now() - (r.delay || 0) : 0;
     S.me = { name: r.name || '' };
     S.run.practice = !!r.practice;

@@ -1257,7 +1257,7 @@ module.exports = function teacherRoutes(r) {
     const quiz = store.getQuiz(run.quiz_id);
     const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
     // their clock, as of the watch page's playback (watch.js DELAY)
-    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, now: Date.now(), delay: 2500, practice: run.mode === 'practice' });
+    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, turnInAt: a.deadline ? Math.min(a.deadline, (a.layout && a.layout.turnInAt) || a.deadline) : null, now: Date.now(), delay: 2500, practice: run.mode === 'practice' });
   });
   r.get('/api/t/attempts/:id/watch', (req, res, p) => {
     const me = requireTeacher(req);

@@ -325,6 +325,8 @@ function runInfoBase(run, quiz) {
 // stays open until the sweeper turns it in, so a late student still gets a normal "submitted" screen.
 const ANSWER_GRACE_MS = 10000;
 const pastDeadline = (a, now) => !!a.deadline && now > a.deadline + ANSWER_GRACE_MS;
+// when a timed exam can be turned in: the class's normal time, or their own deadline if that's sooner
+const turnInAt = (a) => (a.deadline ? Math.min(a.deadline, (a.layout && a.layout.turnInAt) || a.deadline) : 0);
 
 function submit(a, quiz, answers, why) {
   if (a.status !== 'active') return;
@@ -531,6 +533,8 @@ module.exports = function studentRoutes(r) {
       // (a poll later). Anyone who agreed after that starts their own clock now.
       const from = a.admittedAt && a.readyAt && a.readyAt <= a.admittedAt && now - a.admittedAt < 15000 ? a.admittedAt : now;
       a.deadline = quiz.timeLimitMin && !run.corrects ? from + Math.round(quiz.timeLimitMin * x * 60000) : null;
+      // the class's normal time: extra time (theirs or the teacher's) can be turned in any time after it
+      if (a.deadline) a.layout.turnInAt = from + Math.round(quiz.timeLimitMin * 60000);
       a.lastBeat = now;
       store.logEvent(a, 'start', 'info', x !== 1 && a.deadline ? `${x}× time` : null);
       noteNewNetwork(a, run, quiz, a.pinIp);
@@ -549,7 +553,7 @@ module.exports = function studentRoutes(r) {
     const pq = publicQuiz(quiz, a.layout);
     if (pq.timeLimitMin && !run.corrects) pq.timeLimitMin = myLimit(quiz, a.studentId); // their own, with extra time
     // tag: tells this attempt from an earlier one (a reset, practice again), for what the browser keeps
-    json(res, 200, { quiz: pq, deadline: a.deadline, now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0, tag: sha256(a.id).slice(0, 12) });
+    json(res, 200, { quiz: pq, deadline: a.deadline, turnInAt: turnInAt(a) || null, now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0, tag: sha256(a.id).slice(0, 12) });
   });
 
   r.post('/api/event', async (req, res) => {
@@ -709,7 +713,7 @@ module.exports = function studentRoutes(r) {
     const body = await readJson(req, 1024 * 1024);
     const { a, run, quiz } = current(req, { mustBeOpen: false });
     // A timed exam turns in when time is up, not before (the teacher can still end it early)
-    if (a.status === 'active' && run.mode !== 'practice' && !quiz.turnInEarly && a.deadline && Date.now() < a.deadline - 15000) throw new HttpError(403, 'not_yet');
+    if (a.status === 'active' && run.mode !== 'practice' && !quiz.turnInEarly && a.deadline && Date.now() < turnInAt(a) - 15000) throw new HttpError(403, 'not_yet');
     if (a.status === 'active') {
       const now = Date.now();
       storeEdits(a, body.edits, now); // the last few seconds of typing, for the replay
