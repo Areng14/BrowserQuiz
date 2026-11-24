@@ -1120,6 +1120,7 @@
       S.el.next.className = 'btn primary';
       S.el.next.disabled = true;
       S.el.gameBtn.hidden = !(!cfg.watch && BQ.snake);
+      snakeLock();
       return;
     }
     const locked = timedExam();
@@ -1127,6 +1128,18 @@
     S.el.next.className = locked ? 'btn' : 'btn primary';
     S.el.next.disabled = locked;
     S.el.gameBtn.hidden = !(locked && !cfg.watch && BQ.snake);
+    snakeLock();
+  }
+  // Snake waits until every question they can still change is answered (the review page above says how
+  // many are): a lock where the snake goes. Parts that are locked, or not open yet, don't count.
+  function snakeLock() {
+    const left = S.quiz.questions.filter((q, i) => !lockedAt(i) && (!timedNav() || partOf(i).n === partNow()) && !isAnswered(q)).length;
+    const btn = S.el.gameBtn;
+    if (btn.dataset.locked === String(left > 0)) return;
+    btn.dataset.locked = String(left > 0);
+    btn.disabled = left > 0;
+    btn.title = left > 0 ? 'Answer every question to play' : '';
+    btn.replaceChildren(left > 0 ? lockIcon(16) : snakeGlyph(), 'Play snake');
   }
 
   function renderQuestion() {
@@ -2362,7 +2375,7 @@
   }
   // Done before time is up on a timed exam: snake (snake.js) in a dialog, while they wait. Still in the quiz.
   function openGame() {
-    if (S.done || !S.el || cfg.watch || !BQ.snake || S.el.wrap.querySelector('.modal-backdrop')) return;
+    if (S.done || !S.el || cfg.watch || !BQ.snake || (S.el.gameBtn && S.el.gameBtn.disabled) || S.el.wrap.querySelector('.modal-backdrop')) return;
     let backdrop;
     let release = null;
     const close = () => { backdrop.remove(); release(); };
