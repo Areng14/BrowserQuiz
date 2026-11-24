@@ -540,7 +540,8 @@ module.exports = function studentRoutes(r) {
     // Saved answers go back in the student's own positional order.
     const pq = publicQuiz(quiz, a.layout);
     if (pq.timeLimitMin && !run.corrects) pq.timeLimitMin = myLimit(quiz, a.studentId); // their own, with extra time
-    json(res, 200, { quiz: pq, deadline: a.deadline, now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0 });
+    // tag: tells this attempt from an earlier one (a reset, practice again), for what the browser keeps
+    json(res, 200, { quiz: pq, deadline: a.deadline, now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0, tag: sha256(a.id).slice(0, 12) });
   });
 
   r.post('/api/event', async (req, res) => {

@@ -175,9 +175,9 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 .who-label { display: block; font-size: 13px; }
 .who-name { display: block; font-size: 17px; color: var(--ink); }
 /* scratchpad: a column on the right, between the top bar and the question bar */
-.quiz.with-scratch { grid-template-columns: minmax(0, 1fr) min(420px, 42vw); }
+.quiz.with-scratch { grid-template-columns: minmax(0, 1fr) min(var(--scratch-w, min(420px, 42vw)), 70vw); }
 .quiz.with-scratch > .qbar, .quiz.with-scratch > .conn-banner, .quiz.with-scratch > .qnav { grid-column: 1 / -1; }
-.quiz > .scratch { grid-row: 3; grid-column: 2; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--soft); border-left: 1px solid var(--line); }
+.quiz > .scratch { position: relative; grid-row: 3; grid-column: 2; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--soft); border-left: 1px solid var(--line); }
 .quiz > .scratch[hidden] { display: none; }
 .qbar .btn[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
 .kbd-hint { font-size: 12px; color: var(--ink-2); white-space: nowrap; }
@@ -457,6 +457,7 @@ mark.hl { color: inherit; background: var(--hl); border-radius: 2px; box-shadow:
 /* No room for a side panel: the scratchpad covers the screen while it's open. */
 @media (max-width: 600px), (max-height: 480px) {
   .quiz.with-scratch { grid-template-columns: minmax(0, 1fr); }
+  .scratch-grip { display: none; }
   .quiz > .scratch { position: fixed; inset: 0; z-index: 15; border-left: 0; padding: max(10px, env(safe-area-inset-top, 0px)) var(--gut-r) calc(10px + env(safe-area-inset-bottom, 0px)) var(--gut-l); }
   .scratch-tool { width: 44px; height: 40px; }
 }
@@ -500,7 +501,7 @@ h1[tabindex="-1"]:focus { outline: none; }
   .qbar, .qnav, .qview:not(.wide), .code-left, .results, .editor-bar, .scratch-head, .screen > .panel, .shared-split > .shared, .shared-split > .shared-stack { zoom: 1.3; }
   :root { --quiz-chrome: 245px; }
   /* a wider scratchpad */
-  .quiz.with-scratch { grid-template-columns: minmax(0, 1fr) clamp(420px, 24vw, 760px); }
+  .quiz.with-scratch { grid-template-columns: minmax(0, 1fr) min(var(--scratch-w, clamp(420px, 24vw, 760px)), 70vw); }
 }
 
 /* A teacher watching: the student's cursor and selection in the code editor */
@@ -561,3 +562,9 @@ h1[tabindex="-1"]:focus { outline: none; }
   .mark-btn[aria-pressed="true"]:hover { background: var(--q-review); }
 }
 .notice-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* The scratchpad's left edge: drag it to resize */
+.scratch-grip { position: absolute; top: 0; bottom: 0; left: -5px; width: 10px; z-index: 3; cursor: col-resize; touch-action: none; }
+.scratch-grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; transition: background 0.15s; }
+.scratch-grip:hover::after, .scratch-grip.dragging::after, .scratch-grip:focus-visible::after { background: var(--accent); }
+.scratch-grip:focus-visible { outline: none; }

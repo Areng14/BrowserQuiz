@@ -739,6 +739,7 @@
   // The quiz on screen, from /api/start's answer: after Start (practice), Continue, or the teacher's start.
   function enterQuiz(r, fsOk) {
     clearInterval(S.poll);
+    S.tag = r.tag || ''; // this attempt: a reset or a second try starts with no marks or scratch work
     S.quiz = r.quiz;
     S.deadline = r.deadline || 0;
     S.skew = r.now ? r.now - Date.now() : 0;
@@ -989,7 +990,7 @@
       scratch,
       h('footer', { class: 'qnav' }, prev, mid, next),
       live, hlBar.bar);
-    S.el = { wrap, main, timer, jump, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null };
+    S.el = { wrap, main, timer, jump, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null, scratchGrip: scratchGrip(wrap, scratch) };
     wrap.addEventListener('scroll', hlBar.hide, { passive: true }); // a short window scrolls the whole quiz
     if (!keysBound) { document.addEventListener('keydown', quizKeys); keysBound = true; }
     S.saveState = 'saved';
@@ -1095,7 +1096,7 @@
   // The student's own working space: one board a question, where they draw and drop typed notes
   // anywhere. It's kept in this browser (per run and student), isn't graded, and is cleared when the
   // quiz is turned in. A teacher watching live sees the page on screen (the server keeps it in memory).
-  const scratchKey = () => 'bq-scratch:' + [S.run && (S.run.id || S.run.code || S.run.title), S.me && S.me.name].join(':');
+  const scratchKey = () => 'bq-scratch:' + [S.run && (S.run.id || S.run.code || S.run.title), S.me && S.me.name, S.tag || ''].join(':');
   function loadScratch() {
     S.scratch = { tool: 'pen', pages: {} };
     try {
@@ -1113,6 +1114,43 @@
   function clearScratch() {
     clearTimeout(scratchTimer);
     try { localStorage.removeItem(scratchKey()); } catch (e) { /* nothing to clear */ }
+  }
+  // The scratchpad's left edge drags (or arrow keys) to make it wider or narrower; this browser remembers it.
+  const SCRATCH_W = 'bq-scratch-w';
+  function scratchGrip(wrap, scratch) {
+    const grip = h('div', { class: 'scratch-grip', role: 'separator', tabindex: '0', 'aria-orientation': 'vertical', 'aria-label': 'Scratchpad width', 'aria-controls': 'scratch' });
+    const setW = (w, keep) => {
+      const max = Math.max(280, wrap.clientWidth - 360); // the question keeps at least 360px
+      const v = Math.round(Math.min(max, Math.max(260, w)));
+      wrap.style.setProperty('--scratch-w', v + 'px');
+      grip.setAttribute('aria-valuenow', String(v));
+      if (S.editor) S.editor.layout();
+      if (keep) { try { localStorage.setItem(SCRATCH_W, String(v)); } catch (e) { /* this page only */ } }
+    };
+    try { const w = Number(localStorage.getItem(SCRATCH_W)); if (w > 0) wrap.style.setProperty('--scratch-w', w + 'px'); } catch (e) { /* the default */ }
+    grip.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      grip.setPointerCapture(e.pointerId);
+      grip.classList.add('dragging');
+      const move = (ev) => setW(wrap.getBoundingClientRect().right - ev.clientX, false);
+      const up = (ev) => {
+        grip.classList.remove('dragging');
+        grip.removeEventListener('pointermove', move);
+        grip.removeEventListener('pointerup', up);
+        grip.removeEventListener('pointercancel', up);
+        setW(wrap.getBoundingClientRect().right - ev.clientX, true);
+      };
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', up);
+      grip.addEventListener('pointercancel', up);
+    });
+    grip.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      setW(scratch.getBoundingClientRect().width + (e.key === 'ArrowLeft' ? 32 : -32), true);
+    });
+    return grip;
   }
   function toggleScratch(force) {
     if (!S.el || !S.el.scratch) return;
@@ -1140,7 +1178,7 @@
   function renderScratch() {
     const el = S.el && S.el.scratch;
     if (!el || el.hidden || !S.quiz || !S.scratch) return;
-    el.replaceChildren(...scratchBoard(S.quiz.questions[S.idx]));
+    el.replaceChildren(...[S.el.scratchGrip].filter(Boolean), ...scratchBoard(S.quiz.questions[S.idx]));
   }
   // Items on a page, oldest first: strokes { p: [x, y, ...], e: true for the eraser } and notes
   // { x, y, s }. Positions are scaled to the board's width, so a page redraws after a resize. Strokes
@@ -1317,8 +1355,9 @@
     canvas.addEventListener('pointerup', end);
     canvas.addEventListener('pointercancel', end);
     requestAnimationFrame(() => { size(); paint(); });
-    const onResize = () => { if (!canvas.isConnected) { window.removeEventListener('resize', onResize); return; } size(); paint(); };
-    window.addEventListener('resize', onResize);
+    // redraw at the board's size: the window changed, or the student dragged the scratchpad wider
+    const ro = new ResizeObserver(() => { if (!canvas.isConnected) { ro.disconnect(); return; } size(); paint(); });
+    ro.observe(board);
 
     const close = btn('close', 'Close scratchpad', () => toggleScratch(false));
     close.classList.add('scratch-close');
@@ -1359,7 +1398,7 @@
   // ---------- mark for review, crossed-out choices ----------
   // Study aids only: they never change an answer, so they stay in this browser (per run and student)
   // and are cleared once the quiz is turned in.
-  const marksKey = () => 'bq-marks:' + [S.run && (S.run.id || S.run.code || S.run.title), S.me && S.me.name].join(':');
+  const marksKey = () => 'bq-marks:' + [S.run && (S.run.id || S.run.code || S.run.title), S.me && S.me.name, S.tag || ''].join(':');
   function loadMarks() {
     S.marks = { review: [], out: {} };
     try {
