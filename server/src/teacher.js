@@ -179,6 +179,23 @@ function activity(a, now) {
   if (now - (a.workedAt || 0) < 30000) return 'working';
   return now - (a.activeAt || a.startedAt || 0) < 120000 ? 'reading' : 'idle';
 }
+// More time for one student: their clock, and with timed parts the part they're on and every one after it.
+function addTime(a, mins) {
+  if (a.status !== 'active' || !a.deadline) return false;
+  a.deadline = Math.max(a.deadline, Date.now()) + mins * 60000;
+  const ends = a.layout && Array.isArray(a.layout.partEnds) ? a.layout.partEnds : null;
+  if (ends) {
+    // timed parts: the part they're on gets the time, and every part after it moves along
+    const now = Date.now();
+    let at = ends.findIndex((e) => e > now);
+    if (at < 0) at = ends.length - 1; // all over (not turned in yet): the last one
+    a.layout.partEnds = ends.map((e, k) => (k < at ? e : (k === at ? Math.max(e, now) : e) + mins * 60000));
+    a.deadline = a.layout.partEnds[a.layout.partEnds.length - 1];
+  }
+  store.logEvent(a, 'extend', 'info', `+${mins} min`);
+  store.save(a);
+  return true;
+}
 // The end of the clock that's running: the current part's, with timed parts, or else the quiz's.
 function partEnd(a, now) {
   const ends = a.layout && Array.isArray(a.layout.partEnds) ? a.layout.partEnds : null;
@@ -1216,6 +1233,12 @@ module.exports = function teacherRoutes(r) {
       q('UPDATE runs SET ip_lock = ? WHERE id = ?').run([...nets].filter(Boolean).slice(0, 50).join(','), run.id);
     } else if (p.action === 'unlock') {
       q('UPDATE runs SET ip_lock = NULL WHERE id = ?').run(run.id);
+    } else if (p.action === 'extend') {
+      // a fire drill, the wifi down, a late start: more time for everyone still working
+      const body = await readJson(req, 1024);
+      const mins = Math.round(Number(body.minutes));
+      if (!(mins >= 1 && mins <= 120)) throw new HttpError(400, 'bad_request');
+      for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'active'").all(run.id)) addTime(store.getAttempt(row.id), mins);
     } else if (p.action === 'regrade-failed') {
       for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'submitted'").all(run.id)) {
         const a = store.getAttempt(row.id);
@@ -1442,20 +1465,7 @@ module.exports = function teacherRoutes(r) {
     } else if (p.action === 'extend') {
       const mins = Math.round(Number(body.minutes));
       if (!(mins >= 1 && mins <= 120)) throw new HttpError(400, 'bad_request');
-      if (a.status === 'active' && a.deadline) {
-        a.deadline = Math.max(a.deadline, Date.now()) + mins * 60000;
-        const ends = a.layout && Array.isArray(a.layout.partEnds) ? a.layout.partEnds : null;
-        if (ends) {
-          // timed parts: the part they're on gets the time, and every part after it moves along
-          const now = Date.now();
-          let at = ends.findIndex((e) => e > now);
-          if (at < 0) at = ends.length - 1; // all over (not turned in yet): the last one
-          a.layout.partEnds = ends.map((e, k) => (k < at ? e : (k === at ? Math.max(e, now) : e) + mins * 60000));
-          a.deadline = a.layout.partEnds[a.layout.partEnds.length - 1];
-        }
-        store.logEvent(a, 'extend', 'info', `+${mins} min`);
-        store.save(a);
-      }
+      addTime(a, mins);
     } else if (p.action === 'reset') {
       a.archived = true;
       store.save(a);

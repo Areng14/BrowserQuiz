@@ -1312,6 +1312,15 @@
       return refresh();
     }
     function alertBox(msg) { detail.prepend(h('p', { class: 't-error', text: msg })); }
+    // How much more time (for one student, or everyone still working): 5 minutes unless they say otherwise.
+    async function askMinutes(title) {
+      const v = await ask.ask({ title, label: 'Minutes', value: '5', ok: 'Add time' });
+      if (v == null) return null;
+      const mins = Math.round(Number(v));
+      if (mins >= 1 && mins <= 120) return mins;
+      await ask.notice({ title: 'Add 1 to 120 minutes' });
+      return null;
+    }
     // Ends one student's quiz: their answers are turned in and they see "Your teacher ended your quiz".
     async function unInvalidate(id, name) {
       if (await ask.confirm({ title: `Un-invalidate ${name}?`, ok: 'Un-invalidate' })) act(`/api/t/attempts/${id}/restore`);
@@ -1427,6 +1436,7 @@
         const sec = !(lastRun && lastRun.practice);
         // Their screen, live, in a new tab (watch.html).
         if (sec && a && a.status === 'active') (bad ? more.push(watchLink(a.id, s.name)) : actions.append(watchLink(a.id, s.name)));
+        if (a && a.status === 'active' && a.deadline) more.push({ text: 'Add time', onclick: async () => { const mins = await askMinutes(`Add time for ${s.name}`); if (mins) act(`/api/t/attempts/${a.id}/extend`, { minutes: mins }); } });
         if (a && a.status !== 'submitted') more.push({ text: 'Message', onclick: () => messageStudent(a.id, s.name) });
         if (sec && a && (a.status === 'active' || a.status === 'admitted') && !a.letIn) more.push({ text: 'Let back in', onclick: () => act(`/api/t/attempts/${a.id}/let-in`) });
         if (a && (a.status === 'active' || a.status === 'admitted') && a.letIn) actions.append(h('span', { class: 't-muted t-small', text: 'Can sign in again' }));
@@ -1531,7 +1541,7 @@
           d.status === 'submitted' && d.totals && d.totals.review ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Grade with AI', title: 'Send the answers waiting for you to Claude. Names and IDs stay here.',
             onclick: () => aiDialog(runId, id, aiDone) }, dk('ai'))) : null,
           moreMenu(`More for ${d.name}`, 'detail:more', [
-            d.status === 'active' && d.deadline ? { text: 'Add 5 minutes', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } } : null,
+            d.status === 'active' && d.deadline ? { text: 'Add time', onclick: async () => { const mins = await askMinutes(`Add time for ${d.name}`); if (mins) { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: mins }); } } } : null,
             d.status !== 'submitted' ? { text: 'Message', onclick: () => messageStudent(id, d.name) } : null,
             d.integrity !== 'invalidated' && !(lastRun && lastRun.practice) ? { text: 'Invalidate', onclick: () => invalidate(id, d.name) } : null,
             d.status === 'submitted' && !d.sealed ? { text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) } : null,
@@ -1675,7 +1685,13 @@
       if (text == null || !text.trim()) return;
       try { await post(`/api/t/runs/${runId}/message`, { text }); } catch (e) { alertBox(e.message); }
     });
-    const runMenu = moreMenu('More for this quiz', 'run:more', () => [lockBtn, notifyBtn,
+    const runMenu = moreMenu('More for this quiz', 'run:more', () => [
+      // a fire drill, the wifi down, a late start: everyone still working gets the same
+      lastRun && lastRun.status === 'open' && lastRun.timeLimitMin ? { text: 'Add time for everyone', onclick: async () => {
+        const mins = await askMinutes('Add time for everyone');
+        if (mins) act(`/api/t/runs/${lastRun.id}/extend`, { minutes: mins });
+      } } : null,
+      lockBtn, notifyBtn,
       ...(lastRun && lastRun.sebFile && lastRun.status === 'open' && sebParts ? sebParts : []),
       // results (export, class report) once an exam is closed: while it's open it's proctoring only
       ...(lastRun && !lastRun.practice && lastRun.status === 'open' ? [] : [exportLink, classReport])], () => refresh());
