@@ -519,7 +519,7 @@
           h('span', { class: 't-meter', 'aria-hidden': 'true' }, [1, 2, 3].map((i) => h('span', { class: i <= m.level ? 'on' : null }))),
           m.security));
     });
-    const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', class: 't-switch', role: 'switch', checked: true });
+    const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', class: 't-switch', role: 'switch', checked: false });
     // SEB only: mute the computer's sound (other apps and tabs included) while the quiz is open
     const sebMute = h('input', { type: 'checkbox', id: 'seb-mute', class: 't-switch', role: 'switch', checked: true });
     const muteRow = h('label', { class: 't-check t-switch-row', for: 'seb-mute' }, sebMute, h('span', { text: "Mute the computer's sound" }));

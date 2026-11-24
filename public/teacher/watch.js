@@ -69,11 +69,14 @@
   function fit() {
     if (!size) return;
     const pad = 16;
-    const k = Math.min((stage.clientWidth - pad * 2) / size.w, (stage.clientHeight - pad * 2) / size.h, 1.5); // up to 1.5x on big screens
+    // As big as the window allows, centered: zooming the page out (a bigger window, in page pixels) still
+    // fills it instead of leaving a small screen stuck at the top.
+    const k = Math.max(0.05, Math.min((stage.clientWidth - pad * 2) / size.w, (stage.clientHeight - pad * 2) / size.h));
     screen.style.width = size.w + 'px';
     screen.style.height = size.h + 'px';
     const left = Math.max(pad, (stage.clientWidth - size.w * k) / 2);
-    screen.style.transform = `translate(${left}px, ${pad}px) scale(${k})`;
+    const top = Math.max(pad, (stage.clientHeight - size.h * k) / 2);
+    screen.style.transform = `translate(${left}px, ${top}px) scale(${k})`;
   }
   window.addEventListener('resize', fit);
 

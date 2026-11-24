@@ -252,6 +252,7 @@ function quizSource(quiz) {
   const out = { format: 1, title: quiz.title, timeLimitMin: quiz.timeLimitMin, language: quiz.language,
     shuffleQuestions: quiz.shuffleQuestions, shuffleChoices: quiz.shuffleChoices, integrity: quiz.integrity };
   if (quiz.lockParts) out.lockParts = true;
+  if (quiz.turnInEarly) out.turnInEarly = true;
   if (Object.keys(quiz.directions || {}).length) out.directions = quiz.directions;
   if (quiz.shared && quiz.shared.length) out.shared = quiz.shared;
   if (quiz.sections && quiz.sections.length) out.sections = quiz.sections;

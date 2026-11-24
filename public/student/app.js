@@ -2334,7 +2334,7 @@
     S.el.next.click();
   }
 
-  const timedExam = () => !!(S.run && !S.run.practice && S.deadline);
+  const timedExam = () => !!(S.run && !S.run.practice && S.deadline && !(S.quiz && S.quiz.turnInEarly));
   function openSubmit() {
     if (timedExam()) return;
     const missing = S.quiz.questions.map((q, i) => (isAnswered(q) ? null : i + 1)).filter(Boolean);

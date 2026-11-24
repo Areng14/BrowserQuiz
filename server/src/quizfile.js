@@ -173,6 +173,8 @@ function normalizeQuiz(raw, assetNames) {
     shuffleChoices: raw.shuffleChoices !== false,
     // Once a student moves on from a part, its answers are final (student.js keepLocked).
     lockParts: raw.lockParts === true,
+    // A timed exam turns in when time is up; with this, students can also turn it in before that.
+    turnInEarly: raw.turnInEarly === true,
     // How inline code is highlighted; "none" leaves it plain (say, networking or math quizzes).
     language: LANGS.includes(raw.language) || raw.language === 'none' ? raw.language : 'java',
     // One free slip by default: the student gets the "You left the quiz" warning, and the second time counts.

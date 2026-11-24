@@ -206,6 +206,7 @@ function publicQuiz(quiz, layout) {
     directions: quiz.directions,
     sections: sectionStarts(quiz, layout),
     lockParts: locks(quiz, layout) || undefined,
+    turnInEarly: quiz.turnInEarly || undefined,
     // corrections: how each went on the exam (or that it's a new one from its pool), and the "What went wrong?" box
     corrections: layout.fix ? { why: !!layout.why, fix: Object.fromEntries(Object.entries(layout.fix).map(([id, f]) => [id, { points: f.old, max: f.max, fresh: !!f.fresh }])) } : undefined,
     shared: Object.fromEntries((quiz.shared || []).filter((m) => used.has(m.id)).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
@@ -698,7 +699,7 @@ module.exports = function studentRoutes(r) {
     const body = await readJson(req, 1024 * 1024);
     const { a, run, quiz } = current(req, { mustBeOpen: false });
     // A timed exam turns in when time is up, not before (the teacher can still end it early)
-    if (a.status === 'active' && run.mode !== 'practice' && a.deadline && Date.now() < a.deadline - 15000) throw new HttpError(403, 'not_yet');
+    if (a.status === 'active' && run.mode !== 'practice' && !quiz.turnInEarly && a.deadline && Date.now() < a.deadline - 15000) throw new HttpError(403, 'not_yet');
     if (a.status === 'active') {
       const now = Date.now();
       storeEdits(a, body.edits, now); // the last few seconds of typing, for the replay
