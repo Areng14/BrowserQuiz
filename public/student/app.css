@@ -568,3 +568,14 @@ h1[tabindex="-1"]:focus { outline: none; }
 .scratch-grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: transparent; transition: background 0.15s; }
 .scratch-grip:hover::after, .scratch-grip.dragging::after, .scratch-grip:focus-visible::after { background: var(--accent); }
 .scratch-grip:focus-visible { outline: none; }
+
+/* Snake on the review page, while a timed exam waits for time to run out */
+.review-game { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--line); }
+.review-game h2 { margin: 0 0 12px; font-size: 16px; }
+
+/* Question statuses carry an icon too (not just a color): a check once answered, a bookmark when marked
+   for review, in the question grid and its legend */
+.nav-grid .sheet-dot.answered::after, .nav-legend .sheet-dot.answered::after { content: '✓'; position: absolute; right: 4px; bottom: 2px; font-size: 11px; font-weight: 700; line-height: 1; }
+.nav-grid .sheet-dot.marked::before, .nav-legend .sheet-dot.marked::before { content: ''; position: absolute; top: -1px; right: 6px; width: 8px; height: 11px; background: var(--q-review-ink); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 70%, 0 100%); }
+.nav-legend .sheet-dot.mini.answered::after { right: 2px; bottom: 1px; font-size: 9px; }
+.nav-legend .sheet-dot.mini.marked::before { top: -1px; right: 3px; width: 6px; height: 8px; }

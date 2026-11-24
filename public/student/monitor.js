@@ -170,8 +170,7 @@
       if (this.armed) return;
       this.armed = true;
       const o = this.opts;
-      if (o.integrity === false) { // practice: heartbeats to autosave answers, and the mouse for Watch
-        this.trackMouse();
+      if (o.integrity === false) { // practice: heartbeats to autosave answers. Not watched, so no mouse.
         this.beatMs = BEAT_MS;
         this.beatTimer = setInterval(() => this.beat(), BEAT_MS);
         this.beat();

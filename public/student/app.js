@@ -824,6 +824,7 @@
     }
     if (res && res.done && !S.submitting) return endQuiz('mine'); // the teacher ended this student's quiz
     if (res && res.notice && res.notice.id !== S.noticeId) { S.noticeId = res.notice.id; showNotice(res.notice.text); }
+    if (res && res.note && res.note.id !== S.noteId) { S.noteId = res.note.id; showNotice(res.note.text); }
     setOnline(true);
     if (info && info.answers && S.saveState === 'saving') setSave('saved');
   }
@@ -2160,7 +2161,9 @@
     return h('div', { class: 'qview review' },
       h('h1', { id: 'q-heading', tabindex: '-1', text: 'Check your work' }),
       h('p', { class: 'muted', text: `${done} of ${plural(qs.length, 'question')} answered${marked ? `, ${marked} for review` : ''}.` }),
-      ...questionGrid(go));
+      ...questionGrid(go),
+      // done before time is up, and it can't be turned in yet: something to do while they wait (snake.js)
+      timedExam() && !cfg.watch && BQ.snake ? h('section', { class: 'review-game', 'aria-label': 'Snake' }, h('h2', { text: 'While you wait' }), BQ.snake()) : null);
   }
   function chevronUp() {
     const s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });

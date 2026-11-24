@@ -79,11 +79,15 @@ function requireSeb(req, run) {
   throw new HttpError(403, run.seb_config ? 'seb_launch' : 'seb_required');
 }
 
+// The network lock: the teacher's network, plus (when it was turned on mid-quiz) the networks the class
+// was already on, comma-separated, so locking never shuts out students already taking it.
+const onLockedNetwork = (ip, lock) => String(lock).split(',').some((l) => sameNetwork(ip, l.trim()));
+
 function openRun(runId, req) {
   const run = q('SELECT * FROM runs WHERE id = ?').get(String(runId || ''));
   if (!run) throw new HttpError(404, 'bad_code');
   if (run.status !== 'open') throw new HttpError(403, 'run_closed');
-  if (run.ip_lock && !sameNetwork(clientIp(req), run.ip_lock)) throw new HttpError(403, 'wrong_network');
+  if (run.ip_lock && !onLockedNetwork(clientIp(req), run.ip_lock)) throw new HttpError(403, 'wrong_network');
   requireSeb(req, run);
   return run;
 }
@@ -183,7 +187,7 @@ function current(req, { mustBeOpen = true } = {}) {
   a.lockedSeb = !!run.seb_config;
   if (mustBeOpen && run.status !== 'open' && a.status !== 'active') throw new HttpError(403, 'run_closed');
   const ip = clientIp(req);
-  if (run.ip_lock && !sameNetwork(ip, run.ip_lock)) {
+  if (run.ip_lock && !onLockedNetwork(ip, run.ip_lock)) {
     if (a.status === 'active' && !a.flagged.has('net')) { a.flagged.add('net'); store.record(a, 'other-network', ip, store.getQuiz(run.quiz_id)); }
     throw new HttpError(403, 'wrong_network');
   }
@@ -367,7 +371,7 @@ module.exports = function studentRoutes(r) {
       if (!joinFails(ip)) throw new HttpError(429, 'too_many');
       throw new HttpError(404, 'bad_code');
     }
-    if (run.ip_lock && !sameNetwork(ip, run.ip_lock)) throw new HttpError(403, 'wrong_network');
+    if (run.ip_lock && !onLockedNetwork(ip, run.ip_lock)) throw new HttpError(403, 'wrong_network');
     requireSeb(req, run);
     issueDevice(req, res);
     json(res, 200, runInfo(run, store.getQuiz(run.quiz_id)));
@@ -514,6 +518,8 @@ module.exports = function studentRoutes(r) {
         if (!p) throw new HttpError(409, 'nothing_to_correct');
         a.layout = p.layout;
         a.answers = p.answers;
+        // what was filled in from the exam, so progress counts what they've changed (teacher.js liveRow)
+        a.layout.startAnswers = Object.fromEntries(Object.entries(p.answers || {}).map(([k, v]) => [k, JSON.stringify(v)]));
       } else a.layout = store.makeLayout(quiz);
       a.status = 'active';
       a.startedAt = now;
@@ -630,7 +636,8 @@ module.exports = function studentRoutes(r) {
     }
     // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
     const notice = a.status !== 'submitted' ? store.notices.get(run.id) : null; // the teacher's message to everyone
-    json(res, 200, { ok: true, now, deadline: a.deadline || null, done: a.status === 'submitted', ...(notice ? { notice } : {}), ...live });
+    const note = a.status !== 'submitted' ? store.notes.get(a.id) : null; // and to this student
+    json(res, 200, { ok: true, now, deadline: a.deadline || null, done: a.status === 'submitted', ...(notice ? { notice } : {}), ...(note ? { note } : {}), ...live });
   });
 
   r.post('/api/run', async (req, res) => {

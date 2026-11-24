@@ -1275,6 +1275,12 @@
       const note = await ask.ask({ title: `Invalidate ${name}?`, label: 'Reason (optional)', ok: 'Invalidate', danger: true });
       if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note });
     }
+    // A message to one student: it pops up on their screen at their next heartbeat.
+    async function messageStudent(id, name) {
+      const text = await ask.ask({ title: `Message ${name}`, label: 'Message', ok: 'Send' });
+      if (text == null || !text.trim()) return;
+      act(`/api/t/attempts/${id}/message`, { text });
+    }
     async function resetAttempt(id, name, before) {
       if (!(await ask.confirm({ title: `Reset ${name}?`, text: 'Their answers are deleted. Crashed computer? Use Let back in instead.', ok: 'Reset', danger: true }))) return;
       if (before) before();
@@ -1370,9 +1376,12 @@
         // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
         // popup doesn't end anyone's quiz without the teacher looking).
         if (bad && a.status === 'active') actions.append(btn('End quiz', 'end', () => endQuiz(a.id, s.name)));
+        // Practice and corrections aren't monitored: no watching, network pins or invalidating there.
+        const sec = !(lastRun && lastRun.practice);
         // Their screen, live, in a new tab (watch.html).
-        if (a && a.status === 'active') (bad ? more.push(watchLink(a.id, s.name)) : actions.append(watchLink(a.id, s.name)));
-        if (a && (a.status === 'active' || a.status === 'admitted') && !a.letIn) more.push({ text: 'Let back in', onclick: () => act(`/api/t/attempts/${a.id}/let-in`) });
+        if (sec && a && a.status === 'active') (bad ? more.push(watchLink(a.id, s.name)) : actions.append(watchLink(a.id, s.name)));
+        if (a && a.status !== 'submitted') more.push({ text: 'Message', onclick: () => messageStudent(a.id, s.name) });
+        if (sec && a && (a.status === 'active' || a.status === 'admitted') && !a.letIn) more.push({ text: 'Let back in', onclick: () => act(`/api/t/attempts/${a.id}/let-in`) });
         if (a && (a.status === 'active' || a.status === 'admitted') && a.letIn) actions.append(h('span', { class: 't-muted t-small', text: 'Can sign in again' }));
         if (a) more.push({ text: 'Reset', danger: true, onclick: () => resetAttempt(a.id, s.name) });
         if (more.length) actions.append(...moreMenu(`More for ${s.name}`, `${a.id}:more`, more, () => refresh()));
@@ -1465,7 +1474,7 @@
           h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Close', onclick: closeDetail }, dk('close')))),
         // what's for now in the row; the rest under ⋯
         h('div', { class: 't-row t-detail-acts' },
-          d.status === 'active' ? watchLink(id, d.name) : null,
+          d.status === 'active' && !(lastRun && lastRun.practice) ? watchLink(id, d.name) : null,
           d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Un-invalidate', onclick: () => unInvalidate(id, d.name) }, dk('restore'))) : null,
           d.status === 'active' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }, dk('end'))) : null,
           d.status === 'active' && d.deadline ? h('span', Object.assign({ class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }, ticks('left-label', d.timeLeft || 0))) : null,
@@ -1475,9 +1484,10 @@
             onclick: () => aiDialog(runId, id, aiDone) }, dk('ai'))) : null,
           moreMenu(`More for ${d.name}`, 'detail:more', [
             d.status === 'active' && d.deadline ? { text: 'Add 5 minutes', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } } : null,
-            d.integrity !== 'invalidated' ? { text: 'Invalidate', onclick: () => invalidate(id, d.name) } : null,
+            d.status !== 'submitted' ? { text: 'Message', onclick: () => messageStudent(id, d.name) } : null,
+            d.integrity !== 'invalidated' && !(lastRun && lastRun.practice) ? { text: 'Invalidate', onclick: () => invalidate(id, d.name) } : null,
             d.status === 'submitted' ? { text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) } : null,
-            d.status === 'active' || d.status === 'admitted' ? { text: 'Let back in', onclick: () => act(`/api/t/attempts/${id}/let-in`) } : null,
+            (d.status === 'active' || d.status === 'admitted') && !(lastRun && lastRun.practice) ? { text: 'Let back in', onclick: () => act(`/api/t/attempts/${id}/let-in`) } : null,
             { text: 'Reset', danger: true, onclick: () => resetAttempt(id, d.name, closeDetail) },
           ], () => refresh())),
         d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}` }) : null,

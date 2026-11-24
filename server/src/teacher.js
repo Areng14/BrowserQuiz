@@ -180,7 +180,9 @@ function liveRow(student, a, quiz, run) {
   const timeX = student.time_x && student.time_x !== 1 ? student.time_x : undefined; // extra time
   if (!a) return { rosterId: student.id, name: student.name, timeX, attempt: null };
   const t = totals(a.result, quiz, a.answers, a.layout);
-  const answered = a.answers ? Object.keys(a.answers).filter((k) => !k.includes('~')).length : 0; // not corrections' notes
+  // Corrections start with the exam's answers filled in: there, a question counts once it's been changed.
+  const start = a.layout && a.layout.startAnswers;
+  const answered = a.answers ? Object.keys(a.answers).filter((k) => !k.includes('~') && (!start || JSON.stringify(a.answers[k]) !== start[k])).length : 0; // not corrections' notes
   // Where they are right now (watch.js has their last heartbeat's screen): question 4 in their own order,
   // the review page, or a part's directions.
   const v = a.status === 'active' ? W.where(a.id) : null;
@@ -1102,7 +1104,13 @@ module.exports = function teacherRoutes(r) {
       if (text) store.notices.set(run.id, { id: Date.now(), text }); else store.notices.delete(run.id);
       audit(me, 'message', run.id, text.slice(0, 100));
     } else if (p.action === 'lock') {
-      q('UPDATE runs SET ip_lock = ? WHERE id = ?').run(clientIp(req), run.id);
+      // Your network, and every network your students are already on (the teacher's laptop can be on staff
+      // wifi or a hotspot while the class is on the student network): locking never kicks the class out.
+      const nets = new Set([clientIp(req)]);
+      for (const row of q('SELECT ip, pin_ip FROM attempts WHERE run_id = ? AND archived = 0').all(run.id)) {
+        for (const x of [row.ip, row.pin_ip]) if (x) nets.add(String(x));
+      }
+      q('UPDATE runs SET ip_lock = ? WHERE id = ?').run([...nets].filter(Boolean).slice(0, 50).join(','), run.id);
     } else if (p.action === 'unlock') {
       q('UPDATE runs SET ip_lock = NULL WHERE id = ?').run(run.id);
     } else if (p.action === 'regrade-failed') {
@@ -1299,7 +1307,11 @@ module.exports = function teacherRoutes(r) {
     const { a, run } = getAttemptRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     const note = String(body.note || '').slice(0, 300);
-    if (p.action === 'admit') {
+    if (p.action === 'message') { // pops up on this student's screen at their next heartbeat
+      const text = String(body.text || '').trim().slice(0, 500);
+      if (text) store.notes.set(a.id, { id: Date.now(), text });
+      audit(me, 'message', a.id, text.slice(0, 100));
+    } else if (p.action === 'admit') {
       if (a.status === 'waiting') { a.status = 'admitted'; a.admittedAt = Date.now(); store.logEvent(a, 'admit', 'info', null); store.save(a); }
     } else if (p.action === 'restore') {
       if (a.integrity === 'invalidated') { a.integrity = 'restored'; a.restoreStrikes = a.strikes; store.logEvent(a, 'restore', 'info', note || null); store.save(a); }

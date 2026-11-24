@@ -63,7 +63,8 @@ Students read on laptops, iPads and phones. Long questions overflow the screen a
 that should go to thinking. Keep to these limits, even when the notes are wordy:
 
 - **Prompt:** what's asked, in 1–3 sentences (about 60 words), plus code if the question is about
-  code. No story, no setup, no "In this question you will…", no restating the rules.
+  code. No story, no setup, no "In this question you will…", no restating the rules. Teachers' notes
+  are often wordy: keep the idea, cut the words.
 - **Code shown to students:** at most about 15 lines, each under about 70 characters. One snippet
   per question.
 - **Choices:** one line each, under about 60 characters, all about the same length.
@@ -97,6 +98,10 @@ that should go to thinking. Keep to these limits, even when the notes are wordy:
 
 **Multiple choice**
 - Exactly one clearly correct answer.
+- The right answer must not stand out. Students quickly learn that "the longest, most detailed or most
+  careful-sounding choice is right", so make the wrong choices just as long, specific and confident.
+  Across the quiz the right answer is the longest choice no more often than the others, and its position
+  varies.
 - Wrong choices come from real mistakes in the quiz's language or topic. In Java: integer
   division, off-by-one, `==` vs `.equals`, aliasing, short-circuiting, precedence. In Python:
   mutable default arguments, `is` vs `==`, off-by-one in `range`. In networking: off-by-one
@@ -165,6 +170,8 @@ in `"imageAlt"`. Never reference an image you aren't including.
 ## 8. Check your work before answering
 
 - Recount every `answer` index against its `choices`, counting from 0.
+- For each multiple choice question, check whether the right answer is the longest choice. If it is in
+  more than about a quarter of them, rewrite choices until it isn't.
 - Trace every code test through your reference solution by hand. Every `expected` value must be
   exactly what your reference returns. If you can run code, run the references on every test.
   When you upload, BrowserQuiz runs the references against every test and rejects the quiz if

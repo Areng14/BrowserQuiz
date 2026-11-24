@@ -85,7 +85,9 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
   - networking: off-by-one subnet sizes, mixing up layers
   - or the equivalent mistakes for any other language or topic
 
-  Keep choices about the same length. No "all/none of the above". `answer` counts from 0:
+  Keep choices about the same length, and make sure the right one doesn't stand out: across the quiz
+  it's the longest (or most detailed, most hedged) choice no more often than the wrong ones are, and
+  its position varies. No "all/none of the above". `answer` counts from 0:
   recount it against the `choices` list.
 - **Choices:** one line takes `inline code`, **bold**, *italic* and images. A choice with a
   `\n` in it is full Markdown, so four short code blocks as the choices work. Long code still

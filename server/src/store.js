@@ -75,6 +75,8 @@ const MERGE_MS = 2000;
 const AWAY_LIMIT_MS = 10000; // away longer than this invalidates the attempt
 // A message from the teacher to everyone in a run: run id -> { id, text }. Kept in memory, so a restart drops it.
 const notices = new Map();
+// A message to one student: attempt id -> { id, text }. In memory, like notices.
+const notes = new Map();
 const MAX_EVENTS = 3000;
 const WARN_PER_TYPE_PER_MIN = 20;
 
@@ -296,6 +298,6 @@ function perStudent(quiz) {
 
 module.exports = {
   watched,
-  notices, getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, back, awayNow, logEvent, makeLayout, quizFor, perStudent, attempts,
+  notices, notes, getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, back, awayNow, logEvent, makeLayout, quizFor, perStudent, attempts,
   CLIENT_EVENTS, SERVER_EVENTS, quizCache,
 };
