@@ -425,6 +425,10 @@
           this.mouse.push([Math.round((e.clientX / Math.max(1, window.innerWidth)) * 1000), Math.round((e.clientY / Math.max(1, window.innerHeight)) * 1000), dt, 1]);
         }
       }, { passive: true, capture: true });
+      // Reading counts too when it's a finger or a scroll wheel (iPads, Chromebooks with touch, a mouse
+      // that stays put): for the live table's reading or idle (teacher.js activity).
+      const active = () => { this.lastActivityAt = Date.now(); };
+      for (const type of ['pointerdown', 'touchstart', 'wheel', 'scroll']) this.on(document, type, active, { passive: true, capture: true });
       this.on(document, 'mousemove', (e) => {
         const now = Date.now();
         this.lastActivityAt = now;
