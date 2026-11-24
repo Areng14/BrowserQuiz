@@ -404,6 +404,19 @@ function startSession(req, res, teacherId, passkey) {
 // firing them all at once doesn't help. A spent budget only blocks new sign-ins for a minute; teachers already
 // signed in keep working, and the right password refunds its try.
 const loginBuckets = new Map();
+// Wrong passwords for one account, from anywhere: after 5 in a row it waits 30 seconds, doubling with each
+// further miss up to 15 minutes. A browser the teacher has signed in from before skips the wait, so a
+// student can't lock the teacher out by guessing on purpose (the device cookie, signed with ID_PEPPER).
+const acctFails = new Map(); // username -> { n, until }
+const TDEV = 'tdev';
+const devSig = (tid, r) => crypto.createHmac('sha256', String(process.env.ID_PEPPER || '')).update(`tdev:${tid}:${r}`).digest('base64url');
+function knownDevice(req, tid) {
+  const [id, r, sig] = String(cookies(req)[TDEV] || '').split('.');
+  if (!id || !r || !sig || id !== String(tid)) return false;
+  const want = Buffer.from(devSig(tid, r));
+  const got = Buffer.from(sig);
+  return want.length === got.length && crypto.timingSafeEqual(want, got);
+}
 function loginBucket(key, cap, refillMs) {
   const now = Date.now();
   if (loginBuckets.size > 5000) for (const [k, b] of loginBuckets) if (now - b.at > 600000) loginBuckets.delete(k);
@@ -429,12 +442,25 @@ module.exports = function teacherRoutes(r) {
     mine.n--;
     all.n--;
     await sleep(250);
+    const uname = (String(body.username || '').trim() || 'admin').toLowerCase().slice(0, 100);
     const teacher = A.byUsername(String(body.username || '').trim() || 'admin');
+    const fail = acctFails.get(uname);
+    if (fail && fail.until > Date.now() && !(teacher && knownDevice(req, teacher.id))) {
+      throw new HttpError(429, 'locked', `Too many wrong passwords. Try again in ${Math.ceil((fail.until - Date.now()) / 1000)} seconds.`);
+    }
     const ok = await A.checkPassword(String(body.password || ''), teacher && !teacher.disabled ? teacher.pw_hash : null);
     if (!ok) {
+      const f = acctFails.get(uname) || { n: 0, until: 0 };
+      f.n++;
+      if (f.n >= 5) f.until = Date.now() + Math.min(15 * 60000, 30000 * 2 ** (f.n - 5));
+      if (acctFails.size > 5000) acctFails.clear();
+      acctFails.set(uname, f);
       await sleep(1000);
       throw new HttpError(401, 'bad_password');
     }
+    acctFails.delete(uname);
+    const r = crypto.randomBytes(12).toString('base64url');
+    setCookie(req, res, TDEV, `${teacher.id}.${r}.${devSig(teacher.id, r)}`, 180 * 86400); // this browser is theirs
     mine.n = Math.min(mine.cap, mine.n + 1);
     all.n = Math.min(all.cap, all.n + 1);
     // Unlock their quiz key. A teacher from before encryption gets one now, with a recovery code to keep.

@@ -598,9 +598,11 @@ h1[tabindex="-1"]:focus { outline: none; }
 .nav-legend .sheet-dot.mini.answered::after { right: 2px; bottom: 1px; font-size: 9px; }
 .nav-legend .sheet-dot.mini.marked::before { top: -1px; right: 3px; width: 6px; height: 8px; }
 
-/* Scratchpad style row: colors (pen and notes), pen size, note text style */
-.scratch-style { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.scratch-style[hidden], .scratch-style > [hidden] { display: none; }
+/* Scratchpad style, under one button: colors (pen and notes), pen size, note text style */
+.scratch-style { position: absolute; left: 12px; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; max-width: calc(100% - 24px); padding: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); }
+.scratch-style[hidden], .scratch-style > [hidden], .pad-style-btn[hidden] { display: none; }
+.pad-cur { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--ink); }
+.pad-style-btn[aria-expanded="true"] { background: var(--soft); }
 .pad-colors { display: inline-flex; gap: 6px; padding: 2px 4px; }
 .pad-swatch { width: 22px; height: 22px; padding: 0; border: 2px solid var(--bg); border-radius: 50%; background: var(--sw); box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
 .pad-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--accent); }

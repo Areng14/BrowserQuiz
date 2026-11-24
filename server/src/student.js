@@ -427,9 +427,10 @@ module.exports = function studentRoutes(r) {
     if (!safeEqual(hashSid(body.studentId), student.sid_hash)) {
       noteBadTry(devKey);
       const n = (ft ? ft.n : 0) + 1;
-      const until = n >= 5 ? now + 30000 : ft && ft.until > now ? ft.until : 0; // a wrong try never shortens a lock
+      // every 5th wrong ID locks the name (in this browser) for longer: 30 s, 1 min, 2 min, ... up to 10 min
+      const until = n % 5 === 0 ? now + Math.min(600000, 30000 * 2 ** (n / 5 - 1)) : ft && ft.until > now ? ft.until : 0; // a wrong try never shortens a lock
       q('INSERT INTO failed_ids (run_id, student_id, n, until) VALUES (?, ?, ?, ?) ON CONFLICT(run_id, student_id) DO UPDATE SET n = excluded.n, until = excluded.until')
-        .run(run.id, student.id, n >= 5 ? 0 : n, until);
+        .run(run.id, student.id, n, until);
       throw new HttpError(400, 'bad_id');
     }
     if (!(ft && ft.until > now)) q('DELETE FROM failed_ids WHERE run_id = ? AND student_id = ?').run(run.id, student.id);

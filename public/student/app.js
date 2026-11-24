@@ -31,7 +31,7 @@
     other_network: 'This quiz is locked to the network you started it on. Ask your teacher.',
     too_many: 'Too many tries. Wait a minute.',
     bad_id: 'Wrong student ID for that name.',
-    name_locked: 'Too many wrong IDs. Wait 30 seconds.',
+    name_locked: 'Too many wrong IDs. Wait a little, then try again.',
     already_started: 'Already started on another computer. Ask your teacher.',
     network: "Can't reach the server.",
     no_attempt: 'Signed out. Sign in again.',
@@ -1234,7 +1234,8 @@
       S.scratch.tool = t;
       for (const [k, b] of Object.entries(tools)) b.setAttribute('aria-pressed', String(k === t));
       board.dataset.tool = t;
-      styleRow.hidden = t === 'eraser';
+      styleBtn.hidden = t === 'eraser';
+      if (t === 'eraser') setPop(false);
       sizes.hidden = t !== 'pen';
       fmts.hidden = t !== 'text';
       saveScratch();
@@ -1279,11 +1280,31 @@
       }
       for (const b of sizeBtns) b.setAttribute('aria-pressed', String(b._z === S.scratch.size));
       for (const b of fmtBtns) b.setAttribute('aria-pressed', String(!!(ta ? ta._note[b._k] : S.scratch.fmt[b._k])));
+      // the button shows the color (and, for the pen, the size)
+      styleDot.style.background = color === 'ink' ? 'var(--ink)' : padColor(color, board);
+      const d = tool === 'pen' ? PAD_SIZES[S.scratch.size] * 2 + 6 : 14;
+      styleDot.style.width = styleDot.style.height = `${d}px`;
     }
     const sizes = h('div', { class: 'scratch-group', role: 'group', 'aria-label': 'Size' }, sizeBtns);
     const fmts = h('div', { class: 'scratch-group', role: 'group', 'aria-label': 'Text style' }, fmtBtns);
-    const styleRow = h('div', { class: 'scratch-style' }, h('div', { class: 'pad-colors', role: 'group', 'aria-label': 'Color' }, colorBtns), sizes, fmts);
-    styleRow.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the note
+    // All of it sits under one button that shows the current color, so the toolbar stays small.
+    const stylePop = h('div', { class: 'scratch-style', role: 'group', 'aria-label': 'Color and style', hidden: true },
+      h('div', { class: 'pad-colors', role: 'group', 'aria-label': 'Color' }, colorBtns), sizes, fmts);
+    const styleDot = h('span', { class: 'pad-cur' });
+    const styleBtn = h('button', { class: 'scratch-tool pad-style-btn', type: 'button', title: 'Color and style', 'aria-label': 'Color and style', 'aria-expanded': 'false' }, styleDot);
+    const setPop = (open) => {
+      stylePop.hidden = !open;
+      styleBtn.setAttribute('aria-expanded', String(open));
+      if (open) stylePop.style.top = `${styleBtn.offsetTop + styleBtn.offsetHeight + 8}px`;
+    };
+    styleBtn.addEventListener('click', () => setPop(stylePop.hidden));
+    for (const el of [stylePop, styleBtn]) el.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the note
+    stylePop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); setPop(false); styleBtn.focus(); } });
+    const onOut = (e) => {
+      if (!stylePop.isConnected) { document.removeEventListener('pointerdown', onOut, true); return; }
+      if (!stylePop.hidden && !stylePop.contains(e.target) && !styleBtn.contains(e.target)) setPop(false);
+    };
+    document.addEventListener('pointerdown', onOut, true);
     notes.addEventListener('focusin', paintStyle);
     notes.addEventListener('focusout', () => setTimeout(paintStyle, 0));
     pick(tool);
@@ -1369,7 +1390,7 @@
       ta.style.left = n.x * w + 'px';
       ta.style.top = n.y * w + 'px';
       ta.addEventListener('input', () => { n.s = ta.value; fit(ta, n); save(); });
-      ta.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); ta.blur(); } });
+      ta.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); setPop(false); ta.blur(); } });
       ta.addEventListener('blur', () => {
         if (n.s.trim() || !ta.isConnected) return;
         const i = items.indexOf(n);
@@ -1441,12 +1462,12 @@
     const close = btn('close', 'Close scratchpad', () => toggleScratch(false));
     close.classList.add('scratch-close');
     const head = h('div', { class: 'scratch-head' },
-      h('div', { class: 'scratch-group', role: 'group', 'aria-label': 'Tool' }, tools.pen, tools.text, tools.eraser),
+      h('div', { class: 'scratch-group', role: 'group', 'aria-label': 'Tool' }, tools.pen, tools.text, tools.eraser, styleBtn),
       h('div', { class: 'scratch-group', role: 'group', 'aria-label': 'Edit' }, undo, clear),
       h('span', { class: 'scratch-q', text: `Question ${S.idx + 1}` }),
       close);
     paintStyle();
-    return [head, styleRow, board];
+    return [head, stylePop, board];
   }
 
   function directionsView(part) {
