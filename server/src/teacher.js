@@ -197,6 +197,9 @@ function liveRow(student, a, quiz, run) {
       awayMs: (a.awayMs || 0) + store.awayNow(a, Date.now()), awayNow: store.awayNow(a, Date.now()) || null,
       leftAgain: a.integrity === 'restored' && a.restoreStrikes != null ? Math.max(0, a.strikes - a.restoreStrikes) : 0,
       reason: a.reason, invalidatedAt: a.invalidatedAt, lastBeatAgo: a.status === 'active' && a.lastBeat ? Date.now() - a.lastBeat : null,
+      // Before the quiz: how long since their rules or waiting screen last checked in (closed the browser,
+      // quit Safe Exam Browser). Unknown (null) until it has, say after a restart.
+      seenAgo: (a.status === 'waiting' || a.status === 'admitted') && (a.seenAt || a.lastBeat) ? Date.now() - Math.max(a.seenAt || 0, a.lastBeat || 0) : null,
       answered, total: a.layout ? store.quizFor(quiz, a.layout).questions.length : store.perStudent(quiz).count, on, deadline: a.deadline,
       activity: a.status === 'active' ? activity(a, Date.now()) : null,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,

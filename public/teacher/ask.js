@@ -45,7 +45,7 @@
 
   function inputField(label, value, readOnly) {
     const fid = `bq-ask-in-${++seq}`;
-    const input = el('input', { class: 'input', id: fid, type: 'text', value: value || '', readonly: readOnly, autocomplete: 'off', spellcheck: 'false' });
+    const input = el('input', { class: 'input', id: fid, type: 'text', value: value || '', readonly: readOnly, autocomplete: 'off', spellcheck: 'false', autocorrect: 'off' }); // typed as typed: no autocorrect (Safari) or autofill
     input.value = value || '';
     const node = el('div', { class: 'field' }, label ? el('label', { class: 'field-label', for: fid, text: label }) : null, input);
     if (!label) input.setAttribute('aria-label', 'Text');

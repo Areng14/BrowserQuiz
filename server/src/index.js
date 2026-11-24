@@ -52,6 +52,14 @@ async function handle(req, res) {
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'method');
   if (p === '/healthz') return json(res, 200, { ok: true });
+  // Whether students are in a quiz right now (signed in, sent a heartbeat in the last 90 seconds). A
+  // deploy restarts the server, so the deploy check (.github/workflows/deploy-gate.yml) waits for this to
+  // say false. Just yes or no: nothing about who or which quiz.
+  if (p === '/healthz/busy') {
+    const n = q(`SELECT COUNT(*) AS n FROM attempts a JOIN runs r ON r.id = a.run_id
+      WHERE r.status = 'open' AND a.archived = 0 AND a.status IN ('waiting', 'admitted', 'active') AND a.last_beat > ?`).get(Date.now() - 90000).n;
+    return json(res, 200, { busy: n > 0 });
+  }
   if (p.startsWith('/asset/')) {
     const rel = decodeURIComponent(p.slice('/asset/'.length));
     if (!/^assets\/[A-Za-z0-9 _.\-/]+$/.test(rel) || rel.includes('..')) throw new HttpError(404, 'not_found');

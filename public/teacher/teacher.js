@@ -824,10 +824,13 @@
   }
 
   // ---------- one running quiz ----------
+  const gone = (a) => (a.status === 'waiting' || a.status === 'admitted') && a.seenAgo > 15000;
   function statusCell(s) {
     if (!s.attempt) return h('td', { class: 't-muted', text: 'Not joined' });
     const a = s.attempt;
     // Waiting for the start: reading the rules, or agreed and in full screen (Ready)
+    // their screen stopped checking in (closed the browser, quit Safe Exam Browser): not ready any more
+    if (gone(a)) return h('td', { class: 't-late', text: `No signal for ${mmss(a.seenAgo)}` });
     if (a.status === 'waiting') return a.ready ? h('td', { class: 'st-good', text: 'Ready' }) : h('td', { class: 'st-waiting', text: 'Reading the rules' });
     if (a.status === 'admitted') return h('td', { text: 'Starting' });
     // a heartbeat every few seconds; much longer without one and they've lost their connection
@@ -1298,11 +1301,13 @@
       const run = data.run;
       lastRun = run;
       notice(data.students);
-      corrBtn.hidden = run.practice || !!run.corrections; // an exam's, once
+      // on the row: Message students while it's open; Corrections once an exam is closed (just once)
+      corrBtn.hidden = run.practice || !!run.corrections || run.status === 'open';
+      msgBtn.hidden = run.status !== 'open';
       code.textContent = run.code;
       document.title = `${run.code} · ${run.title} – BrowserQuiz`;
       const count = (f) => data.students.filter((x) => x.attempt && f(x.attempt)).length;
-      const said = [[count((a) => a.status === 'waiting' && a.ready), 'ready'], [count((a) => a.status === 'waiting' && !a.ready), 'reading the rules'], [count((a) => a.status === 'admitted'), 'starting'], [count((a) => a.status === 'active'), 'working'],
+      const said = [[count((a) => a.status === 'waiting' && a.ready && !gone(a)), 'ready'], [count((a) => a.status === 'waiting' && !a.ready && !gone(a)), 'reading the rules'], [count((a) => a.status === 'admitted' && !gone(a)), 'starting'], [count(gone), 'no signal'], [count((a) => a.status === 'active'), 'working'],
         [count((a) => a.status === 'submitted'), 'turned in'], [count((a) => a.integrity === 'invalidated'), 'invalidated']]
         .filter(([n]) => n).map(([n, w]) => `${n} ${w}`).join(', ') || 'Nobody has joined yet';
       if (summary.textContent !== said) summary.textContent = said;
@@ -1559,7 +1564,18 @@
     const toasts = h('div', { class: 't-toasts', 'aria-live': 'polite' });
     const openStudent = (id) => { selected = id; lastDetail = ''; showDetail(id); refresh(); };
     const notifyKey = 'bq-notify';
-    const notifyOn = () => { try { return localStorage.getItem(notifyKey) === '1' && 'Notification' in window && Notification.permission === 'granted'; } catch (e) { return false; } };
+    // On unless the teacher turned them off. The browser asks first, and only after a click on the page.
+    const notifyWanted = () => { try { return localStorage.getItem(notifyKey) !== '0'; } catch (e) { return true; } };
+    const notifyOn = () => notifyWanted() && 'Notification' in window && Notification.permission === 'granted';
+    if (notifyWanted() && 'Notification' in window && Notification.permission === 'default') {
+      const askOnce = () => {
+        if (!toasts.isConnected) { document.removeEventListener('pointerdown', askOnce, true); return; } // left the quiz's page
+        if (!lastRun || lastRun.status !== 'open') return; // an open quiz is when they matter
+        document.removeEventListener('pointerdown', askOnce, true);
+        Notification.requestPermission().then(paintNotify, () => {});
+      };
+      document.addEventListener('pointerdown', askOnce, true);
+    }
     const notifyBtn = h('button', { class: 'btn', type: 'button' });
     const paintNotify = () => { notifyBtn.textContent = notifyOn() ? 'Notifications: on' : 'Notifications: off'; };
     notifyBtn.addEventListener('click', async () => {
@@ -1608,7 +1624,7 @@
       }
       firstLook = false;
     }
-    // Close quiz stays out; the rest is under ⋯.
+    // Start, Message students, Corrections and Close quiz stay out; the rest is under ⋯.
     // A message to everyone taking the quiz: it pops up on their screens at the next heartbeat.
     const msgBtn = h('button', { class: 'btn', type: 'button', text: 'Message students' });
     msgBtn.addEventListener('click', async () => {
@@ -1616,9 +1632,11 @@
       if (text == null || !text.trim()) return;
       try { await post(`/api/t/runs/${runId}/message`, { text }); } catch (e) { alertBox(e.message); }
     });
-    const runMenu = moreMenu('More for this quiz', 'run:more', () => [msgBtn, lockBtn, notifyBtn,
+    const runMenu = moreMenu('More for this quiz', 'run:more', () => [lockBtn, notifyBtn,
       ...(lastRun && lastRun.sebFile && lastRun.status === 'open' && sebParts ? sebParts : []),
-      exportLink, classReport, corrBtn.hidden ? null : corrBtn], () => refresh());
+      exportLink, classReport,
+      // an exam still open: corrections from here too (once it's closed, the button's on the row)
+      lastRun && !lastRun.practice && !lastRun.corrections && lastRun.status === 'open' ? { text: 'Corrections', onclick: () => correctionsDialog(runId, lastRun) } : null], () => refresh());
     detail.className = 't-detail-host';
     detail.setAttribute('aria-labelledby', 't-detail-name');
     if (openRuns === null) { try { noteRuns((await api('/api/t/overview')).runs); } catch (e) { /* the tab can wait */ } }
@@ -1627,7 +1645,7 @@
         h('section', { class: 't-section' },
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
           howTo, quitPw,
-          h('div', { class: 't-row t-run-acts' }, admitAll, aiBtn, toggle, runMenu), aiMsg,
+          h('div', { class: 't-row t-run-acts' }, admitAll, aiBtn, msgBtn, corrBtn, toggle, runMenu), aiMsg,
           failedBox, summary, toasts),
         h('div', { class: 't-livegrid' }, h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },
           h('thead', {}, h('tr', {}, heads(['Student', 'Status', 'Integrity', 'Strikes', 'Progress', 'Time left', 'Score'], ['Strikes', 'Progress', 'Time left', 'Score']), actionsHead())),

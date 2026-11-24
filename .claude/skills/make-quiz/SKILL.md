@@ -32,6 +32,9 @@ Fill gaps with these defaults and say which ones you used. Don't stop to ask.
     hidden tests, and speed tests that require an efficient solution (see "Speed tests" in the
     format spec; say the required big-O in the prompt).
   - Mixed: start easy, end hard.
+  - Pitch it at the class, not the best student: someone who studied should get most questions
+    right. When unsure, make it easier; only go hard when asked. Nothing needs a trick or an idea the
+    notes don't teach.
 - Rubric items on code questions grade themselves (`require`/`forbid`) unless the user wants
   to grade them by hand or wants no rubric
 
@@ -141,7 +144,10 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
     trick questions, misleading names or planted typos. "NOT" questions say **NOT** in bold.
   - Every hidden test checks something the prompt says (empty input, negatives, ties); a speed
     test means the prompt names the speed needed.
-  - Code students read compiles and reads normally; output questions print a few short lines.
+  - All code is clean, the way students should write it (prompts, choices, starters, references):
+    the language's usual formatting and naming, clear names, braces on every `if` and loop in Java
+    and the C family, no unused variables, dead code or clever one-liners. References are the simple,
+    expected solution. Code students read compiles; output questions print a few short lines.
   - Short answers and blanks accept every reasonable form. Trace tables: about 8 rows, starting
     values given. Select-all with 3+ correct choices gets `"partialCredit": true`.
   - Points match the work, and the time limit is about 20% more than the questions need.

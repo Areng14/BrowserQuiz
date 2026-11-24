@@ -504,6 +504,7 @@ module.exports = function studentRoutes(r) {
 
   r.post('/api/admit-status', async (req, res) => {
     const { a } = current(req);
+    a.seenAt = Date.now(); // their rules or waiting screen is still open (teacher.js liveRow: No signal)
     json(res, 200, { admitted: a.status !== 'waiting' });
   });
 

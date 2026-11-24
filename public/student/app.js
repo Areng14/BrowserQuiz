@@ -960,7 +960,9 @@
     const main = h('main', { class: 'qmain', tabindex: '-1', 'aria-labelledby': 'q-heading' });
     // "Question 3 of 20" opens every question; the review page lists them all before turning in.
     const jump = h('button', { class: 'btn q-jump', type: 'button', 'aria-haspopup': 'dialog', onclick: () => openNavigator() });
-    const mid = h('div', { class: 'qnav-mid' }, jump);
+    // On a timed exam's review page, where there's nothing to turn in yet: snake, while they wait
+    const gameBtn = h('button', { class: 'btn game-btn', type: 'button', hidden: true, onclick: () => openGame() }, snakeGlyph(), 'Play snake');
+    const mid = h('div', { class: 'qnav-mid' }, jump, gameBtn);
     const prev = h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => go(S.reviewOpen ? S.quiz.questions.length - 1 : S.idx - 1) });
     const next = h('button', { class: 'btn', type: 'button' });
     next.addEventListener('click', () => {
@@ -991,7 +993,7 @@
       scratch,
       h('footer', { class: 'qnav' }, prev, mid, next),
       live, hlBar.bar);
-    S.el = { wrap, main, timer, jump, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null, scratchGrip: scratchGrip(wrap, scratch) };
+    S.el = { wrap, main, timer, jump, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null, scratchGrip: scratchGrip(wrap, scratch), gameBtn };
     wrap.addEventListener('scroll', hlBar.hide, { passive: true }); // a short window scrolls the whole quiz
     if (!keysBound) { document.addEventListener('keydown', quizKeys); keysBound = true; }
     S.saveState = 'saved';
@@ -1057,6 +1059,7 @@
       S.el.next.className = timedExam() ? 'btn' : 'btn primary';
       S.el.next.disabled = timedExam();
       S.el.jump.hidden = true;
+      S.el.gameBtn.hidden = !(timedExam() && !cfg.watch && BQ.snake);
       document.title = `Check your work – ${S.quiz.title}`;
       if (S.el.hlBar) S.el.hlBar.hide();
       S.el.main.classList.remove('code-fit', 'split-fit');
@@ -1065,6 +1068,7 @@
       return;
     }
     S.el.jump.hidden = false;
+    S.el.gameBtn.hidden = true;
     S.el.prev.disabled = S.idx === 0 || lockedAt(S.idx - 1);
     const last = S.idx === total - 1;
     S.el.next.disabled = false;
@@ -2161,20 +2165,14 @@
     return h('div', { class: 'qview review' },
       h('h1', { id: 'q-heading', tabindex: '-1', text: 'Check your work' }),
       h('p', { class: 'muted', text: `${done} of ${plural(qs.length, 'question')} answered${marked ? `, ${marked} for review` : ''}.` }),
-      ...questionGrid(go),
-      timedExam() && !cfg.watch && BQ.snake ? gameCard() : null);
+      ...questionGrid(go));
   }
-  // Done before time is up: a small card for snake under the questions. Play opens it in a dialog.
-  function gameCard() {
-    let best = 0;
-    try { best = Number(localStorage.getItem('bq-snake-best')) || 0; } catch (e) { /* none yet */ }
+  // Snake's icon: three linked nodes, the head filled
+  function snakeGlyph() {
     const glyph = svgEl('svg', { class: 'game-glyph', viewBox: '0 0 44 16', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'aria-hidden': 'true' });
     [[1, false], [16, false], [31, true]].forEach(([x, head]) => glyph.append(svgEl('rect', { x, y: 2, width: 12, height: 12, rx: 3, fill: head ? 'currentColor' : 'none' })));
     glyph.append(svgEl('path', { d: 'M13 8h3M28 8h3', 'stroke-linecap': 'round' }));
-    return h('div', { class: 'game-card' },
-      glyph,
-      h('div', { class: 'game-card-text' }, h('strong', { text: 'Snake' }), best ? h('span', { text: `Best: ${best}` }) : null),
-      h('button', { class: 'btn', type: 'button', text: 'Play', onclick: openGame }));
+    return glyph;
   }
   // Done before time is up on a timed exam: snake (snake.js) in a dialog, while they wait. Still in the quiz.
   function openGame() {

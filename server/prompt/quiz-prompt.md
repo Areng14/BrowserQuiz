@@ -57,6 +57,10 @@ Use these for anything still blank, and list the ones you used in your answer.
   the prompt.
 - **Mixed:** start easy and end hard.
 
+Pitch it at the class, not at the best student: someone who studied the notes should get most
+questions right. When unsure, make it easier. Only go hard if I ask for it. No question should need
+a trick or an idea the notes don't teach.
+
 ## 4. Keep every question short
 
 Students read on laptops, iPads and phones. Long questions overflow the screen and eat time
@@ -147,7 +151,12 @@ Students should lose points for not knowing the material, never for guessing wha
 - Code questions give the exact signature and say what to return. Every hidden test checks
   something the prompt says: if a test uses an empty array, a negative or a tie, the prompt says
   what to do with it. A speed test means the prompt names the speed needed.
-- Code students read compiles, is formatted normally and uses sensible names. Predict-the-output
+- All code is clean, the way students should write it: in prompts, choices, starter code and
+  reference solutions. The language's usual formatting, indentation and naming (camelCase in Java,
+  snake_case in Python), clear names, braces on every `if` and loop in Java and the C family, no
+  unused variables or dead code, no clever one-liners, comments only where they help. Reference
+  solutions are the simple, expected solution, not the shortest or most clever one.
+- Code students read compiles. Predict-the-output
   code prints a few short lines, never output where only the spacing differs.
 - Short answer accepts every reasonable way to write it: synonyms, abbreviations, with or
   without units. Use a pattern when there are many.
@@ -178,6 +187,8 @@ in `"imageAlt"`. Never reference an image you aren't including.
   any value is wrong.
 - Every `image` path must be a file you put in `assets/`.
 - Reread each question against the limits in "Keep every question short", and cut what's over.
+- Reread every piece of code: it compiles, and it's formatted and named cleanly.
+- Reread the quiz as a student who studied: if a question would stump most of them, make it easier.
 - Make sure the JSON is valid: double quotes, no trailing commas, no comments, nothing left out.
 
 ## 9. Your answer

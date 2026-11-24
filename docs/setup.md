@@ -277,6 +277,12 @@ changes, Railway shows **Update available** on your project, and nothing changes
 Stay on the Hobby plan rather than the Free one: Free puts services to sleep when idle, and a restart
 locks quizzes until their teacher signs in again.
 
+**Deploys wait for quizzes to end.** A deploy restarts the server, which drops every student for about
+half a minute. To hold deploys while anyone is in a quiz: set the repository variable `QUIZ_URL` to your
+site (GitHub: Settings, Secrets and variables, Actions, Variables), and turn on **Wait for CI** for both
+services in Railway (each service's Settings, Source). The check in `.github/workflows/deploy-gate.yml`
+then passes only once `/healthz/busy` says nobody is in a quiz.
+
 To set it up by hand instead, it's two services from this repo:
 
 | Service | Settings |

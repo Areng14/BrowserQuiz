@@ -1,0 +1,31 @@
+# A deploy restarts the server, which drops every student for half a minute. With Railway's "Wait for
+# CI" turned on for the services, a push to main deploys only once this check passes: it waits while
+# students are in a quiz, then lets the deploy through. Set the repository variable QUIZ_URL to the
+# site (https://quiz.example.org); without it the check passes at once.
+name: Deploy when no quiz is running
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: deploy-gate
+  cancel-in-progress: true # only the newest push needs to wait
+jobs:
+  wait:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Wait until no students are in a quiz
+        env:
+          QUIZ_URL: ${{ vars.QUIZ_URL }}
+        run: |
+          if [ -z "$QUIZ_URL" ]; then echo "QUIZ_URL isn't set: not waiting."; exit 0; fi
+          while true; do
+            r=$(curl -fsS --max-time 15 "${QUIZ_URL%/}/healthz/busy" || echo unreachable)
+            echo "$(date -u +%H:%M:%S) $r"
+            case "$r" in
+              *'"busy":true'*) sleep 60 ;;
+              *) echo "No quiz running: deploying."; exit 0 ;;
+            esac
+          done
