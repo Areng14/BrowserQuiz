@@ -40,9 +40,11 @@ Before writing, send me one short message and wait for my answer. In it:
   - **Speed tests:** a code question that needs an efficient solution (Java, Python, JavaScript and
     TypeScript).
   - **Banned methods:** rule out shortcuts on code questions, like a built-in sort.
+  - **Code without running:** students write code questions without running them, like on paper.
+    The tests still grade them.
   - **Images:** diagrams you draw, or pictures I attach.
-  - **Turning in early:** by default a timed quiz turns in when time is up; students can't turn it in
-    before.
+  - **Turning in early:** students can turn in before time is up. Without it, a timed quiz turns in
+    when time runs out.
 
 Ask only once. If everything above is filled in and Extras says none, don't ask: start writing. If I
 answer "defaults", use the defaults with no extras.
@@ -54,7 +56,8 @@ Use these for anything still blank, and list the ones you used in your answer.
 - **Style, level and language:** match the topic and notes. If nothing says otherwise, use Java.
 - **Topics that aren't about code** (networking, math, theory): set `"language": "none"` and write
   no code questions unless I ask for them. Concept, scenario and calculation questions fit better.
-  A quiz about TCP handshakes doesn't need a method to write.
+  A quiz about TCP handshakes doesn't need a method to write. Write math in LaTeX (`$x^2$`), as the
+  format shows.
 - **Difficulty:** medium.
 - **Minutes:** 1 per multiple choice, 2 per select-all, 1–2 per short answer or output, 3–4 per
   trace table, 2–4 per fill in the blanks, 5–15 per code question (by difficulty), 5 per written answer.
@@ -100,7 +103,8 @@ that should go to thinking. Keep to these limits, even when the notes are wordy:
 ## 5. Questions
 
 **Order and types**
-- Order the questions by type: single, multi, text, output, trace, fill, code, essay.
+- Order the questions by type: single, multi, text, output, trace, fill, code, essay (inside each
+  section, if there are sections).
 - For "what is printed" questions use `output`, and for tracing loops use `trace`.
 - Use select-all only when 2 or more choices are correct.
 - Use short answer only when there are few ways to write the answer, and list all of them.
@@ -110,6 +114,10 @@ that should go to thinking. Keep to these limits, even when the notes are wordy:
 - Set `"lockParts": true` only if I ask that students can't go back to earlier parts.
 - Add `sections` only if I ask for named parts. Set `"turnInEarly": true` only if I ask that students can
   turn in before time is up.
+- Timed parts only if I ask for them: give every section a `timeLimitMin`, start the first one at the
+  first question, and leave the quiz's `timeLimitMin` out (it's the sections added up). Work out each
+  part's minutes from its questions, as for the time limit (Defaults), with room to check work.
+- Set `"noRun": true` on code questions only if I ask for code without running.
 
 **Every question**
 - Give every question an `explanation`: why the right answer is right, and for multiple choice,
@@ -117,6 +125,9 @@ that should go to thinking. Keep to these limits, even when the notes are wordy:
   don't just restate the answer.
 - Prompts say exactly what's asked, including edge cases ("return 0 for an empty array").
   No hints and nothing that gives the answer away.
+- Give each question a short `name`, like "countVowels" or "Search running time". Students see the
+  names before they start, so a name never gives the answer away ("Binary search" for "which search
+  is this?" does).
 
 **Multiple choice**
 - Exactly one clearly correct answer.

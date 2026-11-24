@@ -74,6 +74,10 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
   question and write `{{x}}` where each value goes, answers included. Work out every row's answer
   yourself and check each one: a wrong row is a wrong answer key for some students.
 - **Locked parts:** `"lockParts": true` only when asked that students can't go back to earlier parts.
+- **Code without running:** `"noRun": true` on a code question only when asked that students write it
+  without running it, like on paper.
+- **Turning in early:** `"turnInEarly": true` only when asked that students can turn in before time is up.
+- **Math:** write it in LaTeX, `$x^2$` in a line and `$$...$$` on its own line.
 - **Timed parts:** only when asked for a time per part ("15 minutes for multiple choice, then 20 for
   code"). Give every section a `timeLimitMin`, start the first one at the first question, and leave the
   quiz's `timeLimitMin` out: it's the sections added up. Parts lock on their own.
