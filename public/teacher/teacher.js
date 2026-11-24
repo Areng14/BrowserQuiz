@@ -154,7 +154,10 @@
     // After an admin reset, with the quiz key not in memory: the recovery code keeps their quizzes.
     let recover = false;
     let fromEnv = false; // admin's first sign-in, with ADMIN_PASSWORD: it isn't a temporary one
-    if (first) { try { const me = await api('/api/t/me'); recover = !!(me.teacher && me.teacher.needsRecovery); fromEnv = !!(me.teacher && me.teacher.passwordFromEnv); } catch (e) { return; } }
+    let uname = who ? who.username : '';
+    if (first) { try { const me = await api('/api/t/me'); recover = !!(me.teacher && me.teacher.needsRecovery); fromEnv = !!(me.teacher && me.teacher.passwordFromEnv); uname = (me.teacher && me.teacher.username) || uname; } catch (e) { return; } }
+    // whose password this is, for password managers (they save the new one under this account)
+    const account = h('input', { type: 'text', autocomplete: 'username', value: uname, readonly: true, hidden: true, tabindex: '-1', 'aria-hidden': 'true' });
     const code = h('input', { class: 'input t-mono', id: 'pw-code', autocomplete: 'off', spellcheck: 'false', placeholder: 'XXXX-XXXX-XXXX-XXXX-XXXX' });
     const fresh = h('input', { type: 'checkbox', id: 'pw-fresh' });
     fresh.addEventListener('change', () => { code.disabled = fresh.checked; });
@@ -163,7 +166,7 @@
     const again = h('input', { class: 'input', type: 'password', id: 'pw-again', autocomplete: 'new-password' });
     const msg = h('p', { class: 't-error', role: 'alert' });
     const btn = h('button', { class: 'btn primary', type: 'submit', text: 'Save password' });
-    const form = h('form', { class: 't-login' },
+    const form = h('form', { class: 't-login' }, account,
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
       h('h1', { text: first ? 'Pick your password' : 'Change your password' }),
       h('label', { class: 'field', for: 'pw-cur' }, h('span', { class: 'field-label', text: first && !fromEnv ? 'Temporary password' : 'Current password' }), cur),
