@@ -80,6 +80,8 @@
     return b;
   }
   let who = null; // the signed-in teacher, from /api/t/me
+  // The password just typed at sign-in, so picking a new one doesn't ask for it again (memory only).
+  let justTyped = null;
   // The signed-in teacher's name, opening a menu: their password (or, for admin with the password in
   // .env, which is changed there, only passkeys) and Sign out.
   function accountMenu() {
@@ -139,7 +141,7 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       btn.disabled = true; msg.textContent = '';
-      try { const r = await post('/api/t/login', { username: user.value.trim(), password: pw.value }); if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else route(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
+      try { const r = await post('/api/t/login', { username: user.value.trim(), password: pw.value }); justTyped = { pw: pw.value, at: Date.now() }; if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else route(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
     });
     mount(h('main', { class: 't-login-page' }, form, h('p', { class: 't-login-foot' }, ghLink())));
     user.focus();
@@ -167,6 +169,9 @@
     const fresh = h('input', { type: 'checkbox', id: 'pw-fresh' });
     fresh.addEventListener('change', () => { code.disabled = fresh.checked; });
     const cur = h('input', { class: 'input', type: 'password', id: 'pw-cur', autocomplete: 'current-password' });
+    const known = first && justTyped && Date.now() - justTyped.at < 10 * 60000;
+    if (known) cur.value = justTyped.pw;
+    const curField = h('label', { class: 'field', for: 'pw-cur', hidden: known }, h('span', { class: 'field-label', text: first && !fromEnv ? 'Temporary password' : 'Current password' }), cur);
     const next = h('input', { class: 'input', type: 'password', id: 'pw-new', autocomplete: 'new-password', minlength: '10' });
     const again = h('input', { class: 'input', type: 'password', id: 'pw-again', autocomplete: 'new-password' });
     const msg = h('p', { class: 't-error', role: 'alert' });
@@ -175,7 +180,7 @@
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
       h('h1', { text: needName ? 'Pick your username and password' : first ? 'Pick your password' : 'Change your password' }),
       needName ? h('label', { class: 'field', for: 'pw-user' }, h('span', { class: 'field-label', text: 'Username' }), account) : null,
-      h('label', { class: 'field', for: 'pw-cur' }, h('span', { class: 'field-label', text: first && !fromEnv ? 'Temporary password' : 'Current password' }), cur),
+      curField,
       h('label', { class: 'field', for: 'pw-new' }, h('span', { class: 'field-label', text: 'New password (10+ characters)' }), next),
       h('label', { class: 'field', for: 'pw-again' }, h('span', { class: 'field-label', text: 'New password again' }), again),
       recover ? [
@@ -191,11 +196,15 @@
       if (recover && fresh.checked && !(await ask.confirm({ title: 'Start over?', text: 'Your quizzes, and the results from them, are deleted for good.', ok: 'Start over', danger: true }))) { btn.disabled = false; return; }
       try {
         const r = await post('/api/t/me/password', { current: cur.value, next: next.value, username: needName ? account.value.trim() : undefined, recoveryCode: recover && !fresh.checked ? code.value : undefined, startOver: recover && fresh.checked });
+        justTyped = null;
         if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else showHome();
-      } catch (ex) { msg.textContent = ex.message; btn.disabled = false; }
+      } catch (ex) {
+        msg.textContent = ex.message; btn.disabled = false;
+        if (ex.code === 'bad_password' && curField.hidden) { curField.hidden = false; cur.value = ''; cur.focus(); }
+      }
     });
     mount(h('main', { class: 't-login-page' }, form, !first && PASSKEYS ? passkeysSection(false) : null));
-    (needName ? account : cur).focus();
+    (needName ? account : known ? next : cur).focus();
   }
 
   // ---------- passkeys ----------
