@@ -708,8 +708,11 @@ th .qe-gridcell { font: 600 13px var(--font); }
   .t-section > .t-row > .field { max-width: 440px; }
   .t-start-form > .t-row:first-child { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
 }
+@media (min-width: 1101px) and (pointer: coarse) { .t-app .t-table td.t-actions { height: 57px; } } /* touch-sized buttons */
 @media (min-width: 1101px) {
   .t-table td.t-actions { width: 1%; text-align: right; }
+  /* a row with no buttons (admin, Not joined) is as tall as one with them: rows stay evenly spaced */
+  .t-table td.t-actions { height: 51px; }
   /* the live run's buttons stay in view when the table scrolls sideways */
   .t-run td.t-actions, .t-run thead th:last-child { position: sticky; right: 0; z-index: 1; box-shadow: -10px 0 10px -10px rgba(0, 0, 0, 0.3); }
   .t-run td.t-actions { background: var(--bg); }
