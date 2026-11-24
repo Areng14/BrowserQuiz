@@ -1142,14 +1142,16 @@
     return h('td', { class: 'num' + (!a.strikes && !away ? ' t-zero' : ''), 'data-label': 'Strikes', title: a.awayMs ? `Away ${mmss(a.awayMs)} in all` : null },
       String(a.strikes), away ? [h('span', { class: 't-muted', text: ' · ' }), away] : null);
   }
-  // The bar: answered out of all, colored by what they're doing (green working, blue reading, gray idle),
-  // which hovering (and a screen reader) says in words.
+  // The bar: answered out of all, colored by what they're doing (green working, blue reading, gray idle,
+  // plain on directions), which hovering (and a screen reader) says in words.
   function progressCell(a) {
     if (!a || a.status === 'waiting') return h('td', { class: 'num', 'data-label': 'Progress' });
     const pct = a.total ? Math.round((a.answered / a.total) * 100) : 0;
-    const act = a.status === 'active' ? a.activity : null;
-    const at = a.on === 'review' ? 'the review' : a.on === 'directions' ? 'directions' : a.on ? `question ${a.on}` : null;
-    const on = !act || !at ? null
+    // on a part's directions (a part starting, or opened again): no color, it's neither working nor idle
+    const dirs = a.status === 'active' && a.on === 'directions';
+    const act = a.status === 'active' && !dirs ? a.activity : null;
+    const at = a.on === 'review' ? 'the review' : a.on ? `question ${a.on}` : null;
+    const on = dirs ? 'reading directions' : !act || !at ? null
       : act === 'working' ? (a.on === 'review' ? 'checking their work' : `working on ${at}`)
       : act === 'idle' ? `idle on ${at}`
       : a.on === 'review' ? 'checking their work' : `reading ${at}`;
