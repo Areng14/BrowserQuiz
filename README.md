@@ -56,8 +56,7 @@ points.
 - Students never find out they got flagged. Their screens look the same either way.
 - Student code runs in its own sandbox on the server, with no internet.
 - Each teacher's quizzes are encrypted with their own key, so even whoever hosts it can't read them.
-- Five rounds of AI security testing. Everything they found got fixed or written up in
-  [docs/security.md](docs/security.md).
+- Five rounds of security testing.
 
 The details are in [docs/security.md](docs/security.md).
 
