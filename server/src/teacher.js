@@ -204,8 +204,8 @@ function liveRow(student, a, quiz, run) {
       activity: a.status === 'active' ? activity(a, Date.now()) : null,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
       letIn: !!(a.letIn && Date.now() - a.letIn < LET_IN_MS),
-      score: t ? (a.integrity === 'invalidated' ? 0 : t.score) : null, rawScore: t ? t.score : null, max: t ? t.max : null,
-      pending: t ? t.pending : 0, failed: t ? t.failed : 0, review: t ? t.review : 0,
+      score: t && !sealed(run) ? (a.integrity === 'invalidated' ? 0 : t.score) : null, rawScore: t && !sealed(run) ? t.score : null, max: t && !sealed(run) ? t.max : null,
+      pending: t && !sealed(run) ? t.pending : 0, failed: t && !sealed(run) ? t.failed : 0, review: t && !sealed(run) ? t.review : 0,
       // corrections: the exam score, what corrections add, and the total (the teacher's view only)
       corrections: run && run.corrects && a.status === 'submitted' ? C.standing(quiz, run, a) : undefined,
     },
@@ -404,6 +404,11 @@ function startSession(req, res, teacherId, passkey) {
 // firing them all at once doesn't help. A spent budget only blocks new sign-ins for a minute; teachers already
 // signed in keep working, and the right password refunds its try.
 const loginBuckets = new Map();
+// An exam still open is proctoring only: no answers, scores, replays or reports for the teacher until
+// it's closed, so nothing on the teacher's screen can be read over their shoulder. Practice and
+// corrections aren't sealed.
+const sealed = (run) => !!run && run.mode !== 'practice' && run.status === 'open';
+const notWhileOpen = (run) => { if (sealed(run)) throw new HttpError(409, 'quiz_open', 'Answers and results show once the quiz is closed.'); };
 // Wrong passwords for one account, from anywhere: after 5 in a row it waits 30 seconds, doubling with each
 // further miss up to 15 minutes. A browser the teacher has signed in from before skips the wait, so a
 // student can't lock the teacher out by guessing on purpose (the device cookie, signed with ID_PEPPER).
@@ -1022,6 +1027,7 @@ module.exports = function teacherRoutes(r) {
   r.get('/api/t/runs/:id/ai-prompt', (req, res, p) => {
     const me = requireTeacher(req);
     const run = getRun(me, p.id);
+    notWhileOpen(run);
     const quiz = store.getQuiz(run.quiz_id);
     const work = pasteWork(run, quiz, new URL(req.url, 'http://x').searchParams.get('attempt'));
     json(res, 200, { answers: work.length, students: new Set(work.map((w) => w.tok)).size, prompt: work.length ? AICSV.buildPrompt(work) : '' });
@@ -1029,6 +1035,7 @@ module.exports = function teacherRoutes(r) {
   r.post('/api/t/runs/:id/ai-csv', async (req, res, p) => {
     const me = requireTeacher(req);
     const run = getRun(me, p.id);
+    notWhileOpen(run);
     const body = await readJson(req, 2 * 1024 * 1024);
     const quiz = store.getQuiz(run.quiz_id);
     const work = pasteWork(run, quiz, typeof body.attempt === 'string' ? body.attempt : null);
@@ -1070,6 +1077,7 @@ module.exports = function teacherRoutes(r) {
   r.post('/api/t/runs/:id/ai-grade', (req, res, p) => {
     const me = requireTeacher(req);
     const run = getRun(me, p.id);
+    notWhileOpen(run);
     const quiz = store.getQuiz(run.quiz_id);
     const attempts = q('SELECT id FROM attempts WHERE run_id = ? AND archived = 0').all(run.id).map((x) => store.getAttempt(x.id));
     const job = startAi(me, run, quiz, attempts);
@@ -1079,6 +1087,7 @@ module.exports = function teacherRoutes(r) {
   r.post('/api/t/attempts/:id/ai-grade', (req, res, p) => {
     const me = requireTeacher(req);
     const { a, run } = getAttemptRun(me, p.id);
+    notWhileOpen(run);
     const quiz = store.getQuiz(run.quiz_id);
     const job = startAi(me, run, quiz, [a]);
     audit(me, 'ai-grade', a.id, null);
@@ -1191,6 +1200,7 @@ module.exports = function teacherRoutes(r) {
   r.get('/api/t/runs/:id/export.csv', (req, res, p) => {
     const me = requireTeacher(req);
     const run = getRun(me, p.id);
+    notWhileOpen(run);
     const quiz = store.getQuiz(run.quiz_id);
     const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const iso = (t) => (t ? new Date(t).toISOString() : '');
@@ -1233,8 +1243,9 @@ module.exports = function teacherRoutes(r) {
       awayMs: (a.awayMs || 0) + store.awayNow(a, Date.now()), awayMax: Math.max(a.awayMax || 0, store.awayNow(a, Date.now())), startedAt: a.startedAt, submittedAt: a.submittedAt,
       deadline: a.deadline, timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
       timeX: student && student.time_x && student.time_x !== 1 ? student.time_x : undefined,
-      totals: totals(a.result, quiz, a.answers, a.layout), answers: answerReport(quiz, a), events,
-      quiz: reportQuiz(quiz, run.quiz_id), report: studentReport(quiz, a, student ? student.name : ''), mouse: mouse.slice(-3000), ip: a.ip, userAgent: a.userAgent,
+      sealed: sealed(run) || undefined,
+      totals: sealed(run) ? null : totals(a.result, quiz, a.answers, a.layout), answers: sealed(run) ? [] : answerReport(quiz, a), events,
+      quiz: sealed(run) ? null : reportQuiz(quiz, run.quiz_id), report: sealed(run) ? null : studentReport(quiz, a, student ? student.name : ''), mouse: mouse.slice(-3000), ip: a.ip, userAgent: a.userAgent,
     });
   });
 
@@ -1246,11 +1257,11 @@ module.exports = function teacherRoutes(r) {
     const quiz = store.getQuiz(run.quiz_id);
     const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
     // their clock, as of the watch page's playback (watch.js DELAY)
-    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, now: Date.now(), delay: 2500, practice: run.mode === 'practice' });
+    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: sealed(run) ? {} : a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, now: Date.now(), delay: 2500, practice: run.mode === 'practice' });
   });
   r.get('/api/t/attempts/:id/watch', (req, res, p) => {
     const me = requireTeacher(req);
-    const { a } = getAttemptRun(me, p.id);
+    const { a, run } = getAttemptRun(me, p.id);
     const url = new URL(req.url, 'http://x');
     const now = Date.now();
     const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
@@ -1269,8 +1280,10 @@ module.exports = function teacherRoutes(r) {
       name: student ? student.name : '?', runId: a.runId, status: a.status, integrity: a.integrity, now, ver, ended, submittedAt: a.submittedAt || null, deadline: a.deadline || null,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - now) : null,
       away: !!store.awayNow(a, now) || !!a.away,
-      answers: url.searchParams.get('ver') === ver ? undefined : (a.answers || {}),
+      // an open exam: where they are and what they do, not what they answer, run or scribble
+      answers: sealed(run) || url.searchParams.get('ver') === ver ? undefined : (a.answers || {}),
       ...W.look(a, url.searchParams.get('since'), now, url.searchParams.get('xver')),
+      ...(sealed(run) ? { extra: undefined } : {}),
     });
   });
 
@@ -1279,7 +1292,8 @@ module.exports = function teacherRoutes(r) {
   // replays had a starting point (no init) can't be rebuilt, so the page says so.
   r.get('/api/t/attempts/:id/replay', (req, res, p) => {
     const me = requireTeacher(req);
-    const { a } = getAttemptRun(me, p.id);
+    const { a, run } = getAttemptRun(me, p.id);
+    notWhileOpen(run);
     const out = {};
     for (const row of q('SELECT deltas FROM code_edits WHERE attempt_id = ? ORDER BY rowid').all(a.id)) {
       let list;
@@ -1300,6 +1314,7 @@ module.exports = function teacherRoutes(r) {
   r.get('/api/t/attempts/:id/report', (req, res, p) => {
     const me = requireTeacher(req);
     const { a, run } = getAttemptRun(me, p.id);
+    notWhileOpen(run);
     const quiz = store.getQuiz(run.quiz_id);
     const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
     json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: [studentReport(quiz, a, student ? student.name : '')] });
@@ -1308,6 +1323,7 @@ module.exports = function teacherRoutes(r) {
   r.get('/api/t/runs/:id/report', (req, res, p) => {
     const me = requireTeacher(req);
     const run = getRun(me, p.id);
+    notWhileOpen(run);
     const quiz = store.getQuiz(run.quiz_id);
     const rows = q(`SELECT attempts.id, roster_students.name FROM attempts JOIN roster_students ON roster_students.id = attempts.student_id
       WHERE attempts.run_id = ? AND attempts.archived = 0 AND attempts.status = 'submitted' ORDER BY roster_students.name`).all(run.id);

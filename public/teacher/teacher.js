@@ -1441,7 +1441,8 @@
       // Each question as it looked in the quiz, with this student's answer and the correct one,
       // plus what only the teacher sees: grading state, hidden test results, and the grading controls.
       const sharedSeen = new Set();
-      const answers = h('div', { class: 't-answers r-view' }, d.report.questions.map((rq, i) => {
+      // an exam still open: proctoring only, the answers come with the results
+      const answers = d.sealed ? h('p', { class: 't-muted', text: 'Answers show once the quiz is closed.' }) : h('div', { class: 't-answers r-view' }, d.report.questions.map((rq, i) => {
         const x = d.answers[i];
         const sec = window.BQReport.question(d.quiz, rq, i, { teacher: true, sharedSeen, attemptId: id });
         const notes = [];
@@ -1484,14 +1485,14 @@
           d.status === 'active' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }, dk('end'))) : null,
           d.status === 'active' && d.deadline ? h('span', Object.assign({ class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }, ticks('left-label', d.timeLeft || 0))) : null,
           d.timeX ? h('span', { class: 't-muted t-small', text: `${d.timeX}× time` }) : null,
-          d.status === 'submitted' ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
+          d.status === 'submitted' && !d.sealed ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
           d.status === 'submitted' && d.totals && d.totals.review ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Grade with AI', title: 'Send the answers waiting for you to Claude. Names and IDs stay here.',
             onclick: () => aiDialog(runId, id, aiDone) }, dk('ai'))) : null,
           moreMenu(`More for ${d.name}`, 'detail:more', [
             d.status === 'active' && d.deadline ? { text: 'Add 5 minutes', onclick: () => { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: 5 }); } } : null,
             d.status !== 'submitted' ? { text: 'Message', onclick: () => messageStudent(id, d.name) } : null,
             d.integrity !== 'invalidated' && !(lastRun && lastRun.practice) ? { text: 'Invalidate', onclick: () => invalidate(id, d.name) } : null,
-            d.status === 'submitted' ? { text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) } : null,
+            d.status === 'submitted' && !d.sealed ? { text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) } : null,
             (d.status === 'active' || d.status === 'admitted') && !(lastRun && lastRun.practice) ? { text: 'Let back in', onclick: () => act(`/api/t/attempts/${id}/let-in`) } : null,
             { text: 'Reset', danger: true, onclick: () => resetAttempt(id, d.name, closeDetail) },
           ], () => refresh())),
@@ -1502,9 +1503,9 @@
             h('ul', { class: 't-events' }, d.events.map((e) => h('li', { class: e.severity }, h('time', { text: clock(e.t) }), h('span', {}, h('b', { text: LABEL[e.type] || e.type }), e.detail ? h('span', { class: 't-muted', text: ` ${e.detail}` }) : null))))),
           h('div', { class: 't-section' }, h('h3', { text: 'Mouse trail' }), canvas,
             d.userAgent ? h('p', { class: 't-muted t-small', title: d.userAgent, text: browserName(d.userAgent) }) : null)),
-        h('div', { class: 't-section' }, h('h3', { text: d.totals ? `Answers (${d.totals.score} / ${d.totals.max}${d.totals.pending ? ', code still grading' : d.totals.failed ? ', grading failed' : d.totals.review ? ', needs review' : ''})` : 'Answers so far' }), answers)));
+        h('div', { class: 't-section' }, h('h3', { text: d.sealed ? 'Answers' : d.totals ? `Answers (${d.totals.score} / ${d.totals.max}${d.totals.pending ? ', code still grading' : d.totals.failed ? ', grading failed' : d.totals.review ? ', needs review' : ''})` : 'Answers so far' }), answers)));
       drawTrail(canvas, d.mouse);
-      window.BQReport.highlight(answers);
+      if (!d.sealed) window.BQReport.highlight(answers);
       if (keep) { const again = detail.querySelector(`[data-key="${CSS.escape(keep)}"]`); if (again) again.focus({ preventScroll: true }); }
       if (!quiet) {
         // A phone: the student's page covers the list, and closing it is back where they were.
@@ -1634,7 +1635,8 @@
     });
     const runMenu = moreMenu('More for this quiz', 'run:more', () => [lockBtn, notifyBtn,
       ...(lastRun && lastRun.sebFile && lastRun.status === 'open' && sebParts ? sebParts : []),
-      exportLink, classReport,
+      // results (export, class report) once an exam is closed: while it's open it's proctoring only
+      ...(lastRun && !lastRun.practice && lastRun.status === 'open' ? [] : [exportLink, classReport]),
       // an exam still open: corrections from here too (once it's closed, the button's on the row)
       lastRun && !lastRun.practice && !lastRun.corrections && lastRun.status === 'open' ? { text: 'Corrections', onclick: () => correctionsDialog(runId, lastRun) } : null], () => refresh());
     detail.className = 't-detail-host';

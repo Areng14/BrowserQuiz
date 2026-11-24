@@ -588,8 +588,7 @@
       h('p', { class: 'eyebrow', text: S.run.title }),
       h('div', { class: 'heading' },
         h('h1', { text: 'Practice' }),
-        h('p', { text: summaryLine(S.run) }),
-        h('p', { text: 'Your teacher can watch the quiz page live.' })),
+        h('p', { text: summaryLine(S.run) })),
       btn, msg)));
     btn.focus();
   }
