@@ -569,9 +569,9 @@ h1[tabindex="-1"]:focus { outline: none; }
 .scratch-grip:hover::after, .scratch-grip.dragging::after, .scratch-grip:focus-visible::after { background: var(--accent); }
 .scratch-grip:focus-visible { outline: none; }
 
-/* Snake on the review page, while a timed exam waits for time to run out */
-.review-game { margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--line); }
-.review-game h2 { margin: 0 0 12px; font-size: 16px; }
+/* Snake, from the review page of a timed exam while it waits for time to run out */
+.game-modal { width: min(100%, 480px); gap: 12px; }
+.game-modal .snake { margin: 0 auto; }
 
 /* Question statuses carry an icon too (not just a color): a check once answered, a bookmark when marked
    for review, in the question grid and its legend */

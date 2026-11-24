@@ -964,7 +964,7 @@
     const prev = h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => go(S.reviewOpen ? S.quiz.questions.length - 1 : S.idx - 1) });
     const next = h('button', { class: 'btn', type: 'button' });
     next.addEventListener('click', () => {
-      if (S.reviewOpen) return openSubmit();
+      if (S.reviewOpen) return timedExam() ? openGame() : openSubmit();
       if (S.dirOpen) return closeDirections();
       if (S.idx === S.quiz.questions.length - 1) return openReview();
       go(S.idx + 1);
@@ -1052,10 +1052,10 @@
     const total = S.quiz.questions.length;
     if (S.reviewOpen) {
       S.el.prev.disabled = false;
-      // a timed exam turns in by itself when time is up: no turning in early
-      S.el.next.textContent = timedExam() ? 'Turns in when time is up' : 'Submit';
+      // a timed exam turns in by itself when time is up: no turning in early, a game instead while they wait
+      S.el.next.textContent = timedExam() ? 'Play snake' : 'Submit';
       S.el.next.className = timedExam() ? 'btn' : 'btn primary';
-      S.el.next.disabled = timedExam();
+      S.el.next.disabled = false;
       S.el.jump.hidden = true;
       document.title = `Check your work – ${S.quiz.title}`;
       if (S.el.hlBar) S.el.hlBar.hide();
@@ -2160,10 +2160,24 @@
     const marked = qs.filter(isMarked).length;
     return h('div', { class: 'qview review' },
       h('h1', { id: 'q-heading', tabindex: '-1', text: 'Check your work' }),
-      h('p', { class: 'muted', text: `${done} of ${plural(qs.length, 'question')} answered${marked ? `, ${marked} for review` : ''}.` }),
-      ...questionGrid(go),
-      // done before time is up, and it can't be turned in yet: something to do while they wait (snake.js)
-      timedExam() && !cfg.watch && BQ.snake ? h('section', { class: 'review-game', 'aria-label': 'Snake' }, h('h2', { text: 'While you wait' }), BQ.snake()) : null);
+      h('p', { class: 'muted', text: `${done} of ${plural(qs.length, 'question')} answered${marked ? `, ${marked} for review` : ''}.${timedExam() ? ' Turns in when time is up.' : ''}` }),
+      ...questionGrid(go));
+  }
+  // Done before time is up on a timed exam: snake (snake.js) in a dialog, while they wait. Still in the quiz.
+  function openGame() {
+    if (S.done || !S.el || cfg.watch || !BQ.snake || S.el.wrap.querySelector('.modal-backdrop')) return;
+    let backdrop;
+    let release = null;
+    const close = () => { backdrop.remove(); release(); };
+    const x = h('button', { class: 'btn small ghost nav-close', type: 'button', 'aria-label': 'Close', onclick: close }, closeIcon());
+    backdrop = h('div', { class: 'modal-backdrop' },
+      h('div', { class: 'modal game-modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'game-title' },
+        h('div', { class: 'nav-head' }, h('h2', { id: 'game-title', text: 'Snake' }), x),
+        BQ.snake()));
+    S.el.wrap.append(backdrop);
+    release = holdFocus(backdrop, close);
+    const play = backdrop.querySelector('.snake button');
+    (play || x).focus();
   }
   function chevronUp() {
     const s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
