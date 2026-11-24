@@ -1155,7 +1155,8 @@
       : a.on === 'review' ? 'checking their work' : `reading ${at}`;
     return h('td', { class: 'num t-progress', 'data-label': 'Progress', title: on ? on[0].toUpperCase() + on.slice(1) : null },
       h('span', { class: 't-prog' + (act ? ' is-' + act : ''), 'aria-hidden': 'true' }, h('span', { style: `width:${pct}%` })),
-      h('span', { text: `${a.answered}/${a.total}` }),
+      // as wide as the widest count, so the bars line up down the column (9/14 under 10/14)
+      h('span', { class: 't-prog-n', style: `min-width:${2 * String(a.total).length + 1}ch`, text: `${a.answered}/${a.total}` }),
       on ? h('span', { class: 'sr-only', text: `, ${on}` }) : null);
   }
   // Less-used actions behind a ⋯ button: a row's, a quiz's, the live quiz's. items: { text, onclick, danger }
