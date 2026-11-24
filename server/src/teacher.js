@@ -1257,7 +1257,7 @@ module.exports = function teacherRoutes(r) {
     const quiz = store.getQuiz(run.quiz_id);
     const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
     // their clock, as of the watch page's playback (watch.js DELAY)
-    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: sealed(run) ? {} : a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, now: Date.now(), delay: 2500, practice: run.mode === 'practice' });
+    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, now: Date.now(), delay: 2500, practice: run.mode === 'practice' });
   });
   r.get('/api/t/attempts/:id/watch', (req, res, p) => {
     const me = requireTeacher(req);
@@ -1280,10 +1280,9 @@ module.exports = function teacherRoutes(r) {
       name: student ? student.name : '?', runId: a.runId, status: a.status, integrity: a.integrity, now, ver, ended, submittedAt: a.submittedAt || null, deadline: a.deadline || null,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - now) : null,
       away: !!store.awayNow(a, now) || !!a.away,
-      // an open exam: where they are and what they do, not what they answer, run or scribble
-      answers: sealed(run) || url.searchParams.get('ver') === ver ? undefined : (a.answers || {}),
+      // Watch is their screen as they see it, answers and all (proctoring needs to see what they do)
+      answers: url.searchParams.get('ver') === ver ? undefined : (a.answers || {}),
       ...W.look(a, url.searchParams.get('since'), now, url.searchParams.get('xver')),
-      ...(sealed(run) ? { extra: undefined } : {}),
     });
   });
 
