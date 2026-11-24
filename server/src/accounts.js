@@ -91,6 +91,7 @@ async function createKey(teacherId, password) {
     q('UPDATE teachers SET key_wrap = ?, rec_wrap = ? WHERE id = ?').run(keyWrap, recWrap, teacherId);
     q('DELETE FROM passkeys WHERE teacher_id = ?').run(teacherId);
   });
+  if (V.isAdmin(teacherId)) V.setAdmin(teacherId, false); // .env no longer keys anything of theirs
   V.unlock(teacherId, key);
   const old = V.legacyAdminKey(teacherId);
   if (old) { rekeyOwned(teacherId, old, key); require('./people').sealPeople(teacherId, old, key); }
@@ -121,8 +122,10 @@ async function ensureAdmin() {
   if (admin.role !== 'admin' || admin.disabled) q("UPDATE teachers SET role = 'admin', disabled = 0 WHERE id = ?").run(admin.id);
   const fromEnv = !!pw && !admin.key_wrap;
   if (pw && admin.key_wrap) console.log('BrowserQuiz: admin has its own password, so ADMIN_PASSWORD is not used. Locked out? Set ADMIN_RESET.');
-  if (fromEnv && (admin.must_change || !(await checkPassword(pw, admin.pw_hash)))) {
-    q('UPDATE teachers SET pw_hash = ?, must_change = 0 WHERE id = ?').run(await hashPassword(pw), admin.id);
+  // ADMIN_PASSWORD is only for the first sign-in: then admin picks their own password (it can be the same)
+  // and gets their own key and a recovery code, so .env no longer opens admin's quizzes or students.
+  if (fromEnv && (!admin.must_change || !(await checkPassword(pw, admin.pw_hash)))) {
+    q('UPDATE teachers SET pw_hash = ?, must_change = 1 WHERE id = ?').run(await hashPassword(pw), admin.id);
   }
   if (!fromEnv && !code) {
     const reset = process.env.ADMIN_RESET || '';

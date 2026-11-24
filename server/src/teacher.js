@@ -523,7 +523,7 @@ module.exports = function teacherRoutes(r) {
   r.post('/api/t/me/password', async (req, res) => {
     const me = requireTeacher(req, { setup: true });
     const body = await readJson(req, 4096);
-    if (me.role === 'admin' && V.adminPasswordFromEnv()) throw new HttpError(400, 'admin_env', 'The admin password is ADMIN_PASSWORD in .env. Change it there and restart.');
+    if (me.role === 'admin' && V.adminPasswordFromEnv() && !me.must_change) throw new HttpError(400, 'admin_env', 'The admin password is ADMIN_PASSWORD in .env. Change it there and restart.');
     const next = String(body.next || '');
     if (next.length < A.MIN_PASSWORD) throw new HttpError(400, 'weak', `Use at least ${A.MIN_PASSWORD} characters.`);
     const t = A.byId(me.id);

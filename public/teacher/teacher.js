@@ -153,7 +153,8 @@
     }
     // After an admin reset, with the quiz key not in memory: the recovery code keeps their quizzes.
     let recover = false;
-    if (first) { try { const me = await api('/api/t/me'); recover = !!(me.teacher && me.teacher.needsRecovery); } catch (e) { return; } }
+    let fromEnv = false; // admin's first sign-in, with ADMIN_PASSWORD: it isn't a temporary one
+    if (first) { try { const me = await api('/api/t/me'); recover = !!(me.teacher && me.teacher.needsRecovery); fromEnv = !!(me.teacher && me.teacher.passwordFromEnv); } catch (e) { return; } }
     const code = h('input', { class: 'input t-mono', id: 'pw-code', autocomplete: 'off', spellcheck: 'false', placeholder: 'XXXX-XXXX-XXXX-XXXX-XXXX' });
     const fresh = h('input', { type: 'checkbox', id: 'pw-fresh' });
     fresh.addEventListener('change', () => { code.disabled = fresh.checked; });
@@ -165,7 +166,7 @@
     const form = h('form', { class: 't-login' },
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
       h('h1', { text: first ? 'Pick your password' : 'Change your password' }),
-      h('label', { class: 'field', for: 'pw-cur' }, h('span', { class: 'field-label', text: first ? 'Temporary password' : 'Current password' }), cur),
+      h('label', { class: 'field', for: 'pw-cur' }, h('span', { class: 'field-label', text: first && !fromEnv ? 'Temporary password' : 'Current password' }), cur),
       h('label', { class: 'field', for: 'pw-new' }, h('span', { class: 'field-label', text: 'New password (10+ characters)' }), next),
       h('label', { class: 'field', for: 'pw-again' }, h('span', { class: 'field-label', text: 'New password again' }), again),
       recover ? [

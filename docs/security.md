@@ -61,8 +61,8 @@ aren't in the sandbox. The same goes for C#, Go and Rust, which have no speed te
     name).
   - The server has to read a quiz to grade it, so a host who changes the server's code can get at a
     quiz while it's unlocked.
-  - When admin's password comes from `.env` (`ADMIN_PASSWORD`), admin's quizzes and students are keyed
-    off `.env`, which the host has anyway. With the one-time code instead, admin gets their own key too.
+  - Admin's first password can come from `.env` (`ADMIN_PASSWORD`), which the host has anyway. Signing in
+    with it, admin picks their own and gets their own key, and from then on `.env` opens nothing.
 
 ## Private by default
 

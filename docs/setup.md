@@ -43,8 +43,10 @@ it up:
   - Admin's quizzes are then encrypted with admin's own key, like every teacher's.
   - Forgot the password later? Set `ADMIN_RESET` to any new word and restart. The log shows a new code,
     once, and your recovery code keeps your quizzes.
-- **A password in `.env`:** set `ADMIN_PASSWORD` (the setup script does this). To change it, edit
-  `.env` and run `docker compose up -d` again. That's also the way back in if you forget it.
+- **A first password in `.env`:** set `ADMIN_PASSWORD` (the setup script and the Railway button do
+  this). Sign in with it once and you pick your own password (it can be the same one) and get a
+  recovery code, like the one-time code. From then on `ADMIN_PASSWORD` isn't used; forgot the password?
+  `ADMIN_RESET`, as above.
 
 To add teachers, open the **Teachers** tab. Each new teacher gets a temporary password to pass on, and
 picks their own the first time they sign in.
