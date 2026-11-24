@@ -13,6 +13,7 @@ const { checkReferences, checkOutputs, runnerConfigured, runnerHealthy, runSampl
 const { totals, questionScore, gradeAttempt, answerReport, cleanAnswers, gradeAuto, studentReport, reportQuiz, isRun } = require('./grade');
 const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
+const Parts = require('./parts');
 const W = require('./watch');
 const { similarCode } = require('./similar');
 const { sameWrong } = require('./samewrong');
@@ -178,6 +179,11 @@ function activity(a, now) {
   if (now - (a.workedAt || 0) < 30000) return 'working';
   return now - (a.activeAt || a.startedAt || 0) < 120000 ? 'reading' : 'idle';
 }
+// The end of the clock that's running: the current part's, with timed parts, or else the quiz's.
+function partEnd(a, now) {
+  const ends = a.layout && Array.isArray(a.layout.partEnds) ? a.layout.partEnds : null;
+  return (ends && ends.find((e) => e > now)) || a.deadline;
+}
 function liveRow(student, a, quiz, run) {
   const timeX = student.time_x && student.time_x !== 1 ? student.time_x : undefined; // extra time
   if (!a) return { rosterId: student.id, name: student.name, timeX, attempt: null };
@@ -204,7 +210,8 @@ function liveRow(student, a, quiz, run) {
       seenAgo: (a.status === 'waiting' || a.status === 'admitted') && (a.seenAt || a.lastBeat) ? Date.now() - Math.max(a.seenAt || 0, a.lastBeat || 0) : null,
       answered, total: a.layout ? store.quizFor(quiz, a.layout).questions.length : store.perStudent(quiz).count, on, deadline: a.deadline,
       activity: a.status === 'active' ? activity(a, Date.now()) : null,
-      timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
+      timeLeft: a.status === 'active' && a.deadline ? Math.max(0, partEnd(a, Date.now()) - Date.now()) : null,
+      parts: Parts.liveParts(quiz, a, Date.now()), // timed parts: each one's size and answered, and the one they're on
       letIn: !!(a.letIn && Date.now() - a.letIn < LET_IN_MS),
       score: t && !sealed(run) ? (a.integrity === 'invalidated' ? 0 : t.score) : null, rawScore: t && !sealed(run) ? t.score : null, max: t && !sealed(run) ? t.max : null,
       pending: t && !sealed(run) ? t.pending : 0, failed: t && !sealed(run) ? t.failed : 0, review: t && !sealed(run) ? t.review : 0,
@@ -258,7 +265,7 @@ function getQuizRow(me, id) {
 function quizSource(quiz) {
   const out = { format: 1, title: quiz.title, timeLimitMin: quiz.timeLimitMin, language: quiz.language,
     shuffleQuestions: quiz.shuffleQuestions, shuffleChoices: quiz.shuffleChoices, integrity: quiz.integrity };
-  if (quiz.lockParts) out.lockParts = true;
+  if (quiz.lockParts && !quiz.timedParts) out.lockParts = true; // timed sections lock their parts anyway
   if (quiz.turnInEarly) out.turnInEarly = true;
   if (Object.keys(quiz.directions || {}).length) out.directions = quiz.directions;
   if (quiz.shared && quiz.shared.length) out.shared = quiz.shared;
@@ -1242,6 +1249,7 @@ module.exports = function teacherRoutes(r) {
       WHERE a.run_id = ? AND a.archived = 0 AND e.severity = 'violation' ORDER BY e.id`).all(run.id)) lastStrike.set(e.attempt_id, e.type);
     json(res, 200, {
       run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, sebQuit: run.seb_quit || null, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin,
+        timedParts: quiz.timedParts && !run.corrects ? quiz.sections.length : undefined, // how many timed parts
         corrections: run.corrects ? { earnBack: run.earn_back, why: !!run.ask_why } : null,
         joinUrl: joinOrigin(req), // where students go (not localhost)
         // an exam's answers still waiting for the teacher: corrections leave those out
@@ -1319,7 +1327,7 @@ module.exports = function teacherRoutes(r) {
     const quiz = store.getQuiz(run.quiz_id);
     const student = q('SELECT bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ?').get(a.studentId);
     // their clock, as of the watch page's playback (watch.js DELAY)
-    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, turnInAt: a.deadline ? Math.min(a.deadline, (a.layout && a.layout.turnInAt) || a.deadline) : null, now: Date.now(), delay: 2500, practice: run.mode === 'practice' });
+    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, turnInAt: a.deadline ? Math.min(a.deadline, (a.layout && a.layout.turnInAt) || a.deadline) : null, partEnds: Parts.timed(quiz, a.layout) ? a.layout.partEnds : undefined, now: Date.now(), delay: 2500, practice: run.mode === 'practice' });
   });
   r.get('/api/t/attempts/:id/watch', (req, res, p) => {
     const me = requireTeacher(req);
@@ -1340,6 +1348,7 @@ module.exports = function teacherRoutes(r) {
     }
     json(res, 200, {
       name: student ? student.name : '?', runId: a.runId, status: a.status, integrity: a.integrity, now, ver, ended, submittedAt: a.submittedAt || null, deadline: a.deadline || null,
+      partEnds: a.layout && Array.isArray(a.layout.partEnds) ? a.layout.partEnds : undefined,
       timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - now) : null,
       away: !!store.awayNow(a, now) || !!a.away,
       // Watch is their screen as they see it, answers and all (proctoring needs to see what they do)
@@ -1435,6 +1444,15 @@ module.exports = function teacherRoutes(r) {
       if (!(mins >= 1 && mins <= 120)) throw new HttpError(400, 'bad_request');
       if (a.status === 'active' && a.deadline) {
         a.deadline = Math.max(a.deadline, Date.now()) + mins * 60000;
+        const ends = a.layout && Array.isArray(a.layout.partEnds) ? a.layout.partEnds : null;
+        if (ends) {
+          // timed parts: the part they're on gets the time, and every part after it moves along
+          const now = Date.now();
+          let at = ends.findIndex((e) => e > now);
+          if (at < 0) at = ends.length - 1; // all over (not turned in yet): the last one
+          a.layout.partEnds = ends.map((e, k) => (k < at ? e : (k === at ? Math.max(e, now) : e) + mins * 60000));
+          a.deadline = a.layout.partEnds[a.layout.partEnds.length - 1];
+        }
         store.logEvent(a, 'extend', 'info', `+${mins} min`);
         store.save(a);
       }

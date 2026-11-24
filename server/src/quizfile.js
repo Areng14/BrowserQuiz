@@ -321,9 +321,27 @@ function normalizeQuiz(raw, assetNames) {
       if (!at.has(before)) fail(`${where}.before: there's no question "${before}".`);
       if (seen.has(before)) fail(`${where}: two sections start at question "${before}".`);
       seen.add(before);
-      return { before, title: typeof sec.title === 'string' ? sec.title.trim().slice(0, 120) : '', directions: typeof sec.directions === 'string' ? sec.directions.trim().slice(0, 4000) : '' };
+      const out = { before, title: typeof sec.title === 'string' ? sec.title.trim().slice(0, 120) : '', directions: typeof sec.directions === 'string' ? sec.directions.trim().slice(0, 4000) : '' };
+      if (sec.timeLimitMin != null && sec.timeLimitMin !== '') {
+        const mins = Number(sec.timeLimitMin);
+        if (!(mins > 0)) fail(`${where}.timeLimitMin should be a number of minutes, more than 0.`);
+        out.timeLimitMin = Math.max(1, Math.round(mins));
+      }
+      return out;
     }).sort((a, b) => at.get(a.before) - at.get(b.before));
     if (!quiz.sections.length) delete quiz.sections;
+    // Timed parts: each section has its own minutes, one after another (student.js, parts.js). Its parts
+    // lock as their time runs out, and the quiz's time is theirs added up.
+    const timed = (quiz.sections || []).filter((sec) => sec.timeLimitMin);
+    if (timed.length) {
+      if (timed.length < quiz.sections.length) fail('Give every section a timeLimitMin, or none of them.');
+      if (at.get(quiz.sections[0].before) !== 0) fail(`With timed sections, the first one has to start at the first question ("${quiz.questions[0].id}").`);
+      const total = timed.reduce((sum, sec) => sum + sec.timeLimitMin, 0);
+      if (total > 600) fail(`The sections' times add up to ${total} minutes; 600 at most.`);
+      quiz.timeLimitMin = total;
+      quiz.lockParts = true;
+      quiz.timedParts = true;
+    }
   }
   // Images written into the text as Markdown, ![alt](assets/name.png), have to be in assets/ too.
   for (const img of markdownImages(quiz)) if (!assetNames.has(img)) fail(`The image "${img}" in the text isn't in the assets folder.`);

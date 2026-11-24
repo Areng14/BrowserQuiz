@@ -1380,7 +1380,7 @@
       meta.textContent = run.corrections
         // each student has their own questions and no clock, so just what it is and what it's worth
         ? `Corrections, ${run.status === 'open' ? 'open' : 'closed'}. Fixed answers earn back ${Math.round(run.corrections.earnBack * 100)}%.`
-        : `${plural(run.questions, 'question')}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
+        : `${plural(run.questions, 'question')}${run.timedParts ? ` in ${run.timedParts} parts` : ''}${run.timeLimitMin ? `, ${plural(run.timeLimitMin, 'minute')}` : ''}. ${run.status === 'open' ? 'Open' : 'Closed'}${run.practice ? ', practice' : ''}${run.ipLock ? ', only your network' : ''}${run.seb ? ', Safe Exam Browser only' : ''}.`;
       // where students go: on localhost, this computer's network address (server: joinOrigin)
       const joinAt = run.joinUrl || "this computer's network address, not localhost";
       howTo.textContent = run.sebFile ? `Join at ${joinAt}, which opens Safe Exam Browser` : `Join at ${joinAt}`;

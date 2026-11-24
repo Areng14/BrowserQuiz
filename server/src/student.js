@@ -12,6 +12,7 @@ const { runSamples } = require('./coderun');
 const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } = require('./grade');
 const { fillTemplate } = require('./quizfile');
 const C = require('./corrections');
+const Parts = require('./parts');
 const { HttpError, addressKey, clientIp, trustedIp, sameNetwork, isHttps, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
 
 const PEPPER = process.env.ID_PEPPER || '';
@@ -268,53 +269,7 @@ function publicQuiz(quiz, layout) {
   };
 }
 
-// Where each section the teacher made starts, by position in this student's order. Shuffling stays inside
-// sections (store.makeLayout). A pool can leave out the question a section starts on: it then starts on
-// the student's first question after that point.
-function sectionStarts(quiz, layout) {
-  const at = new Map(quiz.questions.map((qq, i) => [qq.id, i]));
-  const order = layout ? layout.order : quiz.questions.map((qq) => qq.id);
-  const out = [];
-  for (const sec of quiz.sections || []) {
-    if (!at.has(sec.before)) continue;
-    const start = order.findIndex((id) => at.get(id) >= at.get(sec.before));
-    if (start < 0) continue;
-    if (out.length && out[out.length - 1].start === start) out.pop(); // a section this student has nothing in
-    out.push({ start, title: sec.title, directions: sec.directions });
-  }
-  return out;
-}
-
-// Locked parts (quiz.lockParts): once a student moves on from a part, its answers are final. Parts are
-// worked out as the student's page does (app.js partsFor): each section, or else each run of questions
-// of one type, in the student's own order. Not in corrections, which are their own few questions.
-const locks = (quiz, layout) => !!(quiz.lockParts && layout && !layout.subset && !layout.fix);
-function partsOf(quiz, layout) {
-  const qs = store.quizFor(quiz, layout).questions;
-  const typeOf = new Map(qs.map((qq) => [qq.id, qq.type]));
-  const starts = new Set(sectionStarts(quiz, layout).map((s) => s.start));
-  const part = new Map(); // question id -> part number (from 1)
-  let n = 0;
-  let type = null;
-  let section = false;
-  layout.order.forEach((id, i) => {
-    const t = typeOf.get(id);
-    if (starts.has(i)) { n++; section = true; type = t; } else if (!n || (!section && t !== type)) { n++; section = false; type = t; }
-    part.set(id, n);
-  });
-  return { part, count: n };
-}
-// Answers coming in, with the finished parts' kept as they were.
-function keepLocked(quiz, a, next) {
-  if (!locks(quiz, a.layout) || !a.layout.locked) return next;
-  const { part } = partsOf(quiz, a.layout);
-  for (const [id, n] of part) {
-    if (n > a.layout.locked) continue;
-    if (a.answers && Object.hasOwn(a.answers, id)) next[id] = a.answers[id];
-    else delete next[id];
-  }
-  return next;
-}
+const { sectionStarts, locks, partsOf, keepLocked } = Parts;
 
 function runInfo(run, quiz, studentId) {
   const corr = run.corrects ? Object.assign({ corrections: true, timeLimitMin: 0 }, studentId ? C.preview(run, quiz, studentId) : { questionCount: null, points: null }) : null;
@@ -353,6 +308,8 @@ function takeLate(a, quiz, late, now) {
     store.record(a, e[0], [d ? String(d).slice(0, 120) : null, `sent ${ago}s late`].filter(Boolean).join(', '), quiz, at);
   }
 }
+// Timed parts' ends for the page (its clock and when it moves on), or nothing.
+const partEndsOut = (quiz, a) => (Parts.timed(quiz, a.layout) && Array.isArray(a.layout.partEnds) ? a.layout.partEnds : undefined);
 const pastDeadline = (a, now) => !!a.deadline && now > a.deadline + ANSWER_GRACE_MS;
 // when a timed exam can be turned in: the class's normal time, or their own deadline if that's sooner
 const turnInAt = (a) => (a.deadline ? Math.min(a.deadline, (a.layout && a.layout.turnInAt) || a.deadline) : 0);
@@ -576,6 +533,11 @@ module.exports = function studentRoutes(r) {
       a.deadline = quiz.timeLimitMin && !run.corrects ? from + Math.round(quiz.timeLimitMin * x * 60000) : null;
       // the class's normal time: extra time (theirs or the teacher's) can be turned in any time after it
       if (a.deadline) a.layout.turnInAt = from + Math.round(quiz.timeLimitMin * 60000);
+      // Timed parts: each part's own end, one after another; the last one is the quiz's
+      if (a.deadline && Parts.timed(quiz, a.layout)) {
+        a.layout.partEnds = Parts.partEnds(quiz, a.layout, from, x);
+        a.deadline = a.layout.partEnds[a.layout.partEnds.length - 1];
+      }
       a.lastBeat = now;
       store.logEvent(a, 'start', 'info', x !== 1 && a.deadline ? `${x}× time` : null);
       noteNewNetwork(a, run, quiz, a.pinIp);
@@ -594,7 +556,8 @@ module.exports = function studentRoutes(r) {
     const pq = publicQuiz(quiz, a.layout);
     if (pq.timeLimitMin && !run.corrects) pq.timeLimitMin = myLimit(quiz, a.studentId); // their own, with extra time
     // tag: tells this attempt from an earlier one (a reset, practice again), for what the browser keeps
-    json(res, 200, { quiz: pq, deadline: a.deadline, turnInAt: turnInAt(a) || null, now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0, tag: sha256(a.id).slice(0, 12) });
+    if (Parts.timed(quiz, a.layout)) keepLocked(quiz, a, {}, now); // parts whose time ran out while they were away
+    json(res, 200, { quiz: pq, deadline: a.deadline, turnInAt: turnInAt(a) || null, partEnds: partEndsOut(quiz, a), now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0, tag: sha256(a.id).slice(0, 12) });
   });
 
   r.post('/api/event', async (req, res) => {
@@ -670,7 +633,7 @@ module.exports = function studentRoutes(r) {
     // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
     const notice = a.status !== 'submitted' ? store.notices.get(run.id) : null; // the teacher's message to everyone
     const note = a.status !== 'submitted' ? store.notes.get(a.id) : null; // and to this student
-    json(res, 200, { ok: true, now, deadline: a.deadline || null, done: a.status === 'submitted', ...(notice ? { notice } : {}), ...(note ? { note } : {}), ...live });
+    json(res, 200, { ok: true, now, deadline: a.deadline || null, partEnds: partEndsOut(quiz, a), done: a.status === 'submitted', ...(notice ? { notice } : {}), ...(note ? { note } : {}), ...live });
   });
 
   r.post('/api/run', async (req, res) => {
@@ -737,6 +700,8 @@ module.exports = function studentRoutes(r) {
     if (!locks(quiz, a.layout)) throw new HttpError(400, 'not_locked');
     const n = Number(body.part);
     if (!Number.isInteger(n) || n < 1 || n > partsOf(quiz, a.layout).count) throw new HttpError(400, 'bad_part');
+    // Timed parts move on when their time is up, not before (a page's clock can run a few seconds ahead)
+    if (Parts.timed(quiz, a.layout) && n > Parts.over(a, Date.now() + 5000)) throw new HttpError(403, 'not_yet');
     if (body.answers && !pastDeadline(a, Date.now())) a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers));
     a.layout.locked = Math.max(a.layout.locked || 0, n);
     store.save(a);
@@ -748,6 +713,9 @@ module.exports = function studentRoutes(r) {
     const { a, run, quiz } = current(req, { mustBeOpen: false });
     // A timed exam turns in when time is up, not before (the teacher can still end it early)
     if (a.status === 'active' && run.mode !== 'practice' && !quiz.turnInEarly && a.deadline && Date.now() < turnInAt(a) - 15000) throw new HttpError(403, 'not_yet');
+    // Timed parts: turning in early (turnInEarly) is for the last part, so no part is skipped
+    if (a.status === 'active' && run.mode !== 'practice' && Parts.timed(quiz, a.layout) && Array.isArray(a.layout.partEnds)
+      && Parts.over(a, Date.now() + 15000) < a.layout.partEnds.length - 1 && Date.now() < turnInAt(a) - 15000) throw new HttpError(403, 'not_yet');
     if (a.status === 'active') {
       const now = Date.now();
       // events the page couldn't send (offline, or its requests blocked) come with the turn-in
