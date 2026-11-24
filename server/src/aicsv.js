@@ -98,6 +98,8 @@ function readCsv(text, answers) {
   const [ci, cit, cm, cp, cr] = ['answer', 'item', 'met', 'points', 'reason'].map(col);
   if (ci < 0) return { grades: new Map(), skipped: ['The CSV needs an answer column.'], rows: 0 };
   const grades = new Map();
+  const seen = new Set();
+  const twice = new Set(); // answers with two rows for the same thing: which one is right? Left for the teacher.
   rows.forEach((r, k) => {
     const where = `Row ${k + 2}`;
     if (r.length < 2) return; // a line of prose, not a row
@@ -111,16 +113,21 @@ function readCsv(text, answers) {
       if (!ans.job.items.some((x) => x.id === item)) { skipped.push(`${where}: ${id} has no rubric item ${item || '(blank)'}.`); return; }
       const m = cm >= 0 ? String(r[cm] || '').trim() : '';
       if (!YES.test(m) && !NO.test(m)) { skipped.push(`${where}: met should be yes or no, not ${m}.`); return; }
+      if (seen.has(`${id} ${item}`)) twice.add(id);
+      seen.add(`${id} ${item}`);
       g.items[item] = { met: YES.test(m), why };
     } else {
       const raw = String(cp >= 0 ? r[cp] || '' : '').trim();
       const p = /^\d+(\.\d+)?$/.test(raw) ? Math.round(Number(raw) * 2) / 2 : NaN;
       if (!(p >= 0 && p <= ans.qq.points)) { skipped.push(`${where}: points for ${id} should be 0 to ${ans.qq.points}.`); return; }
+      if (seen.has(id)) twice.add(id);
+      seen.add(id);
       g.points = p;
       g.why = why;
     }
     grades.set(id, g);
   });
+  for (const id of twice) { grades.delete(id); skipped.push(`${id}: more than one row, so it's left for you.`); }
   // An answer counts only when every rubric item has a row.
   for (const [id, g] of grades) {
     const { job } = answers.get(id);

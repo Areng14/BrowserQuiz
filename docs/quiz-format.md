@@ -501,6 +501,8 @@ give the code a fresh set of builtins); `reflect`, `unsafe`, templates and `go:l
 reflection, `dynamic`, expression trees and `DllImport` in C#; `unsafe`, `include!`, `#[path]` and a
 module from another file in Rust. In C, C++, C#, JavaScript and
 TypeScript, `support` code counts as the student's, so keep banned names out of it. The reference solutions must keep to the bans, or the upload is refused.
+In C and C++, a question with bans doesn't allow `#define` or `#undef` in answers: a macro could carry a
+banned call into the code that tests theirs.
 
 Other library routes to the same answer aren't caught unless you list them. For a sorting
 question, also think about `"PriorityQueue"`, `"TreeSet"`, `"TreeMap"` (`"set"`, `"map"`,
@@ -533,6 +535,8 @@ match per line (`^` and `$` are line starts and ends) and are case-sensitive.
 - Checked items only give points to code that compiles and passes at least one hidden test.
   An empty class doesn't earn "doesn't use Arrays.sort".
 - Every check must pass on the reference solutions, or the upload is refused.
+- A check reads the code as written, so a student set on it can write around a pattern
+  (`Arrays . sort`, a method found by name). To rule something out for sure, use `ban`.
 - A language with no pattern leaves that item to the teacher. So does a written answer: checks
   only work on code questions.
 - The teacher can still change any item in the dashboard. Once they save, their ticks count.

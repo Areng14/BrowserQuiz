@@ -17,6 +17,8 @@ const PEPPER = process.env.ID_PEPPER || '';
 const joinFails = limiter(20, 60000); // wrong join codes, per address (an IPv6 /48)
 const nameLookups = limiter(400, 5 * 60000); // per run and address: a whole class can share one school IP
 const runLimit = limiter(1, 3000);
+const runsGoing = new Set(); // students with a Run in progress: one at a time, so nobody can hog the runner
+const practiceAgain = limiter(5, 10 * 60000); // practice tries per student: each one grades every hidden test
 const ATT = 'att';
 
 // Wrong student IDs lock a name for 30s after 5 tries, to slow down guessing. The lock only holds back
@@ -679,12 +681,17 @@ module.exports = function studentRoutes(r) {
     if (qq && qq.type === 'fill') body.code = Array.isArray(body.blanks) ? fillTemplate(qq.code, body.blanks.map((b) => String(b || '').slice(0, 500))) : null;
     if (!qq || !qq.languages.includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
     if (qq.noRun) throw new HttpError(403, 'run_off'); // this question is written without running
+    const who = `${a.runId}:${a.studentId}`;
+    if (runsGoing.has(who)) throw new HttpError(429, 'too_many');
     store.logEvent(a, 'run', 'info', `${qq.id} (${T.LANG_NAMES[body.language] || body.language})`);
     let out;
+    runsGoing.add(who);
     try {
       out = await runSamples(qq, body.language, body.code.slice(0, 50000));
     } catch (e) {
       out = { status: 'error', message: 'Code runner offline. Tell your teacher.' };
+    } finally {
+      runsGoing.delete(who);
     }
     W.ran(a.id, `${qq.id}:${body.language}`, out); // what a teacher watching sees under the editor
     json(res, 200, out);
@@ -705,6 +712,7 @@ module.exports = function studentRoutes(r) {
   r.post('/api/practice-retry', async (req, res) => {
     const { a, run } = current(req);
     if (!a.practice || run.corrects) throw new HttpError(404, 'not_found'); // corrections: once, then the answers
+    if (!practiceAgain(`${run.id}:${a.studentId}`)) throw new HttpError(429, 'too_many');
     a.archived = true;
     store.save(a);
     store.forget(a.id);

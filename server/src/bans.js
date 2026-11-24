@@ -535,4 +535,13 @@ function timingIntrusions(lang, facts) {
 // The languages bans work in (all of them now).
 const BAN_LANGS = T.LANGS.filter(T.hasBans);
 
-module.exports = { normalizeBans, bansFor, bannedUse, runnerFacts, timingIntrusions, shown, jsKnows, BAN_LANGS, LIST_QUALIFIED };
+// C and C++ with bans: the student's own macro can carry a banned call into the test code that calls their
+// function, where the check doesn't count it (#define smallest(x) ...). So with bans on, #define and #undef
+// aren't allowed in those answers (%: is #, spelled as a digraph).
+function macroUse(ban, lang, code) {
+  if (!(lang === 'c' || lang === 'cpp') || !bansFor(ban, lang).length) return [];
+  const src = require('./rubric').stripCode(code, lang);
+  return /^[ \t]*(#|%:)[ \t]*(define|undef)\b/m.test(src) ? ['#define'] : [];
+}
+
+module.exports = { macroUse, normalizeBans, bansFor, bannedUse, runnerFacts, timingIntrusions, shown, jsKnows, BAN_LANGS, LIST_QUALIFIED };

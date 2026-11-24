@@ -13,7 +13,12 @@ const TIMEOUT_MS = 100;
 
 // Code with comments and the inside of string literals removed. Line breaks stay where they were.
 function stripCode(code, lang) {
-  const s = String(code || '');
+  let s = String(code || '');
+  // What the compiler sees first: Java turns \uXXXX escapes into characters before anything else (so
+  // "// \u000a return x;" is a line of code), and C and C++ join lines that end in a backslash (so a
+  // comment can run on to the next line).
+  if (lang === 'java') s = s.replace(/(\\+)(u+)([0-9a-fA-F]{4})/g, (m, bs, us, hex) => (bs.length % 2 ? bs.slice(1) + String.fromCharCode(parseInt(hex, 16)) : m));
+  if (lang === 'c' || lang === 'cpp') s = s.replace(/\\\r?\n/g, '');
   const py = lang === 'python';
   const js = lang === 'javascript' || lang === 'typescript' || lang === 'go'; // `...` strings
   const n = s.length;

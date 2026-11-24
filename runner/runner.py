@@ -405,6 +405,10 @@ def scan_steps(lang, scan, sources, objs, include):
     return [], []
 
 
+class ScanTimeout(Exception):
+    """The check ran out of time: a busy runner as likely as the code. The job fails, to be graded again."""
+
+
 def run_scan(lang, scan, sources, objs, include, files, uid, job, env):
     """The facts as text, or None when the check couldn't read the code (which then counts against it)."""
     argvs, tools = scan_steps(lang, scan, sources, objs, include)
@@ -413,6 +417,8 @@ def run_scan(lang, scan, sources, objs, include, files, uid, job, env):
         senv = dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(1536 << 20)) if lang == "csharp" else env
         st, code, out, err, ms = run_step(argv, uid, job, 20, 40, 4096, 64, senv, fsize=64 << 20, tools=tl, cap=SCAN_CAP)
         kill_uid(uid)
+        if st == "timeout":
+            raise ScanTimeout()
         if st != "ok" or code != 0 or len(out) >= SCAN_CAP:
             return None
         outs.append(out)
@@ -888,6 +894,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(503, {"error": "busy"})
         try:
             res = run_job(slot, req)
+        except ScanTimeout:
+            res = {"status": "error", "message": "busy"}
         except Exception as e:  # never leak details of the host
             print("job failed:", repr(e), flush=True)
             res = {"status": "error", "message": "runner error"}

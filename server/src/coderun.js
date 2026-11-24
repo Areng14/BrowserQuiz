@@ -74,7 +74,10 @@ async function runTests(q, lang, code, tests, opts) {
   }));
   const compile = parts.find((p) => p.status === 'compile_error');
   if (compile) return compile;
-  if (job0Scans(q, lang) && parts[0].status === 'error') return parts[0]; // no facts: grade it again later
+  // A job that broke (the runner busy, a compile out of time) says nothing about the code: the whole answer
+  // is graded again later (the sweeper retries), never a failed test.
+  const broken = parts.find((p) => p.status === 'error');
+  if (broken) return broken;
   // (JavaScript's are what each test's run tripped: all of them count)
   const scan = isJsLang(lang) ? { hits: [...new Set(parts.flatMap((p) => (p.scan && p.scan.hits) || []))] } : (parts.find((p) => p.scan) || {}).scan || null;
   return { status: 'ok', scan, tests: parts.map((p) => (p.status === 'ok' ? p.tests[0] : { pass: false, error: p.message || 'Run failed' })) };
@@ -85,7 +88,7 @@ async function runSamples(q, lang, code) {
   const banned = B.bansFor(q.ban, lang).length > 0;
   if (!q.tests.sample.length && !banned) return { status: 'ok', tests: [], stdout: '' };
   const r = await runTests(q, lang, code, q.tests.sample);
-  const used = r.status === 'ok' || r.status === 'compile_error' ? B.bannedUse(q.ban, lang, r.scan, q.types) : [];
+  const used = r.status === 'ok' || r.status === 'compile_error' ? [...B.bannedUse(q.ban, lang, r.scan, q.types), ...B.macroUse(q.ban, lang, code)] : [];
   if (used.length) return { status: 'banned', banned: used, message: `Uses ${used.join(', ')}.` };
   return H.studentView(q, lang, q.tests.sample, r);
 }
@@ -98,11 +101,19 @@ async function gradeCode(q, answer) {
   }
   const r = await runTests(q, answer.language, answer.code, tests, { perTest: true });
   // Using a banned method scores 0, whatever the tests say (they still run, for the teacher to see).
-  const used = B.bannedUse(q.ban, answer.language, r.scan, q.types);
+  const used = [...B.bannedUse(q.ban, answer.language, r.scan, q.types), ...B.macroUse(q.ban, answer.language, answer.code)];
   const banned = used.length ? { banned: used, note: `Not allowed: ${used.join(', ')}` } : null;
   if (r.status === 'compile_error') {
+    // That message came from a build with a hidden test in it, and code can get a test's input into its
+    // own error. Show the one the sample tests give (the same mistake shows there), or just that it didn't.
+    let compileError = "Didn't compile.";
+    try {
+      const s = await runTests(q, answer.language, answer.code, q.tests.sample);
+      if (s.status === 'compile_error') compileError = s.message;
+      else if (s.status === 'error') return { status: 'error', score: 0, max, message: s.message };
+    } catch (e) { /* keep the plain one */ }
     return {
-      status: 'done', score: 0, max, language: answer.language, compileError: r.message, tests: tests.map(() => ({ pass: false, error: "Didn't compile" })),
+      status: 'done', score: 0, max, language: answer.language, compileError, tests: tests.map(() => ({ pass: false, error: "Didn't compile" })),
       rubric: autoRubric(q, answer.language, answer.code, false), ...banned,
     };
   }
@@ -137,7 +148,7 @@ async function checkReferences(quiz) {
         const tests = q.tests[kind];
         if (!tests.length) continue;
         const r = await runTests(q, lang, code, tests);
-        const used = r.status === 'ok' ? B.bannedUse(q.ban, lang, r.scan, q.types) : [];
+        const used = r.status === 'ok' ? [...B.bannedUse(q.ban, lang, r.scan, q.types), ...B.macroUse(q.ban, lang, code)] : [];
         if (used.length) { problems.push(`${q.id} (${lang}): the reference solution uses ${used.join(', ')}, which "ban" doesn't allow.`); break; }
         if (r.status !== 'ok') {
           problems.push(`${q.id} (${lang}): the reference solution ${r.status === 'compile_error' ? "doesn't compile" : "couldn't run"}: ${String(r.message || '').slice(0, 300)}`);
