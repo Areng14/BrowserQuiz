@@ -10,8 +10,10 @@ const MAX_CONCURRENT = Math.max(1, Number(process.env.RUNNER_CONCURRENCY) || 4);
 let active = 0;
 const waiting = [];
 
-async function withSlot(fn) {
-  if (active >= MAX_CONCURRENT) await new Promise((resolve) => waiting.push(resolve));
+// Urgent: a student's Run, which they sit waiting for, goes ahead of grading (that can wait), so a flood of
+// submissions never keeps a classmate's Run waiting for more than one job.
+async function withSlot(fn, urgent) {
+  if (active >= MAX_CONCURRENT) await new Promise((resolve) => (urgent ? waiting.unshift(resolve) : waiting.push(resolve)));
   active++;
   try {
     return await fn();
@@ -35,7 +37,7 @@ async function runnerHealthy() {
   }
 }
 
-async function callRunner(job, timeMs, memoryMb) {
+async function callRunner(job, timeMs, memoryMb, urgent) {
   const url = (process.env.RUNNER_URL || '').replace(/\/$/, '');
   if (!url) { const e = new Error('The code runner is not set up.'); e.code = 'runner_offline'; throw e; }
   return withSlot(async () => {
@@ -52,7 +54,7 @@ async function callRunner(job, timeMs, memoryMb) {
     }
     if (!res.ok) { const err = new Error(`The code runner answered ${res.status}.`); err.code = 'runner_offline'; throw err; }
     return res.json();
-  });
+  }, urgent);
 }
 
 const isJsLang = (lang) => lang === 'javascript' || lang === 'typescript';
@@ -63,7 +65,7 @@ async function runTests(q, lang, code, tests, opts) {
   const perTest = opts && opts.perTest;
   if (!perTest) {
     const { marker, job } = H.buildJob(q, lang, code, tests);
-    const res = await callRunner(job, Math.min(10000, q.limits.timeMs * tests.length), q.limits.memoryMb);
+    const res = await callRunner(job, Math.min(10000, q.limits.timeMs * tests.length), q.limits.memoryMb, opts && opts.urgent);
     return H.readResults(q, lang, tests, res, marker);
   }
   // In the compiled languages the ban check's facts are the runner's, read once: with the first test.
@@ -87,7 +89,7 @@ async function runTests(q, lang, code, tests, opts) {
 async function runSamples(q, lang, code) {
   const banned = B.bansFor(q.ban, lang).length > 0;
   if (!q.tests.sample.length && !banned) return { status: 'ok', tests: [], stdout: '' };
-  const r = await runTests(q, lang, code, q.tests.sample);
+  const r = await runTests(q, lang, code, q.tests.sample, { urgent: true });
   const used = r.status === 'ok' || r.status === 'compile_error' ? [...B.bannedUse(q.ban, lang, r.scan, q.types), ...B.macroUse(q.ban, lang, code)] : [];
   if (used.length) return { status: 'banned', banned: used, message: `Uses ${used.join(', ')}.` };
   return H.studentView(q, lang, q.tests.sample, r);

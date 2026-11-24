@@ -405,6 +405,11 @@ def scan_steps(lang, scan, sources, objs, include):
     return [], []
 
 
+# Processes for code that runs as one: C, C++, Rust and Python answers. A few spare, but not the dozens a
+# fork loop needs to crowd out every other job on the runner (Go, Java, C# and Node keep threads of their own).
+SINGLE_NPROC = 8
+
+
 class ScanTimeout(Exception):
     """The check ran out of time: a busy runner as likely as the code. The job fails, to be graded again."""
 
@@ -798,7 +803,7 @@ def run_job(slot, req):
                     return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                             "exitCode": code, "ms": ms}
             facts = run_scan(lang, scan, sources, objs, include, files, uid, job, env) if scan else None
-            st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s, mem_mb + 64, 64, env,
+            st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s, mem_mb + 64, SINGLE_NPROC, env,
                                               run_file=os.path.join(job, "main"))
         elif lang in ("go", "rust"):
             if lang == "go":
@@ -821,7 +826,7 @@ def run_job(slot, req):
             # Go reserves ~800 MB of address space before it starts; GOMEMLIMIT keeps its heap to the limit.
             run_env = dict(env, GOMEMLIMIT=f"{mem_mb}MiB", GOMAXPROCS="2") if lang == "go" else env
             st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s,
-                                              mem_mb + (1536 if lang == "go" else 128), 64, run_env,
+                                              mem_mb + (1536 if lang == "go" else 128), 64 if lang == "go" else SINGLE_NPROC, run_env,
                                               run_file=os.path.join(job, "main"))
         elif lang == "csharp":
             argv = [shutil.which("dotnet"), "exec", CS + "/csc.dll"] + CS_FLAGS + (["-main:" + entry] if entry else []) + sources
@@ -840,7 +845,7 @@ def run_job(slot, req):
             st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1024, 64, env, tools=["node"])
         else:
             argv = [shutil.which("python3"), "-E", "-s", "-B", "-X", "utf8", req.get("main") or "main.py"]
-            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 128, 64, env, tools=["python3"])
+            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 128, SINGLE_NPROC, env, tools=["python3"])
         res = {"status": st, "stdout": out, "stderr": err, "exitCode": code, "ms": ms}
         if scan:
             res["scan"] = facts  # None: the scan didn't work, so nothing can be said for the code
