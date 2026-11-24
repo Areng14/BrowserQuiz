@@ -1199,6 +1199,7 @@
   const PAD_SIZES = { s: 1.5, m: 2.5, l: 5 };
   const padColor = (c, el) => (PAD_COLORS[c] ? PAD_COLORS[c][isDark() ? 1 : 0] : getComputedStyle(el).color);
   function scratchBoard(q) {
+    let repainting = false; // paint() is swapping the note boxes for new ones
     const pages = S.scratch.pages;
     if (!Object.hasOwn(PAD_COLORS, S.scratch.color)) S.scratch.color = 'ink';
     if (!Object.hasOwn(PAD_SIZES, S.scratch.size)) S.scratch.size = 'm';
@@ -1369,7 +1370,8 @@
       // Redrawing makes new note boxes: keep the one being typed in focused, cursor and all.
       const a = document.activeElement;
       const typing = a && notes.contains(a) && a._note ? { n: a._note, from: a.selectionStart, to: a.selectionEnd } : null;
-      notes.replaceChildren(...items.filter((it) => it.s != null).map(noteEl));
+      repainting = true; // the old boxes blur as they go: that isn't the student leaving an empty note
+      try { notes.replaceChildren(...items.filter((it) => it.s != null).map(noteEl)); } finally { repainting = false; }
       const again = typing && [...notes.children].find((t) => t._note === typing.n);
       if (again) { again.focus({ preventScroll: true }); again.setSelectionRange(typing.from, typing.to); }
     }
@@ -1398,7 +1400,7 @@
       ta.addEventListener('input', () => { n.s = ta.value; fit(ta, n); save(); });
       ta.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); setPop(false); ta.blur(); } });
       ta.addEventListener('blur', () => {
-        if (n.s.trim() || !ta.isConnected) return;
+        if (repainting || n.s.trim() || !ta.isConnected) return;
         const i = items.indexOf(n);
         if (i >= 0) items.splice(i, 1);
         ta.remove();
