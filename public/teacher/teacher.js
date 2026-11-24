@@ -11,7 +11,7 @@
     'fullscreen-exit': 'Left fullscreen', return: 'Came back', 'mouse-left': 'Cursor left the page', copy: 'Copy blocked',
     paste: 'Outside paste blocked', contextmenu: 'Right-click', 'blocked-key': 'Blocked key', 'print-screen': 'Print Screen',
     resize: 'Window resized', 'unfocused-beat': 'Heartbeat: not focused', 'heartbeat-lost': 'Connection lost', reconnect: 'Reconnected',
-    resume: 'Continued on a new computer', 'let-in': 'Let back in by teacher', extend: 'Extra time', grade: 'Graded by teacher', 'ai-grade': 'Graded by AI',
+    resume: 'Continued on a new computer', 'let-in': 'Let back in by teacher', extend: 'Extra time', pause: 'Quiz paused', unpause: 'Quiz resumed', grade: 'Graded by teacher', 'ai-grade': 'Graded by AI',
     'extended-display': 'Second display', 'bulk-insert': 'Large insert in editor', 'inhuman-typing': 'Typing faster than a person',
     'late-submit': 'Submitted late', exit: 'Exited the quiz', 'other-network': 'Request from another network', 'left-network': 'Tried to continue from another network', 'other-device': 'Request from another browser',
     extension: 'Extension on the page', 'spoofed-checks': 'Extension hides leaving the window', 'no-frames': 'Quiz not on screen, no leave reported',
@@ -468,6 +468,15 @@
     for (const d of paths) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); s.append(p); }
     return s;
   }
+  // Filled pause and play marks (the paused quiz's banner)
+  function glyph(kind, size = 16) {
+    const ns = 'http://www.w3.org/2000/svg';
+    const s = document.createElementNS(ns, 'svg');
+    for (const [k, v] of Object.entries({ width: size, height: size, viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': 'true' })) s.setAttribute(k, String(v));
+    const shapes = kind === 'pause' ? [['rect', { x: 6, y: 5, width: 4, height: 14, rx: 1 }], ['rect', { x: 14, y: 5, width: 4, height: 14, rx: 1 }]] : [['path', { d: 'M7 5l12 7-12 7z' }]];
+    for (const [tag, attrs] of shapes) { const el = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v)); s.append(el); }
+    return s;
+  }
   // The page frame: tabs on the left, the page on the right. active: the tab this page belongs to.
   function shell(active, ...content) {
     const tabs = TABS.filter((t) => !t.admin || (who && who.role === 'admin'));
@@ -863,7 +872,7 @@
     if (a.status === 'waiting') return a.ready ? h('td', { class: 'st-good', text: 'Ready' }) : h('td', { class: 'st-waiting', text: 'Reading the rules' });
     if (a.status === 'admitted') return h('td', { text: 'Starting' });
     // a heartbeat every few seconds; much longer without one and they've lost their connection
-    if (a.status === 'active') return a.lastBeatAgo > 15000 ? h('td', { class: 't-late', text: `No signal for ${mmss(a.lastBeatAgo)}` }) : h('td', { text: 'In progress' });
+    if (a.status === 'active') return a.lastBeatAgo > 15000 ? h('td', { class: 't-late', text: `No signal for ${mmss(a.lastBeatAgo)}` }) : h('td', { text: a.paused ? 'Paused' : 'In progress' });
     return h('td', { class: 'st-good', text: 'Submitted' });
   }
   function integrityCell(a) {
@@ -1149,9 +1158,9 @@
     const pct = a.total ? Math.round((a.answered / a.total) * 100) : 0;
     // on a part's directions (a part starting, or opened again): no color, it's neither working nor idle
     const dirs = a.status === 'active' && a.on === 'directions';
-    const act = a.status === 'active' && !dirs ? a.activity : null;
+    const act = a.status === 'active' && !dirs && !a.paused ? a.activity : null; // paused: nobody's doing anything
     const at = a.on === 'review' ? 'the review' : a.on ? `question ${a.on}` : null;
-    const on = dirs ? 'reading directions' : !act || !at ? null
+    const on = a.paused ? 'paused' : dirs ? 'reading directions' : !act || !at ? null
       : act === 'working' ? (a.on === 'review' ? 'checking their work' : `working on ${at}`)
       : act === 'idle' ? `idle on ${at}`
       : a.on === 'review' ? 'checking their work' : `reading ${at}`;
@@ -1311,6 +1320,12 @@
       try { await post(path, body); } catch (e) { alertBox(e.message); }
       return refresh();
     }
+    // Paused (the run's ⋯ menu): a bar across the top, how long it's been, and the way back
+    const pausedFor = h('span', { class: 't-paused-for' });
+    const resumeBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => act(`/api/t/runs/${runId}/resume`) }, glyph('play'), 'Resume quiz');
+    // (not a live region: its clock ticks; the summary below says "3 paused")
+    const pausedBar = h('div', { class: 't-paused', hidden: true },
+      h('span', { class: 't-paused-what' }, glyph('pause', 18), 'Quiz paused', pausedFor), resumeBtn);
     function alertBox(msg) { detail.prepend(h('p', { class: 't-error', text: msg })); }
     // How much more time (for one student, or everyone still working): 5 minutes unless they say otherwise.
     async function askMinutes(title) {
@@ -1351,6 +1366,14 @@
       try { data = await api(`/api/t/runs/${runId}/live`); } catch (e) { return; }
       const run = data.run;
       lastRun = run;
+      // paused: the bar, and every row still working says so
+      const paused = run.status === 'open' && run.pausedMs != null;
+      if (pausedBar.hidden === paused) {
+        pausedBar.hidden = !paused;
+        if (!paused && document.activeElement === resumeBtn) runMenu[0].focus({ preventScroll: true }); // the ⋯ it came from
+      }
+      if (paused) { pausedFor.dataset.tick = 'since'; pausedFor.dataset.at = String(Date.now() - run.pausedMs); pausedFor.textContent = mmss(run.pausedMs); } else delete pausedFor.dataset.tick;
+      for (const x of data.students) if (x.attempt && x.attempt.status === 'active') x.attempt.paused = paused;
       notice(data.students);
       // on the row: Message students while it's open; Corrections once an exam is closed (just once)
       corrBtn.hidden = run.practice || !!run.corrections || run.status === 'open';
@@ -1358,7 +1381,7 @@
       code.textContent = run.code;
       document.title = `${run.code} · ${run.title} – BrowserQuiz`;
       const count = (f) => data.students.filter((x) => x.attempt && f(x.attempt)).length;
-      const said = [[count((a) => a.status === 'waiting' && a.ready && !gone(a)), 'ready'], [count((a) => a.status === 'waiting' && !a.ready && !gone(a)), 'reading the rules'], [count((a) => a.status === 'admitted' && !gone(a)), 'starting'], [count(gone), 'no signal'], [count((a) => a.status === 'active'), 'working'],
+      const said = [[count((a) => a.status === 'waiting' && a.ready && !gone(a)), 'ready'], [count((a) => a.status === 'waiting' && !a.ready && !gone(a)), 'reading the rules'], [count((a) => a.status === 'admitted' && !gone(a)), 'starting'], [count(gone), 'no signal'], [count((a) => a.status === 'active'), paused ? 'paused' : 'working'],
         [count((a) => a.status === 'submitted'), 'turned in'], [count((a) => a.integrity === 'invalidated'), 'invalidated']]
         .filter(([n]) => n).map(([n, w]) => `${n} ${w}`).join(', ') || 'Nobody has joined yet';
       if (summary.textContent !== said) summary.textContent = said;
@@ -1461,7 +1484,7 @@
           progressCell(a),
           // extra time (the class's settings) shows next to the clock, and on it in words for screen readers
           h('td', { class: 'num', 'data-label': 'Time left', title: s.timeX && !(a && a.status === 'submitted') ? `${s.timeX}× time` : null },
-            h('span', Object.assign({ text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }, a && a.timeLeft != null && a.status === 'active' ? ticks('left', a.timeLeft) : {})),
+            h('span', Object.assign({ text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }, a && a.timeLeft != null && a.status === 'active' && !a.paused ? ticks('left', a.timeLeft) : {})),
             s.timeX && !(a && a.status === 'submitted') ? h('span', { class: 't-muted t-xtime', text: ` ${s.timeX}×`, 'aria-label': `, ${s.timeX} times the time` }) : null),
           h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), 'data-label': 'Score', text: score }),
           actions);
@@ -1535,7 +1558,7 @@
           d.status === 'active' && !(lastRun && lastRun.practice) ? watchLink(id, d.name) : null,
           d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Un-invalidate', onclick: () => unInvalidate(id, d.name) }, dk('restore'))) : null,
           d.status === 'active' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }, dk('end'))) : null,
-          d.status === 'active' && d.deadline ? h('span', Object.assign({ class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }, ticks('left-label', d.timeLeft || 0))) : null,
+          d.status === 'active' && d.deadline ? h('span', Object.assign({ class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }, d.paused ? {} : ticks('left-label', d.timeLeft || 0))) : null,
           d.timeX ? h('span', { class: 't-muted t-small', text: `${d.timeX}× time` }) : null,
           d.status === 'submitted' && !d.sealed ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
           d.status === 'submitted' && d.totals && d.totals.review ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Grade with AI', title: 'Send the answers waiting for you to Claude. Names and IDs stay here.',
@@ -1686,6 +1709,8 @@
       try { await post(`/api/t/runs/${runId}/message`, { text }); } catch (e) { alertBox(e.message); }
     });
     const runMenu = moreMenu('More for this quiz', 'run:more', () => [
+      // a fire drill, a question for the whole class: every clock stops and the questions are hidden
+      lastRun && lastRun.status === 'open' && lastRun.pausedMs == null ? { text: 'Pause quiz', onclick: () => act(`/api/t/runs/${lastRun.id}/pause`) } : null,
       // a fire drill, the wifi down, a late start: everyone still working gets the same
       lastRun && lastRun.status === 'open' && lastRun.timeLimitMin ? { text: 'Add time for everyone', onclick: async () => {
         const mins = await askMinutes('Add time for everyone');
@@ -1700,6 +1725,7 @@
     if (openRuns === null) { try { noteRuns((await api('/api/t/overview')).runs); } catch (e) { /* the tab can wait */ } }
     const isOpen = openRuns && openRuns.some((r) => r.id === runId);
     mount(shell(isOpen ? 'open' : tab === 'results' ? 'results' : 'give',
+        pausedBar,
         h('section', { class: 't-section' },
           h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
           howTo, quitPw,
@@ -1724,6 +1750,7 @@
       if (el.dataset.tick === 'left') el.textContent = mmss(Math.max(0, at - now));
       else if (el.dataset.tick === 'left-label') el.textContent = `${mmss(Math.max(0, at - now))} left`;
       else if (el.dataset.tick === 'away') el.textContent = 'away ' + mmss(now - at);
+      else if (el.dataset.tick === 'since') el.textContent = mmss(now - at);
     }
   }
 

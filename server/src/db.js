@@ -119,6 +119,8 @@ addColumn('attempts', 'device', 'TEXT');
 addColumn('attempts', 'ready_at', 'INTEGER');
 // Extra time for one student (an accommodation): their time limit is multiplied by this on every quiz.
 addColumn('roster_students', 'time_x', 'REAL NOT NULL DEFAULT 1');
+// When the teacher paused the quiz (pause.js); null while it runs.
+addColumn('runs', 'paused_at', 'INTEGER');
 // Passkeys (passkeys.js): id is the credential id, public_key its SPKI DER. key_wrap is the teacher's quiz
 // key sealed with what the passkey's PRF gives (vault.js); null for admin while its key comes from .env.
 // pk_user is the random user handle a teacher's passkeys carry. A session's passkey flag: it was made

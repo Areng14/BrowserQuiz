@@ -219,6 +219,7 @@ mark.hl[data-c="u"] { background: none; box-shadow: none; text-decoration: under
 .timer:empty { visibility: hidden; } /* no time limit (or Preview): it still holds the middle, so the tools stay on the right */
 .timer.parts { display: flex; flex-direction: column; align-items: center; line-height: 1.2; } /* timed parts: which part, above its clock */
 .timer-part { font: 500 12px var(--font); color: var(--ink-2); }
+.timer.paused .timer-part { font-weight: 600; color: var(--warn); } /* the teacher paused the quiz: the clock holds */
 .timer.warn { color: var(--bad); }
 .timer.crit { color: var(--bad); font-weight: 800; }
 
@@ -418,6 +419,10 @@ mark.hl[data-c="u"] { background: none; box-shadow: none; text-decoration: under
 /* the review page: every question before turning in */
 .qview.review { gap: 16px; }
 .qview.review h1 { margin: 0; font-size: 22px; }
+/* Paused by the teacher: the questions are hidden until it goes on */
+.qview.paused-view { justify-items: start; gap: 16px; padding-top: 88px; }
+.paused-view h1 { margin: 0; }
+.paused-mark { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--soft); color: var(--ink-2); }
 /* timed parts: the next part, locked until this one's time is up */
 .next-part { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; color: var(--ink-2); font-size: 14px; }
 .next-part b { color: var(--ink); font-weight: 600; }

@@ -748,6 +748,7 @@
     S.skew = r.now ? r.now - Date.now() : 0;
     S.locked = r.locked || 0;
     S.partEnds = r.partEnds || null; // timed parts: when each one's time is up (the server's clock)
+    S.pausedAt = r.paused || 0; // the teacher has the quiz paused: when this student's clock stopped
     const unsent = takeUnsent(r.savedAt);
     S.answers = restoreAnswers(unsent || r.saved || {});
     loadMarks();
@@ -766,6 +767,7 @@
       fullscreen: fsOk,
       keysHeld: () => keysHeld && !!document.fullscreenElement,
       getAnswers: serializeAnswers,
+      holdAnswers: () => !!S.pausedAt, // the server doesn't take them while the quiz is paused
       getView: currentView,
       onFullscreenLost: showFsOverlay,
       onFullscreenBack: hideFsOverlay,
@@ -789,7 +791,7 @@
     const modal = S.el.wrap.querySelector('.modal-backdrop:not(.nav-pop) [aria-labelledby]');
     const pad = !!(S.el.scratch && !S.el.scratch.hidden);
     const v = {
-      q: q ? q.id : null, review: !!S.reviewOpen, dir: !!S.dirOpen && !S.reviewOpen, intro: !!S.introOpen,
+      q: q ? q.id : null, review: !!S.reviewOpen, dir: !!S.dirOpen && !S.reviewOpen, intro: !!S.introOpen, paused: S.pausedAt || 0,
       scroll: Math.round(S.el.main.scrollTop), wscroll: Math.round(S.el.wrap.scrollTop),
       w: window.innerWidth, h: window.innerHeight, lang: a ? a.language : null,
       nav: !!S.el.wrap.querySelector('.nav-pop'), modal: modal ? modal.getAttribute('aria-labelledby') : false,
@@ -824,17 +826,20 @@
     if (!S.el) return;
     if (S.padSending) { S.padSent = S.padSending; S.padSending = null; }
     if (res && res.now) S.skew = res.now - Date.now();
+    const resumed = !!S.pausedAt && !!res && !res.paused && !res.done; // the clocks moved on by the time it was paused
     if (res && res.deadline && res.deadline !== S.deadline) { // teacher gave extra time
-      if (S.deadline && res.deadline > S.deadline + 30000) toast('Your teacher gave you more time.', 6000);
+      if (S.deadline && res.deadline > S.deadline + 30000 && !resumed) toast('Your teacher gave you more time.', 6000);
       S.deadline = res.deadline;
     }
     if (res && res.partEnds) S.partEnds = res.partEnds; // added time moves the parts along too
     if (res && res.done && !S.submitting) return endQuiz('mine'); // the teacher ended this student's quiz
+    if (res && (res.paused || 0) !== (S.pausedAt || 0)) setPaused(res.paused || 0);
+    if (res && res.held && S.monitor) S.monitor.answersDirty = true; // not taken while paused: they go after
     if (res && res.notice && res.notice.id !== S.noticeId) { S.noticeId = res.notice.id; showNotice(res.notice.text); }
     if (res && res.note && res.note.id !== S.noteId) { S.noteId = res.note.id; showNotice(res.note.text); }
     setOnline(true);
-    if (info && info.answers && S.saveState === 'saving') setSave('saved');
-    if (info && info.answers && S.monitor && !S.monitor.answersDirty) clearUnsent(); // the server has them all
+    if (info && info.answers && !res.held && S.saveState === 'saving') setSave('saved');
+    if (info && info.answers && !res.held && S.monitor && !S.monitor.answersDirty) clearUnsent(); // the server has them all
   }
   function onBeatError(err, failures) {
     if (S.done || !S.el) return;
@@ -957,7 +962,8 @@
   // student can't move on before a part's time is up; when it is, the part locks and the next one starts.
   const timedParts = () => !!(S.partEnds && S.parts && S.parts.length > 1 && S.partEnds.length === S.parts.length);
   const timedNav = () => timedParts() && lockOn();
-  const serverNow = () => Date.now() + (S.skew || 0);
+  // The server's clock, held where it stopped while the teacher has the quiz paused (S.pausedAt)
+  const serverNow = () => { const t = Date.now() + (S.skew || 0); return S.pausedAt ? Math.min(t, S.pausedAt) : t; };
   // the part whose clock is running (from 1)
   function partNow() {
     const over = S.partEnds.filter((e) => e <= serverNow()).length;
@@ -981,6 +987,36 @@
     s.append(svgEl('rect', { x: 5, y: 11, width: 14, height: 10, rx: 2 }), svgEl('path', { d: 'M8 11V7a4 4 0 0 1 8 0v4' }));
     return s;
   }
+  // The teacher paused the quiz, or went on (at: when this student's clock stopped, on the server's
+  // clock, or 0). Paused, every clock holds and the questions are hidden; nothing they do counts.
+  function setPaused(at) {
+    const was = !!S.pausedAt;
+    S.pausedAt = at || 0;
+    if (!S.el || S.done || S.submitting || was === !!at) return; // turning in: that decides (submitNow)
+    if (at) {
+      // whatever's open over the quiz waits (the teacher's messages stay)
+      for (const b of [...S.el.wrap.querySelectorAll('.modal-backdrop')]) if (b._release && !b.classList.contains('notice-backdrop')) { b.remove(); b._release(false); }
+      if (!S.el.scratch.hidden) toggleScratch(false);
+    }
+    renderQuestion();
+    S.el.main.scrollTop = 0;
+    if (!cfg.watch) {
+      const head = document.getElementById('q-heading');
+      if (head && !S.el.wrap.querySelector('.modal-backdrop')) head.focus({ preventScroll: true });
+      if (!at) announce('The quiz is back on.');
+    }
+  }
+  function pausedView() {
+    return h('div', { class: 'qview paused-view', role: 'status' },
+      h('span', { class: 'paused-mark' }, pauseGlyph(20)),
+      h('h1', { id: 'q-heading', tabindex: '-1', text: 'Your teacher paused the quiz' }));
+  }
+  function pauseGlyph(size) {
+    const s = svgEl('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': 'true' });
+    s.append(svgEl('rect', { x: 6, y: 5, width: 4, height: 14, rx: 1 }), svgEl('rect', { x: 14, y: 5, width: 4, height: 14, rx: 1 }));
+    return s;
+  }
+
   // A part's time is up: its last answers go in, it locks, and the next part's directions come up.
   async function partTimeUp(done) {
     if (S.moving || S.done || S.submitting || !S.el) return;
@@ -1059,7 +1095,7 @@
       scratch,
       h('footer', { class: 'qnav' }, prev, mid, next),
       live, hlBar.bar);
-    S.el = { wrap, main, timer, jump, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null, scratchGrip: scratchGrip(wrap, scratch), gameBtn };
+    S.el = { wrap, main, timer, jump, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null, scratchGrip: scratchGrip(wrap, scratch), gameBtn, nav: wrap.querySelector('.qnav') };
     wrap.addEventListener('scroll', hlBar.hide, { passive: true }); // a short window scrolls the whole quiz
     if (!keysBound) { document.addEventListener('keydown', quizKeys); keysBound = true; }
     S.saveState = 'saved';
@@ -1151,6 +1187,17 @@
     disposeEditor();
     const q = S.quiz.questions[S.idx];
     const total = S.quiz.questions.length;
+    // Paused by the teacher: no questions, no way around (the footer), no scratchpad
+    const paused = !!S.pausedAt;
+    S.el.nav.hidden = paused;
+    S.el.scratchBtn.disabled = paused;
+    if (paused) {
+      document.title = `Paused – ${S.quiz.title}`;
+      if (S.el.hlBar) S.el.hlBar.hide();
+      S.el.main.classList.remove('code-fit', 'split-fit');
+      S.el.main.replaceChildren(pausedView());
+      return;
+    }
     if (S.reviewOpen) {
       S.el.prev.disabled = false;
       reviewButtons();
@@ -2454,29 +2501,41 @@
 
   function startTimer() {
     clearInterval(S.timer);
+    // a small line above the clock (which part, or Paused), or the clock alone
+    const lines = (top, digits) => {
+      if (!S.el.timerDigits) {
+        S.el.timerPart = h('span', { class: 'timer-part' });
+        S.el.timerDigits = h('span');
+        S.el.timer.replaceChildren(S.el.timerPart, S.el.timerDigits);
+        S.el.timer.classList.add('parts');
+      }
+      S.el.timerPart.textContent = top;
+      S.el.timerDigits.textContent = digits;
+    };
+    const plain = (text) => {
+      if (S.el.timerDigits) { S.el.timerDigits = S.el.timerPart = null; S.el.timer.classList.remove('parts'); }
+      S.el.timer.textContent = text;
+    };
     const tick = () => {
-      if (!S.deadline) { S.el.timer.textContent = ''; return; }
+      const paused = !!S.pausedAt; // the teacher paused the quiz: the clock holds
+      S.el.timer.classList.toggle('paused', paused);
+      S.el.timer.setAttribute('aria-label', paused ? 'Paused, time left' : 'Time left');
+      if (!S.deadline) { if (paused) lines('Paused', ''); else plain(''); return; }
       // timed parts: the part's own clock, and which part it is above it
       const tp = timedParts();
       const n = tp ? partNow() : 0;
       const left = Math.max(0, (tp ? S.partEnds[n - 1] : S.deadline) - serverNow());
       const quizLeft = Math.max(0, S.deadline - serverNow());
+      if (tp || paused) lines(paused ? 'Paused' : `Part ${n} of ${S.partEnds.length}`, mmss(left));
+      else plain(mmss(left));
       if (tp) {
-        if (!S.el.timerDigits) {
-          S.el.timerPart = h('span', { class: 'timer-part' });
-          S.el.timerDigits = h('span');
-          S.el.timer.replaceChildren(S.el.timerPart, S.el.timerDigits);
-          S.el.timer.classList.add('parts');
-        }
-        S.el.timerPart.textContent = `Part ${n} of ${S.partEnds.length}`;
-        S.el.timerDigits.textContent = mmss(left);
         if (S.warnPart !== n) { S.warnPart = n; S.warned = {}; } // the warnings again for each part
         for (const el of S.el.wrap.querySelectorAll('[data-part-left]')) el.textContent = mmss(left);
         if (S.reviewOpen) reviewButtons();
         if (lockOn() && !cfg.watch && n - 1 > (S.locked || 0)) partTimeUp(n - 1);
-      } else S.el.timer.textContent = mmss(left);
-      S.el.timer.classList.toggle('warn', left < 5 * 60000 && left >= 60000);
-      S.el.timer.classList.toggle('crit', left < 60000);
+      }
+      S.el.timer.classList.toggle('warn', !paused && left < 5 * 60000 && left >= 60000);
+      S.el.timer.classList.toggle('crit', !paused && left < 60000);
       for (const mins of [5, 1]) {
         if (left > mins * 60000 + 1000) S.warned[mins] = false; // re-arm after extra time
         else if (!S.warned[mins] && left > 0) {
@@ -2548,7 +2607,7 @@
       h('div', { class: 'fs-card', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'fs-title' },
         h('h2', { id: 'fs-title', text: 'You left fullscreen' }),
         // waiting for the teacher's Start (no quiz yet): leaving doesn't count until it starts (store.record)
-        h('p', { text: S.quiz ? 'Leaving fullscreen counts as cheating, and your teacher can see that you left. Go back to keep working.' : 'Once the quiz starts, this counts as cheating.' }),
+        h('p', { text: !S.quiz ? 'Once the quiz starts, this counts as cheating.' : S.pausedAt ? 'Once the quiz goes on, this counts as cheating.' : 'Leaving fullscreen counts as cheating, and your teacher can see that you left. Go back to keep working.' }),
         h('div', { class: 'row-actions' }, btn, S.quiz ? h('button', { class: 'btn', type: 'button', text: 'Exit', onclick: () => openExit() }) : null)));
     S.el.fsOverlay = ov;
     S.el.wrap.append(ov);
@@ -2562,11 +2621,12 @@
     let backdrop;
     let release = null;
     const before = !S.quiz; // waiting for the teacher's Start: it doesn't count yet (store.record)
-    const back = h('button', { class: 'btn primary', type: 'button', text: before ? 'OK' : 'Back to the quiz', onclick: () => { backdrop.remove(); release(); } });
+    const paused = !before && !!S.pausedAt; // nor while the teacher has it paused
+    const back = h('button', { class: 'btn primary', type: 'button', text: before || paused ? 'OK' : 'Back to the quiz', onclick: () => { backdrop.remove(); release(); } });
     backdrop = h('div', { class: 'modal-backdrop' },
       h('div', { class: 'modal warn-modal', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'left-title', 'aria-describedby': 'left-text' },
-        h('h2', { id: 'left-title', text: before ? 'You left the quiz window' : 'You left the quiz' }),
-        h('p', { id: 'left-text', text: before ? 'Once the quiz starts, this counts as cheating.' : 'Leaving the quiz window counts as cheating, and your teacher can see that you left.' }),
+        h('h2', { id: 'left-title', text: before || paused ? 'You left the quiz window' : 'You left the quiz' }),
+        h('p', { id: 'left-text', text: before ? 'Once the quiz starts, this counts as cheating.' : paused ? 'Once the quiz goes on, this counts as cheating.' : 'Leaving the quiz window counts as cheating, and your teacher can see that you left.' }),
         h('div', { class: 'modal-actions' }, back)));
     backdrop.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); back.click(); } });
     S.el.wrap.append(backdrop);
@@ -2625,7 +2685,7 @@
 
   // Keyboard: 1–9 pick a choice, Enter goes to the next question (or opens Submit on the last one).
   function quizKeys(e) {
-    if (S.done || !S.el || !S.quiz || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (S.done || !S.el || !S.quiz || S.pausedAt || e.ctrlKey || e.metaKey || e.altKey) return;
     if (S.el.wrap.querySelector('.modal-backdrop, .fs-overlay')) return;
     const t = e.target;
     const typing = t && t.closest && t.closest('textarea, .monaco-editor, select, input[type="text"], input:not([type])');
@@ -2656,7 +2716,7 @@
   }
 
   const timedExam = () => !!(S.run && !S.run.practice && S.deadline && !(S.quiz && S.quiz.turnInEarly)
-    && !(S.turnInAt && S.turnInAt < S.deadline && Date.now() + S.skew >= S.turnInAt));
+    && !(S.turnInAt && S.turnInAt < S.deadline && serverNow() >= S.turnInAt));
   function openSubmit() {
     if (timedExam() || (timedNav() && partNow() < S.parts.length)) return;
     const missing = S.quiz.questions.map((q, i) => (isAnswered(q) ? null : i + 1)).filter(Boolean);
@@ -2698,6 +2758,15 @@
         if (e.code === 'no_attempt') return leaveQuiz(signedOut);
         if (e.code === 'run_closed') return finishQuiz('ended');
         if (e.code === 'other_network') return leaveQuiz(() => screenJoin(ERRORS.other_network));
+        if (e.code === 'paused') { // the teacher paused it just now: back to the quiz, which shows that
+          ov.close();
+          S.submitting = false;
+          startTimer();
+          const at = S.pausedAt || serverNow();
+          S.pausedAt = 0;
+          setPaused(at);
+          return;
+        }
         if (tries === 1) ov.failed();
         const delay = Math.min(2000 * 2 ** tries, 15000);
         await new Promise((resolve) => {
@@ -2717,9 +2786,10 @@
       h('div', { class: 'modal', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'turnin-title' },
         title, text, h('div', { class: 'modal-actions' }, retry)));
     S.el.wrap.append(backdrop);
-    holdFocus(backdrop);
+    const release = holdFocus(backdrop);
     return {
       retry,
+      close() { backdrop.remove(); release(false); },
       failed() {
         title.textContent = "Couldn't reach the quiz server";
         text.textContent = 'Your answers are still here. Retrying automatically.';
@@ -3009,6 +3079,10 @@
       onThemeChange();
     }
     if (v && v.deadline !== undefined) S.deadline = v.deadline || 0; // extra time
+    if (v && v.paused !== undefined && (v.paused || 0) !== (S.pausedAt || 0)) { // the teacher paused the quiz, or went on
+      if (!!v.paused !== !!S.pausedAt) redraw = true;
+      S.pausedAt = v.paused || 0;
+    }
     if (v && v.partEnds) S.partEnds = v.partEnds;
     if (v && typeof v.phone === 'boolean' && v.phone !== !!S.watchPhone) { S.watchPhone = v.phone; redraw = true; } // their plain code box
     if (v && S.scratch && typeof v.tool === 'string' && v.tool !== S.scratch.tool) { S.scratch.tool = v.tool; padDraw = true; }
@@ -3040,7 +3114,7 @@
       else if (!v.nav && open) open.remove();
     }
     const total = S.quiz.questions.length;
-    return { where: S.reviewOpen ? 'Check your work' : S.dirOpen ? (S.introOpen ? 'Directions' : partOf(S.idx).title) : `Question ${S.idx + 1} of ${total}` };
+    return { where: S.pausedAt ? 'Paused' : S.reviewOpen ? 'Check your work' : S.dirOpen ? (S.introOpen ? 'Directions' : partOf(S.idx).title) : `Question ${S.idx + 1} of ${total}` };
   }
   // Their highlights, put on the same text here
   function watchHighlights(hl) {

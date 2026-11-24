@@ -14,6 +14,7 @@ const { totals, questionScore, gradeAttempt, answerReport, cleanAnswers, gradeAu
 const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
 const Parts = require('./parts');
+const Pause = require('./pause');
 const W = require('./watch');
 const { similarCode } = require('./similar');
 const { sameWrong } = require('./samewrong');
@@ -180,13 +181,13 @@ function activity(a, now) {
   return now - (a.activeAt || a.startedAt || 0) < 120000 ? 'reading' : 'idle';
 }
 // More time for one student: their clock, and with timed parts the part they're on and every one after it.
-function addTime(a, mins) {
+function addTime(a, mins, run) {
   if (a.status !== 'active' || !a.deadline) return false;
-  a.deadline = Math.max(a.deadline, Date.now()) + mins * 60000;
+  const now = Pause.clock(a, run.paused_at); // paused: their clock is held, so it's from where it stopped
+  a.deadline = Math.max(a.deadline, now) + mins * 60000;
   const ends = a.layout && Array.isArray(a.layout.partEnds) ? a.layout.partEnds : null;
   if (ends) {
     // timed parts: the part they're on gets the time, and every part after it moves along
-    const now = Date.now();
     let at = ends.findIndex((e) => e > now);
     if (at < 0) at = ends.length - 1; // all over (not turned in yet): the last one
     a.layout.partEnds = ends.map((e, k) => (k < at ? e : (k === at ? Math.max(e, now) : e) + mins * 60000));
@@ -202,6 +203,7 @@ function partEnd(a, now) {
   return (ends && ends.find((e) => e > now)) || a.deadline;
 }
 function liveRow(student, a, quiz, run) {
+  const clk = a ? Pause.clock(a, run.paused_at) : 0; // their clock: held while the quiz is paused
   const timeX = student.time_x && student.time_x !== 1 ? student.time_x : undefined; // extra time
   if (!a) return { rosterId: student.id, name: student.name, timeX, attempt: null };
   const t = totals(a.result, quiz, a.answers, a.layout);
@@ -227,8 +229,8 @@ function liveRow(student, a, quiz, run) {
       seenAgo: (a.status === 'waiting' || a.status === 'admitted') && (a.seenAt || a.lastBeat) ? Date.now() - Math.max(a.seenAt || 0, a.lastBeat || 0) : null,
       answered, total: a.layout ? store.quizFor(quiz, a.layout).questions.length : store.perStudent(quiz).count, on, deadline: a.deadline,
       activity: a.status === 'active' ? activity(a, Date.now()) : null,
-      timeLeft: a.status === 'active' && a.deadline ? Math.max(0, partEnd(a, Date.now()) - Date.now()) : null,
-      parts: Parts.liveParts(quiz, a, Date.now()), // timed parts: each one's size and answered, and the one they're on
+      timeLeft: a.status === 'active' && a.deadline ? Math.max(0, partEnd(a, clk) - clk) : null,
+      parts: Parts.liveParts(quiz, a, clk), // timed parts: each one's size and answered, and the one they're on
       letIn: !!(a.letIn && Date.now() - a.letIn < LET_IN_MS),
       score: t && !sealed(run) ? (a.integrity === 'invalidated' ? 0 : t.score) : null, rawScore: t && !sealed(run) ? t.score : null, max: t && !sealed(run) ? t.max : null,
       pending: t && !sealed(run) ? t.pending : 0, failed: t && !sealed(run) ? t.failed : 0, review: t && !sealed(run) ? t.review : 0,
@@ -1197,7 +1199,7 @@ module.exports = function teacherRoutes(r) {
     const run = getRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     if (p.action === 'close') {
-      q("UPDATE runs SET status = 'closed', closed_at = ? WHERE id = ?").run(Date.now(), run.id);
+      q("UPDATE runs SET status = 'closed', closed_at = ?, paused_at = NULL WHERE id = ?").run(Date.now(), run.id);
       for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'active'").all(run.id)) {
         submit(store.getAttempt(row.id), quiz, null, 'quiz closed');
       }
@@ -1233,12 +1235,35 @@ module.exports = function teacherRoutes(r) {
       q('UPDATE runs SET ip_lock = ? WHERE id = ?').run([...nets].filter(Boolean).slice(0, 50).join(','), run.id);
     } else if (p.action === 'unlock') {
       q('UPDATE runs SET ip_lock = NULL WHERE id = ?').run(run.id);
+    } else if (p.action === 'pause' || p.action === 'resume') {
+      // A fire drill, a question for the whole class: every clock stops, and the questions are hidden
+      // (pause.js). Resumed, everyone has the time they had left.
+      const now = Date.now();
+      if (p.action === 'pause' && run.status !== 'open') throw new HttpError(409, 'run_closed');
+      if ((p.action === 'pause') === !!run.paused_at) return json(res, 200, { ok: true }); // already so
+      tx(() => {
+        q('UPDATE runs SET paused_at = ? WHERE id = ?').run(p.action === 'pause' ? now : null, run.id);
+        for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'active'").all(run.id)) {
+          const a = store.getAttempt(row.id);
+          if (p.action === 'pause') {
+            a.pausedAt = now;
+            store.logEvent(a, 'pause', 'info', null);
+          } else {
+            const d = Pause.shift(a, run.paused_at, now);
+            a.pausedAt = 0;
+            store.logEvent(a, 'unpause', 'info', d ? `paused ${Math.floor(d / 60000)}:${String(Math.floor(d / 1000) % 60).padStart(2, '0')}` : null);
+            store.save(a);
+          }
+        }
+      });
+      // waiting and turned-in attempts in memory pick it up too (student.js current sets it on each request)
+      for (const a of store.attempts.values()) if (a.runId === run.id) a.pausedAt = p.action === 'pause' ? now : 0;
     } else if (p.action === 'extend') {
       // a fire drill, the wifi down, a late start: more time for everyone still working
       const body = await readJson(req, 1024);
       const mins = Math.round(Number(body.minutes));
       if (!(mins >= 1 && mins <= 120)) throw new HttpError(400, 'bad_request');
-      for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'active'").all(run.id)) addTime(store.getAttempt(row.id), mins);
+      for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'active'").all(run.id)) addTime(store.getAttempt(row.id), mins, run);
     } else if (p.action === 'regrade-failed') {
       for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'submitted'").all(run.id)) {
         const a = store.getAttempt(row.id);
@@ -1271,7 +1296,7 @@ module.exports = function teacherRoutes(r) {
     for (const e of q(`SELECT e.attempt_id, e.type FROM events e JOIN attempts a ON a.id = e.attempt_id
       WHERE a.run_id = ? AND a.archived = 0 AND e.severity = 'violation' ORDER BY e.id`).all(run.id)) lastStrike.set(e.attempt_id, e.type);
     json(res, 200, {
-      run: { id: run.id, code: run.code, status: run.status, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, sebQuit: run.seb_quit || null, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin,
+      run: { id: run.id, code: run.code, status: run.status, pausedMs: run.paused_at ? Math.max(0, Date.now() - run.paused_at) : null, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, sebQuit: run.seb_quit || null, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin,
         timedParts: quiz.timedParts && !run.corrects ? quiz.sections.length : undefined, // how many timed parts
         corrections: run.corrects ? { earnBack: run.earn_back, why: !!run.ask_why } : null,
         joinUrl: joinOrigin(req), // where students go (not localhost)
@@ -1334,7 +1359,8 @@ module.exports = function teacherRoutes(r) {
       id: a.id, name: student ? student.name : '?', status: a.status, integrity: a.integrity, reason: a.reason,
       invalidatedAt: a.invalidatedAt, strikes: a.strikes, warnings: a.warnings,
       awayMs: (a.awayMs || 0) + store.awayNow(a, Date.now()), awayMax: Math.max(a.awayMax || 0, store.awayNow(a, Date.now())), startedAt: a.startedAt, submittedAt: a.submittedAt,
-      deadline: a.deadline, timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Date.now()) : null,
+      deadline: a.deadline, timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - Pause.clock(a, run.paused_at)) : null,
+      paused: a.status === 'active' && !!run.paused_at,
       timeX: student && student.time_x && student.time_x !== 1 ? student.time_x : undefined,
       sealed: sealed(run) || undefined,
       totals: sealed(run) ? null : totals(a.result, quiz, a.answers, a.layout), answers: sealed(run) ? [] : answerReport(quiz, a), events,
@@ -1350,7 +1376,7 @@ module.exports = function teacherRoutes(r) {
     const quiz = store.getQuiz(run.quiz_id);
     const student = q('SELECT bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ?').get(a.studentId);
     // their clock, as of the watch page's playback (watch.js DELAY)
-    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, turnInAt: a.deadline ? Math.min(a.deadline, (a.layout && a.layout.turnInAt) || a.deadline) : null, partEnds: Parts.timed(quiz, a.layout) ? a.layout.partEnds : undefined, now: Date.now(), delay: 2500, practice: run.mode === 'practice' });
+    json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, turnInAt: a.deadline ? Math.min(a.deadline, (a.layout && a.layout.turnInAt) || a.deadline) : null, partEnds: Parts.timed(quiz, a.layout) ? a.layout.partEnds : undefined, now: Date.now(), delay: 2500, practice: run.mode === 'practice', paused: a.status === 'active' ? Pause.since(a, run.paused_at) || undefined : undefined });
   });
   r.get('/api/t/attempts/:id/watch', (req, res, p) => {
     const me = requireTeacher(req);
@@ -1372,7 +1398,8 @@ module.exports = function teacherRoutes(r) {
     json(res, 200, {
       name: student ? student.name : '?', runId: a.runId, status: a.status, integrity: a.integrity, now, ver, ended, submittedAt: a.submittedAt || null, deadline: a.deadline || null,
       partEnds: a.layout && Array.isArray(a.layout.partEnds) ? a.layout.partEnds : undefined,
-      timeLeft: a.status === 'active' && a.deadline ? Math.max(0, partEnd(a, now) - now) : null, // timed parts: the part's
+      paused: a.status === 'active' ? Pause.since(a, run.paused_at) || undefined : undefined, // when their clock stopped
+      timeLeft: a.status === 'active' && a.deadline ? Math.max(0, partEnd(a, Pause.clock(a, run.paused_at, now)) - Pause.clock(a, run.paused_at, now)) : null, // timed parts: the part's
       away: !!store.awayNow(a, now) || !!a.away,
       // Watch is their screen as they see it, answers and all (proctoring needs to see what they do)
       answers: url.searchParams.get('ver') === ver ? undefined : (a.answers || {}),
@@ -1465,7 +1492,7 @@ module.exports = function teacherRoutes(r) {
     } else if (p.action === 'extend') {
       const mins = Math.round(Number(body.minutes));
       if (!(mins >= 1 && mins <= 120)) throw new HttpError(400, 'bad_request');
-      addTime(a, mins);
+      addTime(a, mins, run);
     } else if (p.action === 'reset') {
       a.archived = true;
       store.save(a);

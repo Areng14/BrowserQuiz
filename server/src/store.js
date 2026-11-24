@@ -66,7 +66,7 @@ const SERVER_EVENTS = {
   // evidence: another student signed in from this browser; a network this student hasn't used before
   'same-browser': 'warning', 'new-network': 'warning',
   'join': 'info', 'admit': 'info', 'start': 'info', 'submit': 'info', 'run': 'info', 'reconnect': 'info', 'resume': 'info',
-  'restore': 'info', 'invalidate': 'info', 'let-in': 'info', 'extend': 'info', 'grade': 'info',
+  'restore': 'info', 'invalidate': 'info', 'let-in': 'info', 'extend': 'info', 'grade': 'info', 'pause': 'info', 'unpause': 'info',
 };
 // In Safe Exam Browser with BrowserQuiz's own settings, SEB blocks every other app, so the page losing focus
 // for a moment is SEB's own doing (its toolbar, a system dialog): no strike. But the SEB check can be faked
@@ -184,9 +184,12 @@ function record(a, type, detail, quiz, at) {
   // Before the quiz starts (in lockdown, waiting for the teacher's Start), leaving doesn't count: the page
   // tells them they left, and the teacher's log has it, without a strike.
   if (a.status !== 'active' && severity === 'violation') { severity = 'info'; soft = false; detail = [detail, 'before the start'].filter(Boolean).join(', '); }
-  if (a.practice && severity !== 'info') return; // practice runs aren't monitored
   const now = Date.now();
   const t = at == null ? now : at;
+  // Nor while the teacher has the quiz paused (pause.js): the questions are hidden, and a fire drill
+  // shouldn't leave everyone with lost connections.
+  if (a.pausedAt && t >= a.pausedAt && severity !== 'info') { severity = 'info'; soft = false; detail = [detail, 'while paused'].filter(Boolean).join(', '); }
+  if (a.practice && severity !== 'info') return; // practice runs aren't monitored
   if (soft && watched(a) && !a.away) { a.away = true; a.awaySince = t; } // the away clock, without a strike
   if (severity === 'warning') {
     const n = (a.warnWindow.get(type) || []).filter((t) => now - t < 60000);

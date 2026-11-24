@@ -468,7 +468,8 @@
       // How long ago the last mouse sample was, so the trail can be placed in time; and what's on screen.
       if (payload.mouse.length) payload.mouseEnd = Date.now() - this.lastMouseAt;
       if (this.opts.getView) payload.view = this.opts.getView();
-      if (this.answersDirty && this.opts.getAnswers) {
+      // holdAnswers: not now (the quiz is paused); they stay dirty and go once it isn't
+      if (this.answersDirty && this.opts.getAnswers && !(this.opts.holdAnswers && this.opts.holdAnswers())) {
         payload.answers = this.opts.getAnswers();
         this.answersDirty = false;
       }

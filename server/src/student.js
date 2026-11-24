@@ -13,6 +13,7 @@ const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } =
 const { fillTemplate } = require('./quizfile');
 const C = require('./corrections');
 const Parts = require('./parts');
+const Pause = require('./pause');
 const { HttpError, addressKey, clientIp, trustedIp, sameNetwork, isHttps, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
 
 const PEPPER = process.env.ID_PEPPER || '';
@@ -196,6 +197,7 @@ function current(req, { mustBeOpen = true } = {}) {
   const run = q('SELECT * FROM runs WHERE id = ?').get(a.runId);
   if (!run) throw new HttpError(401, 'no_attempt');
   a.practice = run.mode === 'practice';
+  a.pausedAt = run.paused_at || 0; // the teacher paused the quiz (pause.js)
   requireSeb(req, run);
   // Safe Exam Browser with our settings (seb.js), checked just above: no other app can be in front
   a.lockedSeb = !!run.seb_config;
@@ -317,8 +319,9 @@ const turnInAt = (a) => (a.deadline ? Math.min(a.deadline, (a.layout && a.layout
 function submit(a, quiz, answers, why) {
   if (a.status !== 'active') return;
   const now = Date.now();
-  if (answers && !pastDeadline(a, now)) a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, answers));
-  if (a.deadline && now > a.deadline + 30000 && why === 'student') store.record(a, 'late-submit', Math.round((now - a.deadline) / 1000) + 's late', quiz);
+  const clk = Pause.clock(a, a.pausedAt, now); // held while the quiz is paused
+  if (answers && !pastDeadline(a, clk) && Pause.taking(a.pausedAt, now)) a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, answers), clk);
+  if (a.deadline && clk > a.deadline + 30000 && why === 'student') store.record(a, 'late-submit', Math.round((now - a.deadline) / 1000) + 's late', quiz);
   store.back(a, now); // turned in while out of the window: the time away stops here
   a.status = 'submitted';
   a.submittedAt = now;
@@ -557,8 +560,8 @@ module.exports = function studentRoutes(r) {
     const pq = publicQuiz(quiz, a.layout);
     if (pq.timeLimitMin && !run.corrects) pq.timeLimitMin = myLimit(quiz, a.studentId); // their own, with extra time
     // tag: tells this attempt from an earlier one (a reset, practice again), for what the browser keeps
-    if (Parts.timed(quiz, a.layout)) keepLocked(quiz, a, {}, now); // parts whose time ran out while they were away
-    json(res, 200, { quiz: pq, deadline: a.deadline, turnInAt: turnInAt(a) || null, partEnds: partEndsOut(quiz, a), savedAt: seenAt, now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0, tag: sha256(a.id).slice(0, 12) });
+    if (Parts.timed(quiz, a.layout)) keepLocked(quiz, a, {}, Pause.clock(a, a.pausedAt, now)); // parts whose time ran out while they were away
+    json(res, 200, { quiz: pq, deadline: a.deadline, turnInAt: turnInAt(a) || null, partEnds: partEndsOut(quiz, a), savedAt: seenAt, now, paused: Pause.since(a, a.pausedAt) || undefined, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0, tag: sha256(a.id).slice(0, 12) });
   });
 
   r.post('/api/event', async (req, res) => {
@@ -582,6 +585,7 @@ module.exports = function studentRoutes(r) {
     const { a, run, quiz } = current(req);
     const now = Date.now();
     let live = {};
+    let held = false; // answers that came while the quiz is paused: the page keeps them for after
     const inQuiz = a.status === 'active';
     if (inQuiz && !allow(a.id, now)) {
       // Over the budget: answered the same, nothing stored.
@@ -619,22 +623,27 @@ module.exports = function studentRoutes(r) {
       // screen then, if the quiz had focus. Gaps (offline, asleep) count 30s at most.
       const order = a.layout && Array.isArray(a.layout.order) ? a.layout.order : [];
       const v = body.view && typeof body.view === 'object' ? body.view : null;
-      const onQ = v && typeof v.q === 'string' && !v.review && !v.dir && !v.intro && order.includes(v.q) ? v.q : null;
+      const onQ = v && typeof v.q === 'string' && !v.review && !v.dir && !v.intro && !v.paused && order.includes(v.q) ? v.q : null;
       if (a.viewQ && a.viewAt && body.focused !== false && body.visible !== false) {
         if (!a.qTime) a.qTime = {};
         a.qTime[a.viewQ] = (a.qTime[a.viewQ] || 0) + Math.min(Math.max(0, now - a.viewAt), 30000);
       }
       a.viewQ = onQ;
       a.viewAt = now;
-      // autosave stops at time's up; only the final submit gets the grace, for its trip over the network
-      if (body.answers && !(a.deadline && now > a.deadline)) { a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers)); a.answersAt = now; }
+      // autosave stops at time's up (only the final submit gets the grace, for its trip over the network),
+      // and while the quiz is paused, once answers already on their way have come in
+      const clk = Pause.clock(a, a.pausedAt, now);
+      if (body.answers && !Pause.taking(a.pausedAt, now)) held = true;
+      else if (body.answers && !(a.deadline && clk > a.deadline)) { a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers), clk); a.answersAt = now; }
       }
       store.save(a);
     }
     // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
     const notice = a.status !== 'submitted' ? store.notices.get(run.id) : null; // the teacher's message to everyone
     const note = a.status !== 'submitted' ? store.notes.get(a.id) : null; // and to this student
-    json(res, 200, { ok: true, now, deadline: a.deadline || null, partEnds: partEndsOut(quiz, a), done: a.status === 'submitted', ...(notice ? { notice } : {}), ...(note ? { note } : {}), ...live });
+    // paused: when their clock stopped (the page shows the time left then, and hides the questions)
+    const paused = a.status === 'active' ? Pause.since(a, a.pausedAt) : 0;
+    json(res, 200, { ok: true, now, deadline: a.deadline || null, partEnds: partEndsOut(quiz, a), done: a.status === 'submitted', ...(paused ? { paused } : {}), ...(held ? { held } : {}), ...(notice ? { notice } : {}), ...(note ? { note } : {}), ...live });
   });
 
   r.post('/api/run', async (req, res) => {
@@ -702,8 +711,9 @@ module.exports = function studentRoutes(r) {
     const n = Number(body.part);
     if (!Number.isInteger(n) || n < 1 || n > partsOf(quiz, a.layout).count) throw new HttpError(400, 'bad_part');
     // Timed parts move on when their time is up, not before (a page's clock can run a few seconds ahead)
-    if (Parts.timed(quiz, a.layout) && n > Parts.over(a, Date.now() + 5000)) throw new HttpError(403, 'not_yet');
-    if (body.answers && !pastDeadline(a, Date.now())) { a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers)); a.answersAt = Date.now(); }
+    const clk = Pause.clock(a, a.pausedAt);
+    if (Parts.timed(quiz, a.layout) && n > Parts.over(a, clk + 5000)) throw new HttpError(403, 'not_yet');
+    if (body.answers && !pastDeadline(a, clk) && Pause.taking(a.pausedAt)) { a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers), clk); a.answersAt = Date.now(); }
     a.layout.locked = Math.max(a.layout.locked || 0, n);
     store.save(a);
     json(res, 200, { locked: a.layout.locked });
@@ -712,11 +722,14 @@ module.exports = function studentRoutes(r) {
   r.post('/api/submit', async (req, res) => {
     const body = await readJson(req, 1024 * 1024);
     const { a, run, quiz } = current(req, { mustBeOpen: false });
+    // Not while the teacher has it paused (a turn-in already on its way still goes through)
+    if (a.status === 'active' && !Pause.taking(a.pausedAt)) throw new HttpError(409, 'paused');
+    const clk = Pause.clock(a, a.pausedAt);
     // A timed exam turns in when time is up, not before (the teacher can still end it early)
-    if (a.status === 'active' && run.mode !== 'practice' && !quiz.turnInEarly && a.deadline && Date.now() < turnInAt(a) - 15000) throw new HttpError(403, 'not_yet');
+    if (a.status === 'active' && run.mode !== 'practice' && !quiz.turnInEarly && a.deadline && clk < turnInAt(a) - 15000) throw new HttpError(403, 'not_yet');
     // Timed parts: turning in early (turnInEarly) is for the last part, so no part is skipped
     if (a.status === 'active' && run.mode !== 'practice' && Parts.timed(quiz, a.layout) && Array.isArray(a.layout.partEnds)
-      && Parts.over(a, Date.now() + 15000) < a.layout.partEnds.length - 1 && Date.now() < turnInAt(a) - 15000) throw new HttpError(403, 'not_yet');
+      && Parts.over(a, clk + 15000) < a.layout.partEnds.length - 1 && clk < turnInAt(a) - 15000) throw new HttpError(403, 'not_yet');
     if (a.status === 'active') {
       const now = Date.now();
       // events the page couldn't send (offline, or its requests blocked) come with the turn-in

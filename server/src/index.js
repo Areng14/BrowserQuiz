@@ -55,12 +55,14 @@ async function handle(req, res) {
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') throw new HttpError(405, 'method');
   if (p === '/healthz') return json(res, 200, { ok: true });
-  // Whether students are in a quiz right now (signed in, sent a heartbeat in the last 90 seconds). A
-  // deploy restarts the server, so the deploy check (.github/workflows/deploy-gate.yml) waits for this to
-  // say false. Just yes or no: nothing about who or which quiz.
+  // Whether students are in a quiz right now (signed in, sent a heartbeat in the last 90 seconds, or in a
+  // quiz the teacher paused: a fire drill leaves the laptops closed). A deploy restarts the server, so the
+  // deploy check (.github/workflows/deploy-gate.yml) waits for this to say false. Just yes or no: nothing
+  // about who or which quiz.
   if (p === '/healthz/busy') {
     const n = q(`SELECT COUNT(*) AS n FROM attempts a JOIN runs r ON r.id = a.run_id
-      WHERE r.status = 'open' AND r.mode != 'practice' AND a.archived = 0 AND a.status IN ('waiting', 'admitted', 'active') AND a.last_beat > ?`).get(Date.now() - 90000).n;
+      WHERE r.status = 'open' AND r.mode != 'practice' AND a.archived = 0 AND a.status IN ('waiting', 'admitted', 'active')
+      AND (a.last_beat > ? OR (r.paused_at IS NOT NULL AND a.status = 'active'))`).get(Date.now() - 90000).n;
     return json(res, 200, { busy: n > 0 });
   }
   if (p.startsWith('/asset/')) {
@@ -110,16 +112,17 @@ setInterval(() => {
   }
   for (const a of store.attempts.values()) {
     if (a.status !== 'active' || a.archived) continue;
-    const run = q('SELECT quiz_id, mode FROM runs WHERE id = ?').get(a.runId);
+    const run = q('SELECT quiz_id, mode, paused_at FROM runs WHERE id = ?').get(a.runId);
     if (!run) continue;
     const quiz = quizOf(run);
     if (!quiz) continue;
     a.practice = run.mode === 'practice';
+    a.pausedAt = run.paused_at || 0; // paused: nothing runs out (pause.js), and a lost connection doesn't count (store.record)
     if (a.lastBeat && now - a.lastBeat > 10000 && !a.beatLost && !a.practice) {
       a.beatLost = true;
       store.record(a, 'heartbeat-lost', Math.round((now - a.lastBeat) / 1000) + 's silent', quiz);
     }
-    if (a.deadline && now > a.deadline + 30000) studentRoutes.submit(a, quiz, null, 'time ran out');
+    if (a.deadline && !a.pausedAt && now > a.deadline + 30000) studentRoutes.submit(a, quiz, null, 'time ran out');
   }
 }, 2000).unref();
 

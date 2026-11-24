@@ -23,6 +23,7 @@
   let pendingAnswers = null;
   let pendingExtra = null;
   let deadline; // theirs, for the clock in their top bar (extra time moves it)
+  let paused = 0; // the quiz is paused: when their clock stopped (their screen shows that)
   let wasActive = false; // seen working: when they turn in, play it instead of just saying so
   let doneQueued = false;
   let frameReady = false;
@@ -124,6 +125,7 @@
     if (r.extra !== undefined) { pendingExtra = { at: r.now, extra: r.extra }; xver = r.xver; }
     if (r.status === 'active') wasActive = true;
     deadline = r.deadline || 0;
+    paused = r.paused || 0;
     if (r.status === 'submitted' && wasActive && !doneQueued) {
       doneQueued = true;
       views.push([Math.max(r.submittedAt || r.now, views.length ? views[views.length - 1][0] : 0), { done: r.ended || 'submitted' }]);
@@ -144,7 +146,7 @@
     while (views.length && views[0][0] <= t) {
       const v = views[0][1];
       if (v.w && (!size || size.w !== v.w || size.h !== v.h)) { size = { w: v.w, h: v.h }; screen.hidden = false; fit(); }
-      const shown = apply(v.done || deadline === undefined ? v : Object.assign({}, v, { deadline }), used ? undefined : due, usedX ? undefined : dueX);
+      const shown = apply(v.done || deadline === undefined ? v : Object.assign({}, v, { deadline, paused }), used ? undefined : due, usedX ? undefined : dueX);
       if (!shown) break; // the frame isn't up yet: next time
       views.shift();
       used = true;
