@@ -434,7 +434,8 @@ mark.hl[data-c="u"] { background: none; box-shadow: none; text-decoration: under
 .modal, .fs-card { width: min(100%, 400px); display: grid; gap: 12px; padding: 20px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .toast {
-  position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 30;
+  /* 24px above the bottom bar (61px tall) */
+  position: absolute; left: 50%; bottom: calc(85px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 30;
   max-width: calc(100% - 32px); padding: 8px 14px; border-radius: 6px; background: var(--ink); color: var(--bg); font-size: 14px;
 }
 
