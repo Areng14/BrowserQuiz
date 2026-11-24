@@ -488,9 +488,6 @@ mark.hl[data-c="u"] { background: none; box-shadow: none; text-decoration: under
 }
 /* Headings take focus on a new screen for screen readers; they don't need a ring for it. */
 h1[tabindex="-1"]:focus { outline: none; }
-@media (prefers-reduced-motion: reduce) {
-  .confetti-layer { display: none; }
-}
 
 /* Teacher preview */
 .pv-score { display: grid; gap: 8px; }

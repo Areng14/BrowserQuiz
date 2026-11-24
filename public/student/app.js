@@ -2644,13 +2644,29 @@
   // slowed by the air, then drifting down slowly, swaying and flipping, fading near the bottom.
   function confetti() {
     const layer = h('div', { class: 'confetti-layer', 'aria-hidden': 'true' });
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return layer;
     const colors = isDark()
       ? ['#7ea3ff', '#5ccb8a', '#ffa94d', '#f783ac', '#ffd43b', '#b197fc']
       : ['#2257d6', '#1b7f45', '#f08c00', '#e64980', '#fab005', '#7048e8'];
     const W = window.innerWidth;
     const H = window.innerHeight;
     const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+    // Animations turned off on the computer (common on school PCs and remote desktops): nothing moves.
+    // The pieces show up where they'd have landed, down both sides, and fade.
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      for (let i = 0; i < 80; i++) {
+        const el = h('span', { class: 'confetti' });
+        el.style.width = rand(6, 11).toFixed(1) + 'px';
+        el.style.height = rand(9, 17).toFixed(1) + 'px';
+        el.style.background = colors[Math.floor(Math.random() * colors.length)];
+        const x = i % 2 === 0 ? rand(0, W * 0.28) : rand(W * 0.72, W);
+        el.style.transform = `translate3d(${x.toFixed(1)}px, ${rand(0, H * 0.92).toFixed(1)}px, 0) rotate(${rand(0, 360).toFixed(0)}deg)`;
+        layer.append(el);
+        if (el.animate) el.animate([{ opacity: 0 }, { opacity: 1, offset: 0.12 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 3600, delay: rand(0, 250), easing: 'ease-out', fill: 'both' });
+        else el.style.opacity = '1';
+      }
+      setTimeout(() => layer.remove(), 4200);
+      return layer;
+    }
     const pieces = [];
     for (let i = 0; i < 150; i++) {
       const left = i % 2 === 0;
