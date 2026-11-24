@@ -25,6 +25,8 @@ the Monaco editor, with insane question customizability.
   variables renamed and the formatting changed, and shows both side by side.
 - **Question pools.** Each student gets a random few questions from a pool, so a neighbor's screen
   won't help.
+- **Timed parts.** Like the SAT: each part has its own clock, and the next one opens when time's up.
+  Extra time stretches every part.
 - **Corrections.** After an exam, students redo just what they missed, with their answers filled in,
   and earn back points. No lockdown, so they can ask around. Explanations show once they turn it in.
 - **Exam lockdown.** Full screen, leaving the window gets flagged quietly, and if that isn't safe
