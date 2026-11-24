@@ -78,8 +78,11 @@ aren't in the sandbox. The same goes for C#, Go and Rust, which have no speed te
   - pages run only the app's own scripts (CSP)
   - use HTTPS for a real class: over plain HTTP, the teacher password and student IDs cross the
     network unencrypted ([HTTPS](setup.md#https-and-a-domain))
-- **Wrong student IDs** lock a name for a moment, but only in the browser that typed them, so a
-  classmate can't lock someone out.
+- **Wrong student IDs** lock a name for a moment in the browser that typed them, so a classmate's typo
+  doesn't lock someone out. After many, the name waits everywhere for a while, and the live page shows
+  how many wrong IDs were typed for it.
+- **The class list stays private:** the name box only finds a name from its first letters, so someone
+  with the join code can't list the class.
 
 ## Exams
 

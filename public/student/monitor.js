@@ -471,8 +471,10 @@
       const sentAt = Date.now();
       const late = this.late.splice(0);
       if (late.length) payload.late = late.map(([type, detail, t]) => [type, detail, sentAt - t]);
+      this.lateInFlight = late; // a turn-in meanwhile takes these too (takeLate)
       Promise.resolve(this.api.beat(payload))
         .then((r) => {
+          if (this.lateInFlight === late) this.lateInFlight = null;
           this.failures = 0;
           this.setBeat(r && r.beatMs);
           if (this.opts.onBeat) this.opts.onBeat(r, { answers: !!payload.answers });
@@ -482,7 +484,8 @@
           if (payload.answers) this.answersDirty = true;
           // Keep the typing replay and anything we couldn't report; the mouse trail can go.
           if (payload.edits.length && this.edits.length < 5000) this.edits.unshift(...payload.edits);
-          if (late.length) this.late.unshift(...late.slice(0, 100 - this.late.length));
+          if (late.length && this.lateInFlight === late) this.late.unshift(...late.slice(0, 100 - this.late.length));
+          if (this.lateInFlight === late) this.lateInFlight = null;
           if (this.opts.onBeatError) this.opts.onBeatError(err, this.failures);
         });
     }
@@ -555,14 +558,23 @@
       return { dispose: () => ta.removeEventListener('input', onInput) };
     }
 
-    // questionId: an answer just changed. Within 30s of coming back from 3s or more away, that's worth a
-    // look (they may have looked it up): flagged once per question per time back. The server words it.
+    // Events that couldn't be sent (their request failed or was blocked), with how long ago each was, for
+    // the turn-in to carry: heartbeats and events can be blocked in the browser, the turn-in can't.
+    takeLate() {
+      const now = Date.now();
+      const items = (this.lateInFlight || []).concat(this.late.splice(0));
+      this.lateInFlight = null; // so a heartbeat that fails after this doesn't queue them again
+      return items.slice(0, 100).map(([type, detail, t]) => [type, detail, now - t]);
+    }
+
     // Turning in: the edits the next heartbeat would have carried go with the submit instead, since a
     // heartbeat after it isn't stored.
     takeEdits() {
       return this.edits.splice(0, 300);
     }
 
+    // questionId: an answer just changed. Within 30s of coming back from 3s or more away, that's worth a
+    // look (they may have looked it up): flagged once per question per time back. The server words it.
     markAnswersDirty(questionId) {
       this.answersDirty = true;
       if (!this.armed || !questionId || !this.backAt || this.awaySince) return;

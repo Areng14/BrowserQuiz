@@ -402,9 +402,10 @@
       const matches = (res && res.matches) || [];
       if (!matches.length) {
         close();
+        if (q.length < 3) return; // names match from 3 letters (or a whole short name)
         hint.hidden = false;
-        hint.textContent = 'No match.';
-        said.textContent = 'No match';
+        hint.textContent = 'No match. Start with your first or last name.';
+        said.textContent = hint.textContent;
         return;
       }
       hint.hidden = true;
@@ -2548,10 +2549,11 @@
     hideFsOverlay();
     const answers = serializeAnswers();
     const edits = S.monitor ? S.monitor.takeEdits() : []; // the replay's last few seconds
+    const late = S.monitor ? S.monitor.takeLate() : []; // anything the monitor couldn't send
     const ov = submittingOverlay();
     for (let tries = 0; ; tries++) {
       try {
-        S.result = await api.submit(answers, edits);
+        S.result = await api.submit(answers, edits, late);
         break;
       } catch (e) {
         if (S.done) return;

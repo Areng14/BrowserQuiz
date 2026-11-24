@@ -32,10 +32,12 @@ function trustedIp(req) {
 }
 // The key for per-address limits. IPv6 hands every device its own address (and a student can pick new ones
 // within their network), so one network's /64 counts as one address, like a school's shared IPv4.
-function addressKey(ip) {
+// bits: 64 for a home or classroom network; 48 where one person could hold a whole site's worth (a free
+// tunnel broker hands out a /48), for limits on guessing.
+function addressKey(ip, bits = 64) {
   ip = String(ip || '').replace(/^::ffff:(?=\d+\.)/i, '');
   if (net.isIP(ip) !== 6) return ip;
-  return ipv6Groups(ip).slice(0, 4).map((x) => x.toString(16)).join(':') + '::/64';
+  return ipv6Groups(ip).slice(0, bits / 16).map((x) => x.toString(16)).join(':') + `::/${bits}`;
 }
 // "Only this network" check. The lock holds the teacher's address from when they started the quiz.
 // - Same address: hosted off campus, the whole school shares one public IP.
@@ -163,7 +165,11 @@ function router() {
       for (const r of routes) {
         if (r.method !== method) continue;
         const m = r.re.exec(pathname);
-        if (m) return { handler: r.handler, params: Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])])) };
+        if (m) {
+          let params;
+          try { params = Object.fromEntries(r.keys.map((k, i) => [k, decodeURIComponent(m[i + 1])])); } catch (e) { throw new HttpError(400, 'bad_request'); }
+          return { handler: r.handler, params };
+        }
       }
       return null;
     },

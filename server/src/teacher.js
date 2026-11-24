@@ -414,11 +414,13 @@ const notWhileOpen = (run) => { if (sealed(run)) throw new HttpError(409, 'quiz_
 // student can't lock the teacher out by guessing on purpose (the device cookie, signed with ID_PEPPER).
 const acctFails = new Map(); // username -> { n, until }
 const TDEV = 'tdev';
-const devSig = (tid, r) => crypto.createHmac('sha256', String(process.env.ID_PEPPER || '')).update(`tdev:${tid}:${r}`).digest('base64url');
-function knownDevice(req, tid) {
+// Signed with the password's hash too: changing the password (or an admin reset) forgets every browser.
+const devSig = (t, r) => crypto.createHmac('sha256', String(process.env.ID_PEPPER || '')).update(`tdev:${t.id}:${r}:${t.pw_hash || ''}`).digest('base64url');
+const devMisses = new Map(); // device -> wrong passwords typed in it: 5 and it's no longer known
+function knownDevice(req, t) {
   const [id, r, sig] = String(cookies(req)[TDEV] || '').split('.');
-  if (!id || !r || !sig || id !== String(tid)) return false;
-  const want = Buffer.from(devSig(tid, r));
+  if (!id || !r || !sig || id !== String(t.id) || (devMisses.get(r) || 0) >= 5) return false;
+  const want = Buffer.from(devSig(t, r));
   const got = Buffer.from(sig);
   return want.length === got.length && crypto.timingSafeEqual(want, got);
 }
@@ -445,9 +447,11 @@ module.exports = function teacherRoutes(r) {
     const teacher = A.byUsername(String(body.username || '').trim() || 'admin');
     // A browser the teacher signed in from before has a budget of its own, so a classmate guessing from the
     // same school address (or from everywhere at once) can't keep the teacher out.
-    const known = !!teacher && knownDevice(req, teacher.id);
-    const mine = known ? loginBucket('dev:' + String(cookies(req)[TDEV]).split('.')[1], 10, 6000) : loginBucket('ip:' + addressKey(clientIp(req)), 10, 6000);
-    const all = known ? mine : loginBucket('all', 60, 1000);
+    const known = !!teacher && knownDevice(req, teacher);
+    const devRand = known ? String(cookies(req)[TDEV]).split('.')[1] : null;
+    const mine = known ? loginBucket('dev:' + devRand, 10, 6000) : loginBucket('ip:' + addressKey(clientIp(req), 48), 10, 6000);
+    // the whole server: a backstop against guessing spread over many addresses (each account also locks)
+    const all = known ? mine : loginBucket('all', 300, 200);
     if (mine.n < 1 || all.n < 1) throw new HttpError(429, 'too_many');
     mine.n--;
     if (all !== mine) all.n--;
@@ -458,6 +462,8 @@ module.exports = function teacherRoutes(r) {
     }
     const ok = await A.checkPassword(String(body.password || ''), teacher && !teacher.disabled ? teacher.pw_hash : null);
     if (!ok) {
+      if (devRand) devMisses.set(devRand, (devMisses.get(devRand) || 0) + 1);
+      if (devMisses.size > 5000) devMisses.delete(devMisses.keys().next().value);
       const f = acctFails.get(uname) || { n: 0, until: 0 };
       f.n++;
       if (f.n >= 5) f.until = Date.now() + Math.min(15 * 60000, 30000 * 2 ** (f.n - 5));
@@ -472,7 +478,7 @@ module.exports = function teacherRoutes(r) {
     }
     acctFails.delete(uname);
     const r = crypto.randomBytes(12).toString('base64url');
-    setCookie(req, res, TDEV, `${teacher.id}.${r}.${devSig(teacher.id, r)}`, 180 * 86400); // this browser is theirs
+    setCookie(req, res, TDEV, `${teacher.id}.${r}.${devSig(teacher, r)}`, 180 * 86400); // this browser is theirs
     mine.n = Math.min(mine.cap, mine.n + 1);
     if (all !== mine) all.n = Math.min(all.cap, all.n + 1);
     // Unlock their quiz key. A teacher from before encryption gets one now, with a recovery code to keep.
@@ -492,6 +498,7 @@ module.exports = function teacherRoutes(r) {
     const t = cookies(req)[TCH];
     if (t) q('DELETE FROM sessions WHERE token_hash = ?').run(sha256(t));
     setCookie(req, res, TCH, '', 0);
+    setCookie(req, res, TDEV, '', 0); // and this browser isn't "theirs" any more (a shared classroom computer)
     json(res, 200, { ok: true });
   });
 
@@ -518,7 +525,13 @@ module.exports = function teacherRoutes(r) {
     const next = String(body.next || '');
     if (next.length < A.MIN_PASSWORD) throw new HttpError(400, 'weak', `Use at least ${A.MIN_PASSWORD} characters.`);
     const t = A.byId(me.id);
-    if (!(await A.checkPassword(String(body.current || ''), t.pw_hash))) throw new HttpError(400, 'bad_password', 'The current password is wrong.');
+    const tries = loginBucket('pw-check:' + me.id, 5, 60000);
+    if (tries.n < 1) throw new HttpError(429, 'too_many', 'Too many tries. Wait a minute.');
+    if (!(await A.checkPassword(String(body.current || ''), t.pw_hash))) {
+      tries.n--;
+      await sleep(1000);
+      throw new HttpError(400, 'bad_password', 'The current password is wrong.');
+    }
     // The quiz key moves to the new password. It's in memory, or the old password or the recovery code
     // opens it; "start over" drops quizzes nobody can open any more. After an admin reset (must_change),
     // the key in memory doesn't count: whoever has the temporary password needs the recovery code too,
@@ -617,7 +630,7 @@ module.exports = function teacherRoutes(r) {
 
   // Sign-in: any passkey for this site (they're discoverable), so no username first.
   r.post('/api/t/passkeys/login-options', async (req, res) => {
-    const mine = loginBucket('pk:' + clientIp(req), 20, 3000);
+    const mine = loginBucket('pk:' + addressKey(clientIp(req), 48), 20, 3000);
     if (mine.n < 1) throw new HttpError(429, 'too_many');
     mine.n--;
     const { rpId } = PK.site(req);
@@ -629,7 +642,7 @@ module.exports = function teacherRoutes(r) {
   r.post('/api/t/passkeys/login', async (req, res) => {
     const body = await readJson(req, 16 * 1024);
     // A passkey can't be guessed: this only caps the work, apart from the password limits a student can use up.
-    const mine = loginBucket('pk:' + addressKey(clientIp(req)), 30, 2000);
+    const mine = loginBucket('pk:' + addressKey(clientIp(req), 48), 30, 2000);
     const all = mine;
     if (mine.n < 1) throw new HttpError(429, 'too_many');
     mine.n--;
@@ -694,6 +707,7 @@ module.exports = function teacherRoutes(r) {
     } else if (p.action === 'disable') {
       q('UPDATE teachers SET disabled = 1 WHERE id = ?').run(t.id);
       q('DELETE FROM sessions WHERE teacher_id = ?').run(t.id);
+      q("UPDATE runs SET status = 'closed', closed_at = ? WHERE owner_id = ? AND status = 'open'").run(Date.now(), t.id); // no new joins or name lookups
     } else if (p.action === 'enable') {
       q('UPDATE teachers SET disabled = 0 WHERE id = ?').run(t.id);
     } else throw new HttpError(404, 'not_found');
@@ -940,6 +954,10 @@ module.exports = function teacherRoutes(r) {
     const body = await readJson(req, 4096);
     if (!q('SELECT 1 FROM quizzes WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.quizId || ''), me.id)) throw new HttpError(400, 'bad_quiz');
     if (!q('SELECT 1 FROM rosters WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.rosterId || ''), me.id)) throw new HttpError(400, 'bad_roster');
+    // corrections show the right answers when turned in: no exam of the same quiz while they're open
+    if (!body.practice && q("SELECT 1 FROM runs WHERE quiz_id = ? AND owner_id = ? AND corrects IS NOT NULL AND status = 'open'").get(String(body.quizId), me.id)) {
+      throw new HttpError(409, 'corrections_open', 'Corrections for this quiz are open. Close them first.');
+    }
     // Safe Exam Browser: settings BrowserQuiz makes (seb), or the Config Key of the teacher's own .seb
     // file from SEB Config Tool (sebKey, 64 hex digits).
     let sebKey = body.sebKey ? String(body.sebKey).trim().toLowerCase() : null;
@@ -1127,6 +1145,7 @@ module.exports = function teacherRoutes(r) {
     const code = newJoinCode();
     q("INSERT INTO runs (id, quiz_id, roster_id, code, status, ip_lock, mode, created_at, owner_id, corrects, earn_back, ask_why) VALUES (?, ?, ?, ?, 'open', NULL, 'practice', ?, ?, ?, ?, ?)")
       .run(id, exam.quiz_id, exam.roster_id, code, Date.now(), me.id, exam.id, earnBack, body.why ? 1 : 0);
+    q('UPDATE runs SET had_corrections = 1 WHERE id = ?').run(exam.id); // for good, even if they're deleted
     audit(me, 'open-corrections', exam.id, code);
     json(res, 200, { id, code });
   });
@@ -1142,7 +1161,7 @@ module.exports = function teacherRoutes(r) {
       }
     } else if (p.action === 'open') {
       // its corrections have shown the right answers: reopened, the exam could be taken with them
-      if (q('SELECT 1 FROM runs WHERE corrects = ? AND owner_id = ?').get(run.id, me.id)) throw new HttpError(409, 'has_corrections', "This quiz has corrections, so it can't reopen.");
+      if (run.had_corrections || q('SELECT 1 FROM runs WHERE corrects = ? AND owner_id = ?').get(run.id, me.id)) throw new HttpError(409, 'has_corrections', "This quiz has corrections, so it can't reopen.");
       q("UPDATE runs SET status = 'open', closed_at = NULL WHERE id = ?").run(run.id);
     } else if (p.action === 'admit-all') {
       // The dashboard sends the students it showed when the teacher checked them in; anyone who joined
@@ -1197,6 +1216,8 @@ module.exports = function teacherRoutes(r) {
       if (!checks.has(e.attempt_id)) checks.set(e.attempt_id, []);
       checks.get(e.attempt_id).push({ type: e.type, detail: e.detail });
     }
+    // wrong student IDs typed for a name: a few are typos, many mean someone is guessing
+    const wrongIds = new Map(q('SELECT student_id, n FROM failed_ids WHERE run_id = ? AND n > 0').all(run.id).map((x) => [x.student_id, x.n]));
     // what each student's latest strike was, for the teacher's notifications (teacher.js notice)
     const lastStrike = new Map();
     for (const e of q(`SELECT e.attempt_id, e.type FROM events e JOIN attempts a ON a.id = e.attempt_id
@@ -1209,6 +1230,7 @@ module.exports = function teacherRoutes(r) {
         waiting: !run.corrects && run.mode !== 'practice' ? roster.reduce((n, s) => { const a = byStudent.get(s.id); const t = a && a.status === 'submitted' ? totals(a.result, quiz, a.answers, a.layout) : null; return n + (t ? t.pending + t.review : 0); }, 0) : 0 },
       students: roster.map((s) => {
         const row = liveRow(s, byStudent.get(s.id), quiz, run);
+        if (wrongIds.has(s.id)) row.wrongIds = wrongIds.get(s.id);
         if (row.attempt && checks.has(row.attempt.id)) row.attempt.checks = checks.get(row.attempt.id);
         if (row.attempt && lastStrike.has(row.attempt.id)) row.attempt.lastStrike = lastStrike.get(row.attempt.id);
         return row;

@@ -64,7 +64,7 @@
     run: (body) => post('/api/run', body),
     // keepalive lets a submit survive the page closing, but browsers cap keepalive bodies at 64 KB.
     partDone: (part, answers) => post('/api/part-done', { part, answers }),
-    submit: (answers, edits) => { const body = { answers, edits: edits && edits.length ? edits : undefined }; return post('/api/submit', body, JSON.stringify(body).length < 60000); },
+    submit: (answers, edits, late) => { const body = { answers, edits: edits && edits.length ? edits : undefined, late: late && late.length ? late : undefined }; return post('/api/submit', body, JSON.stringify(body).length < 60000); },
     resume: () => post('/api/resume'),
     practiceRetry: () => post('/api/practice-retry'),
     assetUrl: (p) => '/asset/' + String(p).split('/').map(encodeURIComponent).join('/') + (seb ? `?seb=${encodeURIComponent(seb.page)}&sebfirst=${encodeURIComponent(seb.first)}&sebkey=${seb.key}` : ''),

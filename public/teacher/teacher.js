@@ -831,7 +831,9 @@
   // ---------- one running quiz ----------
   const gone = (a) => (a.status === 'waiting' || a.status === 'admitted') && a.seenAgo > 15000;
   function statusCell(s) {
-    if (!s.attempt) return h('td', { class: 't-muted', text: 'Not joined' });
+    // wrong student IDs typed for this name: a few are typos, many mean someone may be guessing
+    const wrong = s.wrongIds ? `${s.wrongIds} wrong ${s.wrongIds === 1 ? 'ID' : 'IDs'}` : '';
+    if (!s.attempt) return wrong ? h('td', { class: s.wrongIds >= 5 ? 't-late' : 't-muted', text: `Not joined · ${wrong}` }) : h('td', { class: 't-muted', text: 'Not joined' });
     const a = s.attempt;
     // Waiting for the start: reading the rules, or agreed and in full screen (Ready)
     // their screen stopped checking in (closed the browser, quit Safe Exam Browser): not ready any more

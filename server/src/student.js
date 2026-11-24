@@ -14,8 +14,8 @@ const C = require('./corrections');
 const { HttpError, addressKey, clientIp, trustedIp, sameNetwork, isHttps, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
 
 const PEPPER = process.env.ID_PEPPER || '';
-const joinFails = limiter(20, 60000);
-const nameLookups = limiter(2000, 60000); // per run and IP: a whole class can share one school IP
+const joinFails = limiter(20, 60000); // wrong join codes, per address (an IPv6 /48)
+const nameLookups = limiter(400, 5 * 60000); // per run and address: a whole class can share one school IP
 const runLimit = limiter(1, 3000);
 const ATT = 'att';
 
@@ -26,17 +26,22 @@ const ATT = 'att';
 const DEV = 'dev';
 const devIssues = limiter(60, 10 * 60000); // per address: a class behind one school IP, plus some retries
 const devBad = new Map(); // "run student device" -> { n, t }: wrong IDs this browser typed for this name
-// Signed, so a browser can't make up a fresh one for every guess: new ones only come from issueDevice.
-const devSig = (r) => crypto.createHmac('sha256', PEPPER).update('dev:' + r).digest('base64url').slice(0, 22);
+// Signed, so a browser can't make up a fresh one for every guess: new ones only come from issueDevice. And
+// dated, so a stash collected earlier stops working after 12 hours, like the cookie itself.
+const DEV_MS = 12 * 3600 * 1000;
+const devSig = (r, t) => crypto.createHmac('sha256', PEPPER).update(`dev:${r}:${t}`).digest('base64url').slice(0, 22);
 function deviceOf(req) {
-  const m = /^([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{22})$/.exec(String(cookies(req)[DEV] || ''));
-  return m && sameHash(m[2], devSig(m[1])) ? m[1] : null;
+  const m = /^([A-Za-z0-9_-]{43})\.([0-9a-z]{1,12})\.([A-Za-z0-9_-]{22})$/.exec(String(cookies(req)[DEV] || ''));
+  if (!m || !sameHash(m[3], devSig(m[1], m[2]))) return null;
+  const at = parseInt(m[2], 36);
+  return Date.now() - at < DEV_MS && at <= Date.now() + 60000 ? m[1] : null;
 }
 const deviceHash = (dev) => sha256('device ' + dev).slice(0, 32);
 function issueDevice(req, res) {
   if (deviceOf(req) || !devIssues(addressKey(clientIp(req)))) return;
   const r = newToken();
-  setCookie(req, res, DEV, `${r}.${devSig(r)}`, 12 * 3600);
+  const t = Date.now().toString(36);
+  setCookie(req, res, DEV, `${r}.${t}.${devSig(r, t)}`, DEV_MS / 1000);
 }
 function badTries(key) {
   const e = key && devBad.get(key);
@@ -156,8 +161,10 @@ function noteSameBrowser(a, run, quiz, name) {
 
 // What a client event says, in the teacher's words. "answer-after-return" arrives as "question id|seconds
 // after|seconds away", and names the question as the teacher's view numbers it (the quiz's order).
+// The detail to log for an event, or null for one that doesn't check out (not "no detail": a blur has
+// none, and must still count, also when it arrives late).
 function eventDetail(a, quiz, type, detail) {
-  if (type !== 'answer-after-return') return detail;
+  if (type !== 'answer-after-return') return detail == null ? undefined : detail;
   const [id, after, away] = String(detail || '').split('|');
   const list = quiz && a.layout ? store.quizFor(quiz, a.layout).questions : [];
   const i = list.findIndex((qq) => qq.id === id);
@@ -327,6 +334,22 @@ function runInfoBase(run, quiz) {
 // Answers stop saving a little after time runs out (slow networks get a few seconds). The attempt itself
 // stays open until the sweeper turns it in, so a late student still gets a normal "submitted" screen.
 const ANSWER_GRACE_MS = 10000;
+// Events the client couldn't send when they happened (offline, or the request was blocked) arrive with a
+// heartbeat or the turn-in, oldest first. Each keeps the time it happened (after the last good heartbeat,
+// in order), so leaving five times while offline is five strikes, not one burst.
+function takeLate(a, quiz, late, now) {
+  if (!Array.isArray(late)) return;
+  let at = Math.min(now, a.lastBeat || 0);
+  for (const e of late.slice(0, 50)) {
+    if (!Array.isArray(e) || !Object.hasOwn(store.CLIENT_EVENTS, e[0])) continue;
+    const agoMs = Math.max(0, Number(e[2]) || 0);
+    at = Math.min(now, Math.max(at, now - agoMs));
+    const ago = Math.round(agoMs / 1000);
+    const d = eventDetail(a, quiz, e[0], e[1]);
+    if (d === null) continue;
+    store.record(a, e[0], [d ? String(d).slice(0, 120) : null, `sent ${ago}s late`].filter(Boolean).join(', '), quiz, at);
+  }
+}
 const pastDeadline = (a, now) => !!a.deadline && now > a.deadline + ANSWER_GRACE_MS;
 // when a timed exam can be turned in: the class's normal time, or their own deadline if that's sooner
 const turnInAt = (a) => (a.deadline ? Math.min(a.deadline, (a.layout && a.layout.turnInAt) || a.deadline) : 0);
@@ -373,7 +396,7 @@ module.exports = function studentRoutes(r) {
     const code = String(body.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     const run = code.length === 6 ? q("SELECT * FROM runs WHERE code = ? AND status = 'open'").get(code) : null;
     if (!run) {
-      if (!joinFails(addressKey(ip))) throw new HttpError(429, 'too_many');
+      if (!joinFails(addressKey(ip, 48))) throw new HttpError(429, 'too_many');
       throw new HttpError(404, 'bad_code');
     }
     if (run.ip_lock && !onLockedNetwork(ip, run.ip_lock)) throw new HttpError(403, 'wrong_network');
@@ -389,7 +412,7 @@ module.exports = function studentRoutes(r) {
     const m = /^([A-Za-z0-9]{6})\.seb$/.exec(String(p.file || ''));
     const run = m ? q("SELECT code, seb_config FROM runs WHERE code = ? AND status = 'open'").get(m[1].toUpperCase()) : null;
     if (!run || !run.seb_config) {
-      if (!joinFails(addressKey(clientIp(req)))) throw new HttpError(429, 'too_many');
+      if (!joinFails(addressKey(clientIp(req), 48))) throw new HttpError(429, 'too_many');
       throw new HttpError(404, 'bad_code');
     }
     send(res, 200, run.seb_config, {
@@ -411,11 +434,16 @@ module.exports = function studentRoutes(r) {
   r.post('/api/names', async (req, res) => {
     const body = await readJson(req, 4096);
     const run = openRun(body.runId, req);
-    if (!nameLookups(run.id + ' ' + clientIp(req))) throw new HttpError(429, 'too_many');
-    const term = String(body.q || '').trim().slice(0, 60);
-    if (term.length < 2) return json(res, 200, { matches: [] });
-    const like = '%' + term.replace(/[\\%_]/g, (c) => '\\' + c) + '%';
-    const rows = q("SELECT id, name FROM roster_students WHERE roster_id = ? AND removed = 0 AND name LIKE ? ESCAPE '\\' ORDER BY name LIMIT 5").all(run.roster_id, like);
+    if (!nameLookups(run.id + ' ' + addressKey(clientIp(req)))) throw new HttpError(429, 'too_many');
+    // The start of a first or last name, 3 letters or more (or a whole short one, like "Bo"): enough to find
+    // your own name, while someone with the code can't list the class two letters at a time.
+    const term = String(body.q || '').trim().replace(/\s+/g, ' ').toLowerCase().slice(0, 60);
+    if (!term) return json(res, 200, { matches: [] });
+    const fits = (name) => {
+      const n = ' ' + String(name).toLowerCase().replace(/\s+/g, ' ') + ' ';
+      return term.length >= 3 ? n.includes(' ' + term) : n.includes(' ' + term + ' ');
+    };
+    const rows = q('SELECT id, name FROM roster_students WHERE roster_id = ? AND removed = 0 ORDER BY name').all(run.roster_id).filter((x) => fits(x.name)).slice(0, 5);
     json(res, 200, { matches: rows.map((x) => ({ id: x.id, name: x.name })) });
   });
 
@@ -429,6 +457,12 @@ module.exports = function studentRoutes(r) {
     const dev = deviceOf(req);
     const devKey = dev && `${run.id} ${student.id} ${dev}`;
     if (ft && ft.until > now && (!dev || badTries(devKey) > 0)) throw new HttpError(429, 'name_locked');
+    // 15 wrong IDs for one name, from anywhere: then a lock holds every browser back (someone is guessing),
+    // except the one already taking this student's quiz. The teacher sees the count on the student's row.
+    if (ft && ft.until > now && ft.n >= 15) {
+      const mineNow = q('SELECT device FROM attempts WHERE run_id = ? AND student_id = ? AND archived = 0').get(run.id, student.id);
+      if (!(dev && mineNow && mineNow.device === deviceHash(dev))) throw new HttpError(429, 'name_locked');
+    }
     if (!safeEqual(hashSid(body.studentId), student.sid_hash)) {
       noteBadTry(devKey);
       const n = (ft ? ft.n : 0) + 1;
@@ -585,21 +619,7 @@ module.exports = function studentRoutes(r) {
       // Over the budget: answered the same, nothing stored.
       live = W.isWatched(a.runId, now) ? { beatMs: W.FAST_BEAT_MS } : {};
     } else if (store.watched(a)) { // in the quiz, or waiting for its start in lockdown
-      // Events the client couldn't send while offline arrive here, oldest first.
-      // Each keeps the time it happened (after the last good heartbeat, in order), so leaving five times
-      // while offline is five strikes, not one burst.
-      if (Array.isArray(body.late)) {
-        let at = Math.min(now, a.lastBeat || 0);
-        for (const e of body.late.slice(0, 50)) {
-          if (!Array.isArray(e) || !Object.hasOwn(store.CLIENT_EVENTS, e[0])) continue;
-          const agoMs = Math.max(0, Number(e[2]) || 0);
-          at = Math.min(now, Math.max(at, now - agoMs));
-          const ago = Math.round(agoMs / 1000);
-          const d = eventDetail(a, quiz, e[0], e[1]);
-          if (d === null) continue;
-          store.record(a, e[0], [d ? String(d).slice(0, 120) : null, `sent ${ago}s late`].filter(Boolean).join(', '), quiz, at);
-        }
-      }
+      takeLate(a, quiz, body.late, now);
       if (a.beatLost) store.logEvent(a, 'reconnect', 'info', Math.round((now - a.lastBeat) / 1000) + 's offline');
       a.lastBeat = now;
       a.beatLost = false;
@@ -719,6 +739,8 @@ module.exports = function studentRoutes(r) {
     if (a.status === 'active' && run.mode !== 'practice' && !quiz.turnInEarly && a.deadline && Date.now() < turnInAt(a) - 15000) throw new HttpError(403, 'not_yet');
     if (a.status === 'active') {
       const now = Date.now();
+      // events the page couldn't send (offline, or its requests blocked) come with the turn-in
+      if (store.watched(a)) takeLate(a, quiz, body.late, now);
       storeEdits(a, body.edits, now); // the last few seconds of typing, for the replay
       // and the time since the last heartbeat, on the question that was on screen then
       if (a.viewQ && a.viewAt) { if (!a.qTime) a.qTime = {}; a.qTime[a.viewQ] = (a.qTime[a.viewQ] || 0) + Math.min(Math.max(0, now - a.viewAt), 30000); a.viewQ = null; }

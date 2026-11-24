@@ -139,8 +139,10 @@ const CHALLENGE_MS = 2 * 60000;
 const challenges = new Map(); // challenge -> { kind, teacherId, at }
 function newChallenge(kind, teacherId) {
   const now = Date.now();
-  if (challenges.size >= 5000) for (const [k, v] of challenges) if (now - v.at > CHALLENGE_MS) challenges.delete(k);
-  while (challenges.size >= 5000) challenges.delete(challenges.keys().next().value); // the oldest go first
+  // Room for far more than sign-ins need (the routes are limited per address), so a flood can't push out a
+  // teacher's challenge mid sign-in.
+  if (challenges.size >= 50000) for (const [k, v] of challenges) if (now - v.at > CHALLENGE_MS) challenges.delete(k);
+  while (challenges.size >= 50000) challenges.delete(challenges.keys().next().value); // the oldest go first
   const c = crypto.randomBytes(32).toString('base64url');
   challenges.set(c, { kind, teacherId: teacherId || null, at: now });
   return c;
