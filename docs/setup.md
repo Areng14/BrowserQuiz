@@ -281,7 +281,8 @@ locks quizzes until their teacher signs in again.
 half a minute. To hold deploys while anyone is in a quiz: set the repository variable `QUIZ_URL` to your
 site (GitHub: Settings, Secrets and variables, Actions, Variables), and turn on **Wait for CI** for both
 services in Railway (each service's Settings, Source). The check in `.github/workflows/deploy-gate.yml`
-then passes only once `/healthz/busy` says nobody is in a quiz.
+then passes only once `/healthz/busy` says nobody is taking an exam. For a fix that can't wait, put
+`[deploy now]` in the commit message.
 
 To set it up by hand instead, it's two services from this repo:
 

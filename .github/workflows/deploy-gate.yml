@@ -1,7 +1,9 @@
 # A deploy restarts the server, which drops every student for half a minute. With Railway's "Wait for
 # CI" turned on for the services, a push to main deploys only once this check passes: it waits while
-# students are in a quiz, then lets the deploy through. Set the repository variable QUIZ_URL to the
-# site (https://quiz.example.org); without it the check passes at once.
+# students are in an exam, then lets the deploy through. Set the repository variable QUIZ_URL to the
+# site (https://quiz.example.org); without it the check passes at once. A fix that can't wait: put
+# [deploy now] in the commit message. If the site can't be reached, the deploy goes ahead (it may be
+# the fix).
 name: Deploy when no quiz is running
 on:
   push:
@@ -19,8 +21,10 @@ jobs:
       - name: Wait until no students are in a quiz
         env:
           QUIZ_URL: ${{ vars.QUIZ_URL }}
+          MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           if [ -z "$QUIZ_URL" ]; then echo "QUIZ_URL isn't set: not waiting."; exit 0; fi
+          case "$MESSAGE" in *'[deploy now]'*) echo "[deploy now]: not waiting."; exit 0 ;; esac
           while true; do
             r=$(curl -fsS --max-time 15 "${QUIZ_URL%/}/healthz/busy" || echo unreachable)
             echo "$(date -u +%H:%M:%S) $r"

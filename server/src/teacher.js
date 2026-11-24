@@ -52,7 +52,7 @@ function keyState(me) {
   };
 }
 const keyChecks = new Map(); // teacher id -> times they had a key checked
-const { HttpError, clientIp, isHttps, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
+const { HttpError, addressKey, clientIp, isHttps, cookies, setCookie, json, readJson, readBody, send, sha256, newToken, sleep } = require('./http');
 const PK = require('./passkeys');
 const { makeConfig: makeSebConfig } = require('./seb');
 const A = require('./accounts');
@@ -441,16 +441,19 @@ module.exports = function teacherRoutes(r) {
   // Username + password. No username means admin, the account from .env.
   r.post('/api/t/login', async (req, res) => {
     const body = await readJson(req, 4096);
-    const mine = loginBucket('ip:' + clientIp(req), 10, 6000);
-    const all = loginBucket('all', 60, 1000);
-    if (mine.n < 1 || all.n < 1) throw new HttpError(429, 'too_many');
-    mine.n--;
-    all.n--;
-    await sleep(250);
     const uname = (String(body.username || '').trim() || 'admin').toLowerCase().slice(0, 100);
     const teacher = A.byUsername(String(body.username || '').trim() || 'admin');
+    // A browser the teacher signed in from before has a budget of its own, so a classmate guessing from the
+    // same school address (or from everywhere at once) can't keep the teacher out.
+    const known = !!teacher && knownDevice(req, teacher.id);
+    const mine = known ? loginBucket('dev:' + String(cookies(req)[TDEV]).split('.')[1], 10, 6000) : loginBucket('ip:' + addressKey(clientIp(req)), 10, 6000);
+    const all = known ? mine : loginBucket('all', 60, 1000);
+    if (mine.n < 1 || all.n < 1) throw new HttpError(429, 'too_many');
+    mine.n--;
+    if (all !== mine) all.n--;
+    await sleep(250);
     const fail = acctFails.get(uname);
-    if (fail && fail.until > Date.now() && !(teacher && knownDevice(req, teacher.id))) {
+    if (fail && fail.until > Date.now() && !known) {
       throw new HttpError(429, 'locked', `Too many wrong passwords. Try again in ${Math.ceil((fail.until - Date.now()) / 1000)} seconds.`);
     }
     const ok = await A.checkPassword(String(body.password || ''), teacher && !teacher.disabled ? teacher.pw_hash : null);
@@ -458,8 +461,12 @@ module.exports = function teacherRoutes(r) {
       const f = acctFails.get(uname) || { n: 0, until: 0 };
       f.n++;
       if (f.n >= 5) f.until = Date.now() + Math.min(15 * 60000, 30000 * 2 ** (f.n - 5));
-      if (acctFails.size > 5000) acctFails.clear();
-      acctFails.set(uname, f);
+      acctFails.delete(uname);
+      acctFails.set(uname, f); // newest last, so the oldest go first when it's full
+      if (acctFails.size > 5000) {
+        for (const [k, v] of acctFails) if (v.until < Date.now()) acctFails.delete(k);
+        while (acctFails.size > 5000) acctFails.delete(acctFails.keys().next().value);
+      }
       await sleep(1000);
       throw new HttpError(401, 'bad_password');
     }
@@ -467,7 +474,7 @@ module.exports = function teacherRoutes(r) {
     const r = crypto.randomBytes(12).toString('base64url');
     setCookie(req, res, TDEV, `${teacher.id}.${r}.${devSig(teacher.id, r)}`, 180 * 86400); // this browser is theirs
     mine.n = Math.min(mine.cap, mine.n + 1);
-    all.n = Math.min(all.cap, all.n + 1);
+    if (all !== mine) all.n = Math.min(all.cap, all.n + 1);
     // Unlock their quiz key. A teacher from before encryption gets one now, with a recovery code to keep.
     let recoveryCode = null;
     if (!(teacher.role === 'admin' && V.adminPasswordFromEnv()) && !teacher.must_change) {
@@ -554,6 +561,16 @@ module.exports = function teacherRoutes(r) {
   // getChallenge. Both go to /add in one request.
   r.post('/api/t/passkeys/add-options', async (req, res) => {
     const me = requireTeacher(req);
+    const body = await readJson(req, 4096);
+    // The password first: a passkey unlocks the quizzes for good, so someone at the teacher's unlocked
+    // computer mustn't be able to add their own.
+    const tries = loginBucket('pk-add:' + me.id, 5, 60000);
+    if (tries.n < 1) throw new HttpError(429, 'too_many', 'Too many tries. Wait a minute.');
+    if (!(await A.checkPassword(String(body.password || ''), A.byId(me.id).pw_hash))) {
+      tries.n--;
+      await sleep(1000);
+      throw new HttpError(400, 'bad_password', 'That password is wrong.');
+    }
     const { rpId } = PK.site(req);
     // The user handle passkeys carry: random, the same for all of a teacher's passkeys.
     if (!A.byId(me.id).pk_user) q('UPDATE teachers SET pk_user = ? WHERE id = ? AND pk_user IS NULL').run(crypto.randomBytes(16).toString('base64url'), me.id);
@@ -611,11 +628,11 @@ module.exports = function teacherRoutes(r) {
   // the PRF output instead of the password) and they get the same session.
   r.post('/api/t/passkeys/login', async (req, res) => {
     const body = await readJson(req, 16 * 1024);
-    const mine = loginBucket('ip:' + clientIp(req), 10, 6000);
-    const all = loginBucket('all', 60, 1000);
-    if (mine.n < 1 || all.n < 1) throw new HttpError(429, 'too_many');
+    // A passkey can't be guessed: this only caps the work, apart from the password limits a student can use up.
+    const mine = loginBucket('pk:' + addressKey(clientIp(req)), 30, 2000);
+    const all = mine;
+    if (mine.n < 1) throw new HttpError(429, 'too_many');
     mine.n--;
-    all.n--;
     const { origin, rpId } = PK.site(req);
     const raw = PK.clientData(body.clientDataJSON, 'webauthn.get', 'login', null, origin);
     const pk = PK.credIdOk(body.id) ? q('SELECT * FROM passkeys WHERE id = ?').get(body.id) : null;
@@ -632,7 +649,7 @@ module.exports = function teacherRoutes(r) {
     }
     q('UPDATE passkeys SET sign_count = ?, last_used_at = ? WHERE id = ?').run(count, Date.now(), pk.id);
     mine.n = Math.min(mine.cap, mine.n + 1);
-    all.n = Math.min(all.cap, all.n + 1);
+    if (all !== mine) all.n = Math.min(all.cap, all.n + 1);
     startSession(req, res, teacher.id, true);
     json(res, 200, { ok: true, recoveryCode: null });
   });
@@ -1099,6 +1116,8 @@ module.exports = function teacherRoutes(r) {
     const me = requireTeacher(req);
     const exam = getRun(me, p.id);
     if (exam.mode === 'practice' || exam.corrects) throw new HttpError(400, 'not_an_exam', 'Corrections are for a quiz given as an exam.');
+    // students doing corrections see the right answers afterwards: never while anyone can still take the exam
+    if (exam.status === 'open') throw new HttpError(409, 'quiz_open', 'Close the quiz first.');
     const body = await readJson(req, 4096);
     // the share of lost points a fixed answer earns back, 0 to 1, in whole percents
     const eb = Number(body.earnBack);
@@ -1122,6 +1141,8 @@ module.exports = function teacherRoutes(r) {
         submit(store.getAttempt(row.id), quiz, null, 'quiz closed');
       }
     } else if (p.action === 'open') {
+      // its corrections have shown the right answers: reopened, the exam could be taken with them
+      if (q('SELECT 1 FROM runs WHERE corrects = ? AND owner_id = ?').get(run.id, me.id)) throw new HttpError(409, 'has_corrections', "This quiz has corrections, so it can't reopen.");
       q("UPDATE runs SET status = 'open', closed_at = NULL WHERE id = ?").run(run.id);
     } else if (p.action === 'admit-all') {
       // The dashboard sends the students it showed when the teacher checked them in; anyone who joined

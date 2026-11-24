@@ -24,10 +24,18 @@ function clientIp(req) {
   }
   return String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
 }
-// The client's address, when it can be told: behind a proxy we don't trust (TRUST_PROXY off, but an
-// X-Forwarded-For came in) every request looks like the proxy's, so null. For pinning an attempt.
+// The address an attempt is pinned to. Without TRUST_PROXY an X-Forwarded-For header is ignored: anyone can
+// send one, so it mustn't switch the pin off. (Behind a proxy we don't trust, that's the proxy's address for
+// everyone, which pins nothing but breaks nothing.)
 function trustedIp(req) {
-  return TRUST_PROXY || !req.headers['x-forwarded-for'] ? clientIp(req) : null;
+  return clientIp(req);
+}
+// The key for per-address limits. IPv6 hands every device its own address (and a student can pick new ones
+// within their network), so one network's /64 counts as one address, like a school's shared IPv4.
+function addressKey(ip) {
+  ip = String(ip || '').replace(/^::ffff:(?=\d+\.)/i, '');
+  if (net.isIP(ip) !== 6) return ip;
+  return ipv6Groups(ip).slice(0, 4).map((x) => x.toString(16)).join(':') + '::/64';
 }
 // "Only this network" check. The lock holds the teacher's address from when they started the quiz.
 // - Same address: hosted off campus, the whole school shares one public IP.
@@ -206,6 +214,7 @@ const newToken = () => crypto.randomBytes(32).toString('base64url');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 module.exports = {
+  addressKey,
   HttpError, clientIp, trustedIp, sameNetwork, isHttps, siteOrigin, cookies, setCookie, send, json, readBody, readJson, router, serveStatic, limiter,
   sha256, newToken, sleep, SECURITY, PAGE_CSP,
 };

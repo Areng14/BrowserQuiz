@@ -11,7 +11,7 @@ const { runSamples } = require('./coderun');
 const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } = require('./grade');
 const { fillTemplate } = require('./quizfile');
 const C = require('./corrections');
-const { HttpError, clientIp, trustedIp, sameNetwork, isHttps, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
+const { HttpError, addressKey, clientIp, trustedIp, sameNetwork, isHttps, cookies, setCookie, json, readJson, limiter, send, sha256, newToken, sleep } = require('./http');
 
 const PEPPER = process.env.ID_PEPPER || '';
 const joinFails = limiter(20, 60000);
@@ -26,14 +26,17 @@ const ATT = 'att';
 const DEV = 'dev';
 const devIssues = limiter(60, 10 * 60000); // per address: a class behind one school IP, plus some retries
 const devBad = new Map(); // "run student device" -> { n, t }: wrong IDs this browser typed for this name
+// Signed, so a browser can't make up a fresh one for every guess: new ones only come from issueDevice.
+const devSig = (r) => crypto.createHmac('sha256', PEPPER).update('dev:' + r).digest('base64url').slice(0, 22);
 function deviceOf(req) {
-  const d = cookies(req)[DEV];
-  return d && /^[A-Za-z0-9_-]{43}$/.test(d) ? d : null;
+  const m = /^([A-Za-z0-9_-]{43})\.([A-Za-z0-9_-]{22})$/.exec(String(cookies(req)[DEV] || ''));
+  return m && sameHash(m[2], devSig(m[1])) ? m[1] : null;
 }
 const deviceHash = (dev) => sha256('device ' + dev).slice(0, 32);
 function issueDevice(req, res) {
-  if (deviceOf(req) || !devIssues(clientIp(req))) return;
-  setCookie(req, res, DEV, newToken(), 12 * 3600);
+  if (deviceOf(req) || !devIssues(addressKey(clientIp(req)))) return;
+  const r = newToken();
+  setCookie(req, res, DEV, `${r}.${devSig(r)}`, 12 * 3600);
 }
 function badTries(key) {
   const e = key && devBad.get(key);
@@ -370,7 +373,7 @@ module.exports = function studentRoutes(r) {
     const code = String(body.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
     const run = code.length === 6 ? q("SELECT * FROM runs WHERE code = ? AND status = 'open'").get(code) : null;
     if (!run) {
-      if (!joinFails(ip)) throw new HttpError(429, 'too_many');
+      if (!joinFails(addressKey(ip))) throw new HttpError(429, 'too_many');
       throw new HttpError(404, 'bad_code');
     }
     if (run.ip_lock && !onLockedNetwork(ip, run.ip_lock)) throw new HttpError(403, 'wrong_network');
@@ -386,7 +389,7 @@ module.exports = function studentRoutes(r) {
     const m = /^([A-Za-z0-9]{6})\.seb$/.exec(String(p.file || ''));
     const run = m ? q("SELECT code, seb_config FROM runs WHERE code = ? AND status = 'open'").get(m[1].toUpperCase()) : null;
     if (!run || !run.seb_config) {
-      if (!joinFails(clientIp(req))) throw new HttpError(429, 'too_many');
+      if (!joinFails(addressKey(clientIp(req)))) throw new HttpError(429, 'too_many');
       throw new HttpError(404, 'bad_code');
     }
     send(res, 200, run.seb_config, {
@@ -601,7 +604,7 @@ module.exports = function studentRoutes(r) {
       a.lastBeat = now;
       a.beatLost = false;
       if (body.focused === false || body.visible === false) {
-        if (!a.away && !a.lockedSeb) store.record(a, 'unfocused-beat', body.visible === false ? 'tab hidden' : 'window not focused', quiz);
+        if (!a.away) store.record(a, 'unfocused-beat', body.visible === false ? 'tab hidden' : 'window not focused', quiz);
       } else {
         store.back(a, now);
       }

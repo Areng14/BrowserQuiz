@@ -5,7 +5,7 @@ const path = require('node:path');
 const { q } = require('./db');
 const store = require('./store');
 const { gradeAttempt, totals } = require('./grade');
-const { HttpError, router, json, serveStatic, send, SECURITY } = require('./http');
+const { HttpError, router, json, serveStatic, send, SECURITY, isHttps } = require('./http');
 const studentRoutes = require('./student');
 const teacherRoutes = require('./teacher');
 
@@ -34,6 +34,7 @@ studentRoutes(api);
 teacherRoutes(api);
 
 async function handle(req, res) {
+  if (isHttps(req)) res.setHeader('Strict-Transport-Security', 'max-age=15552000'); // HTTPS only from now on
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
   if (req.method === 'POST') {
@@ -57,7 +58,7 @@ async function handle(req, res) {
   // say false. Just yes or no: nothing about who or which quiz.
   if (p === '/healthz/busy') {
     const n = q(`SELECT COUNT(*) AS n FROM attempts a JOIN runs r ON r.id = a.run_id
-      WHERE r.status = 'open' AND a.archived = 0 AND a.status IN ('waiting', 'admitted', 'active') AND a.last_beat > ?`).get(Date.now() - 90000).n;
+      WHERE r.status = 'open' AND r.mode != 'practice' AND a.archived = 0 AND a.status IN ('waiting', 'admitted', 'active') AND a.last_beat > ?`).get(Date.now() - 90000).n;
     return json(res, 200, { busy: n > 0 });
   }
   if (p.startsWith('/asset/')) {

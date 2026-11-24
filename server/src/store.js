@@ -68,9 +68,12 @@ const SERVER_EVENTS = {
   'restore': 'info', 'invalidate': 'info', 'let-in': 'info', 'extend': 'info', 'grade': 'info',
 };
 // In Safe Exam Browser with BrowserQuiz's own settings, SEB blocks every other app, so the page losing focus
-// is SEB's own doing (its toolbar, a system dialog, an iPad keyboard) and can't be the student leaving:
-// logged, never a strike. Quitting SEB to leave still counts, as the reload when they come back.
-const SEB_QUIET = new Set(['blur', 'hidden', 'fullscreen-exit', 'mouse-left', 'resize', 'extended-display', 'answer-after-return']);
+// for a moment is SEB's own doing (its toolbar, a system dialog): no strike. But the SEB check can be faked
+// from a normal browser, so losing focus still starts the away clock: the teacher sees the time, and a long
+// absence invalidates (back()). SEB isn't full screen through the browser, and its window can't be left with
+// the mouse or resized, so those are only logged. Quitting SEB to leave still counts, as the reload after.
+const SEB_QUIET = new Set(['fullscreen-exit', 'mouse-left', 'resize']);
+const SEB_SOFT = new Set(['blur', 'hidden', 'unfocused-beat']);
 const MERGE_MS = 2000;
 const AWAY_LIMIT_MS = 10000; // away longer than this invalidates the attempt
 // A message from the teacher to everyone in a run: run id -> { id, text }. Kept in memory, so a restart drops it.
@@ -165,16 +168,17 @@ const watched = (a) => a.status === 'active' || (!!a.readyAt && (a.status === 'w
 function record(a, type, detail, quiz, at) {
   let severity = (Object.hasOwn(CLIENT_EVENTS, type) && CLIENT_EVENTS[type]) || (Object.hasOwn(SERVER_EVENTS, type) && SERVER_EVENTS[type]);
   if (!severity) return;
-  if (a.lockedSeb && SEB_QUIET.has(type)) {
-    severity = 'info';
-    detail = [detail, 'in Safe Exam Browser'].filter(Boolean).join(', ');
-  }
+  let soft = false;
+  if (a.lockedSeb && SEB_QUIET.has(type)) severity = 'info';
+  else if (a.lockedSeb && SEB_SOFT.has(type) && severity === 'violation') { severity = 'warning'; soft = true; }
+  if (a.lockedSeb && (soft || SEB_QUIET.has(type))) detail = [detail, 'in Safe Exam Browser'].filter(Boolean).join(', ');
   if (a.practice && severity !== 'info') return; // practice runs aren't monitored
   const now = Date.now();
   const t = at == null ? now : at;
+  if (soft && watched(a) && !a.away) { a.away = true; a.awaySince = t; } // the away clock, without a strike
   if (severity === 'warning') {
     const n = (a.warnWindow.get(type) || []).filter((t) => now - t < 60000);
-    if (n.length >= WARN_PER_TYPE_PER_MIN) return;
+    if (n.length >= WARN_PER_TYPE_PER_MIN) { if (soft) save(a); return; }
     n.push(now);
     a.warnWindow.set(type, n);
   }

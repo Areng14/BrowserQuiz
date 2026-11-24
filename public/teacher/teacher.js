@@ -223,8 +223,8 @@
   // create(), then, if that gave no PRF output (it usually doesn't), get() on just the new passkey for
   // it: a second touch. The quiz key is sealed with it, so a passkey without PRF can't be added (except
   // by admin with the password in .env). null: the teacher closed the browser's prompt.
-  async function addPasskey() {
-    const o = await post('/api/t/passkeys/add-options');
+  async function addPasskey(password) {
+    const o = await post('/api/t/passkeys/add-options', { password });
     const salt = b64d(o.prfSalt);
     let cred;
     try {
@@ -287,7 +287,12 @@
     add.addEventListener('click', async () => {
       add.disabled = true;
       msg.textContent = '';
-      try { const r = await addPasskey(); if (r) paint(r.passkeys); } catch (e) { if (e.message !== 'login') msg.textContent = e.message; }
+      try {
+        // the password first, so nobody else at this computer can add a passkey of their own
+        const password = await ask.ask({ title: 'Add a passkey', label: 'Your password', password: true, ok: 'Continue' });
+        const r = password == null ? null : await addPasskey(password);
+        if (r) paint(r.passkeys);
+      } catch (e) { if (e.message !== 'login') msg.textContent = e.message; }
       add.disabled = false;
     });
     api('/api/t/passkeys').then((r) => paint(r.passkeys)).catch(() => {});
@@ -1636,9 +1641,7 @@
     const runMenu = moreMenu('More for this quiz', 'run:more', () => [lockBtn, notifyBtn,
       ...(lastRun && lastRun.sebFile && lastRun.status === 'open' && sebParts ? sebParts : []),
       // results (export, class report) once an exam is closed: while it's open it's proctoring only
-      ...(lastRun && !lastRun.practice && lastRun.status === 'open' ? [] : [exportLink, classReport]),
-      // an exam still open: corrections from here too (once it's closed, the button's on the row)
-      lastRun && !lastRun.practice && !lastRun.corrections && lastRun.status === 'open' ? { text: 'Corrections', onclick: () => correctionsDialog(runId, lastRun) } : null], () => refresh());
+      ...(lastRun && !lastRun.practice && lastRun.status === 'open' ? [] : [exportLink, classReport])], () => refresh());
     detail.className = 't-detail-host';
     detail.setAttribute('aria-labelledby', 't-detail-name');
     if (openRuns === null) { try { noteRuns((await api('/api/t/overview')).runs); } catch (e) { /* the tab can wait */ } }
