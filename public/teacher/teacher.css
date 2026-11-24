@@ -356,6 +356,17 @@ input[type="file"].input { padding: 6px 10px; }
 .t-prog.is-idle > span { background: color-mix(in srgb, var(--ink-2) 55%, transparent); }
 .t-on { display: block; font-size: 12px; color: var(--ink-2); }
 @media (forced-colors: active) { .t-prog { border: 1px solid CanvasText; } .t-prog > span { background: Highlight; } }
+/* timed parts: a segment per part */
+.t-prog.t-prog-parts { display: inline-flex; gap: 3px; width: 96px; overflow: visible; background: none; border-radius: 0; }
+.t-prog-parts > .t-seg { height: 100%; min-width: 4px; overflow: hidden; border-radius: 3px; background: var(--line); } /* not .t-prog > span's fill */
+.t-seg > span { display: block; height: 100%; border-radius: 3px; background: var(--ink-2); }
+.t-seg.next { background: color-mix(in srgb, var(--line) 55%, transparent); }
+.t-seg.is-working { background: color-mix(in srgb, var(--good) 25%, var(--line)); }
+.t-seg.is-working > span { background: var(--good); }
+.t-seg.is-reading { background: color-mix(in srgb, var(--accent) 25%, var(--line)); }
+.t-seg.is-reading > span { background: var(--accent); }
+.t-seg.is-idle > span { background: color-mix(in srgb, var(--ink-2) 55%, transparent); }
+@media (forced-colors: active) { .t-prog.t-prog-parts { border: 0; } .t-prog-parts > .t-seg { border: 1px solid CanvasText; background: Canvas; } .t-seg > span { background: Highlight; } }
 
 /* The live page. Wide: every button in view. Phone: a short header, one compact row per student (what
    needs doing now stays on the row; the rest is on the student's page), and the student's page as a sheet
@@ -387,6 +398,7 @@ input[type="file"].input { padding: 6px 10px; }
   .t-run td[data-tick="left"]::before { content: none; }
   .t-run td[data-tick="left"]::after { content: " left"; }
   .t-run .t-prog { width: 64px; }
+  .t-run .t-prog.t-prog-parts { width: 88px; }
   .t-run .t-on { display: inline; font-size: inherit; }
   .t-run .t-on::before { content: " · "; }
   .t-run .t-link { padding: 4px 0; }

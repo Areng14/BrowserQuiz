@@ -555,7 +555,9 @@
     let groups = [];
     if (run.sections && run.sections.length) {
       // the teacher's sections, in order
-      groups = partsFor(outline.map((q) => q.type), run.sections).map((p) => ({ title: p.title, qs: outline.slice(p.start, p.end + 1) }));
+      const base = run.sections.reduce((t, sec) => t + (sec.timeLimitMin || 0), 0);
+      const x = base && run.timeLimitMin ? run.timeLimitMin / base : 1; // their extra time
+      groups = partsFor(outline.map((q) => q.type), run.sections).map((p) => ({ title: p.title, qs: outline.slice(p.start, p.end + 1), mins: p.section && p.section.timeLimitMin ? Math.round(p.section.timeLimitMin * x) : 0 }));
     } else {
       for (const q of outline) {
         let g = groups.find((x) => x.type === q.type);
@@ -566,7 +568,7 @@
     groups.forEach((g) => { g.points = g.qs.reduce((t, q) => t + q.points, 0); });
     if (!groups.length) return null;
     return h('div', { class: 'overview' }, groups.map((g) => h('details', { class: 'ov-group' },
-      h('summary', {}, h('span', {}, h('b', { text: `${g.title}: ` }), `${plural(g.qs.length, 'question')} (${plural(round2(g.points), 'point')})`)),
+      h('summary', {}, h('span', {}, h('b', { text: `${g.title}: ` }), `${plural(g.qs.length, 'question')} (${plural(round2(g.points), 'point')})${g.mins ? ` · ${g.mins} min` : ''}`)),
       h('ul', { class: 'ov-list' }, g.qs.map((q) => h('li', {},
         q.n ? `Question ${q.n}${q.name ? `: ${q.name}` : ''}` : q.name || 'Unnamed question',
         h('span', { class: 'ov-pts', text: ` (${plural(q.points, 'point')})` })))))));
@@ -745,6 +747,7 @@
     S.turnInAt = r.turnInAt || 0;
     S.skew = r.now ? r.now - Date.now() : 0;
     S.locked = r.locked || 0;
+    S.partEnds = r.partEnds || null; // timed parts: when each one's time is up (the server's clock)
     S.answers = restoreAnswers(r.saved || {});
     loadMarks();
     loadScratch();
@@ -823,6 +826,7 @@
       if (S.deadline && res.deadline > S.deadline + 30000) toast('Your teacher gave you more time.', 6000);
       S.deadline = res.deadline;
     }
+    if (res && res.partEnds) S.partEnds = res.partEnds; // added time moves the parts along too
     if (res && res.done && !S.submitting) return endQuiz('mine'); // the teacher ended this student's quiz
     if (res && res.notice && res.notice.id !== S.noticeId) { S.noticeId = res.notice.id; showNotice(res.notice.text); }
     if (res && res.note && res.note.id !== S.noteId) { S.noteId = res.note.id; showNotice(res.note.text); }
@@ -943,11 +947,67 @@
     return parts;
   }
   const partOf = (i) => S.parts.find((p) => i >= p.start && i <= p.end);
+  const rangeOf = (p) => (p.start === p.end ? `Question ${p.start + 1}` : `Questions ${p.start + 1}-${p.end + 1}`);
+
+  // Timed parts: each part has its own clock, one after another (S.partEnds, on the server's clock). The
+  // student can't move on before a part's time is up; when it is, the part locks and the next one starts.
+  const timedParts = () => !!(S.partEnds && S.parts && S.parts.length > 1 && S.partEnds.length === S.parts.length);
+  const timedNav = () => timedParts() && lockOn();
+  const serverNow = () => Date.now() + (S.skew || 0);
+  // the part whose clock is running (from 1)
+  function partNow() {
+    const over = S.partEnds.filter((e) => e <= serverNow()).length;
+    return Math.min(Math.max(over, S.locked || 0) + 1, S.partEnds.length);
+  }
+  const partLeft = (n) => Math.max(0, S.partEnds[n - 1] - serverNow());
+  const mmss = (ms) => `${String(Math.floor(ms / 60000)).padStart(2, '0')}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
+  // The next part, locked until this one's time is up (the question list and the review page).
+  function nextPartRow(withMinutes) {
+    if (!timedNav()) return null;
+    const n = partNow();
+    const next = S.parts[n];
+    if (!next) return null;
+    const mins = Math.round((S.partEnds[n] - S.partEnds[n - 1]) / 60000); // their own, with extra time
+    return h('div', { class: 'next-part' }, lockIcon(),
+      h('span', { class: 'np-text' }, h('b', { text: next.title }), ` ${rangeOf(next)}${withMinutes ? ` · ${mins} min` : ''}`),
+      h('span', { class: 'np-when' }, 'Opens in ', h('span', { class: 'np-left', 'data-part-left': '', text: mmss(partLeft(n)) })));
+  }
+  function lockIcon(size = 18) {
+    const s = svgEl('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
+    s.append(svgEl('rect', { x: 5, y: 11, width: 14, height: 10, rx: 2 }), svgEl('path', { d: 'M8 11V7a4 4 0 0 1 8 0v4' }));
+    return s;
+  }
+  // A part's time is up: its last answers go in, it locks, and the next part's directions come up.
+  async function partTimeUp(done) {
+    if (S.moving || S.done || S.submitting || !S.el) return;
+    S.moving = true;
+    // whatever's open over the quiz (the question list, snake) was for the part that ended
+    for (const b of [...S.el.wrap.querySelectorAll('.modal-backdrop')]) if (b._release && !b.classList.contains('notice-backdrop')) { b.remove(); b._release(false); }
+    try {
+      const r = await api.partDone(done, serializeAnswers());
+      S.locked = Math.max(S.locked || 0, r.locked || done);
+      if (S.monitor) S.monitor.answersDirty = false;
+    } catch (e) {
+      S.locked = Math.max(S.locked || 0, done); // offline: the server locks it on time anyway
+    }
+    S.moving = false;
+    const next = S.parts[done];
+    if (S.done || !S.el || !next) return;
+    S.timeUpFor = done;
+    S.reviewOpen = false;
+    S.idx = next.start;
+    S.dirOpen = true;
+    renderQuestion();
+    S.el.main.scrollTop = 0;
+    const head = document.getElementById('q-heading');
+    if (head) head.focus({ preventScroll: true });
+  }
 
   // ---------- quiz ----------
   function screenQuiz() {
     S.parts = buildParts(S.quiz.questions);
     S.idx = 0;
+    if (timedNav()) S.locked = Math.max(S.locked || 0, partNow() - 1); // parts whose time ran out meanwhile
     // back after a reload in a quiz with locked parts: start at the first part that isn't done
     const open = lockOn() && S.locked ? S.parts.find((p) => p.n > S.locked) : null;
     if (open) { S.idx = open.start; S.introOpen = false; for (const p of S.parts) if (p.n <= S.locked) S.partsSeen.add(p.n); }
@@ -964,12 +1024,12 @@
     // On a timed exam's review page, where there's nothing to turn in yet: snake, while they wait
     const gameBtn = h('button', { class: 'btn game-btn', type: 'button', hidden: true, onclick: () => openGame() }, snakeGlyph(), 'Play snake');
     const mid = h('div', { class: 'qnav-mid' }, jump, gameBtn);
-    const prev = h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => go(S.reviewOpen ? S.quiz.questions.length - 1 : S.idx - 1) });
+    const prev = h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => go(S.reviewOpen ? (timedNav() ? S.parts[partNow() - 1].end : S.quiz.questions.length - 1) : S.idx - 1) });
     const next = h('button', { class: 'btn', type: 'button' });
     next.addEventListener('click', () => {
       if (S.reviewOpen) return openSubmit();
       if (S.dirOpen) return closeDirections();
-      if (S.idx === S.quiz.questions.length - 1) return openReview();
+      if (S.idx === S.quiz.questions.length - 1 || (timedNav() && S.idx === partOf(S.idx).end)) return openReview();
       go(S.idx + 1);
     });
     const hlBar = highlightBar();
@@ -1009,6 +1069,7 @@
   function lockedAt(i) { return lockOn() && S.locked > 0 && !!partOf(i) && partOf(i).n <= S.locked; }
   function go(i) {
     if (i < 0 || i >= S.quiz.questions.length || lockedAt(i)) return;
+    if (timedNav() && partOf(i).n > partNow()) return; // a timed part opens when the one before runs out
     const done = lockOn() ? partOf(i).n - 1 : 0;
     if (done > S.locked) return confirmFinishParts(done, () => goNow(i));
     goNow(i);
@@ -1037,6 +1098,7 @@
   }
   function closeDirections() {
     S.partsSeen.add(partOf(S.idx).n);
+    S.timeUpFor = 0;
     S.dirOpen = false;
     S.introOpen = false;
     renderQuestion();
@@ -1051,6 +1113,15 @@
 
   // A timed exam turns in by itself when time is up: no turning in early (extra time can, after the normal time)
   function reviewButtons() {
+    // timed parts, before the last one: the next part opens when this one's time is up
+    if (timedNav() && partNow() < S.parts.length) {
+      const n = partNow();
+      S.el.next.replaceChildren(`Part ${n + 1} in`, h('span', { class: 'np-left', text: mmss(partLeft(n)) }));
+      S.el.next.className = 'btn primary';
+      S.el.next.disabled = true;
+      S.el.gameBtn.hidden = !(!cfg.watch && BQ.snake);
+      return;
+    }
     const locked = timedExam();
     S.el.next.textContent = locked ? 'Turns in when time is up' : 'Submit';
     S.el.next.className = locked ? 'btn' : 'btn primary';
@@ -1076,7 +1147,7 @@
     S.el.jump.hidden = false;
     S.el.gameBtn.hidden = true;
     S.el.prev.disabled = S.idx === 0 || lockedAt(S.idx - 1);
-    const last = S.idx === total - 1;
+    const last = S.idx === total - 1 || (timedNav() && S.idx === partOf(S.idx).end); // timed parts: each has its own review
     S.el.next.disabled = false;
     S.el.next.textContent = S.dirOpen ? 'Continue' : last ? 'Review' : 'Next';
     S.el.next.className = 'btn' + (last && !S.dirOpen ? ' primary' : '');
@@ -1480,7 +1551,7 @@
 
   function directionsView(part) {
     const seen = S.partsSeen.has(part.n);
-    const range = part.start === part.end ? `Question ${part.start + 1}` : `Questions ${part.start + 1}–${part.end + 1}`;
+    const range = rangeOf(part);
     // Right after Start: the quiz's own directions and what's on it, above the first part's.
     const intro = S.introOpen && part.n === 1;
     const qs = S.quiz.questions;
@@ -1494,6 +1565,8 @@
         h('section', { class: 'intro-ov', 'aria-labelledby': 'ov-head' }, h('h2', { id: 'ov-head', text: "What's on the quiz" }), overview(run)),
         h('hr', { class: 'intro-rule' }),
       ] : null,
+      // a timed part that started because the last one's time was up
+      S.timeUpFor && S.timeUpFor === part.n - 1 ? [h('p', { class: 'time-up' }, lockIcon(16), `Time's up for Part ${part.n - 1}.`), h('hr', { class: 'intro-rule' })] : null,
       h('div', { class: 'meta-row' }, h('span', { text: `Part ${part.n} of ${S.parts.length}` }), h('span', { text: range })),
       h(intro ? 'h2' : 'h1', { id: intro ? 'part-heading' : 'q-heading', class: 'part-title', text: part.title }),
       part.md ? h('div', { class: 'directions prompt' }, BQ.md.render(part.md, mdOpts()))
@@ -2262,16 +2335,17 @@
       h('span', {}, h('span', { class: 'sheet-dot mini answered' }), 'Answered'),
       h('span', {}, h('span', { class: 'sheet-dot mini marked' }), 'For review'),
       S.reviewOpen ? null : h('span', {}, h('span', { class: 'sheet-dot mini current' }), 'Current'));
-    const parts = S.parts && S.parts.length ? S.parts : [{ title: 'Questions', start: 0, end: S.quiz.questions.length - 1 }];
+    const parts = timedNav() ? [S.parts[partNow() - 1]] : S.parts && S.parts.length ? S.parts : [{ title: 'Questions', start: 0, end: S.quiz.questions.length - 1 }];
     return [legend, ...parts.map((p) => {
-      const range = p.start === p.end ? `Question ${p.start + 1}` : `Questions ${p.start + 1}–${p.end + 1}`;
+      const range = rangeOf(p);
       return h('section', { class: 'nav-part', 'aria-label': `${p.title}, ${range}` },
         h('h3', {}, p.title, h('span', { class: 'nav-range', text: ` ${range}` })),
         h('div', { class: 'nav-grid' }, S.quiz.questions.slice(p.start, p.end + 1).map((q, k) => sheetDot(q, p.start + k, onPick))));
-    })];
+    }), nextPartRow(S.reviewOpen)];
   }
   function reviewView() {
-    const qs = S.quiz.questions;
+    const now = timedNav() ? S.parts[partNow() - 1] : null; // timed parts: this part's questions
+    const qs = now ? S.quiz.questions.slice(now.start, now.end + 1) : S.quiz.questions;
     const done = qs.filter(isAnswered).length;
     const marked = qs.filter(isMarked).length;
     return h('div', { class: 'qview review' },
@@ -2340,10 +2414,25 @@
     clearInterval(S.timer);
     const tick = () => {
       if (!S.deadline) { S.el.timer.textContent = ''; return; }
-      const left = Math.max(0, S.deadline - (Date.now() + S.skew));
-      const m = Math.floor(left / 60000);
-      const s = Math.floor(left / 1000) % 60;
-      S.el.timer.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      // timed parts: the part's own clock, and which part it is above it
+      const tp = timedParts();
+      const n = tp ? partNow() : 0;
+      const left = Math.max(0, (tp ? S.partEnds[n - 1] : S.deadline) - serverNow());
+      const quizLeft = Math.max(0, S.deadline - serverNow());
+      if (tp) {
+        if (!S.el.timerDigits) {
+          S.el.timerPart = h('span', { class: 'timer-part' });
+          S.el.timerDigits = h('span');
+          S.el.timer.replaceChildren(S.el.timerPart, S.el.timerDigits);
+          S.el.timer.classList.add('parts');
+        }
+        S.el.timerPart.textContent = `Part ${n} of ${S.partEnds.length}`;
+        S.el.timerDigits.textContent = mmss(left);
+        if (S.warnPart !== n) { S.warnPart = n; S.warned = {}; } // the warnings again for each part
+        for (const el of S.el.wrap.querySelectorAll('[data-part-left]')) el.textContent = mmss(left);
+        if (S.reviewOpen) reviewButtons();
+        if (lockOn() && !cfg.watch && n - 1 > (S.locked || 0)) partTimeUp(n - 1);
+      } else S.el.timer.textContent = mmss(left);
       S.el.timer.classList.toggle('warn', left < 5 * 60000 && left >= 60000);
       S.el.timer.classList.toggle('crit', left < 60000);
       for (const mins of [5, 1]) {
@@ -2353,7 +2442,7 @@
           if (left > (mins - 1) * 60000 + 30000 && !cfg.watch) toast(`${plural(mins, 'minute')} left.`, 6000);
         }
       }
-      if (left <= 0 && !cfg.watch) submitNow('time');
+      if (quizLeft <= 0 && !cfg.watch) submitNow('time');
       const locked = timedExam(); // the class's time is up and they have extra: they can turn in now
       if (S.lockedIn && !locked && left > 0) {
         if (S.reviewOpen) reviewButtons();
@@ -2401,11 +2490,14 @@
       const next = i < 0 ? (e.shiftKey ? f.length - 1 : 0) : (i + (e.shiftKey ? f.length - 1 : 1)) % f.length;
       f[next].focus();
     });
-    return (refocus = true) => {
+    const release = (refocus = true) => {
+      layer._release = null;
       others.forEach((el) => { el.inert = false; });
       if (refocus && back && back.isConnected && back !== document.body && back.focus) back.focus({ preventScroll: true });
       else if (refocus && S.el && S.el.main) S.el.main.focus({ preventScroll: true });
     };
+    layer._release = release; // a timed part ending closes it (partTimeUp)
+    return release;
   }
   function showFsOverlay() {
     if (S.done || !S.el || S.el.fsOverlay) return;
@@ -2413,7 +2505,8 @@
     const ov = h('div', { class: 'fs-overlay' },
       h('div', { class: 'fs-card', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'fs-title' },
         h('h2', { id: 'fs-title', text: 'You left fullscreen' }),
-        h('p', { text: 'Leaving fullscreen counts as cheating, and your teacher can see that you left. Go back to keep working.' }),
+        // waiting for the teacher's Start (no quiz yet): leaving doesn't count until it starts (store.record)
+        h('p', { text: S.quiz ? 'Leaving fullscreen counts as cheating, and your teacher can see that you left. Go back to keep working.' : 'Once the quiz starts, this counts as cheating.' }),
         h('div', { class: 'row-actions' }, btn, S.quiz ? h('button', { class: 'btn', type: 'button', text: 'Exit', onclick: () => openExit() }) : null)));
     S.el.fsOverlay = ov;
     S.el.wrap.append(ov);
@@ -2426,11 +2519,12 @@
     if (S.done || !S.el || S.el.fsOverlay || S.el.wrap.querySelector('.modal-backdrop')) return;
     let backdrop;
     let release = null;
-    const back = h('button', { class: 'btn primary', type: 'button', text: 'Back to the quiz', onclick: () => { backdrop.remove(); release(); } });
+    const before = !S.quiz; // waiting for the teacher's Start: it doesn't count yet (store.record)
+    const back = h('button', { class: 'btn primary', type: 'button', text: before ? 'OK' : 'Back to the quiz', onclick: () => { backdrop.remove(); release(); } });
     backdrop = h('div', { class: 'modal-backdrop' },
       h('div', { class: 'modal warn-modal', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'left-title', 'aria-describedby': 'left-text' },
-        h('h2', { id: 'left-title', text: 'You left the quiz' }),
-        h('p', { id: 'left-text', text: 'Leaving the quiz window counts as cheating, and your teacher can see that you left.' }),
+        h('h2', { id: 'left-title', text: before ? 'You left the quiz window' : 'You left the quiz' }),
+        h('p', { id: 'left-text', text: before ? 'Once the quiz starts, this counts as cheating.' : 'Leaving the quiz window counts as cheating, and your teacher can see that you left.' }),
         h('div', { class: 'modal-actions' }, back)));
     backdrop.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); back.click(); } });
     S.el.wrap.append(backdrop);
@@ -2522,7 +2616,7 @@
   const timedExam = () => !!(S.run && !S.run.practice && S.deadline && !(S.quiz && S.quiz.turnInEarly)
     && !(S.turnInAt && S.turnInAt < S.deadline && Date.now() + S.skew >= S.turnInAt));
   function openSubmit() {
-    if (timedExam()) return;
+    if (timedExam() || (timedNav() && partNow() < S.parts.length)) return;
     const missing = S.quiz.questions.map((q, i) => (isAnswered(q) ? null : i + 1)).filter(Boolean);
     const marked = S.quiz.questions.map((q, i) => (isMarked(q) ? i + 1 : null)).filter(Boolean);
     if (S.done || !S.el || S.el.wrap.querySelector('.modal-backdrop')) return;
@@ -2799,6 +2893,7 @@
     S.quiz = r.quiz;
     S.run = { title: r.quiz.title, timeLimitMin: 0, questionCount: r.quiz.questions.length, outline: r.quiz.questions.map((q, i) => ({ type: q.type, points: q.points, name: q.name, n: i + 1 })), quizDirections: (r.quiz.directions && r.quiz.directions.quiz) || '', sections: r.quiz.sections || [], hasCode: r.quiz.questions.some((q) => q.type === 'code') };
     S.deadline = r.deadline || 0;
+    S.partEnds = r.partEnds || null;
     S.turnInAt = r.turnInAt || 0;
     S.skew = r.now ? r.now - Date.now() - (r.delay || 0) : 0;
     S.me = { name: r.name || '' };
@@ -2870,6 +2965,7 @@
       onThemeChange();
     }
     if (v && v.deadline !== undefined) S.deadline = v.deadline || 0; // extra time
+    if (v && v.partEnds) S.partEnds = v.partEnds;
     if (v && typeof v.phone === 'boolean' && v.phone !== !!S.watchPhone) { S.watchPhone = v.phone; redraw = true; } // their plain code box
     if (v && S.scratch && typeof v.tool === 'string' && v.tool !== S.scratch.tool) { S.scratch.tool = v.tool; padDraw = true; }
     if (v && S.el.scratch && S.el.scratch.hidden === !!v.pad) { // the scratchpad opened or closed

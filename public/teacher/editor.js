@@ -489,7 +489,7 @@
   function collect(quiz) {
     const out = Object.assign({}, quiz, { questions: [] });
     out.sections = (quiz.sections || []).filter((d) => quiz.questions[d.at])
-      .map((d) => ({ before: quiz.questions[d.at].id, title: (d.title || '').trim(), directions: (d.directions || '').trim() }));
+      .map((d) => Object.assign({ before: quiz.questions[d.at].id, title: (d.title || '').trim(), directions: (d.directions || '').trim() }, d.timeLimitMin > 0 ? { timeLimitMin: d.timeLimitMin } : {}));
     if (!out.sections.length) delete out.sections;
     // Shared material that no question uses is left out.
     const used = new Set(quiz.questions.flatMap((q) => [].concat(q.shared || [])));
@@ -683,7 +683,7 @@
     quiz.questions.forEach(withUi);
     // Section dividers: here each sits at a place in the list (before question number at+1), so moving a question
     // across one moves it into that section. Saved as the id of the question each starts at (collect).
-    quiz.sections = (quiz.sections || []).map((sec) => ({ at: quiz.questions.findIndex((q) => q.id === sec.before), title: sec.title || '', directions: sec.directions || '' }))
+    quiz.sections = (quiz.sections || []).map((sec) => ({ at: quiz.questions.findIndex((q) => q.id === sec.before), title: sec.title || '', directions: sec.directions || '', timeLimitMin: sec.timeLimitMin || 0 }))
       .filter((d) => d.at >= 0).sort((a, b) => a.at - b.at);
 
     let sel = quiz.questions.length ? 0 : -1; // -1 is Settings
@@ -1559,16 +1559,21 @@
       langSel.addEventListener('change', () => { quiz.language = langSel.value; touch(); });
       paneTick = null;
       const pools = poolSettings(q);
+      // timed sections set the quiz's time (their total) and lock each part
+      const timedSum = (quiz.sections || []).reduce((t, d) => t + (d.timeLimitMin || 0), 0);
+      const lockParts = check(q, quiz.lockParts === true || timedSum > 0, 'Lock each part once it\'s done', (v) => { if (v) quiz.lockParts = true; else delete quiz.lockParts; });
+      if (timedSum) lockParts.querySelector('input').disabled = true;
       return [h('div', { class: 'qe-head' }, h('h1', { class: 'qe-n', text: 'Settings' })),
         h('div', { class: 'qe-settings-cards' },
           card('Quiz',
             h('div', { class: 'qe-settings-grid' },
-              field('Time limit (minutes, 0 = none)', input(q, quiz.timeLimitMin, (v) => { quiz.timeLimitMin = Number(v) || 0; }, { type: 'number', min: '0', max: '600' })),
+              timedSum ? field('Time limit (minutes, the sections added up)', input(q, timedSum, () => {}, { type: 'number', disabled: true }))
+                : field('Time limit (minutes, 0 = none)', input(q, quiz.timeLimitMin, (v) => { quiz.timeLimitMin = Number(v) || 0; }, { type: 'number', min: '0', max: '600' })),
               field('Code highlighting', langSel)),
             h('div', { class: 'qe-line' },
               check(q, quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { quiz.shuffleQuestions = v; }),
               check(q, quiz.shuffleChoices !== false, 'Shuffle choices', (v) => { quiz.shuffleChoices = v; }),
-              check(q, quiz.lockParts === true, 'Lock each part once it\'s done', (v) => { if (v) quiz.lockParts = true; else delete quiz.lockParts; }),
+              lockParts,
               check(q, quiz.turnInEarly === true, 'Students can turn in before time is up', (v) => { if (v) quiz.turnInEarly = true; else delete quiz.turnInEarly; }))),
           pools ? card('Question pools', pools) : null,
           card('Directions',
@@ -1603,10 +1608,12 @@
       const d = quiz.sections[k];
       const title = input(null, d.title, (v) => { d.title = v; renderOutline(); }, { id: 'qe-div-title', maxlength: '120', placeholder: `Section ${k + 1}` });
       const dirs = area(null, d.directions, (v) => { d.directions = v; }, { rows: 4, spellcheck: 'true', placeholder: 'Optional' });
+      // timed parts (docs/quiz-format.md): every section gets its own minutes, or none does
+      const mins = input(null, d.timeLimitMin || '', (v) => { d.timeLimitMin = Math.max(0, Math.round(Number(v) || 0)); }, { type: 'number', min: '0', max: '600', placeholder: 'None' });
       const del = h('button', { class: 'btn small', type: 'button', text: 'Remove section', onclick: () => { quiz.sections.splice(k, 1); touch(); select(d.at); } });
       paneTick = null;
       return [h('div', { class: 'qe-head' }, h('h1', { class: 'qe-n', text: 'Section' }), h('span', { class: 'qe-grow' }), del),
-        h('div', { class: 'qe-stack' }, field('Title', title), field('Directions', dirs))];
+        h('div', { class: 'qe-stack' }, field('Title', title), field('Time limit (minutes)', mins), field('Directions', dirs))];
     }
 
     // A quiz with no questions yet opens on the kinds of question to start with

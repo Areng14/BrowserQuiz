@@ -38,8 +38,26 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `directions` | built in | `"quiz"`: your own directions for the whole quiz (Markdown), shown before it starts and with each part's. The type keys replace that part's directions: `{ "quiz": "No calculators.", "single": "...", "code": "..." }` |
 | `shared` | none | Shared material that several questions use (below) |
 | `pools` | none | How many questions each student gets from each question pool: `{ "loops": 2 }` (below). A pool not listed gives 1 |
-| `sections` | none | Your own section dividers: `[{ "before": "q5", "title": "Part B: Strings", "directions": "..." }]`. Each starts at the question named in `before` and runs to the next one, whatever the questions' types, with its own title and directions (Markdown). Questions before the first are grouped by type. Shuffling stays inside a section |
+| `sections` | none | Your own section dividers: `[{ "before": "q5", "title": "Part B: Strings", "directions": "..." }]`. Each starts at the question named in `before` and runs to the next one, whatever the questions' types, with its own title and directions (Markdown). Questions before the first are grouped by type. Shuffling stays inside a section. Give every section a `timeLimitMin` for timed parts (below) |
 | `questions` | required | List of questions |
+
+**Timed parts.** Like the SAT: each section gets its own minutes, and the parts run one after another.
+
+```json
+"sections": [
+  { "before": "q1", "title": "Part A: Multiple choice", "timeLimitMin": 15 },
+  { "before": "q9", "title": "Part B: Short answer", "timeLimitMin": 10 },
+  { "before": "q13", "title": "Part C: Tracing", "timeLimitMin": 20 }
+]
+```
+
+- Every section needs a `timeLimitMin`, and the first one starts at the first question.
+- The quiz's time is the sections' added up (45 here); `timeLimitMin` on the quiz is ignored.
+- Students stay in a part until its time is up, even if they finish early. Then it locks and the next
+  part starts, for everyone at once if you start them together. `lockParts` comes with it.
+- Turning in early (`turnInEarly`) works in the last part only.
+- Extra time applies to each part (1.5x turns 10 minutes into 15), and adding time to a student adds it
+  to the part they're on.
 
 **Shared material.** A case, passage, table or code listing that several questions use goes
 in `shared` once, instead of being copied into each prompt:

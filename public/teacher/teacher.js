@@ -1155,11 +1155,21 @@
       : act === 'working' ? (a.on === 'review' ? 'checking their work' : `working on ${at}`)
       : act === 'idle' ? `idle on ${at}`
       : a.on === 'review' ? 'checking their work' : `reading ${at}`;
-    return h('td', { class: 'num t-progress', 'data-label': 'Progress', title: on ? on[0].toUpperCase() + on.slice(1) : null },
-      h('span', { class: 't-prog' + (act ? ' is-' + act : ''), 'aria-hidden': 'true' }, h('span', { style: `width:${pct}%` })),
+    // Timed parts: a segment per part, as long as its questions; the parts before theirs gray, theirs in the
+    // color of what they're doing, the ones after it empty.
+    const tp = a.parts && a.parts.sizes.length > 1 ? a.parts : null;
+    const where = tp && tp.on ? `part ${tp.on} of ${tp.sizes.length}` + (on ? `, ${on}` : '') : on;
+    const bar = tp
+      ? h('span', { class: 't-prog t-prog-parts', 'aria-hidden': 'true' }, tp.sizes.map((size, k) => {
+        const state = !tp.on || k + 1 < tp.on ? 'done' : k + 1 === tp.on ? (act ? 'is-' + act : 'now') : 'next';
+        return h('span', { class: 't-seg ' + state, style: `flex:${size}` }, h('span', { style: `width:${size ? Math.round((tp.answered[k] / size) * 100) : 0}%` }));
+      }))
+      : h('span', { class: 't-prog' + (act ? ' is-' + act : ''), 'aria-hidden': 'true' }, h('span', { style: `width:${pct}%` }));
+    return h('td', { class: 'num t-progress', 'data-label': 'Progress', title: where ? where[0].toUpperCase() + where.slice(1) : null },
+      bar,
       // as wide as the widest count, so the bars line up down the column (9/14 under 10/14)
       h('span', { class: 't-prog-n', style: `min-width:${2 * String(a.total).length + 1}ch`, text: `${a.answered}/${a.total}` }),
-      on ? h('span', { class: 'sr-only', text: `, ${on}` }) : null);
+      where ? h('span', { class: 'sr-only', text: `, ${where}` }) : null);
   }
   // Less-used actions behind a ⋯ button: a row's, a quiz's, the live quiz's. items: { text, onclick, danger }
   // or an element (a link, say), or a function that gives them, asked each time it opens. The live table

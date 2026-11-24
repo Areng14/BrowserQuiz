@@ -1349,7 +1349,7 @@ module.exports = function teacherRoutes(r) {
     json(res, 200, {
       name: student ? student.name : '?', runId: a.runId, status: a.status, integrity: a.integrity, now, ver, ended, submittedAt: a.submittedAt || null, deadline: a.deadline || null,
       partEnds: a.layout && Array.isArray(a.layout.partEnds) ? a.layout.partEnds : undefined,
-      timeLeft: a.status === 'active' && a.deadline ? Math.max(0, a.deadline - now) : null,
+      timeLeft: a.status === 'active' && a.deadline ? Math.max(0, partEnd(a, now) - now) : null, // timed parts: the part's
       away: !!store.awayNow(a, now) || !!a.away,
       // Watch is their screen as they see it, answers and all (proctoring needs to see what they do)
       answers: url.searchParams.get('ver') === ver ? undefined : (a.answers || {}),

@@ -181,6 +181,9 @@ function record(a, type, detail, quiz, at) {
   if (a.lockedSeb && SEB_QUIET.has(type)) severity = 'info';
   else if (a.lockedSeb && SEB_SOFT.has(type) && severity === 'violation') { severity = 'warning'; soft = true; }
   if (a.lockedSeb && (soft || SEB_QUIET.has(type))) detail = [detail, 'in Safe Exam Browser'].filter(Boolean).join(', ');
+  // Before the quiz starts (in lockdown, waiting for the teacher's Start), leaving doesn't count: the page
+  // tells them they left, and the teacher's log has it, without a strike.
+  if (a.status !== 'active' && severity === 'violation') { severity = 'info'; soft = false; detail = [detail, 'before the start'].filter(Boolean).join(', '); }
   if (a.practice && severity !== 'info') return; // practice runs aren't monitored
   const now = Date.now();
   const t = at == null ? now : at;
