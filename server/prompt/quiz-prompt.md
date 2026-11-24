@@ -34,6 +34,8 @@ Before writing, send me one short message and wait for my answer. In it:
   - **Random values:** the numbers in a question change per student, each with its own answer.
   - **Locked parts:** once a student moves on to the next part, they can't go back.
   - **Sections:** named parts, like "Part A: Arrays, Part B: Strings".
+  - **Timed parts:** each section gets its own minutes, like the SAT. Students stay in a part until
+    its time is up, then it locks and the next one starts.
   - **Shared material:** one passage, table or piece of code that several questions use.
   - **Speed tests:** a code question that needs an efficient solution (Java, Python, JavaScript and
     TypeScript).
