@@ -85,6 +85,8 @@ function sealPeople(owner, from, to) {
     for (const a of q(`SELECT a.id, ${ATTEMPT_FIELDS.map((f) => 'a.' + f).join(', ')} FROM attempts a JOIN runs r ON r.id = a.run_id WHERE r.owner_id = ? AND (${any})`).all(owner)) {
       const set = [];
       for (const f of ATTEMPT_FIELDS) { const v = redo(a[f], attAad(a.id, f)); if (v) set.push([f, v]); }
+      // a result from before: where its grading is goes in the clear, as store.save keeps it (index.js resume)
+      if (a.result != null && !isSealed(a.result)) set.push(['grading', a.result.includes('"pending"') ? 'pending' : a.result.includes('"error"') ? 'error' : 'done']);
       if (set.length) { q(`UPDATE attempts SET ${set.map(([f]) => f + ' = ?').join(', ')} WHERE id = ?`).run(...set.map(([, v]) => v), a.id); n++; }
     }
     for (const e of q(`SELECT e.id, e.attempt_id, e.detail FROM events e JOIN attempts a ON a.id = e.attempt_id JOIN runs r ON r.id = a.run_id
