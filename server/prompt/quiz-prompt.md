@@ -11,25 +11,39 @@ Number and kinds of questions:
 Time limit:
 Languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust; one or several, or any):
 Rubric points on code questions (graded automatically, by me, or none):
+Extras (any from the list in step 1, or none):
 Anything else:
 
-## 1. Ask about what's missing
+## 1. Ask before you write
 
-If Topic, Difficulty, or Number and kinds of questions is blank above, ask me first. Send one
-short message that asks about everything left blank, with the default in brackets, then wait
-for my answer:
+Before writing, send me one short message and wait for my answer. In it:
 
-1. What topic or unit, and what have students covered so far? Notes or a worksheet help.
-2. How hard: easy, medium, hard, or mixed? [medium]
-3. How many questions, and what kinds? [6 multiple choice, 1 select-all, 1 predict the output, 1 code]
-4. Time limit? [worked out from the questions]
-5. Which languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust)?
-   [the topic's language, or Java]
-6. Code questions can have rubric points for things tests can't check, like private fields.
-   Should those be graded automatically, by you, or left out? [automatically]
+- Ask about anything left blank above, with the default in brackets:
+  1. What topic or unit, and what have students covered so far? Notes or a worksheet help.
+  2. How hard: easy, medium, hard, or mixed? [medium]
+  3. How many questions, and what kinds? [6 multiple choice, 1 select-all, 1 predict the output, 1 code]
+  4. Time limit? [worked out from the questions]
+  5. Which languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust)?
+     [the topic's language, or Java]
+  6. Code questions can have rubric points for things tests can't check, like private fields.
+     Should those be graded automatically, by you, or left out? [automatically]
+- Unless Extras is already filled in, list these extras in one line each and ask which I want
+  [none]. Teachers often don't know BrowserQuiz has them:
+  - **Question pools:** each student gets a random few questions from a bigger set, so neighbors'
+    screens don't match.
+  - **Random values:** the numbers in a question change per student, each with its own answer.
+  - **Locked parts:** once a student moves on to the next part, they can't go back.
+  - **Sections:** named parts, like "Part A: Arrays, Part B: Strings".
+  - **Shared material:** one passage, table or piece of code that several questions use.
+  - **Speed tests:** a code question that needs an efficient solution (Java, Python, JavaScript and
+    TypeScript).
+  - **Banned methods:** rule out shortcuts on code questions, like a built-in sort.
+  - **Images:** diagrams you draw, or pictures I attach.
+  - **Turning in early:** by default a timed quiz turns in when time is up; students can't turn it in
+    before.
 
-Ask only once. If I answer "defaults", use the defaults. If those three are filled in, don't ask:
-use the defaults for the rest and start writing.
+Ask only once. If everything above is filled in and Extras says none, don't ask: start writing. If I
+answer "defaults", use the defaults with no extras.
 
 ## 2. Defaults
 
@@ -88,10 +102,12 @@ that should go to thinking. Keep to these limits, even when the notes are wordy:
 - For "what is printed" questions use `output`, and for tracing loops use `trace`.
 - Use select-all only when 2 or more choices are correct.
 - Use short answer only when there are few ways to write the answer, and list all of them.
-- Use question pools only if I ask for them.
+- Use question pools only if I ask for them (Extras).
 - Use random values (`vars`, see the format) only if I ask for them: give 3 to 6 rows, and work
   out each row's answer and put it in the row.
 - Set `"lockParts": true` only if I ask that students can't go back to earlier parts.
+- Add `sections` only if I ask for named parts. Set `"turnInEarly": true` only if I ask that students can
+  turn in before time is up.
 
 **Every question**
 - Give every question an `explanation`: why the right answer is right, and for multiple choice,

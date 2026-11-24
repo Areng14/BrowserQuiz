@@ -36,19 +36,23 @@ function cleanMarks(m) {
 
 // Highlights: [start, end) character offsets in each highlighted piece of text (app.js marksIn).
 const HL_KEY = /^(prompt|shared):[A-Za-z0-9_-]{1,40}$|^choice:[A-Za-z0-9_-]{1,40}:\d{1,2}$/;
+const HL_STYLE = /^[gbpu]$/;
 function cleanHl(hl) {
   const out = {};
   if (!hl || typeof hl !== 'object') return out;
   for (const [k, v] of Object.entries(hl).slice(0, 400)) {
     if (!HL_KEY.test(k) || !Array.isArray(v)) continue;
-    const r = v.slice(0, 100).filter((x) => Array.isArray(x) && x.length === 2 && Number.isInteger(x[0]) && Number.isInteger(x[1]) && x[0] >= 0 && x[1] > x[0] && x[1] <= 1e6);
-    if (r.length) out[k] = r.map((x) => [x[0], x[1]]);
+    // [start, end], or [start, end, style]: g, b, p (colors) or u (underline); yellow has none
+    const r = v.slice(0, 100).filter((x) => Array.isArray(x) && (x.length === 2 || (x.length === 3 && HL_STYLE.test(x[2]))) && Number.isInteger(x[0]) && Number.isInteger(x[1]) && x[0] >= 0 && x[1] > x[0] && x[1] <= 1e6);
+    if (r.length) out[k] = r.map((x) => (x.length === 3 ? [x[0], x[1], x[2]] : [x[0], x[1]]));
   }
   return out;
 }
 
-// A scratchpad page: strokes { p: [x, y, ...] (out of the board's width), e: true for the eraser } and
-// typed notes { x, y, s }.
+// A scratchpad page: strokes { p: [x, y, ...] (out of the board's width), e: true for the eraser, c: color,
+// sz: size } and typed notes { x, y, s, c: color, b, i, u: bold, italic, underline }.
+const PAD_COLOR = /^(blue|red|green|orange|purple)$/;
+const PAD_SIZE = /^[sl]$/;
 const fin = (x, lo, hi) => Math.max(lo, Math.min(hi, Math.round(x * 10000) / 10000));
 function cleanPage(items) {
   if (!Array.isArray(items)) return null;
@@ -58,9 +62,15 @@ function cleanPage(items) {
     if (Array.isArray(it.p)) {
       if (it.p.length < 2 || it.p.length > 20000 || !it.p.every(Number.isFinite)) continue;
       const p = it.p.slice(0, it.p.length - (it.p.length % 2)).map((x) => fin(x, -1, 100));
-      out.push(it.e ? { p, e: true } : { p });
+      const o = it.e ? { p, e: true } : { p };
+      if (!it.e && PAD_COLOR.test(it.c)) o.c = it.c;
+      if (!it.e && PAD_SIZE.test(it.sz)) o.sz = it.sz;
+      out.push(o);
     } else if (typeof it.s === 'string' && Number.isFinite(it.x) && Number.isFinite(it.y)) {
-      out.push({ x: fin(it.x, 0, 1), y: fin(it.y, 0, 100), s: it.s.slice(0, 5000) });
+      const o = { x: fin(it.x, 0, 1), y: fin(it.y, 0, 100), s: it.s.slice(0, 5000) };
+      if (PAD_COLOR.test(it.c)) o.c = it.c;
+      for (const k of ['b', 'i', 'u']) if (it[k] === true) o[k] = true;
+      out.push(o);
     }
   }
   return out;

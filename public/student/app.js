@@ -282,7 +282,7 @@
             if (inlineCode) code.querySelectorAll('br').forEach((b) => b.remove());
             else if (!endsWithNewline && code.lastChild && code.lastChild.nodeName === 'BR') code.lastChild.remove();
           }
-          for (const [a, b] of hl) addHighlight(rangeAt(code, a, b), true);
+          for (const [a, b, st] of hl) addHighlight(rangeAt(code, a, b), true, st);
         }).catch(() => {});
       });
     }).catch(() => {});
@@ -1188,8 +1188,15 @@
   // Items on a page, oldest first: strokes { p: [x, y, ...], e: true for the eraser } and notes
   // { x, y, s }. Positions are scaled to the board's width, so a page redraws after a resize. Strokes
   // and notes take the page's text color, so they follow the theme.
+  // Pen and note colors (by name, so they follow the theme: [light, dark]) and pen sizes.
+  const PAD_COLORS = { ink: null, blue: ['#2257d6', '#7ea3ff'], red: ['#c92a2a', '#ff8787'], green: ['#1b7f45', '#5ccb8a'], orange: ['#d9480f', '#ffa94d'], purple: ['#7048e8', '#b197fc'] };
+  const PAD_SIZES = { s: 1.5, m: 2.5, l: 5 };
+  const padColor = (c, el) => (PAD_COLORS[c] ? PAD_COLORS[c][isDark() ? 1 : 0] : getComputedStyle(el).color);
   function scratchBoard(q) {
     const pages = S.scratch.pages;
+    if (!Object.hasOwn(PAD_COLORS, S.scratch.color)) S.scratch.color = 'ink';
+    if (!Object.hasOwn(PAD_SIZES, S.scratch.size)) S.scratch.size = 'm';
+    if (!S.scratch.fmt || typeof S.scratch.fmt !== 'object') S.scratch.fmt = {};
     const items = pages[q.id] || [];
     let tool = ['pen', 'text', 'eraser'].includes(S.scratch.tool) ? S.scratch.tool : 'pen';
     let ctx = null;
@@ -1216,7 +1223,7 @@
       if (!ctx && !size()) return;
       let y = 0.03;
       for (const ta of notes.querySelectorAll('.scratch-note')) y = Math.max(y, (ta.offsetTop + ta.offsetHeight + 8) / w);
-      const n = { x: 0.03, y: +y.toFixed(4), s: '' };
+      const n = withStyle({ x: 0.03, y: +y.toFixed(4), s: '' });
       add(n);
       const ta = noteEl(n);
       notes.append(ta);
@@ -1227,8 +1234,58 @@
       S.scratch.tool = t;
       for (const [k, b] of Object.entries(tools)) b.setAttribute('aria-pressed', String(k === t));
       board.dataset.tool = t;
+      styleRow.hidden = t === 'eraser';
+      sizes.hidden = t !== 'pen';
+      fmts.hidden = t !== 'text';
       saveScratch();
     }
+    // Color for the pen and notes; size for the pen; bold, italic, underline for notes. With a note being
+    // typed in, they change that note (the row keeps the focus in it); otherwise the next one.
+    const typingNote = () => { const a = document.activeElement; return a && notes.contains(a) && a._note ? a : null; };
+    const colorBtns = Object.keys(PAD_COLORS).map((c) => {
+      const b = h('button', { class: 'pad-swatch', type: 'button', title: c === 'ink' ? 'Black' : c[0].toUpperCase() + c.slice(1), 'aria-label': c === 'ink' ? 'Black' : c[0].toUpperCase() + c.slice(1) });
+      b.addEventListener('click', () => {
+        S.scratch.color = c;
+        const ta = typingNote();
+        if (ta) { if (c === 'ink') delete ta._note.c; else ta._note.c = c; noteLook(ta, ta._note); save(); }
+        paintStyle(); saveScratch();
+      });
+      b._c = c;
+      return b;
+    });
+    const sizeBtns = Object.keys(PAD_SIZES).map((z) => {
+      const b = h('button', { class: 'scratch-tool pad-size', type: 'button', title: { s: 'Thin', m: 'Medium', l: 'Thick' }[z], 'aria-label': { s: 'Thin', m: 'Medium', l: 'Thick' }[z] }, h('span', { class: 'pad-dot', style: `width:${PAD_SIZES[z] + 3}px;height:${PAD_SIZES[z] + 3}px` }));
+      b.addEventListener('click', () => { S.scratch.size = z; paintStyle(); saveScratch(); });
+      b._z = z;
+      return b;
+    });
+    const fmtBtns = [['b', 'Bold', 'B'], ['i', 'Italic', 'I'], ['u', 'Underline', 'U']].map(([k, label, letter]) => {
+      const b = h('button', { class: `scratch-tool pad-fmt pad-fmt-${k}`, type: 'button', title: label, 'aria-label': label, text: letter });
+      b.addEventListener('click', () => {
+        const ta = typingNote();
+        if (ta) { if (ta._note[k]) delete ta._note[k]; else ta._note[k] = true; noteLook(ta, ta._note); fit(ta, ta._note); save(); }
+        else S.scratch.fmt[k] = !S.scratch.fmt[k];
+        paintStyle(); saveScratch();
+      });
+      b._k = k;
+      return b;
+    });
+    function paintStyle() {
+      const ta = typingNote();
+      const color = ta ? ta._note.c || 'ink' : S.scratch.color;
+      for (const b of colorBtns) {
+        b.setAttribute('aria-pressed', String(b._c === color));
+        b.style.setProperty('--sw', b._c === 'ink' ? 'var(--ink)' : padColor(b._c, board)); // follows the theme
+      }
+      for (const b of sizeBtns) b.setAttribute('aria-pressed', String(b._z === S.scratch.size));
+      for (const b of fmtBtns) b.setAttribute('aria-pressed', String(!!(ta ? ta._note[b._k] : S.scratch.fmt[b._k])));
+    }
+    const sizes = h('div', { class: 'scratch-group', role: 'group', 'aria-label': 'Size' }, sizeBtns);
+    const fmts = h('div', { class: 'scratch-group', role: 'group', 'aria-label': 'Text style' }, fmtBtns);
+    const styleRow = h('div', { class: 'scratch-style' }, h('div', { class: 'pad-colors', role: 'group', 'aria-label': 'Color' }, colorBtns), sizes, fmts);
+    styleRow.addEventListener('mousedown', (e) => e.preventDefault()); // keep typing in the note
+    notes.addEventListener('focusin', paintStyle);
+    notes.addEventListener('focusout', () => setTimeout(paintStyle, 0));
     pick(tool);
     const undo = btn('undo', 'Undo', () => {
       if (!items.length && cleared) { items.push(...cleared); cleared = null; }
@@ -1246,6 +1303,12 @@
       save();
     });
     const add = (it) => { items.push(it); cleared = null; };
+    // a new note in the chosen color and text style
+    const withStyle = (n) => {
+      if (S.scratch.color !== 'ink') n.c = S.scratch.color;
+      for (const k of ['b', 'i', 'u']) if (S.scratch.fmt[k]) n[k] = true;
+      return n;
+    };
 
     function size() {
       const r = canvas.getBoundingClientRect();
@@ -1260,10 +1323,10 @@
     }
     function style(st) {
       ctx.globalCompositeOperation = st.e ? 'destination-out' : 'source-over';
-      ctx.lineWidth = st.e ? 22 : 2.5;
+      ctx.lineWidth = st.e ? 22 : PAD_SIZES[st.sz] || PAD_SIZES.m;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.strokeStyle = getComputedStyle(canvas).color;
+      ctx.strokeStyle = padColor(st.c, canvas);
     }
     function path(p, from) {
       ctx.beginPath();
@@ -1293,9 +1356,16 @@
       ta.style.height = 'auto';
       ta.style.height = ta.scrollHeight + 'px';
     }
+    function noteLook(ta, n) {
+      ta.style.color = n.c ? padColor(n.c, board) : '';
+      ta.style.fontWeight = n.b ? '700' : '';
+      ta.style.fontStyle = n.i ? 'italic' : '';
+      ta.style.textDecoration = n.u ? 'underline' : '';
+    }
     function noteEl(n) {
       const ta = h('textarea', { class: 'scratch-note', rows: '1', spellcheck: 'false', 'aria-label': 'Note' });
       ta.value = n.s;
+      noteLook(ta, n);
       ta.style.left = n.x * w + 'px';
       ta.style.top = n.y * w + 'px';
       ta.addEventListener('input', () => { n.s = ta.value; fit(ta, n); save(); });
@@ -1329,7 +1399,7 @@
       e.preventDefault();
       if (tool === 'text') {
         const [x, y] = at(e);
-        const n = { x: Math.min(x, +((w - 80) / w).toFixed(4)), y: Math.max(0, +(y - 11 / w).toFixed(4)), s: '' };
+        const n = withStyle({ x: Math.min(x, +((w - 80) / w).toFixed(4)), y: Math.max(0, +(y - 11 / w).toFixed(4)), s: '' });
         add(n);
         const ta = noteEl(n);
         notes.append(ta);
@@ -1340,6 +1410,10 @@
       canvas.setPointerCapture(e.pointerId);
       cur = { p: at(e) };
       if (tool === 'eraser' || e.button === 5) cur.e = true; // button 5: a pen's eraser end
+      else {
+        if (S.scratch.color !== 'ink') cur.c = S.scratch.color;
+        if (S.scratch.size !== 'm') cur.sz = S.scratch.size;
+      }
       add(cur);
       style(cur);
       path(cur.p, 0);
@@ -1371,7 +1445,8 @@
       h('div', { class: 'scratch-group', role: 'group', 'aria-label': 'Edit' }, undo, clear),
       h('span', { class: 'scratch-q', text: `Question ${S.idx + 1}` }),
       close);
-    return [head, board];
+    paintStyle();
+    return [head, styleRow, board];
   }
 
   function directionsView(part) {
@@ -1502,9 +1577,12 @@
   // selection (or a click) touches a highlight.
   function highlightBar() {
     let range = null;
-    const hl = h('button', { class: 'btn small', type: 'button', text: 'Highlight', onclick: () => { if (range) addHighlight(range); hide(); } });
-    const un = h('button', { class: 'btn small', type: 'button', text: 'Remove highlight', onclick: () => { if (range) removeHighlight(range); hide(); } });
-    const bar = h('div', { class: 'hl-bar', role: 'toolbar', 'aria-label': 'Highlight', hidden: true }, hl, un);
+    const apply = (st) => { if (range) addHighlight(range, false, st); hide(); };
+    const swatches = [['y', 'Yellow'], ['g', 'Green'], ['b', 'Blue'], ['p', 'Pink']].map(([c, name]) =>
+      h('button', { class: `hl-swatch hl-sw-${c}`, type: 'button', title: `${name} highlight`, 'aria-label': `${name} highlight`, onclick: () => apply(c) }));
+    const ul = h('button', { class: 'btn small hl-ul', type: 'button', title: 'Underline', 'aria-label': 'Underline', text: 'U', onclick: () => apply('u') });
+    const un = h('button', { class: 'btn small', type: 'button', text: 'Remove', 'aria-label': 'Remove highlight', onclick: () => { if (range) removeHighlight(range); hide(); } });
+    const bar = h('div', { class: 'hl-bar', role: 'toolbar', 'aria-label': 'Highlight', hidden: true }, ...swatches, ul, un);
     bar.addEventListener('mousedown', (e) => e.preventDefault()); // keep the selection while clicking
     function hide() { bar.hidden = true; range = null; }
     const rootOf = (n) => { const el = n && (n.nodeType === 1 ? n : n.parentElement); return el && el.closest('.hl-root'); };
@@ -1518,8 +1596,7 @@
       // A click (no selection) on a highlight offers to remove it; not on a choice, where a click picks it.
       if (sel.isCollapsed && (!marks.length || root.closest('.choice'))) return hide();
       if (sel.isCollapsed) { range = document.createRange(); range.selectNodeContents(marks[0]); } else range = r.cloneRange();
-      hl.hidden = sel.isCollapsed;
-      un.hidden = !marks.length;
+      un.hidden = !marks.length; // a click on a highlight: recolor it, or take it off
       bar.hidden = false;
       const at = (sel.isCollapsed ? marks[0] : r).getBoundingClientRect();
       const box = S.el.wrap.getBoundingClientRect();
@@ -1560,9 +1637,11 @@
       for (const c of n.childNodes) {
         if (c.nodeType === 3) {
           const len = c.nodeValue.length;
-          if (c.parentElement.closest('mark.hl')) {
+          const m = c.parentElement.closest('mark.hl');
+          if (m) { // [start, end], and the style when it isn't yellow: g, b, p (colors) or u (underline)
+            const st = m.dataset.c || 'y';
             const last = out[out.length - 1];
-            if (last && last[1] === pos) last[1] += len; else out.push([pos, pos + len]);
+            if (last && last[1] === pos && (last[2] || 'y') === st) last[1] += len; else out.push(st === 'y' ? [pos, pos + len] : [pos, pos + len, st]);
           }
           pos += len;
         } else if (c.nodeName === 'BR') pos += 1;
@@ -1589,16 +1668,20 @@
     }(el));
     return r;
   }
-  function addHighlight(range, keepSelection) {
+  // st: y (yellow), g, b, p (green, blue, pink) or u (underline). Already highlighted text takes the new style.
+  const HL_STYLES = ['y', 'g', 'b', 'p', 'u'];
+  function addHighlight(range, keepSelection, st) {
+    st = HL_STYLES.includes(st) ? st : 'y';
     for (let node of textNodesIn(range)) {
-      if (node.parentElement.closest('mark.hl')) continue;
+      const old = node.parentElement.closest('mark.hl');
+      if (old) { if (st === 'y') delete old.dataset.c; else old.dataset.c = st; continue; }
       const start = node === range.startContainer ? range.startOffset : 0;
       const end = node === range.endContainer ? range.endOffset : node.length;
       if (start >= end) continue;
       if (end < node.length) node.splitText(end);
       if (start > 0) node = node.splitText(start);
       if (!node.nodeValue.trim() && node.nodeValue.includes('\n')) continue; // the gap between two paragraphs
-      const mark = h('mark', { class: 'hl' });
+      const mark = h('mark', { class: 'hl', 'data-c': st === 'y' ? null : st });
       node.replaceWith(mark);
       mark.append(node);
     }
@@ -2771,9 +2854,9 @@
       const want = hl[key] || [];
       if (JSON.stringify(marksIn(node)) === JSON.stringify(want)) continue;
       for (const m of [...node.querySelectorAll('mark.hl')]) { const parent = m.parentNode; m.replaceWith(...m.childNodes); parent.normalize(); }
-      for (const [a, b] of want) {
+      for (const [a, b, st] of want) {
         const r = rangeAt(node, a, b);
-        if (!r.collapsed && node.contains(r.startContainer) && node.contains(r.endContainer)) addHighlight(r, true);
+        if (!r.collapsed && node.contains(r.startContainer) && node.contains(r.endContainer)) addHighlight(r, true, st);
       }
     }
   }
