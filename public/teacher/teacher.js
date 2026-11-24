@@ -322,7 +322,7 @@
 
   // Shown once, when a teacher's quiz key is made: the only way back to their quizzes without the password.
   function showRecoveryCode(codeText) {
-    const copy = h('button', { class: 'btn small', type: 'button', text: 'Copy' });
+    const copy = h('button', { class: 'btn', type: 'button', text: 'Copy' }); // as tall as the code beside it
     copy.addEventListener('click', async () => { if (await copyText(codeText)) copy.textContent = 'Copied'; });
     mount(h('main', { class: 't-login t-recovery' },
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
