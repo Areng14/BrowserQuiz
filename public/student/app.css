@@ -560,3 +560,4 @@ h1[tabindex="-1"]:focus { outline: none; }
   .scratch-tool[aria-pressed="true"]:hover { background: var(--accent); }
   .mark-btn[aria-pressed="true"]:hover { background: var(--q-review); }
 }
+.notice-text { white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -822,6 +822,7 @@
       S.deadline = res.deadline;
     }
     if (res && res.done && !S.submitting) return endQuiz('mine'); // the teacher ended this student's quiz
+    if (res && res.notice && res.notice.id !== S.noticeId) { S.noticeId = res.notice.id; showNotice(res.notice.text); }
     setOnline(true);
     if (info && info.answers && S.saveState === 'saving') setSave('saved');
   }
@@ -1049,8 +1050,10 @@
     const total = S.quiz.questions.length;
     if (S.reviewOpen) {
       S.el.prev.disabled = false;
-      S.el.next.textContent = 'Submit';
-      S.el.next.className = 'btn primary';
+      // a timed exam turns in by itself when time is up: no turning in early
+      S.el.next.textContent = timedExam() ? 'Turns in when time is up' : 'Submit';
+      S.el.next.className = timedExam() ? 'btn' : 'btn primary';
+      S.el.next.disabled = timedExam();
       S.el.jump.hidden = true;
       document.title = `Check your work – ${S.quiz.title}`;
       if (S.el.hlBar) S.el.hlBar.hide();
@@ -1062,6 +1065,7 @@
     S.el.jump.hidden = false;
     S.el.prev.disabled = S.idx === 0 || lockedAt(S.idx - 1);
     const last = S.idx === total - 1;
+    S.el.next.disabled = false;
     S.el.next.textContent = S.dirOpen ? 'Continue' : last ? 'Review' : 'Next';
     S.el.next.className = 'btn' + (last && !S.dirOpen ? ' primary' : '');
     const views = { code: codeView, output: outputView, trace: traceView, fill: fillView, essay: essayView };
@@ -2179,6 +2183,25 @@
   // ---------- overlays ----------
   // While a dialog or overlay is up, the quiz behind it can't be reached (inert), Tab stays inside it,
   // Esc does onEscape (if any), and closing puts focus back where it was. Returns the close function.
+  // A message the teacher sent to everyone taking the quiz.
+  function showNotice(text) {
+    if (!S.el || !S.el.wrap) return;
+    const old = S.el.wrap.querySelector('.notice-backdrop');
+    if (old) old.remove();
+    let release = null;
+    const ok = h('button', { class: 'btn primary', type: 'button', text: 'OK' });
+    const backdrop = h('div', { class: 'modal-backdrop notice-backdrop' },
+      h('div', { class: 'modal', role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'notice-title', 'aria-describedby': 'notice-text' },
+        h('h2', { id: 'notice-title', text: 'Message from your teacher' }),
+        h('p', { id: 'notice-text', class: 'notice-text', text: String(text || '') }),
+        h('div', { class: 'modal-actions' }, ok)));
+    const close = () => { backdrop.remove(); if (release) release(); };
+    ok.addEventListener('click', close);
+    S.el.wrap.append(backdrop);
+    release = holdFocus(backdrop, close);
+    ok.focus();
+  }
+
   function holdFocus(layer, onEscape) {
     const back = document.activeElement;
     const others = [...S.el.wrap.children].filter((el) => el !== layer && !el.inert);
@@ -2251,7 +2274,7 @@
       h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'exit-title' },
         h('h2', { id: 'exit-title', text: 'Exit the quiz?' }),
         h('p', { text: "Exiting counts as leaving the quiz unless your teacher told you to. Your answers are saved." }),
-        h('div', { class: 'modal-actions' }, keep, turnIn, exit)));
+        h('div', { class: 'modal-actions' }, keep, timedExam() ? null : turnIn, exit)));
     S.el.wrap.append(backdrop);
     release = holdFocus(backdrop, close);
     keep.focus();
@@ -2311,7 +2334,9 @@
     S.el.next.click();
   }
 
+  const timedExam = () => !!(S.run && !S.run.practice && S.deadline);
   function openSubmit() {
+    if (timedExam()) return;
     const missing = S.quiz.questions.map((q, i) => (isAnswered(q) ? null : i + 1)).filter(Boolean);
     const marked = S.quiz.questions.map((q, i) => (isMarked(q) ? i + 1 : null)).filter(Boolean);
     if (S.done || !S.el || S.el.wrap.querySelector('.modal-backdrop')) return;

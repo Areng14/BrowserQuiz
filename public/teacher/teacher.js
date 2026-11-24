@@ -6,7 +6,7 @@
   const ask = window.BQAsk; // our own confirm, notice and prompt (ask.js)
   const THEME_KEY = 'bq-theme';
   const LABEL = {
-    join: 'Signed in', ready: 'Agreed to the rules, waiting in full screen', admit: 'Started by you', start: 'Started the quiz', submit: 'Submitted', run: 'Ran examples', reload: 'Reopened mid-quiz',
+    join: 'Signed in', ready: 'Agreed to the rules, waiting in full screen', admit: 'Started by you', 'away-long': 'Gone longer than 10 seconds', start: 'Started the quiz', submit: 'Submitted', run: 'Ran examples', reload: 'Reopened mid-quiz',
     restore: 'Un-invalidated by teacher', automation: 'Browser run by a script', 'virtual-machine': 'Virtual machine or remote desktop', 'software-graphics': 'No graphics card (VM or remote desktop?)', invalidate: 'Invalidated by teacher', blur: 'Left the quiz window', hidden: 'Tab hidden',
     'fullscreen-exit': 'Left fullscreen', return: 'Came back', 'mouse-left': 'Cursor left the page', copy: 'Copy blocked',
     paste: 'Outside paste blocked', contextmenu: 'Right-click', 'blocked-key': 'Blocked key', 'print-screen': 'Print Screen',
@@ -1599,7 +1599,14 @@
       firstLook = false;
     }
     // Close quiz stays out; the rest is under ⋯.
-    const runMenu = moreMenu('More for this quiz', 'run:more', () => [lockBtn, notifyBtn,
+    // A message to everyone taking the quiz: it pops up on their screens at the next heartbeat.
+    const msgBtn = h('button', { class: 'btn', type: 'button', text: 'Message students' });
+    msgBtn.addEventListener('click', async () => {
+      const text = await ask.ask({ title: 'Message students', label: 'Message', ok: 'Send' });
+      if (text == null || !text.trim()) return;
+      try { await post(`/api/t/runs/${runId}/message`, { text }); } catch (e) { alertBox(e.message); }
+    });
+    const runMenu = moreMenu('More for this quiz', 'run:more', () => [msgBtn, lockBtn, notifyBtn,
       ...(lastRun && lastRun.sebFile && lastRun.status === 'open' && sebParts ? sebParts : []),
       exportLink, classReport, corrBtn.hidden ? null : corrBtn], () => refresh());
     detail.className = 't-detail-host';

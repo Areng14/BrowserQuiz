@@ -1095,6 +1095,11 @@ module.exports = function teacherRoutes(r) {
         store.logEvent(a, 'admit', 'info', null);
         store.save(a);
       }
+    } else if (p.action === 'message') {
+      const body = await readJson(req, 8192);
+      const text = String(body.text || '').trim().slice(0, 500);
+      if (text) store.notices.set(run.id, { id: Date.now(), text }); else store.notices.delete(run.id);
+      audit(me, 'message', run.id, text.slice(0, 100));
     } else if (p.action === 'lock') {
       q('UPDATE runs SET ip_lock = ? WHERE id = ?').run(clientIp(req), run.id);
     } else if (p.action === 'unlock') {

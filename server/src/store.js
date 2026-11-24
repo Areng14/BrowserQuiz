@@ -72,6 +72,9 @@ const SERVER_EVENTS = {
 // logged, never a strike. Quitting SEB to leave still counts, as the reload when they come back.
 const SEB_QUIET = new Set(['blur', 'hidden', 'fullscreen-exit', 'mouse-left', 'resize', 'extended-display', 'answer-after-return']);
 const MERGE_MS = 2000;
+const AWAY_LIMIT_MS = 10000; // away longer than this invalidates the attempt
+// A message from the teacher to everyone in a run: run id -> { id, text }. Kept in memory, so a restart drops it.
+const notices = new Map();
 const MAX_EVENTS = 3000;
 const WARN_PER_TYPE_PER_MIN = 20;
 
@@ -136,6 +139,13 @@ function back(a, t) {
     const ms = Math.max(0, t - a.awaySince);
     a.awayMs = (a.awayMs || 0) + ms;
     a.awayMax = Math.max(a.awayMax || 0, ms);
+    // Gone longer than a stray popup takes: cheating, whatever the grace strikes. Quietly, like any invalidation.
+    if (ms > AWAY_LIMIT_MS && !a.practice && a.integrity === 'clean' && watched(a)) {
+      a.integrity = 'invalidated';
+      a.reason = 'away-long';
+      a.invalidatedAt = t;
+      logEvent(a, 'away-long', 'violation', Math.round(ms / 1000) + 's away');
+    }
   }
   a.away = false;
   a.awaySince = 0;
@@ -286,6 +296,6 @@ function perStudent(quiz) {
 
 module.exports = {
   watched,
-  getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, back, awayNow, logEvent, makeLayout, quizFor, perStudent, attempts,
+  notices, getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, back, awayNow, logEvent, makeLayout, quizFor, perStudent, attempts,
   CLIENT_EVENTS, SERVER_EVENTS, quizCache,
 };

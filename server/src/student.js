@@ -560,7 +560,7 @@ module.exports = function studentRoutes(r) {
 
   r.post('/api/beat', async (req, res) => {
     const body = await readJson(req, 1024 * 1024);
-    const { a, quiz } = current(req);
+    const { a, run, quiz } = current(req);
     const now = Date.now();
     let live = {};
     const inQuiz = a.status === 'active';
@@ -627,7 +627,8 @@ module.exports = function studentRoutes(r) {
       store.save(a);
     }
     // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
-    json(res, 200, { ok: true, now, deadline: a.deadline || null, done: a.status === 'submitted', ...live });
+    const notice = a.status !== 'submitted' ? store.notices.get(run.id) : null; // the teacher's message to everyone
+    json(res, 200, { ok: true, now, deadline: a.deadline || null, done: a.status === 'submitted', ...(notice ? { notice } : {}), ...live });
   });
 
   r.post('/api/run', async (req, res) => {
@@ -695,7 +696,9 @@ module.exports = function studentRoutes(r) {
 
   r.post('/api/submit', async (req, res) => {
     const body = await readJson(req, 1024 * 1024);
-    const { a, quiz } = current(req, { mustBeOpen: false });
+    const { a, run, quiz } = current(req, { mustBeOpen: false });
+    // A timed exam turns in when time is up, not before (the teacher can still end it early)
+    if (a.status === 'active' && run.mode !== 'practice' && a.deadline && Date.now() < a.deadline - 15000) throw new HttpError(403, 'not_yet');
     if (a.status === 'active') {
       const now = Date.now();
       storeEdits(a, body.edits, now); // the last few seconds of typing, for the replay
