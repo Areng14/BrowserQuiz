@@ -679,7 +679,7 @@
       existingAssets = new Set(src.assets);
     }
     if (preset) quiz = preset.quiz;
-    if (!quiz) quiz = { format: 1, title: '', timeLimitMin: 20, language: 'java', shuffleQuestions: true, shuffleChoices: true, integrity: { graceStrikes: 1 }, questions: [] };
+    if (!quiz) quiz = { format: 1, title: '', timeLimitMin: 20, language: 'java', shuffleQuestions: true, shuffleChoices: true, questions: [] };
     quiz.questions.forEach(withUi);
     // Section dividers: here each sits at a place in the list (before question number at+1), so moving a question
     // across one moves it into that section. Saved as the id of the question each starts at (collect).
@@ -1561,7 +1561,7 @@
       const pools = poolSettings(q);
       // timed sections set the quiz's time (their total) and lock each part
       const timedSum = (quiz.sections || []).reduce((t, d) => t + (d.timeLimitMin || 0), 0);
-      const lockParts = check(q, quiz.lockParts === true || timedSum > 0, 'Lock each part once it\'s done', (v) => { if (v) quiz.lockParts = true; else delete quiz.lockParts; });
+      const lockParts = check(q, quiz.lockParts === true || timedSum > 0, timedSum ? 'Lock each part once it\'s done (timed sections do)' : 'Lock each part once it\'s done', (v) => { if (v) quiz.lockParts = true; else delete quiz.lockParts; });
       if (timedSum) lockParts.querySelector('input').disabled = true;
       return [h('div', { class: 'qe-head' }, h('h1', { class: 'qe-n', text: 'Settings' })),
         h('div', { class: 'qe-settings-cards' },
@@ -1604,16 +1604,30 @@
       }
       selectDivider(quiz.sections.findIndex((d) => d.at === at));
     }
+    // Timed sections (docs/quiz-format.md): every one has minutes, and the first starts at question 1, as
+    // the server checks (quizfile.js). Which section is off, and what to do, for its pane and for Save.
+    function sectionTimeProblem() {
+      const secs = quiz.sections || [];
+      if (!secs.some((d) => d.timeLimitMin > 0)) return null;
+      const untimed = secs.findIndex((d) => !(d.timeLimitMin > 0));
+      if (untimed >= 0) return { k: untimed, text: 'Give every section a time limit, or none of them.' };
+      const first = secs.reduce((m, d) => (d.at < m.at ? d : m), secs[0]);
+      if (first.at !== 0) return { k: secs.indexOf(first), text: 'With timed sections, the first one starts at question 1. Add a section there.' };
+      return null;
+    }
     function dividerPane(k) {
       const d = quiz.sections[k];
       const title = input(null, d.title, (v) => { d.title = v; renderOutline(); }, { id: 'qe-div-title', maxlength: '120', placeholder: `Section ${k + 1}` });
       const dirs = area(null, d.directions, (v) => { d.directions = v; }, { rows: 4, spellcheck: 'true', placeholder: 'Optional' });
       // timed parts (docs/quiz-format.md): every section gets its own minutes, or none does
-      const mins = input(null, d.timeLimitMin || '', (v) => { d.timeLimitMin = Math.max(0, Math.round(Number(v) || 0)); }, { type: 'number', min: '0', max: '600', placeholder: 'None' });
+      const timeMsg = h('p', { class: 't-error t-small', role: 'alert' });
+      const showTime = () => { const p = sectionTimeProblem(); timeMsg.textContent = p && p.k === k ? p.text : ''; };
+      const mins = input(null, d.timeLimitMin || '', (v) => { d.timeLimitMin = Math.max(0, Math.round(Number(v) || 0)); showTime(); }, { type: 'number', min: '0', max: '600', placeholder: 'None' });
+      showTime();
       const del = h('button', { class: 'btn small', type: 'button', text: 'Remove section', onclick: () => { quiz.sections.splice(k, 1); touch(); select(d.at); } });
       paneTick = null;
       return [h('div', { class: 'qe-head' }, h('h1', { class: 'qe-n', text: 'Section' }), h('span', { class: 'qe-grow' }), del),
-        h('div', { class: 'qe-stack' }, field('Title', title), field('Time limit (minutes)', mins), field('Directions', dirs))];
+        h('div', { class: 'qe-stack' }, field('Title', title), field('Time limit (minutes)', mins, timeMsg), field('Directions', dirs))];
     }
 
     // A quiz with no questions yet opens on the kinds of question to start with
@@ -1792,6 +1806,8 @@
       globalMsg.textContent = '';
       if (!quiz.questions.length) { setStatus('Add a question first.', true); return null; }
       renderOutline();
+      const secTime = sectionTimeProblem();
+      if (secTime) { selectDivider(secTime.k); setStatus('Not saved. Fix the section times', true); return null; }
       const left = problems.filter((p) => p.length).length;
       if (left) {
         tried = true;
