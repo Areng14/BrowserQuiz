@@ -527,6 +527,14 @@ module.exports = function teacherRoutes(r) {
     const next = String(body.next || '');
     if (next.length < A.MIN_PASSWORD) throw new HttpError(400, 'weak', `Use at least ${A.MIN_PASSWORD} characters.`);
     const t = A.byId(me.id);
+    // Admin still called "admin" (anyone could guess it) picks a username of their own with the password.
+    let rename = null;
+    if (me.role === 'admin' && t.username.toLowerCase() === 'admin') {
+      rename = String(body.username || '').trim();
+      if (!A.USERNAME.test(rename)) throw new HttpError(400, 'bad_username', 'Pick a username: 2 to 32 letters, digits, dots, dashes or underscores.');
+      if (rename.toLowerCase() === 'admin') throw new HttpError(400, 'bad_username', 'Pick a username other than admin.');
+      if (A.byUsername(rename)) throw new HttpError(400, 'taken', `${rename} is taken.`);
+    }
     const tries = loginBucket('pw-check:' + me.id, 5, 60000);
     if (tries.n < 1) throw new HttpError(429, 'too_many', 'Too many tries. Wait a minute.');
     if (!(await A.checkPassword(String(body.current || ''), t.pw_hash))) {
@@ -546,6 +554,7 @@ module.exports = function teacherRoutes(r) {
     }
     if (!key && t.key_wrap) dropQuizzes(me);
     q('UPDATE teachers SET pw_hash = ?, must_change = 0 WHERE id = ?').run(await A.hashPassword(next), me.id);
+    if (rename) { q('UPDATE teachers SET username = ? WHERE id = ?').run(rename, me.id); audit(me, 'rename-admin', null, rename); }
     let recoveryCode = null;
     if (key) {
       q('UPDATE teachers SET key_wrap = ? WHERE id = ?').run(await V.wrapKey(key, next), me.id);
@@ -686,6 +695,7 @@ module.exports = function teacherRoutes(r) {
     const username = String(body.username || '').trim();
     const name = String(body.name || '').trim().slice(0, 80);
     if (!A.USERNAME.test(username)) throw new HttpError(400, 'bad_username', 'Usernames are 2 to 32 letters, digits, dots, dashes or underscores.');
+    if (username.toLowerCase() === 'admin') throw new HttpError(400, 'bad_username', 'admin is kept for the first account. Pick another.');
     if (!name) throw new HttpError(400, 'bad_name', 'Add their name.');
     if (A.byUsername(username)) throw new HttpError(400, 'taken', `${username} is taken.`);
     const temp = A.tempPassword();

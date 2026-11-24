@@ -110,7 +110,8 @@ const setSetting = (k, v) => q('INSERT INTO settings (k, v) VALUES (?, ?) ON CON
 //   is unused, and once each time ADMIN_RESET is set to a new value (forgot the password).
 async function ensureAdmin() {
   const pw = process.env.ADMIN_PASSWORD || '';
-  let admin = byUsername('admin');
+  // Admin is found by role: they pick their own username at the first sign-in (teacher.js me/password)
+  let admin = q("SELECT * FROM teachers WHERE role = 'admin' ORDER BY created_at LIMIT 1").get() || byUsername('admin');
   let code = null;
   if (!admin) {
     const id = crypto.randomUUID();
@@ -142,7 +143,7 @@ async function ensureAdmin() {
   q('DELETE FROM sessions WHERE teacher_id IS NULL').run(); // sessions from before accounts
   V.setAdmin(admin.id, fromEnv);
   if (fromEnv) { encryptOwned(admin.id, V.keyFor(admin.id)); require('./people').sealPeople(admin.id); }
-  if (code) console.log(`\nBrowserQuiz: sign in at /teacher as "admin" with this one-time code: ${code}\nYou'll pick your own password right after.\n`);
+  if (code) console.log(`\nBrowserQuiz: sign in at /teacher as "${admin.username}" with this one-time code: ${code}\nYou'll pick your own password right after.\n`);
   return admin.id;
 }
 

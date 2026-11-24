@@ -34,8 +34,9 @@ If students can't reach it, open port 8080 in the server's firewall.
 
 ## Teachers
 
-The first account is `admin` (leaving the username blank also means admin). There are two ways to set
-it up:
+The first account is admin. Sign in the first time with the username `admin` (or leave it blank), and
+you pick a username of your own along with your password: nobody can guess yours, and `admin` stops
+working. There are two ways to set it up:
 
 - **A one-time code (recommended):** leave `ADMIN_PASSWORD` empty. The server prints a code to its log
   (`docker compose logs app`, or the deploy logs on Railway).

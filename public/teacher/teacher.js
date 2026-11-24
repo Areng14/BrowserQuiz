@@ -155,9 +155,14 @@
     let recover = false;
     let fromEnv = false; // admin's first sign-in, with ADMIN_PASSWORD: it isn't a temporary one
     let uname = who ? who.username : '';
-    if (first) { try { const me = await api('/api/t/me'); recover = !!(me.teacher && me.teacher.needsRecovery); fromEnv = !!(me.teacher && me.teacher.passwordFromEnv); uname = (me.teacher && me.teacher.username) || uname; } catch (e) { return; } }
-    // whose password this is, for password managers (they save the new one under this account)
-    const account = h('input', { type: 'text', autocomplete: 'username', value: uname, readonly: true, hidden: true, tabindex: '-1', 'aria-hidden': 'true' });
+    let role = who ? who.role : '';
+    if (first) { try { const me = await api('/api/t/me'); recover = !!(me.teacher && me.teacher.needsRecovery); fromEnv = !!(me.teacher && me.teacher.passwordFromEnv); uname = (me.teacher && me.teacher.username) || uname; role = (me.teacher && me.teacher.role) || role; } catch (e) { return; } }
+    // Admin still called "admin" picks a username of their own too (anyone could guess "admin"). Otherwise
+    // it's whose password this is, hidden, for password managers to save the new one under.
+    const needName = role === 'admin' && uname.toLowerCase() === 'admin';
+    const account = needName
+      ? h('input', { class: 'input', id: 'pw-user', autocomplete: 'username', autocapitalize: 'none', spellcheck: 'false', required: true })
+      : h('input', { type: 'text', autocomplete: 'username', value: uname, readonly: true, hidden: true, tabindex: '-1', 'aria-hidden': 'true' });
     const code = h('input', { class: 'input t-mono', id: 'pw-code', autocomplete: 'off', spellcheck: 'false', placeholder: 'XXXX-XXXX-XXXX-XXXX-XXXX' });
     const fresh = h('input', { type: 'checkbox', id: 'pw-fresh' });
     fresh.addEventListener('change', () => { code.disabled = fresh.checked; });
@@ -165,10 +170,11 @@
     const next = h('input', { class: 'input', type: 'password', id: 'pw-new', autocomplete: 'new-password', minlength: '10' });
     const again = h('input', { class: 'input', type: 'password', id: 'pw-again', autocomplete: 'new-password' });
     const msg = h('p', { class: 't-error', role: 'alert' });
-    const btn = h('button', { class: 'btn primary', type: 'submit', text: 'Save password' });
-    const form = h('form', { class: 't-login' }, account,
+    const btn = h('button', { class: 'btn primary', type: 'submit', text: needName ? 'Save' : 'Save password' });
+    const form = h('form', { class: 't-login' }, needName ? null : account,
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
-      h('h1', { text: first ? 'Pick your password' : 'Change your password' }),
+      h('h1', { text: needName ? 'Pick your username and password' : first ? 'Pick your password' : 'Change your password' }),
+      needName ? h('label', { class: 'field', for: 'pw-user' }, h('span', { class: 'field-label', text: 'Username' }), account) : null,
       h('label', { class: 'field', for: 'pw-cur' }, h('span', { class: 'field-label', text: first && !fromEnv ? 'Temporary password' : 'Current password' }), cur),
       h('label', { class: 'field', for: 'pw-new' }, h('span', { class: 'field-label', text: 'New password (10+ characters)' }), next),
       h('label', { class: 'field', for: 'pw-again' }, h('span', { class: 'field-label', text: 'New password again' }), again),
@@ -184,12 +190,12 @@
       btn.disabled = true;
       if (recover && fresh.checked && !(await ask.confirm({ title: 'Start over?', text: 'Your quizzes, and the results from them, are deleted for good.', ok: 'Start over', danger: true }))) { btn.disabled = false; return; }
       try {
-        const r = await post('/api/t/me/password', { current: cur.value, next: next.value, recoveryCode: recover && !fresh.checked ? code.value : undefined, startOver: recover && fresh.checked });
+        const r = await post('/api/t/me/password', { current: cur.value, next: next.value, username: needName ? account.value.trim() : undefined, recoveryCode: recover && !fresh.checked ? code.value : undefined, startOver: recover && fresh.checked });
         if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else showHome();
       } catch (ex) { msg.textContent = ex.message; btn.disabled = false; }
     });
     mount(h('main', { class: 't-login-page' }, form, !first && PASSKEYS ? passkeysSection(false) : null));
-    cur.focus();
+    (needName ? account : cur).focus();
   }
 
   // ---------- passkeys ----------
