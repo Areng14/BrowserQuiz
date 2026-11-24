@@ -511,6 +511,7 @@ module.exports = function studentRoutes(r) {
 
   r.post('/api/start', async (req, res) => {
     const { a, run, quiz } = current(req);
+    const seenAt = a.answersAt || 0; // when their answers last reached the server: the page keeps newer ones (app.js takeUnsent)
     if (a.status === 'waiting') throw new HttpError(403, 'not_admitted');
     if (a.status === 'submitted') throw new HttpError(403, 'run_closed');
     const now = Date.now();
@@ -557,7 +558,7 @@ module.exports = function studentRoutes(r) {
     if (pq.timeLimitMin && !run.corrects) pq.timeLimitMin = myLimit(quiz, a.studentId); // their own, with extra time
     // tag: tells this attempt from an earlier one (a reset, practice again), for what the browser keeps
     if (Parts.timed(quiz, a.layout)) keepLocked(quiz, a, {}, now); // parts whose time ran out while they were away
-    json(res, 200, { quiz: pq, deadline: a.deadline, turnInAt: turnInAt(a) || null, partEnds: partEndsOut(quiz, a), now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0, tag: sha256(a.id).slice(0, 12) });
+    json(res, 200, { quiz: pq, deadline: a.deadline, turnInAt: turnInAt(a) || null, partEnds: partEndsOut(quiz, a), savedAt: seenAt, now, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0, tag: sha256(a.id).slice(0, 12) });
   });
 
   r.post('/api/event', async (req, res) => {
@@ -626,7 +627,7 @@ module.exports = function studentRoutes(r) {
       a.viewQ = onQ;
       a.viewAt = now;
       // autosave stops at time's up; only the final submit gets the grace, for its trip over the network
-      if (body.answers && !(a.deadline && now > a.deadline)) a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers));
+      if (body.answers && !(a.deadline && now > a.deadline)) { a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers)); a.answersAt = now; }
       }
       store.save(a);
     }
@@ -702,7 +703,7 @@ module.exports = function studentRoutes(r) {
     if (!Number.isInteger(n) || n < 1 || n > partsOf(quiz, a.layout).count) throw new HttpError(400, 'bad_part');
     // Timed parts move on when their time is up, not before (a page's clock can run a few seconds ahead)
     if (Parts.timed(quiz, a.layout) && n > Parts.over(a, Date.now() + 5000)) throw new HttpError(403, 'not_yet');
-    if (body.answers && !pastDeadline(a, Date.now())) a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers));
+    if (body.answers && !pastDeadline(a, Date.now())) { a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers)); a.answersAt = Date.now(); }
     a.layout.locked = Math.max(a.layout.locked || 0, n);
     store.save(a);
     json(res, 200, { locked: a.layout.locked });

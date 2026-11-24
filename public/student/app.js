@@ -748,10 +748,12 @@
     S.skew = r.now ? r.now - Date.now() : 0;
     S.locked = r.locked || 0;
     S.partEnds = r.partEnds || null; // timed parts: when each one's time is up (the server's clock)
-    S.answers = restoreAnswers(r.saved || {});
+    const unsent = takeUnsent(r.savedAt);
+    S.answers = restoreAnswers(unsent || r.saved || {});
     loadMarks();
     loadScratch();
     if (!S.monitor) S.monitor = makeMonitor(fsOk);
+    if (unsent) S.monitor.answersDirty = true; // the next heartbeat takes them to the server
     screenQuiz();
     if (!S.monitor.armed) S.monitor.arm();
     // left full screen while it was starting: the same warning as in the quiz
@@ -832,6 +834,7 @@
     if (res && res.note && res.note.id !== S.noteId) { S.noteId = res.note.id; showNotice(res.note.text); }
     setOnline(true);
     if (info && info.answers && S.saveState === 'saving') setSave('saved');
+    if (info && info.answers && S.monitor && !S.monitor.answersDirty) clearUnsent(); // the server has them all
   }
   function onBeatError(err, failures) {
     if (S.done || !S.el) return;
@@ -907,6 +910,7 @@
     if (value === undefined) delete S.answers[qid];
     else S.answers[qid] = value;
     if (S.monitor) S.monitor.markAnswersDirty(String(qid).split('~')[0]);
+    keepUnsent();
     if (S.saveState !== 'offline') setSave('saving');
     renderSheet();
   }
@@ -994,6 +998,7 @@
     const next = S.parts[done];
     if (S.done || !S.el || !next) return;
     S.timeUpFor = done;
+    announce(`Time's up for Part ${done}.`);
     S.reviewOpen = false;
     S.idx = next.start;
     S.dirOpen = true;
@@ -1191,6 +1196,30 @@
   // The student's own working space: one board a question, where they draw and drop typed notes
   // anywhere. It's kept in this browser (per run and student), isn't graded, and is cleared when the
   // quiz is turned in. A teacher watching live sees the page on screen (the server keeps it in memory).
+  // Answers the server doesn't have yet (offline, or typed in the seconds before a reload or a dead
+  // battery) stay in this browser until a heartbeat saves them. Back on this page, they're used if they're
+  // newer than the server's last word from this student (so an older copy here can't undo work done on
+  // another computer since). Cleared once saved, and on turn-in.
+  const unsentKey = () => 'bq-unsent:' + [S.run && (S.run.id || S.run.code || S.run.title), S.me && S.me.name, S.tag || ''].join(':');
+  let unsentTimer = 0;
+  function keepUnsent() {
+    if (cfg.preview || cfg.watch || cfg.demo || !S.monitor) return;
+    clearTimeout(unsentTimer);
+    unsentTimer = setTimeout(() => {
+      try { localStorage.setItem(unsentKey(), JSON.stringify({ at: Date.now() + (S.skew || 0), answers: serializeAnswers() })); } catch (e) { /* kept on the server only */ }
+    }, 300);
+  }
+  function clearUnsent() {
+    clearTimeout(unsentTimer);
+    try { localStorage.removeItem(unsentKey()); } catch (e) { /* nothing kept */ }
+  }
+  function takeUnsent(savedAt) {
+    try {
+      const v = JSON.parse(localStorage.getItem(unsentKey()) || 'null');
+      if (v && v.answers && typeof v.answers === 'object' && v.at > (savedAt || 0)) return v.answers;
+    } catch (e) { /* nothing kept */ }
+    return null;
+  }
   const scratchKey = () => 'bq-scratch:' + [S.run && (S.run.id || S.run.code || S.run.title), S.me && S.me.name, S.tag || ''].join(':');
   function loadScratch() {
     S.scratch = { tool: 'pen', pages: {} };
@@ -2705,6 +2734,7 @@
     S.done = true;
     clearMarks();
     clearScratch();
+    clearUnsent();
     clearInterval(S.timer);
     hideFsOverlay();
     disposeEditor();
@@ -2716,6 +2746,7 @@
 
   // Out of the quiz without turning anything in (the teacher reset or moved this attempt).
   function leaveQuiz(next) {
+    clearUnsent(); // the teacher reset or moved it: these answers belong to an attempt that's gone
     teardown();
     S = freshState();
     next();
