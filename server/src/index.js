@@ -70,14 +70,14 @@ async function handle(req, res) {
     if (!/^assets\/[A-Za-z0-9 _.\-/]+$/.test(rel) || rel.includes('..')) throw new HttpError(404, 'not_found');
     return studentRoutes.serveAsset(req, res, rel);
   }
-  if (p.startsWith('/vendor/') && serveStatic(res, path.join(PUBLIC, 'vendor'), p.slice('/vendor/'.length), true)) return;
+  if (p.startsWith('/vendor/') && serveStatic(req, res, path.join(PUBLIC, 'vendor'), p.slice('/vendor/'.length))) return;
   if (p === '/teacher') { res.writeHead(302, Object.assign({}, SECURITY, { Location: '/teacher/' })); return res.end(); }
   if (p.startsWith('/teacher/')) {
     const rel = p.slice('/teacher/'.length) || 'index.html';
-    if (serveStatic(res, path.join(PUBLIC, 'teacher'), rel)) return;
+    if (serveStatic(req, res, path.join(PUBLIC, 'teacher'), rel)) return;
     throw new HttpError(404, 'not_found');
   }
-  if (serveStatic(res, path.join(PUBLIC, 'student'), p === '/' ? 'index.html' : p.slice(1))) return;
+  if (serveStatic(req, res, path.join(PUBLIC, 'student'), p === '/' ? 'index.html' : p.slice(1))) return;
   throw new HttpError(404, 'not_found');
 }
 

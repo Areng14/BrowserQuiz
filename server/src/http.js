@@ -180,7 +180,10 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
 };
-function serveStatic(res, rootDir, rel, longCache) {
+// Every file is checked with the server on each load (no-cache) and comes back as a tiny 304 while it's
+// unchanged (ETag: its size and time). Bundles like Monaco keep one URL across versions, so a long cache
+// left browsers on an old one after a deploy (a new language with no colors).
+function serveStatic(req, res, rootDir, rel) {
   const root = path.resolve(rootDir);
   const file = path.resolve(root, '.' + path.posix.normalize('/' + rel));
   if (file !== root && !file.startsWith(root + path.sep)) return false;
@@ -190,7 +193,13 @@ function serveStatic(res, rootDir, rel, longCache) {
   const ext = path.extname(file).toLowerCase();
   const type = MIME[ext];
   if (!type) return false;
-  const headers = { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': longCache ? 'public, max-age=604800' : 'no-cache' };
+  const etag = `W/"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+  if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(etag)) {
+    res.writeHead(304, Object.assign({}, SECURITY, { 'Cache-Control': 'no-cache', ETag: etag }));
+    res.end();
+    return true;
+  }
+  const headers = { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': 'no-cache', ETag: etag };
   if (ext === '.html') headers['Content-Security-Policy'] = PAGE_CSP;
   // The one page that goes in a frame: the student's screen inside the teacher's Watch page, same origin only.
   if (file.endsWith(path.join(path.sep, 'teacher', 'watch-frame.html'))) {

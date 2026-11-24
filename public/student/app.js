@@ -4,6 +4,10 @@
   'use strict';
   const BQ = (window.BQ = window.BQ || {});
   const cfg = Object.assign({ demo: false, monacoBase: '/vendor/monaco/' }, window.BQ_CONFIG || {});
+  // Browsers once kept Monaco for a week at the same address, so an old copy (without C, Go, Rust or C#)
+  // could outlive a deploy. A new address fetches it fresh once; since then the server has it checked on
+  // every load (http.js serveStatic).
+  const MONACO_V = '?v=2';
 
   const CODE_ALPHABET = /[^ABCDEFGHJKMNPQRSTUVWXYZ23456789]/g;
   const LANG_NAMES = { java: 'Java', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', c: 'C', cpp: 'C++', csharp: 'C#', go: 'Go', rust: 'Rust' };
@@ -222,11 +226,11 @@
     if (monacoPromise) return monacoPromise;
     monacoPromise = new Promise((resolve, reject) => {
       const base = cfg.monacoBase;
-      window.MonacoEnvironment = { getWorkerUrl: () => base + 'editor.worker.js' };
+      window.MonacoEnvironment = { getWorkerUrl: () => base + 'editor.worker.js' + MONACO_V };
       if (!document.querySelector('link[data-monaco]')) {
-        document.head.append(h('link', { rel: 'stylesheet', href: base + 'monaco.css', 'data-monaco': true }));
+        document.head.append(h('link', { rel: 'stylesheet', href: base + 'monaco.css' + MONACO_V, 'data-monaco': true }));
       }
-      const s = h('script', { src: base + 'monaco.js' });
+      const s = h('script', { src: base + 'monaco.js' + MONACO_V });
       s.onload = () => {
         const m = window.monaco;
         if (!m) return reject(new Error('monaco missing'));
