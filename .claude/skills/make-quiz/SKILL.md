@@ -165,8 +165,7 @@ Report:
 - the `.quiz` path
 - number of questions and total points
 - the time limit
-- the defaults you picked, including `graceStrikes` (1, the default, lets one window switch go; 0 means the first one invalidates)
-  and shuffling
+- the defaults you picked, including shuffling
 - anything you couldn't verify
 
 `VALID` means the server accepts the quiz and the references pass. It doesn't show what the

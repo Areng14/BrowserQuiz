@@ -1564,7 +1564,6 @@
           card('Quiz',
             h('div', { class: 'qe-settings-grid' },
               field('Time limit (minutes, 0 = none)', input(q, quiz.timeLimitMin, (v) => { quiz.timeLimitMin = Number(v) || 0; }, { type: 'number', min: '0', max: '600' })),
-              field('Window exits allowed before invalidating', input(q, (quiz.integrity || {}).graceStrikes ?? 1, (v) => { quiz.integrity = { graceStrikes: Number(v) || 0 }; }, { type: 'number', min: '0', max: '10' })),
               field('Code highlighting', langSel)),
             h('div', { class: 'qe-line' },
               check(q, quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { quiz.shuffleQuestions = v; }),

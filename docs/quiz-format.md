@@ -33,7 +33,7 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `shuffleQuestions` | `true` | Shuffle order per student, within each part (see below) |
 | `shuffleChoices` | `true` | Shuffle multiple choice options per student |
 | `lockParts` | `false` | Once a student moves on to a later part, the parts before it are final: they can't go back to them. The page asks first. Not in corrections |
-| `integrity.graceStrikes` | `1` | Times a student can leave the window before the attempt is invalidated (0–10). The default lets one slip go; 0 invalidates on the first. |
+| `integrity.graceStrikes` | | No longer used: the first time a student leaves the window invalidates the attempt. Older quizzes may still have it. |
 | `directions` | built in | `"quiz"`: your own directions for the whole quiz (Markdown), shown before it starts and with each part's. The type keys replace that part's directions: `{ "quiz": "No calculators.", "single": "...", "code": "..." }` |
 | `shared` | none | Shared material that several questions use (below) |
 | `pools` | none | How many questions each student gets from each question pool: `{ "loops": 2 }` (below). A pool not listed gives 1 |

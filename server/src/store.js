@@ -186,8 +186,8 @@ function record(a, type, detail, quiz, at) {
     if (!merged) {
       a.burstStart = t;
       a.strikes++;
-      const grace = quiz && quiz.integrity && quiz.integrity.graceStrikes != null ? quiz.integrity.graceStrikes : 1;
-      if (a.integrity === 'clean' && a.strikes > grace) {
+      // the first time they leave invalidates the attempt (quizzes' old graceStrikes setting is ignored)
+      if (a.integrity === 'clean') {
         a.integrity = 'invalidated';
         a.reason = type;
         a.invalidatedAt = now;
