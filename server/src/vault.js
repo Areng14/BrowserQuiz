@@ -16,6 +16,15 @@ const scrypt = promisify(crypto.scrypt);
 const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 
 const keyring = new Map(); // teacher id -> their quiz key, while unlocked
+// Signing in puts a teacher's key in memory; what's waiting on it (people.js, index.js) hears about it.
+const unlockHooks = [];
+function unlock(teacherId, key) {
+  keyring.set(teacherId, key);
+  for (const fn of unlockHooks) {
+    try { fn(teacherId); } catch (e) { console.error('after unlock:', e.message); }
+  }
+}
+const onUnlock = (fn) => unlockHooks.push(fn);
 let adminId = null;
 let adminKey = null;
 
@@ -99,6 +108,6 @@ const isAdmin = (id) => id === adminId;
 const adminPasswordFromEnv = () => adminFromEnv;
 
 module.exports = {
-  keyring, seal, open, sealText, openText, quizAad, assetAad, wrapKey, unwrapKey, newKey,
+  keyring, unlock, onUnlock, seal, open, sealText, openText, quizAad, assetAad, wrapKey, unwrapKey, newKey,
   passkeyAad, wrapKeyPrf, unwrapKeyPrf, recoveryCode, normCode, setAdmin, keyFor, needKey, isAdmin, legacyAdminKey, adminPasswordFromEnv,
 };

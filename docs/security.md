@@ -40,24 +40,29 @@ so patching `JSON`, `Array.prototype` or `process.stdout` changes nothing it rep
 no speed tests, and their results can only say what the code returned, since the expected values
 aren't in the sandbox. The same goes for C#, Go and Rust, which have no speed tests either.
 
-## Quizzes are encrypted, even from whoever hosts it
+## Quizzes and student data are encrypted, even from whoever hosts it
 
 - **How:** each teacher's quizzes and images are encrypted (AES-256-GCM) with a key that only their
   password, recovery code or passkeys unlock. The person running the server can't read them from the
   database or a backup.
+- **Student data too:** with the same key: students' names, their answers and scores, their network
+  addresses and browsers, the details of what the quiz noticed, and typing replays. A leaked database
+  shows ids, times and counts, not who anyone is or what they wrote. Anything from before this is
+  encrypted the next time its teacher signs in.
 - **Recovery code:** teachers see it once, when they first set their password. If they forget the
   password, an admin reset plus that code (or one of their passkeys) gets their quizzes back. The
   temporary password alone isn't enough, even while the server has their key in memory. Without
   either, nobody can open them, and they start over, which also removes their passkeys.
 - **After a restart:** the key stays in the server's memory from sign-in until the server restarts.
   Until the teacher signs in again, their quizzes are locked: students see "your teacher needs to sign
-  in", and their app keeps their answers and retries.
+  in", and their app keeps their answers and retries. Students can't look up their names until then either.
 - **Not covered:**
-  - Quiz titles, class lists and results (scores, and which answers were right) stay readable.
+  - Quiz titles, class names, and counts like strikes and time away stay readable (tied to an id, not a
+    name).
   - The server has to read a quiz to grade it, so a host who changes the server's code can get at a
     quiz while it's unlocked.
-  - When admin's password comes from `.env` (`ADMIN_PASSWORD`), admin's quizzes are keyed off `.env`,
-    which the host has anyway. With the one-time code instead, admin gets their own key too.
+  - When admin's password comes from `.env` (`ADMIN_PASSWORD`), admin's quizzes and students are keyed
+    off `.env`, which the host has anyway. With the one-time code instead, admin gets their own key too.
 
 ## Private by default
 

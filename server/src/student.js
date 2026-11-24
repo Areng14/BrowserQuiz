@@ -4,6 +4,7 @@
 const crypto = require('node:crypto');
 const { q } = require('./db');
 const store = require('./store');
+const P = require('./people');
 const H = require('./harness');
 const T = require('../../public/teacher/types.js');
 const W = require('./watch');
@@ -140,9 +141,9 @@ function noteNewNetwork(a, run, quiz, ip) {
   if (q("SELECT 1 FROM events WHERE attempt_id = ? AND type = 'new-network'").get(a.id)) return;
   const me = q('SELECT sid_hash FROM roster_students WHERE id = ?').get(a.studentId);
   if (!me) return;
-  const before = q(`SELECT a.pin_ip FROM attempts a JOIN roster_students s ON s.id = a.student_id JOIN runs r ON r.id = a.run_id
+  const before = q(`SELECT a.id, a.run_id, a.pin_ip FROM attempts a JOIN roster_students s ON s.id = a.student_id JOIN runs r ON r.id = a.run_id
     WHERE s.sid_hash = ? AND r.owner_id = ? AND a.run_id != ? AND a.pin_ip IS NOT NULL AND a.archived = 0
-    ORDER BY a.started_at DESC LIMIT 50`).all(me.sid_hash, run.owner_id, run.id).map((x) => x.pin_ip);
+    ORDER BY a.started_at DESC LIMIT 50`).all(me.sid_hash, run.owner_id, run.id).map((x) => P.tryField(x.run_id, x.id, 'pin_ip', x.pin_ip)).filter(Boolean);
   if (!before.length || before.some((x) => sameArea(x, ip))) return;
   const seen = [...new Set(before)].slice(0, 2);
   store.record(a, 'new-network', `${ip}, before: ${seen.join(', ')}${new Set(before).size > 2 ? ', …' : ''}`, quiz);
@@ -151,9 +152,9 @@ function noteNewNetwork(a, run, quiz, ip) {
 // seats): flagged on both, once per pair.
 function noteSameBrowser(a, run, quiz, name) {
   if (!a.device || run.mode === 'practice') return;
-  const others = q(`SELECT a.id, s.name FROM attempts a JOIN roster_students s ON s.id = a.student_id
+  const others = q(`SELECT a.id, bq_name(s.name, s.id, s.roster_id) AS name FROM attempts a JOIN roster_students s ON s.id = a.student_id
     WHERE a.run_id = ? AND a.device = ? AND a.student_id != ? AND a.archived = 0`).all(run.id, a.device, a.studentId);
-  const logged = (id, who) => q("SELECT 1 FROM events WHERE attempt_id = ? AND type = 'same-browser' AND detail = ?").get(id, who);
+  const logged = (id, who) => q("SELECT detail FROM events WHERE attempt_id = ? AND type = 'same-browser'").all(id).some((e) => P.openEvent(run.id, id, e.detail) === who);
   for (const o of others) {
     const other = store.getAttempt(o.id);
     if (!logged(a.id, o.name)) store.record(a, 'same-browser', o.name, quiz); // "Same browser as" + the other's name
@@ -184,7 +185,7 @@ function storeEdits(a, list, now) {
   let text = JSON.stringify(edits);
   while (text.length > 400000 && edits.length > 1) { edits.pop(); text = JSON.stringify(edits); }
   if (text.length > 400000) return;
-  q('INSERT INTO code_edits (attempt_id, t, deltas) VALUES (?, ?, ?)').run(a.id, now, text);
+  q('INSERT INTO code_edits (attempt_id, t, deltas) VALUES (?, ?, ?)').run(a.id, now, P.sealEdits(a.runId, a.id, text));
   a.edits += edits.length;
 }
 
@@ -428,7 +429,7 @@ module.exports = function studentRoutes(r) {
     try { ctx = current(req, { mustBeOpen: false }); } catch (e) { return json(res, 200, { status: null }); }
     const { a, run, quiz } = ctx;
     if (run.status !== 'open' && a.status !== 'active' && a.status !== 'submitted') return json(res, 200, { status: null });
-    const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
+    const student = q('SELECT bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ?').get(a.studentId);
     json(res, 200, { status: a.status, run: runInfo(run, quiz, a.studentId), name: student ? student.name : '' });
   });
 
@@ -445,14 +446,14 @@ module.exports = function studentRoutes(r) {
       const n = ' ' + String(name).toLowerCase().replace(/\s+/g, ' ') + ' ';
       return term.length >= 3 ? n.includes(' ' + term) : n.includes(' ' + term + ' ');
     };
-    const rows = q('SELECT id, name FROM roster_students WHERE roster_id = ? AND removed = 0 ORDER BY name').all(run.roster_id).filter((x) => fits(x.name)).slice(0, 5);
+    const rows = q('SELECT id, bq_name(name, id, roster_id) AS name FROM roster_students WHERE roster_id = ? AND removed = 0 ORDER BY name').all(run.roster_id).filter((x) => fits(x.name)).slice(0, 5);
     json(res, 200, { matches: rows.map((x) => ({ id: x.id, name: x.name })) });
   });
 
   r.post('/api/attempt', async (req, res) => {
     const body = await readJson(req, 4096);
     const run = openRun(body.runId, req);
-    const student = q('SELECT * FROM roster_students WHERE id = ? AND roster_id = ? AND removed = 0').get(String(body.rosterId || ''), run.roster_id);
+    const student = q(`SELECT id, roster_id, sid_hash, time_x, bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ? AND roster_id = ? AND removed = 0`).get(String(body.rosterId || ''), run.roster_id);
     if (!student) throw new HttpError(400, 'bad_id');
     const now = Date.now();
     const ft = q('SELECT * FROM failed_ids WHERE run_id = ? AND student_id = ?').get(run.id, student.id);
@@ -503,7 +504,8 @@ module.exports = function studentRoutes(r) {
       }
       if (run.mode === 'practice' && existing.status === 'waiting') { existing.status = 'admitted'; store.save(existing); }
       existing.tokenHash = sha256(token);
-      q('UPDATE attempts SET token_hash = ?, ip = ?, user_agent = ? WHERE id = ?').run(existing.tokenHash, clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), existing.id);
+      q('UPDATE attempts SET token_hash = ?, ip = ?, user_agent = ? WHERE id = ?').run(existing.tokenHash, P.sealField(run.id, existing.id, 'ip', clientIp(req)),
+        P.sealField(run.id, existing.id, 'user_agent', String(req.headers['user-agent'] || '').slice(0, 300)), existing.id);
       existing.userAgent = String(req.headers['user-agent'] || '').slice(0, 300);
       store.logEvent(existing, 'join', 'info', 'signed in again');
       if (dev) { existing.device = deviceHash(dev); q('UPDATE attempts SET device = ? WHERE id = ?').run(existing.device, existing.id); }
@@ -514,7 +516,7 @@ module.exports = function studentRoutes(r) {
       // Practice runs skip the waiting room.
       q(`INSERT INTO attempts (id, run_id, student_id, token_hash, status, ip, user_agent, created_at, device)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, run.id, student.id, sha256(token), run.mode === 'practice' ? 'admitted' : 'waiting',
-        clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), now, dev ? deviceHash(dev) : null);
+        P.sealField(run.id, id, 'ip', clientIp(req)), P.sealField(run.id, id, 'user_agent', String(req.headers['user-agent'] || '').slice(0, 300)), now, dev ? deviceHash(dev) : null);
       const fresh = store.getAttempt(id);
       store.logEvent(fresh, 'join', 'info', student.name);
       noteSameBrowser(fresh, run, store.getQuiz(run.quiz_id), student.name);
@@ -704,7 +706,7 @@ module.exports = function studentRoutes(r) {
     if (a.status !== 'submitted') throw new HttpError(409, 'not_submitted');
     const until = Date.now() + 30000;
     while (Date.now() < until && (!a.result || totals(a.result, quiz, a.answers, a.layout).pending)) await sleep(500);
-    const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
+    const student = q('SELECT bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ?').get(a.studentId);
     json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id, a.layout), students: [studentReport(quiz, a, student ? student.name : '', { forStudent: true })] });
   });
 
@@ -719,7 +721,8 @@ module.exports = function studentRoutes(r) {
     const id = crypto.randomUUID();
     const token = newToken();
     q(`INSERT INTO attempts (id, run_id, student_id, token_hash, status, ip, user_agent, created_at)
-       VALUES (?, ?, ?, ?, 'admitted', ?, ?, ?)`).run(id, run.id, a.studentId, sha256(token), clientIp(req), String(req.headers['user-agent'] || '').slice(0, 300), Date.now());
+       VALUES (?, ?, ?, ?, 'admitted', ?, ?, ?)`).run(id, run.id, a.studentId, sha256(token), P.sealField(run.id, id, 'ip', clientIp(req)),
+      P.sealField(run.id, id, 'user_agent', String(req.headers['user-agent'] || '').slice(0, 300)), Date.now());
     store.logEvent(store.getAttempt(id), 'join', 'info', 'practice again');
     setCookie(req, res, ATT, token, 12 * 3600);
     json(res, 200, { ok: true });

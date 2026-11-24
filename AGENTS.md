@@ -41,3 +41,7 @@ Never use the browser's `alert()`, `confirm()` or `prompt()`. Teacher pages use 
   only through `store.getQuiz`, `store.getAsset` and `store.listAssets`, write them only through
   `saveQuiz`, and never `SELECT json` or `bytes` directly. Stored results never hold hidden tests'
   inputs or expected values (`store.storedResult`).
+- Student data is sealed with the teacher's key too (`server/src/people.js`): names, answers, results,
+  network addresses, browsers, event details and typing replays. Read names in SQL with
+  `bq_name(name, id, roster_id)`, attempts through `store.getAttempt`, and seal anything new you store with
+  `people.js`, never plain.

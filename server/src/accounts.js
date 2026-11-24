@@ -91,9 +91,9 @@ async function createKey(teacherId, password) {
     q('UPDATE teachers SET key_wrap = ?, rec_wrap = ? WHERE id = ?').run(keyWrap, recWrap, teacherId);
     q('DELETE FROM passkeys WHERE teacher_id = ?').run(teacherId);
   });
-  V.keyring.set(teacherId, key);
+  V.unlock(teacherId, key);
   const old = V.legacyAdminKey(teacherId);
-  if (old) rekeyOwned(teacherId, old, key);
+  if (old) { rekeyOwned(teacherId, old, key); require('./people').sealPeople(teacherId, old, key); }
   encryptOwned(teacherId, key);
   return code;
 }
@@ -138,7 +138,7 @@ async function ensureAdmin() {
   for (const t of ['quizzes', 'rosters', 'runs']) q(`UPDATE ${t} SET owner_id = ? WHERE owner_id IS NULL`).run(admin.id);
   q('DELETE FROM sessions WHERE teacher_id IS NULL').run(); // sessions from before accounts
   V.setAdmin(admin.id, fromEnv);
-  if (fromEnv) encryptOwned(admin.id, V.keyFor(admin.id));
+  if (fromEnv) { encryptOwned(admin.id, V.keyFor(admin.id)); require('./people').sealPeople(admin.id); }
   if (code) console.log(`\nBrowserQuiz: sign in at /teacher as "admin" with this one-time code: ${code}\nYou'll pick your own password right after.\n`);
   return admin.id;
 }

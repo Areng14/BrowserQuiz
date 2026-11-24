@@ -4,6 +4,7 @@
 const crypto = require('node:crypto');
 const { q } = require('./db');
 const V = require('./vault');
+const P = require('./people');
 const { putVars, normOutput } = require('./quizfile');
 
 // ---------- quizzes ----------
@@ -85,15 +86,19 @@ const WARN_PER_TYPE_PER_MIN = 20;
 
 const attempts = new Map(); // id -> live attempt
 
+// The sealed fields (people.js) open with the run's teacher's key: "locked" until they've signed in.
 function fromRow(r) {
+  const open = (f) => P.openField(r.run_id, r.id, f, r[f]);
+  const answers = open('answers');
+  const result = open('result');
   return {
     id: r.id, runId: r.run_id, studentId: r.student_id, tokenHash: r.token_hash, status: r.status,
     integrity: r.integrity, strikes: r.strikes, warnings: r.warnings, reason: r.reason, invalidatedAt: r.invalidated_at,
     startedAt: r.started_at, deadline: r.deadline, submittedAt: r.submitted_at, lastBeat: r.last_beat,
-    layout: r.layout ? JSON.parse(r.layout) : null, answers: r.answers ? JSON.parse(r.answers) : {},
-    result: r.result ? JSON.parse(r.result) : null, ip: r.ip, userAgent: r.user_agent, edits: r.edits,
+    layout: r.layout ? JSON.parse(r.layout) : null, answers: answers ? JSON.parse(answers) : {},
+    result: result ? JSON.parse(result) : null, ip: open('ip'), userAgent: open('user_agent'), edits: r.edits,
     archived: !!r.archived, createdAt: r.created_at,
-    awayMs: r.away_ms || 0, awayMax: r.away_max || 0, restoreStrikes: r.restore_strikes, pinIp: r.pin_ip || null,
+    awayMs: r.away_ms || 0, awayMax: r.away_max || 0, restoreStrikes: r.restore_strikes, pinIp: open('pin_ip') || null,
     qTime: r.q_time ? JSON.parse(r.q_time) : {}, device: r.device || null, readyAt: r.ready_at || null,
     // runtime only
     awaySince: 0, away: false, burstStart: 0, beatLost: false, eventCount: null, warnWindow: new Map(), flagged: new Set(), viewQ: null, viewAt: 0,
@@ -115,13 +120,17 @@ function attemptByToken(token) {
   return row ? getAttempt(row.id) : null;
 }
 function save(a) {
+  const sealed = (f, text) => P.sealField(a.runId, a.id, f, text);
+  const result = a.result ? JSON.stringify(storedResult(a.result)) : null;
+  // where grading is, in the clear (the result itself is sealed), so a restart knows what to finish
+  const grading = !result ? null : result.includes('"pending"') ? 'pending' : result.includes('"error"') ? 'error' : 'done';
   q(`UPDATE attempts SET status = ?, integrity = ?, strikes = ?, warnings = ?, reason = ?, invalidated_at = ?, started_at = ?,
      deadline = ?, submitted_at = ?, last_beat = ?, layout = ?, answers = ?, result = ?, edits = ?, archived = ?,
-     away_ms = ?, away_max = ?, restore_strikes = ?, pin_ip = ?, q_time = ?, ready_at = ? WHERE id = ?`).run(
+     away_ms = ?, away_max = ?, restore_strikes = ?, pin_ip = ?, q_time = ?, ready_at = ?, grading = ? WHERE id = ?`).run(
     a.status, a.integrity, a.strikes, a.warnings, a.reason, a.invalidatedAt, a.startedAt, a.deadline, a.submittedAt,
-    a.lastBeat, a.layout ? JSON.stringify(a.layout) : null, JSON.stringify(a.answers || {}), a.result ? JSON.stringify(storedResult(a.result)) : null,
-    a.edits || 0, a.archived ? 1 : 0, a.awayMs || 0, a.awayMax || 0, a.restoreStrikes == null ? null : a.restoreStrikes, a.pinIp || null,
-    a.qTime && Object.keys(a.qTime).length ? JSON.stringify(a.qTime) : null, a.readyAt || null, a.id,
+    a.lastBeat, a.layout ? JSON.stringify(a.layout) : null, sealed('answers', JSON.stringify(a.answers || {})), sealed('result', result),
+    a.edits || 0, a.archived ? 1 : 0, a.awayMs || 0, a.awayMax || 0, a.restoreStrikes == null ? null : a.restoreStrikes, sealed('pin_ip', a.pinIp || null),
+    a.qTime && Object.keys(a.qTime).length ? JSON.stringify(a.qTime) : null, a.readyAt || null, grading, a.id,
   );
 }
 function forget(id) { attempts.delete(id); }
@@ -131,7 +140,7 @@ function logEvent(a, type, severity, detail) {
   // Violations are kept past the cap (spam can't push evidence out), up to a much higher one for disk.
   if (a.eventCount >= (severity === 'violation' ? MAX_EVENTS * 5 : MAX_EVENTS)) return false;
   q('INSERT INTO events (attempt_id, t, type, severity, detail) VALUES (?, ?, ?, ?, ?)').run(
-    a.id, Date.now(), type, severity, detail == null ? null : String(detail).slice(0, 200),
+    a.id, Date.now(), type, severity, detail == null ? null : P.sealEvent(a.runId, a.id, String(detail).slice(0, 200)),
   );
   a.eventCount++;
   return true;

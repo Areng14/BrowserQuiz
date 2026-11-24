@@ -4,6 +4,8 @@ const http = require('node:http');
 const path = require('node:path');
 const { q } = require('./db');
 const store = require('./store');
+const V = require('./vault');
+const P = require('./people');
 const { gradeAttempt, totals } = require('./grade');
 const { HttpError, router, json, serveStatic, send, SECURITY, isHttps } = require('./http');
 const studentRoutes = require('./student');
@@ -126,17 +128,31 @@ for (const row of q(`SELECT id, result FROM attempts WHERE result LIKE '%"expect
   try { q('UPDATE attempts SET result = ? WHERE id = ?').run(JSON.stringify(store.storedResult(JSON.parse(row.result))), row.id); } catch (e) { /* leave it */ }
 }
 
-// After a restart: load active attempts back into memory and finish any grading that was cut off.
-for (const row of q("SELECT id FROM attempts WHERE archived = 0 AND status = 'active'").all()) {
-  const a = store.getAttempt(row.id);
-  a.lastBeat = Date.now(); // give clients a moment to reconnect before calling their heartbeat lost
+// After a restart: load active attempts back into memory and finish any grading that was cut off. Their
+// answers and results are sealed with their teacher's key (people.js), so a teacher's own come back when
+// they sign in (resume(theirId)); admin's .env key is there from the start.
+function resume(ownerId) {
+  const mine = ownerId ? ' AND run_id IN (SELECT id FROM runs WHERE owner_id = ?)' : '';
+  const args = ownerId ? [ownerId] : [];
+  const load = (id) => { try { return store.getAttempt(id); } catch (e) { return null; } }; // locked: later
+  for (const row of q(`SELECT id FROM attempts WHERE archived = 0 AND status = 'active'${mine}`).all(...args)) {
+    const fresh = !store.attempts.has(row.id);
+    const a = load(row.id);
+    if (a && fresh) a.lastBeat = Date.now(); // give clients a moment to reconnect before calling their heartbeat lost
+  }
+  for (const row of q(`SELECT id, run_id FROM attempts WHERE archived = 0 AND status = 'submitted' AND (result IS NULL OR grading IN ('pending', 'error')
+    OR (grading IS NULL AND (result LIKE '%"pending"%' OR result LIKE '%"error"%')))${mine}`).all(...args)) {
+    const a = load(row.id);
+    const quiz = a && quizOf(q('SELECT quiz_id FROM runs WHERE id = ?').get(row.run_id)); // a locked one waits for its teacher
+    if (quiz) gradeAttempt(a, quiz).catch((e) => console.error('regrade failed', a.id, e.message));
+  }
 }
-for (const row of q("SELECT id, run_id FROM attempts WHERE archived = 0 AND status = 'submitted' AND (result IS NULL OR result LIKE '%\"pending\"%' OR result LIKE '%\"error\"%')").all()) {
-  const a = store.getAttempt(row.id);
-  const run = q('SELECT quiz_id FROM runs WHERE id = ?').get(row.run_id);
-  const quiz = quizOf(run); // a locked quiz is graded by the sweeper once its teacher signs in
-  if (quiz) gradeAttempt(a, quiz).catch((e) => console.error('regrade failed', a.id, e.message));
-}
+resume(null);
+// A teacher signing in: whatever of theirs is still in the clear gets sealed, and their quizzes carry on.
+V.onUnlock((id) => {
+  P.sealPeople(id);
+  resume(id);
+});
 
 // The admin account is set up (ADMIN_PASSWORD, or a one-time code); start taking requests once it's in place.
 require('./accounts').ensureAdmin()

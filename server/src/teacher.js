@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { q, tx } = require('./db');
 const store = require('./store');
+const P = require('./people');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -93,6 +94,7 @@ function dropQuizzes(me) {
     q('DELETE FROM failed_ids WHERE run_id IN (SELECT id FROM runs WHERE owner_id = ?)').run(me.id);
     q('DELETE FROM runs WHERE owner_id = ?').run(me.id);
     q('DELETE FROM quizzes WHERE owner_id = ?').run(me.id);
+    q('DELETE FROM rosters WHERE owner_id = ?').run(me.id); // their students' names were sealed with it too
     q('UPDATE teachers SET ai_key = NULL WHERE id = ?').run(me.id); // sealed with the key that's gone
   });
   store.quizCache.clear();
@@ -389,7 +391,7 @@ function retireRoster(id) {
   if (q('SELECT 1 FROM runs WHERE roster_id = ? LIMIT 1').get(id)) q('UPDATE rosters SET archived = 1 WHERE id = ?').run(id);
   else q('DELETE FROM rosters WHERE id = ?').run(id);
 }
-const rosterStudentsForRun = (run) => q(`SELECT id, name, time_x FROM roster_students WHERE roster_id = ?
+const rosterStudentsForRun = (run) => q(`SELECT id, bq_name(name, id, roster_id) AS name, time_x FROM roster_students WHERE roster_id = ?
   AND (removed = 0 OR id IN (SELECT student_id FROM attempts WHERE run_id = ?)) ORDER BY name`).all(run.roster_id, run.id);
 
 // Signed in, by password or passkey: the session cookie.
@@ -486,7 +488,7 @@ module.exports = function teacherRoutes(r) {
     if (!(teacher.role === 'admin' && V.adminPasswordFromEnv()) && !teacher.must_change) {
       if (teacher.key_wrap) {
         const key = await V.unwrapKey(teacher.key_wrap, body.password);
-        if (key) V.keyring.set(teacher.id, key);
+        if (key) V.unlock(teacher.id, key);
         else q('UPDATE teachers SET must_change = 1 WHERE id = ?').run(teacher.id); // can't unlock: recovery code needed
       } else recoveryCode = await A.createKey(teacher.id, String(body.password));
     }
@@ -547,7 +549,7 @@ module.exports = function teacherRoutes(r) {
     let recoveryCode = null;
     if (key) {
       q('UPDATE teachers SET key_wrap = ? WHERE id = ?').run(await V.wrapKey(key, next), me.id);
-      V.keyring.set(me.id, key);
+      V.unlock(me.id, key);
     } else recoveryCode = await A.createKey(me.id, next);
     // Signed out everywhere else.
     q('DELETE FROM sessions WHERE teacher_id = ? AND token_hash != ?').run(me.id, sha256(cookies(req)[TCH]));
@@ -658,7 +660,7 @@ module.exports = function teacherRoutes(r) {
     if (!envAdmin(teacher)) {
       const key = V.unwrapKeyPrf(pk.key_wrap, PK.prfOf(body.prf), V.passkeyAad(teacher.id, pk.id));
       if (!key) throw new HttpError(400, 'needs_password', "This passkey can't unlock your quizzes. Sign in with your password.");
-      V.keyring.set(teacher.id, key);
+      V.unlock(teacher.id, key);
     }
     q('UPDATE passkeys SET sign_count = ?, last_used_at = ? WHERE id = ?').run(count, Date.now(), pk.id);
     mine.n = Math.min(mine.cap, mine.n + 1);
@@ -899,7 +901,10 @@ module.exports = function teacherRoutes(r) {
     const id = crypto.randomUUID();
     tx(() => {
       q('INSERT INTO rosters (id, name, created_at, owner_id) VALUES (?, ?, ?, ?)').run(id, name, Date.now(), me.id);
-      for (const s of students) q('INSERT INTO roster_students (id, roster_id, name, sid_hash, time_x) VALUES (?, ?, ?, ?, ?)').run(crypto.randomUUID(), id, s.name, hashSid(s.sid), s.timeX || 1);
+      for (const s of students) {
+        const sid = crypto.randomUUID();
+        q('INSERT INTO roster_students (id, roster_id, name, sid_hash, time_x) VALUES (?, ?, ?, ?, ?)').run(sid, id, P.sealName(me.id, sid, s.name), hashSid(s.sid), s.timeX || 1);
+      }
     });
     audit(me, 'create-roster', null, `${name} (${students.length})`);
     json(res, 200, { id, name, students: students.length });
@@ -910,8 +915,8 @@ module.exports = function teacherRoutes(r) {
   r.get('/api/t/rosters/:id', (req, res, p) => {
     const me = requireTeacher(req);
     const roster = getRoster(me, p.id);
-    const students = q(`SELECT s.id, s.name, s.time_x, EXISTS(SELECT 1 FROM attempts a WHERE a.student_id = s.id) AS results
-      FROM roster_students s WHERE s.roster_id = ? AND s.removed = 0 ORDER BY s.name`).all(roster.id)
+    const students = q(`SELECT s.id, bq_name(s.name, s.id, s.roster_id) AS name, s.time_x, EXISTS(SELECT 1 FROM attempts a WHERE a.student_id = s.id) AS results
+      FROM roster_students s WHERE s.roster_id = ? AND s.removed = 0 ORDER BY name`).all(roster.id)
       .map((x) => ({ id: x.id, name: x.name, results: !!x.results, timeX: x.time_x || 1 }));
     json(res, 200, { id: roster.id, name: roster.name, students });
   });
@@ -926,7 +931,10 @@ module.exports = function teacherRoutes(r) {
     tx(() => {
       const name = String(body.name || '').trim().slice(0, 80);
       if (name) q('UPDATE rosters SET name = ? WHERE id = ?').run(name, roster.id);
-      for (const s of students) q('INSERT INTO roster_students (id, roster_id, name, sid_hash, time_x) VALUES (?, ?, ?, ?, ?)').run(crypto.randomUUID(), roster.id, s.name, hashSid(s.sid), s.timeX || 1);
+      for (const s of students) {
+        const sid = crypto.randomUUID();
+        q('INSERT INTO roster_students (id, roster_id, name, sid_hash, time_x) VALUES (?, ?, ?, ?, ?)').run(sid, roster.id, P.sealName(me.id, sid, s.name), hashSid(s.sid), s.timeX || 1);
+      }
       // extra time per student: { roster student id: 1 | 1.25 | 1.5 | 2 }; a quiz already started keeps its clock
       if (body.time && typeof body.time === 'object') {
         for (const [sid, v] of Object.entries(body.time).slice(0, 500)) q('UPDATE roster_students SET time_x = ? WHERE id = ? AND roster_id = ?').run(parseTimeX(v), String(sid), roster.id);
@@ -1094,7 +1102,7 @@ module.exports = function teacherRoutes(r) {
     if (body.apply !== true) {
       const names = new Map();
       const nameOf = (a) => {
-        if (!names.has(a.studentId)) { const st = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId); names.set(a.studentId, st ? st.name : '?'); }
+        if (!names.has(a.studentId)) { const st = q('SELECT bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ?').get(a.studentId); names.set(a.studentId, st ? st.name : '?'); }
         return names.get(a.studentId);
       };
       preview = [...grades].slice(0, 300).map(([id, g]) => {
@@ -1185,8 +1193,8 @@ module.exports = function teacherRoutes(r) {
       // Your network, and every network your students are already on (the teacher's laptop can be on staff
       // wifi or a hotspot while the class is on the student network): locking never kicks the class out.
       const nets = new Set([clientIp(req)]);
-      for (const row of q('SELECT ip, pin_ip FROM attempts WHERE run_id = ? AND archived = 0').all(run.id)) {
-        for (const x of [row.ip, row.pin_ip]) if (x) nets.add(String(x));
+      for (const row of q('SELECT id, ip, pin_ip FROM attempts WHERE run_id = ? AND archived = 0').all(run.id)) {
+        for (const f of ['ip', 'pin_ip']) { const x = P.tryField(run.id, row.id, f, row[f]); if (x) nets.add(String(x)); }
       }
       q('UPDATE runs SET ip_lock = ? WHERE id = ?').run([...nets].filter(Boolean).slice(0, 50).join(','), run.id);
     } else if (p.action === 'unlock') {
@@ -1214,7 +1222,7 @@ module.exports = function teacherRoutes(r) {
     for (const e of q(`SELECT e.attempt_id, e.type, e.detail FROM events e JOIN attempts a ON a.id = e.attempt_id
       WHERE a.run_id = ? AND a.archived = 0 AND e.type IN ('new-network', 'same-browser') ORDER BY e.id`).all(run.id)) {
       if (!checks.has(e.attempt_id)) checks.set(e.attempt_id, []);
-      checks.get(e.attempt_id).push({ type: e.type, detail: e.detail });
+      checks.get(e.attempt_id).push({ type: e.type, detail: P.openEvent(run.id, e.attempt_id, e.detail) });
     }
     // wrong student IDs typed for a name: a few are typos, many mean someone is guessing
     const wrongIds = new Map(q('SELECT student_id, n FROM failed_ids WHERE run_id = ? AND n > 0').all(run.id).map((x) => [x.student_id, x.n]));
@@ -1276,8 +1284,9 @@ module.exports = function teacherRoutes(r) {
     const me = requireTeacher(req);
     const { a, run } = getAttemptRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
-    const student = q('SELECT name, time_x FROM roster_students WHERE id = ?').get(a.studentId);
-    const events = q('SELECT t, type, severity, detail FROM events WHERE attempt_id = ? ORDER BY id DESC LIMIT 400').all(a.id);
+    const student = q('SELECT bq_name(name, id, roster_id) AS name, time_x FROM roster_students WHERE id = ?').get(a.studentId);
+    const events = q('SELECT t, type, severity, detail FROM events WHERE attempt_id = ? ORDER BY id DESC LIMIT 400').all(a.id)
+      .map((e) => ({ t: e.t, type: e.type, severity: e.severity, detail: P.openEvent(a.runId, a.id, e.detail) }));
     const mouse = [];
     for (const m of q('SELECT points FROM mouse WHERE attempt_id = ? ORDER BY rowid DESC LIMIT 60').all(a.id).reverse()) mouse.push(...JSON.parse(m.points));
     json(res, 200, {
@@ -1298,7 +1307,7 @@ module.exports = function teacherRoutes(r) {
     const { a, run } = getAttemptRun(me, p.id);
     if (!a.layout) throw new HttpError(409, 'not_started');
     const quiz = store.getQuiz(run.quiz_id);
-    const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
+    const student = q('SELECT bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ?').get(a.studentId);
     // their clock, as of the watch page's playback (watch.js DELAY)
     json(res, 200, { quiz: publicQuiz(quiz, a.layout), quizId: run.quiz_id, answers: a.answers || {}, name: student ? student.name : '', deadline: a.deadline || null, turnInAt: a.deadline ? Math.min(a.deadline, (a.layout && a.layout.turnInAt) || a.deadline) : null, now: Date.now(), delay: 2500, practice: run.mode === 'practice' });
   });
@@ -1307,7 +1316,7 @@ module.exports = function teacherRoutes(r) {
     const { a, run } = getAttemptRun(me, p.id);
     const url = new URL(req.url, 'http://x');
     const now = Date.now();
-    const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
+    const student = q('SELECT bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ?').get(a.studentId);
     // The answers only when they've changed since the version the page has.
     const text = JSON.stringify(a.answers || {});
     const ver = crypto.createHash('sha1').update(text).digest('hex').slice(0, 16);
@@ -1315,7 +1324,7 @@ module.exports = function teacherRoutes(r) {
     let ended = null;
     if (a.status === 'submitted') {
       const ev = q("SELECT detail FROM events WHERE attempt_id = ? AND type = 'submit' ORDER BY id DESC LIMIT 1").get(a.id);
-      const why = ev ? ev.detail : null;
+      const why = ev ? P.openEvent(a.runId, a.id, ev.detail) : null;
       ended = why === 'time ran out' ? 'time' : why === 'quiz closed' ? 'ended' : why === 'ended by teacher' ? 'mine'
         : a.deadline && a.submittedAt >= a.deadline - 1500 ? 'time' : 'submitted';
     }
@@ -1339,7 +1348,7 @@ module.exports = function teacherRoutes(r) {
     const out = {};
     for (const row of q('SELECT deltas FROM code_edits WHERE attempt_id = ? ORDER BY rowid').all(a.id)) {
       let list;
-      try { list = JSON.parse(row.deltas); } catch (e) { continue; }
+      try { list = JSON.parse(P.openEdits(a.runId, a.id, row.deltas)); } catch (e) { continue; }
       if (!Array.isArray(list)) continue;
       for (const e of list) {
         if (!e || typeof e.q !== 'string' || !Number.isFinite(e.t)) continue;
@@ -1358,7 +1367,7 @@ module.exports = function teacherRoutes(r) {
     const { a, run } = getAttemptRun(me, p.id);
     notWhileOpen(run);
     const quiz = store.getQuiz(run.quiz_id);
-    const student = q('SELECT name FROM roster_students WHERE id = ?').get(a.studentId);
+    const student = q('SELECT bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ?').get(a.studentId);
     json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: [studentReport(quiz, a, student ? student.name : '')] });
   });
 
@@ -1367,8 +1376,9 @@ module.exports = function teacherRoutes(r) {
     const run = getRun(me, p.id);
     notWhileOpen(run);
     const quiz = store.getQuiz(run.quiz_id);
-    const rows = q(`SELECT attempts.id, roster_students.name FROM attempts JOIN roster_students ON roster_students.id = attempts.student_id
-      WHERE attempts.run_id = ? AND attempts.archived = 0 AND attempts.status = 'submitted' ORDER BY roster_students.name`).all(run.id);
+    const rows = q(`SELECT attempts.id, bq_name(roster_students.name, roster_students.id, roster_students.roster_id) AS name FROM attempts
+      JOIN roster_students ON roster_students.id = attempts.student_id
+      WHERE attempts.run_id = ? AND attempts.archived = 0 AND attempts.status = 'submitted' ORDER BY name`).all(run.id);
     const attempts = rows.map((x) => store.getAttempt(x.id));
     json(res, 200, {
       quiz: reportQuiz(quiz, run.quiz_id), students: rows.map((x, i) => studentReport(quiz, attempts[i], x.name)),
