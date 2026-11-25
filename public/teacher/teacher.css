@@ -176,6 +176,10 @@ input[type="file"].input { padding: 6px 10px; }
 .t-mono { font-family: var(--mono); }
 .t-seb { max-width: 560px; }
 .t-app .t-temp { padding: 1px 6px; font: 600 15px var(--mono); background: var(--soft); border: 1px solid var(--line); border-radius: 4px; user-select: all; }
+/* The SEB quit password, blurred until it's hovered or focused (a tap on a touch screen): the quiz's page
+   is often up on a projector */
+.t-app .t-reveal { color: transparent; text-shadow: 0 0 9px var(--ink); transition: color 0.15s, text-shadow 0.15s; }
+.t-app .t-reveal:hover, .t-app .t-reveal:focus { color: var(--ink); text-shadow: none; }
 
 .t-table-wrap { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
 /* Scrolling boxes hold what's placed absolutely inside them (screen-reader labels), so it can't stick out

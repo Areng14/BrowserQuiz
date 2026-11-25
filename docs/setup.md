@@ -144,7 +144,7 @@ never counts against a student, and the quiz has no **Exit** button. Any time aw
 page.
 
 When students turn in, **Quit Safe Exam Browser** closes it. A stuck student can also quit with the
-**SEB quit password** on the quiz's page; that counts as leaving the quiz.
+**SEB quit password** on the quiz's page (hover over it to see it); that counts as leaving the quiz.
 
 **iPads** work too, much like Bluebook: SEB locks the iPad into Assessment Mode, so students can't
 switch apps until they turn in.

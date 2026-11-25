@@ -1519,7 +1519,7 @@
       const joinAt = run.joinUrl || "this computer's network address, not localhost";
       howTo.textContent = run.sebFile ? `Join at ${joinAt}, which opens Safe Exam Browser` : `Join at ${joinAt}`;
       quitPw.hidden = !run.sebQuit || run.status !== 'open';
-      if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp', text: run.sebQuit }));
+      if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp t-reveal', tabindex: '0', title: 'Hover to show', text: run.sebQuit }));
       if (run.sebFile && !sebParts) sebParts = sebButtons(run.code, run.joinUrl);
       toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
       toggle.onclick = async () => {
