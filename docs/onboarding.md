@@ -54,7 +54,7 @@ Pick the quiz, the class and a mode on **Give a quiz**, then click **Start quiz*
 
 ## Proctoring the quiz
 
-The live page is your control room. One row per student, updated every couple of seconds. You can find the live page at any time by going to the Open quiz tab.
+One row per student, updated every couple of seconds. You can find the live page at any time by going to the Open quiz tab.
 
 - **The table.** Status, integrity, strikes, progress, time left and score. The progress bar's color shows if they're working, reading or idle. You can also click on a title to sort by name, progress, etc.
 - **Watch.** Monitor any student's screen. You see their quiz page, not their whole screen.
@@ -63,7 +63,7 @@ The live page is your control room. One row per student, updated every couple of
 - **Pause quiz.** You may pause a quiz which stops the questions from showing and freezes the timer for breaks or emergencies.
 - **Close quiz.** Closes the quiz and turns in everyone's quiz.
 
-**Integrity.** Leaving the quiz window during an exam flags the attempt, quietly. Students never find out, so there's nothing to game. You see when they left and for how long, and **Un-invalidate** undoes it if they had a good reason.
+**Integrity.** Leaving the quiz window during an exam flags the attempt, quietly. Students never find out. You see when they left and for how long, and **Un-invalidate** undoes it if they had a good reason.
 
 ## Grading the quiz
 

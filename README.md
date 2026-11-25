@@ -1,9 +1,7 @@
 # BrowserQuiz
 
-**No more paper CS quizzes.**
-
-A quiz and exam app for CS classes that teachers can host themselves. Students can write real code in
-the Monaco editor, with insane question customizability.
+A quiz and exam app for CS classes that teachers can host themselves. Students write real code in the
+Monaco editor, and each question type has its own options.
 
 ## Features
 
@@ -38,7 +36,7 @@ the Monaco editor, with insane question customizability.
 
 ## Question types
 
-- **Multiple choice.** You know what this is.
+- **Multiple choice.** One answer from a list of choices.
 - **Select-all.** All or nothing, or partial credit if you choose.
 - **Short answer.** Accept as many phrasings as you like, or a pattern like `/^(binary|bin) search$/`.
   Numbers match by value, so 3.5, 3.50 and 7/2 all count and formatting isn't an issue.

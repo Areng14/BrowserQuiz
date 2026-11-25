@@ -146,4 +146,4 @@ Optional, for locked-down exams. SEB has to be installed on the student devices,
 3. On a student device, on the network students will use, open the address, join with the code, answer, and turn it in.
 4. On the live page the test student shows as turned in. Close the quiz, and their score shows up.
 
-If that works, the server, the network, HTTPS and SEB all work. You are ready to administer a BrowserQuiz exam now.
+If that works, the server, the network, HTTPS and SEB all work.
