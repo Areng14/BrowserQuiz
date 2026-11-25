@@ -2,7 +2,7 @@
 
 BrowserQuiz runs on one server on your school's own network, and it's free. The full reference is [setup.md](setup.md).
 
-## What it needs
+## Requirements
 
 - **A Linux server or VM:** Ubuntu 22.04 or newer, or Debian 12, with Docker (Quick Install sets it up).
 - **Size:** 2 CPU cores, 4 GB of RAM and about 15 GB of disk for a class of about 30.
@@ -23,7 +23,7 @@ BrowserQuiz runs on one server on your school's own network, and it's free. The 
 
 It starts again on its own after a reboot: Docker starts at boot, and the containers restart with it.
 
-## The network
+## Network setup
 
 - **A fixed address** (a static IP or a DHCP reservation). Safe Exam Browser quizzes have the server's address written into them when they start, so it cannot change.
 - **A name** in your DNS, like `browserquiz.school.example`, so students type a name instead of an IP.
@@ -110,7 +110,7 @@ Your domain is `quiz.yourschool.org`, your public IP is `203.0.113.10`, and the 
 
 The `Caddyfile` stays as it comes. The first start takes a minute while Caddy gets the certificate.
 
-### Check it worked
+### Checking that HTTPS works
 
 ```bash
 curl -I https://browserquiz.school.example/healthz
@@ -126,14 +126,14 @@ Optional, for locked-down exams. SEB has to be installed on the student devices,
 - **SEB has to be allowed to open exam links.** If your SEB is locked to one exam system (a client config for Moodle, say), turn on downloading and opening SEB config files (`downloadAndOpenSebConfig`). Otherwise the link does nothing and students cannot take the BrowserQuiz SEB exam.
 - A student stuck in SEB can quit with the quit password on the quiz's live page.
 
-## Running it
+## Updates, backups and logs
 
 | Task | How |
 | --- | --- |
 | Update | `git pull && docker compose up -d --build`, when no quiz is running |
 | Logs | `docker compose logs -f app` |
 | Back up | `docker compose stop app && docker compose cp app:/data ./backup-$(date +%F) && docker compose start app` |
-| Restore | Under [Day to day](setup.md#day-to-day) in setup.md |
+| Restore | Under [Updates, backups and logs](setup.md#updates-backups-and-logs) in setup.md |
 
 - Everything lives in one SQLite database in the `bq-data` volume. Back it up between terms, or let your VM backups cover it.
 - Keep a copy of `.env` somewhere safe. Without its `ID_PEPPER`, no student can sign in again.

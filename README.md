@@ -22,7 +22,7 @@ the Monaco editor, with insane question customizability.
   change any of them.
 - **Auto grading and reports.** Every answer next to the right one, with a diff view for code. Export to
   CSV.
-- **Catches copied code.** The class report flags students whose code is near-identical, even with the
+- **Copied code detection.** The class report flags students whose code is near-identical, even with the
   variables renamed and the formatting changed, and shows both side by side.
 - **Question pools.** Each student gets a random few questions from a pool, so a neighbor's screen
   won't help.
@@ -53,7 +53,7 @@ the Monaco editor, with insane question customizability.
 Any question can share material, a code block or an image with others, and every question gets its own
 points.
 
-## Secure and private
+## Security and privacy
 
 - Answers and hidden tests never reach students' browsers.
 - Students never find out they got flagged. Their screens look the same either way.

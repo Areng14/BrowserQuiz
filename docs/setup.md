@@ -103,7 +103,7 @@ How to make and give quizzes is in [onboarding.md](onboarding.md). Here are some
 - **Extra time.** 1.25×, 1.5× or 2× applies from the next quiz the student starts.
 - **Corrections.** By default a fixed answer earns back 50% of the points it lost, on top of the exam score. The CSV adds `exam_score`, `earned_back` and `with_corrections`. An invalidated exam stays at 0, and students never see their total. Answers that are still waiting to be graded are not in corrections, so grade those first.
 
-## Day to day
+## Updates, backups and logs
 
 | Task | How |
 | --- | --- |
@@ -154,7 +154,7 @@ If a fix cannot wait, put `[deploy now]` in the commit message.
 
 Put the two secrets in the project's **shared variables**. If you left the admin password out, the one-time code is in the app's deploy logs. Student code still cannot reach the internet here, since the sandbox blocks it.
 
-## Something went wrong?
+## Troubleshooting
 
 | What happened | What to do |
 | --- | --- |
@@ -171,7 +171,7 @@ docker build --build-arg EXTRA_CA="$(cat /path/to/ca.crt)" -t browserquiz-runner
 docker compose up -d --no-build
 ```
 
-## For developers
+## Repository layout
 
 | Folder | What's in it |
 | --- | --- |

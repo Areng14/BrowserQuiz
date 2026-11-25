@@ -30,7 +30,7 @@ Students sign in by picking their name and typing their student ID, so we need t
 ## Making a quiz
 
 - **Quiz maker.** **Quizzes**, then **New quiz**. 8 question types: multiple choice, select-all, short answer, predict the output, trace tables, fill in the blanks, written answers and code.
-- **Or let AI write it.** Click **Copy AI prompt**, paste it into ChatGPT or Claude, fill in the blanks at the top, and upload the `.quiz` or `quiz.json` it gives back. Chat won't take something that long? Download it with the button next to it and attach the file.
+- **Writing it with AI.** Click **Copy AI prompt**, paste it into ChatGPT or Claude, fill in the blanks at the top, and upload the `.quiz` or `quiz.json` it gives back. Chat won't take something that long? Download it with the button next to it and attach the file.
 - **Preview.** Shows exactly what students see, runs code, and gives you a score. Check it before you give a quiz.
 - **Other options.** You can allow the quiz to have time limits, timed parts, a question pool, etc.
 
@@ -75,7 +75,7 @@ Most questions grade themselves the second a student turns in. Only written answ
 - **Corrections.** If you wish to offer corrections, click on the corrections button which will open a new "quiz" that students can enter to do corrections. It will not lock their computer down and they are free to search online or ask friends how to solve this.
 - **Reports.** A class report (averages, the hardest questions, copied code, same wrong answers), a printable report per student, and **Export CSV** for your gradebook.
 
-## Something went wrong?
+## Troubleshooting
 
 | What happened | What to do |
 | --- | --- |
