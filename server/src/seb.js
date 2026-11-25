@@ -23,6 +23,9 @@ function settingsFor(origin, code, quitPassword, { mute = true } = {}) {
     quitURL: `${origin}/seb-quit.html`,
     sendBrowserExamKey: true, // sends the Config Key hash header
     startURL: `${origin}/?code=${code}`,
+    // what follows "??" in the launch link reaches the start page: the student's dark mode (?theme=dark).
+    // SEB for Windows adds it with "&", SEB for Mac and iPad with a second "?" (the page reads both).
+    startURLAppendQueryParameter: true,
   };
 }
 

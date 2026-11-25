@@ -154,10 +154,21 @@
     if (t === 'dark' || t === 'light') return t === 'dark';
     return darkQuery.matches;
   }
-  try {
-    const saved = localStorage.getItem(THEME_KEY);
-    if (saved === 'dark' || saved === 'light') document.documentElement.dataset.theme = saved;
-  } catch (e) { /* storage blocked: follow the system */ }
+  // The page's address: ?code=ABC123, and in Safe Exam Browser maybe the dark mode they picked before it
+  // opened (screenSebLaunch), which SEB for Mac and iPad add with a second "?" instead of "&".
+  function pageParams() {
+    try { return new URLSearchParams(location.search.slice(1).replace(/\?/g, '&')); } catch (e) { return new URLSearchParams(); }
+  }
+  const askedTheme = pageParams().get('theme');
+  if (askedTheme === 'dark' || askedTheme === 'light') {
+    document.documentElement.dataset.theme = askedTheme;
+    try { localStorage.setItem(THEME_KEY, askedTheme); } catch (e) { /* this page only */ }
+  } else {
+    try {
+      const saved = localStorage.getItem(THEME_KEY);
+      if (saved === 'dark' || saved === 'light') document.documentElement.dataset.theme = saved;
+    } catch (e) { /* storage blocked: follow the system */ }
+  }
 
   const SVGNS = 'http://www.w3.org/2000/svg';
   function svgEl(tag, attrs) {
@@ -341,10 +352,16 @@
 
   // A quiz that needs Safe Exam Browser: the seb:// (sebs:// on https) link starts SEB with the quiz's settings.
   function screenSebLaunch(code) {
-    const href = `${location.protocol === 'https:' ? 'sebs' : 'seb'}://${location.host}/api/seb/${code}.seb`;
+    // The dark or light mode they picked goes along: SEB is a browser of its own, without this one's storage.
+    // SEB adds what follows "??" to the quiz's start page (seb.js).
+    // Made on the click, in case they switch it on this screen.
+    const link = () => {
+      const theme = document.documentElement.dataset.theme;
+      return `${location.protocol === 'https:' ? 'sebs' : 'seb'}://${location.host}/api/seb/${code}.seb${theme === 'dark' || theme === 'light' ? `??theme=${theme}` : ''}`;
+    };
     // iPads say they're Macs; a touch screen gives them away. SEB for them comes from the App Store.
     const apple = /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-    const open = h('a', { class: 'btn primary', href, text: 'Open Safe Exam Browser' });
+    const open = h('a', { class: 'btn primary', href: link(), text: 'Open Safe Exam Browser', onclick: (e) => { e.currentTarget.href = link(); } });
     mount(entry(h('div', { class: 'panel' },
       h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
       h('div', { class: 'heading' }, h('h1', { text: 'This quiz opens in lockdown' }),
@@ -3189,9 +3206,14 @@
       if (!api.resume) { screenJoin(); return; }
       let code = null;
       try {
-        const u = new URL(location.href);
-        code = u.searchParams.get('code');
-        if (code) { u.searchParams.delete('code'); history.replaceState(null, '', u.pathname + u.search + u.hash); }
+        const ps = pageParams();
+        code = ps.get('code');
+        if (code || ps.has('theme')) {
+          ps.delete('code');
+          ps.delete('theme');
+          const rest = ps.toString();
+          history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+        }
       } catch (e) { /* no code */ }
       // Already signed in on this browser (say, after a reload)? Pick up where they were.
       api.resume().then((r) => {
