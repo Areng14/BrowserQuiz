@@ -82,7 +82,7 @@ aren't in the sandbox. The same goes for C#, Go and Rust, which have no speed te
   - session cookies are HttpOnly and SameSite=Strict, and requests from other sites are refused
   - pages run only the app's own scripts (CSP)
   - use HTTPS for a real class: over plain HTTP, the teacher password and student IDs cross the
-    network unencrypted ([HTTPS](setup.md#https-and-a-domain))
+    network unencrypted ([HTTPS](setup.md#https-and-where-to-host-it))
 - **Wrong student IDs** lock a name for a moment in the browser that typed them, so a classmate's typo
   doesn't lock someone out. After many, the name waits everywhere for a while, and the live page shows
   how many wrong IDs were typed for it.
@@ -93,7 +93,7 @@ aren't in the sandbox. The same goes for C#, Go and Rust, which have no speed te
 
 - **Lockdown:** exams run full screen and catch leaving the quiz. You can lock a quiz to your network,
   and each attempt stays on the network it started on. For graded exams, use
-  [Safe Exam Browser](setup.md#giving-an-exam).
+  [Safe Exam Browser](setup.md#safe-exam-browser).
 - **The live page** shows who's where and anything that looks off, with the details. Students never
   find out whether they were flagged: their screens look the same either way. You decide what counts.
 - **While an exam is open,** answers and scores stay hidden, even from you: reports, replays, CSV and
