@@ -218,7 +218,7 @@ Where to host:
   "only my network" lock matches the school's public IP.
 - **A box on the school network:** fine too, but the lab PCs have to reach it, it needs its own way
   to a certificate (above), and IT usually has opinions about that. The network lock then accepts any
-  private (10.x / 192.168.x) address.
+  private (10.x / 192.168.x) address. Step by step, for the school's IT: [school-hosting.md](school-hosting.md).
 - **Railway:** see [Hosting on Railway](#hosting-on-railway).
 
 ## Requirements
