@@ -467,6 +467,13 @@ button.t-joincode:hover { background: var(--soft); }
 .t-adjust summary { cursor: pointer; color: var(--accent); width: max-content; }
 .t-adjust .t-row { margin-top: 8px; align-items: center; gap: 8px; }
 .t-head { display: flex; align-items: center; gap: 12px; }
+/* Sortable column headers: the whole header is the button; an arrow on the sorted one, faint on hover */
+.t-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+th.num .t-sort { flex-direction: row-reverse; }
+.t-sort-arrow { opacity: 0; flex: none; }
+.t-sort:hover .t-sort-arrow, .t-sort:focus-visible .t-sort-arrow { opacity: 0.45; }
+.t-sorted .t-sort { color: var(--ink); }
+.t-sorted .t-sort-arrow { opacity: 1; }
 /* The Quizzes tab's search, over the list it filters */
 .t-search-row { display: grid; gap: 12px; }
 .t-search { width: min(100%, 360px); }

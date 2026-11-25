@@ -123,6 +123,48 @@
   const actionsHead = () => h('th', {}, h('span', { class: 'sr-only', text: 'Actions' }));
   // Column headers; the ones named in nums sit right, over their right-aligned numbers.
   const heads = (names, nums = []) => names.map((x) => h('th', { class: nums.includes(x) ? 'num' : null, text: x }));
+  // Click to sort: up, then down, then back to the list's own order. sort: { by, dir } or null; onSort(next).
+  function sortHeads(names, nums, sort, onSort) {
+    return names.map((x) => {
+      const on = sort && sort.by === x;
+      const arrow = icon([on && sort.dir < 0 ? 'M12 5v14M6 13l6 6 6-6' : 'M12 19V5M6 11l6-6 6 6'], 14);
+      arrow.classList.add('t-sort-arrow');
+      return h('th', { class: (nums.includes(x) ? 'num ' : '') + (on ? 't-sorted' : ''), 'aria-sort': on ? (sort.dir > 0 ? 'ascending' : 'descending') : null },
+        h('button', { class: 't-sort', type: 'button', onclick: () => onSort(!on ? { by: x, dir: 1 } : sort.dir > 0 ? { by: x, dir: -1 } : null) }, x, arrow));
+    });
+  }
+  // Sorting rows by a key: numbers and text both, nothing (null) always last, ties by name.
+  function sortRows(rows, sort, keys, name) {
+    if (!sort || !keys[sort.by]) return rows;
+    const k = keys[sort.by];
+    return rows.slice().sort((x, y) => {
+      const a = k(x), b = k(y);
+      if (a == null || b == null) return a == null && b == null ? 0 : a == null ? 1 : -1;
+      const c = typeof a === 'string' ? a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }) : a - b;
+      return c * sort.dir || name(x).localeCompare(name(y));
+    });
+  }
+  // A list that doesn't redraw by itself (Results, Teachers): sorts its rows where they are, by each
+  // cell's data-sort, or its text.
+  function sortableTable(table, nums = []) {
+    const thead = table.querySelector('thead tr');
+    const names = [...thead.children].map((th) => th.textContent).filter((t) => t && t !== 'Actions');
+    const body = table.querySelector('tbody');
+    const original = [...body.children];
+    let sort = null;
+    const cellKey = (tr, i) => { const td = tr.children[i]; if (!td) return null; const v = td.dataset.sort != null ? td.dataset.sort : td.textContent.trim(); return v === '' ? null : /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v.toLowerCase(); };
+    const draw = () => {
+      const keys = Object.fromEntries(names.map((n, i) => [n, (tr) => cellKey(tr, i)]));
+      body.replaceChildren(...sortRows(original, sort, keys, (tr) => tr.children[0].textContent));
+      const extra = [...thead.children].slice(names.length);
+      thead.replaceChildren(...sortHeads(names, nums, sort, (next) => { sort = next; draw(); }), ...extra);
+      if (sort) { const b = thead.querySelector('.t-sorted .t-sort'); if (b && document.activeElement && document.activeElement.classList.contains('t-sort')) b.focus(); }
+    };
+    draw();
+    return table;
+  }
+  // A score with its percentage: "7 / 9 · 78%"
+  const scoreText = (score, max) => `${score} / ${max}${max ? ` · ${Math.round((score / max) * 100)}%` : ''}`;
 
   // ---------- sign in ----------
   function showLogin() {
@@ -353,7 +395,7 @@
           load();
         } catch (e) { msg.textContent = e.message; }
       };
-      list.replaceChildren(h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
+      list.replaceChildren(h('div', { class: 't-table-wrap' }, sortableTable(h('table', { class: 't-table' },
         h('thead', {}, h('tr', {}, heads(['Name', 'Username', 'Quizzes', 'Classes', 'Status'], ['Quizzes', 'Classes']), actionsHead())),
         h('tbody', {}, r.teachers.map((x) => h('tr', {},
           h('td', { text: x.name }), h('td', { class: 't-muted', text: x.username }),
@@ -362,7 +404,7 @@
           h('td', { class: 't-actions' }, x.role === 'admin' ? null : moreMenu(`More for ${x.name}`, `teacher:${x.id}`, [
             { text: 'Reset password', onclick: () => act(x, 'reset') },
             { text: x.disabled ? 'Enable' : 'Disable', danger: !x.disabled, onclick: () => act(x, x.disabled ? 'enable' : 'disable') },
-          ]))))))));
+          ])))))), ['Quizzes', 'Classes'])));
     }
     const form = h('form', { class: 't-row' },
       h('label', { class: 'field', for: 'teacher-name' }, h('span', { class: 'field-label', text: 'Name' }), name),
@@ -512,17 +554,17 @@
     window.scrollTo(0, y);
   }
 
-  const runsTable = (runs) => h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
+  const runsTable = (runs) => h('div', { class: 't-table-wrap' }, sortableTable(h('table', { class: 't-table' },
     h('thead', {}, h('tr', {}, heads(['Code', 'Quiz', 'Class', 'Status', 'Joined', 'Started'], ['Joined']), actionsHead())),
     h('tbody', {}, runs.map((r) => h('tr', {},
       h('td', {}, h('button', { class: 't-link t-mono', type: 'button', text: r.code, onclick: () => showRun(r.id) })),
       h('td', { text: r.quiz }), h('td', { text: r.roster }),
       h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.corrections ? ' (corrections)' : r.practice ? ' (practice)' : r.seb ? ' (SEB)' : ''}` }),
-      h('td', { class: 'num', 'data-label': 'Joined', text: String(r.joined) }), h('td', { 'data-label': 'Started', text: date(r.createdAt) }),
+      h('td', { class: 'num', 'data-label': 'Joined', text: String(r.joined) }), h('td', { 'data-label': 'Started', 'data-sort': String(r.createdAt), text: date(r.createdAt) }),
       // like every list: the rest, and Delete in red, under ⋯
       h('td', { class: 't-actions' }, moreMenu(`More for ${r.code}`, `run:${r.id}`, [
         h('a', { href: `/teacher/report.html?run=${encodeURIComponent(r.id)}`, target: '_blank', rel: 'noopener', text: 'Class report' }),
-        { text: 'Delete', danger: true, onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?`, r.status === 'open' ? "It's still open: anyone taking it gets signed out." : null) }])))))));
+        { text: 'Delete', danger: true, onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?`, r.status === 'open' ? "It's still open: anyone taking it gets signed out." : null) }])))))), ['Joined']));
 
   // Start a quiz: what, who, and how it's locked down. (Open ones are under the Open tab.)
   function giveTab(data, me) {
@@ -1205,6 +1247,18 @@
   // doesn't redraw while one is open (menuOpen), so it stays put; onClose catches it up.
   let menuOpen = false;
   let quizFind = ''; // the Quizzes tab's search, kept while it redraws
+  let liveSort = null; // the live table's column sort: { by, dir }
+  const STATUS_RANK = { waiting: 1, admitted: 2, active: 3, submitted: 4 };
+  const INTEGRITY_RANK = { invalidated: 0, restored: 1, clean: 2 };
+  const LIVE_SORT = {
+    Student: (s) => s.name,
+    Status: (s) => (s.attempt ? STATUS_RANK[s.attempt.status] || 0 : null),
+    Integrity: (s) => (s.attempt ? INTEGRITY_RANK[s.attempt.integrity] ?? 3 : null),
+    Strikes: (s) => (s.attempt ? s.attempt.strikes : null),
+    Progress: (s) => (s.attempt && s.attempt.total ? s.attempt.answered / s.attempt.total : null),
+    'Time left': (s) => (s.attempt && s.attempt.timeLeft != null ? s.attempt.timeLeft : null),
+    Score: (s) => (s.attempt && s.attempt.score != null && s.attempt.max ? s.attempt.score / s.attempt.max : null),
+  };
   // opts.text: a button with that text and a chevron (the account menu) instead of ⋯.
   function moreMenu(label, key, items, onClose, opts) {
     const named = opts && opts.text;
@@ -1341,6 +1395,18 @@
       try { await post(path, body); } catch (e) { alertBox(e.message); }
       return refresh();
     }
+    // Column headers that sort the table (kept while the page is open, and across quizzes)
+    const LIVE_COLS = ['Student', 'Status', 'Integrity', 'Strikes', 'Progress', 'Time left', 'Score'];
+    const LIVE_NUMS = ['Strikes', 'Progress', 'Time left', 'Score'];
+    const liveHead = h('tr', {});
+    const drawLiveHead = () => liveHead.replaceChildren(...sortHeads(LIVE_COLS, LIVE_NUMS, liveSort, (next) => {
+      liveSort = next;
+      drawLiveHead();
+      const b = liveHead.querySelector(`th:nth-child(${LIVE_COLS.indexOf((next || { by: '' }).by) + 1}) .t-sort`);
+      (b || liveHead.querySelector('.t-sort')).focus();
+      refresh();
+    }), actionsHead());
+    drawLiveHead();
     // Paused (the run's ⋯ menu): a bar across the top, how long it's been, and the way back
     const pausedFor = h('span', { class: 't-paused-for' });
     const resumeBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => act(`/api/t/runs/${runId}/resume`) }, glyph('play'), 'Resume quiz');
@@ -1462,7 +1528,8 @@
       failedBox.replaceChildren(failed ? h('p', { class: 't-error' }, `Code grading failed for ${plural(failed, 'student')}. `,
         h('button', { class: 'btn small', type: 'button', text: 'Retry now', onclick: () => act(`/api/t/runs/${runId}/regrade-failed`) })) : '');
       const order = (s) => (s.attempt ? (s.attempt.integrity === 'invalidated' || s.attempt.leftAgain ? 0 : s.attempt.status === 'waiting' ? 1 : 2) : 3);
-      const rows = data.students.slice().sort((x, y) => order(x) - order(y) || x.name.localeCompare(y.name));
+      // the teacher's sort (a column header), else flagged first, then waiting, then everyone else
+      const rows = sortRows(data.students.slice().sort((x, y) => order(x) - order(y) || x.name.localeCompare(y.name)), liveSort, LIVE_SORT, (s) => s.name);
       const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
       if (!menuOpen) tbody.replaceChildren(...rows.map((s) => {
         const a = s.attempt;
@@ -1491,7 +1558,7 @@
         if (![...actions.children].some((b) => !b.classList.contains('t-row-extra'))) actions.classList.add('t-only-extra');
         let score = '';
         if (a && a.score != null) {
-          score = `${a.score} / ${a.max}`;
+          score = scoreText(a.score, a.max);
           if (a.pending) score += ' (grading)';
           else if (a.failed) score += ' (grading failed)';
           else if (a.review) score += ' (needs review)';
@@ -1599,7 +1666,7 @@
             h('ul', { class: 't-events' }, d.events.map((e) => h('li', { class: e.severity }, h('time', { text: clock(e.t) }), h('span', {}, h('b', { text: LABEL[e.type] || e.type }), e.detail ? h('span', { class: 't-muted', text: ` ${e.detail}` }) : null))))),
           h('div', { class: 't-section' }, h('h3', { text: 'Mouse trail' }), canvas,
             d.userAgent ? h('p', { class: 't-muted t-small', title: d.userAgent, text: browserName(d.userAgent) }) : null)),
-        h('div', { class: 't-section' }, h('h3', { text: d.sealed ? 'Answers' : d.totals ? `Answers (${d.totals.score} / ${d.totals.max}${d.totals.pending ? ', code still grading' : d.totals.failed ? ', grading failed' : d.totals.review ? ', needs review' : ''})` : 'Answers so far' }), answers)));
+        h('div', { class: 't-section' }, h('h3', { text: d.sealed ? 'Answers' : d.totals ? `Answers (${scoreText(d.totals.score, d.totals.max)}${d.totals.pending ? ', code still grading' : d.totals.failed ? ', grading failed' : d.totals.review ? ', needs review' : ''})` : 'Answers so far' }), answers)));
       drawTrail(canvas, d.mouse);
       if (!d.sealed) window.BQReport.highlight(answers);
       if (keep) { const again = detail.querySelector(`[data-key="${CSS.escape(keep)}"]`); if (again) again.focus({ preventScroll: true }); }
@@ -1753,7 +1820,7 @@
           h('div', { class: 't-row t-run-acts' }, admitAll, aiBtn, msgBtn, corrBtn, toggle, runMenu), aiMsg,
           failedBox, summary, toasts),
         h('div', { class: 't-livegrid' }, h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },
-          h('thead', {}, h('tr', {}, heads(['Student', 'Status', 'Integrity', 'Strikes', 'Progress', 'Time left', 'Score'], ['Strikes', 'Progress', 'Time left', 'Score']), actionsHead())),
+          h('thead', {}, liveHead),
           tbody)),
         detail)));
     await refresh();
