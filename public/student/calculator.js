@@ -444,14 +444,38 @@
     // graphing: the Graph screen is built (some question allows it); kind: what the question on screen allows
     const state = { mode: place.mode, screen: graphing ? place.screen : 'calculate', position: place.position, disabled: false, kind: opts.kind };
     const screenNow = () => (state.kind === 'graphing' ? state.screen : 'calculate');
-    const button = h('button', { class: 'btn small ghost calc-btn', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'calc-panel' }, calcIcon(), h('span', { class: 'calc-btn-label', text: 'Calculator' }));
+    const button = h('button', { class: 'icon-btn calc-btn', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'calc-panel' }, calcIcon(), h('span', { class: 'icon-label', text: 'Calculator' }));
     let panel = null, screens = null, built = null;
+    const hostEl = () => (typeof opts.host === 'function' ? opts.host() : opts.host) || document.body;
+    // greyed out (still focusable, so the tooltip says why) on a question without one
+    function paintButton() {
+      if (state.kind) button.removeAttribute('aria-disabled'); else button.setAttribute('aria-disabled', 'true');
+      button.title = state.kind ? 'Calculator' : 'No calculator on this question';
+    }
+    paintButton();
 
+    // Docked: it has no place of its own and sits at the top right, and the host gets "calc-docked" so
+    // the question can make room (app.css). Dragging it undocks it; dropping it back at the right edge docks it.
+    function setDocked() { hostEl().classList.toggle('calc-docked', !!(panel && panel.isConnected && !state.position)); }
+    function pin() {
+      if (state.position && !phone()) Object.assign(panel.style, { left: state.position.x + 'px', top: state.position.y + 'px', right: 'auto', bottom: 'auto' });
+      else Object.assign(panel.style, { left: '', top: '', right: '', bottom: '' });
+      setDocked();
+    }
     function move(x, y) {
       if (!panel) return;
       const r = panel.getBoundingClientRect();
       state.position = { x: Math.max(12, Math.min(x, window.innerWidth - r.width - 12)), y: Math.max(12, Math.min(y, window.innerHeight - r.height - 12)) };
-      if (!phone()) Object.assign(panel.style, { left: state.position.x + 'px', top: state.position.y + 'px', right: 'auto', bottom: 'auto' });
+      pin();
+      remember(state);
+    }
+    // the right edge it docks against: the question area's, less the gap
+    function dockEdge() { const d = opts.dock && opts.dock(); return (d ? d.getBoundingClientRect().right : window.innerWidth) - 16; }
+    function dockIfAt(slack) {
+      if (!panel || !state.position || phone()) return;
+      if (panel.getBoundingClientRect().right < dockEdge() - slack) return;
+      state.position = null;
+      pin();
       remember(state);
     }
     function onResize() { if (panel && state.position && !phone()) { const r = panel.getBoundingClientRect(); move(r.left, r.top); } }
@@ -470,11 +494,17 @@
       head.addEventListener('pointerdown', (e) => {
         if (e.button !== 0 || phone()) return;
         const r = panel.getBoundingClientRect();
-        drag = { x: e.clientX, y: e.clientY, left: r.left, top: r.top };
+        drag = { x: e.clientX, y: e.clientY, left: r.left, top: r.top, moved: false };
         head.setPointerCapture(e.pointerId); e.preventDefault();
       });
-      head.addEventListener('pointermove', (e) => { if (drag) move(drag.left + e.clientX - drag.x, drag.top + e.clientY - drag.y); });
-      for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) head.addEventListener(ev, () => { drag = null; });
+      head.addEventListener('pointermove', (e) => {
+        if (!drag) return;
+        // a click on the head isn't a drag (it would undock it)
+        if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+        drag.moved = true;
+        move(drag.left + e.clientX - drag.x, drag.top + e.clientY - drag.y);
+      });
+      for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) head.addEventListener(ev, () => { if (drag && drag.moved) dockIfAt(24); drag = null; });
       head.addEventListener('keydown', (e) => {
         if (e.target !== head || phone()) return;
         const d = { ArrowLeft: [-20, 0], ArrowRight: [20, 0], ArrowUp: [0, -20], ArrowDown: [0, 20] }[e.key];
@@ -482,6 +512,7 @@
         e.preventDefault();
         const r = panel.getBoundingClientRect();
         move(r.left + d[0], r.top + d[1]);
+        if (e.key === 'ArrowRight') dockIfAt(1);
       });
       panel = h('section', { class: 'calc-panel', id: 'calc-panel', 'aria-label': graphing ? 'Graphing calculator' : 'Calculator' },
         head, h('div', { class: 'calc-bar' }, tabs, modes), calc.el, graph ? graph.el : null);
@@ -505,7 +536,7 @@
     }
 
     async function open() {
-      if (state.disabled) return;
+      if (state.disabled || !state.kind) return;
       button.setAttribute('aria-expanded', 'true');
       button.classList.add('on');
       try {
@@ -516,11 +547,9 @@
           if (button.getAttribute('aria-expanded') !== 'true') return;
           build(C, ML);
         }
-        const host = typeof opts.host === 'function' ? opts.host() : opts.host;
-        (host || document.body).append(panel);
+        hostEl().append(panel);
         if (built.calc.mounted && !built.mountedOnce) { built.calc.mounted(); built.mountedOnce = true; }
-        if (state.position && !phone()) Object.assign(panel.style, { left: state.position.x + 'px', top: state.position.y + 'px', right: 'auto', bottom: 'auto' });
-        else Object.assign(panel.style, { left: '', top: '', right: '', bottom: '' });
+        pin();
         built.showScreen();
         requestAnimationFrame(() => { onResize(); (screenNow() === 'graph' && built.graph ? built.graph : built.calc).focus(); });
         window.addEventListener('resize', onResize);
@@ -536,23 +565,27 @@
       button.setAttribute('aria-expanded', 'false');
       button.classList.remove('on');
       if (panel && panel.isConnected) panel.remove();
+      setDocked();
       window.removeEventListener('resize', onResize);
       if (refocus) button.focus();
       if (opts.onToggle) opts.onToggle(false);
     }
-    button.addEventListener('click', () => (button.getAttribute('aria-expanded') === 'true' ? close(false) : open()));
+    button.addEventListener('click', () => {
+      if (!state.kind) return;
+      if (button.getAttribute('aria-expanded') === 'true') close(false); else open();
+    });
     return {
       button,
       close: () => close(false),
       isOpen: () => !!(panel && panel.isConnected),
       setDisabled(v) { state.disabled = !!v; button.disabled = !!v; if (v) close(false); },
-      // what the question on screen allows: "scientific", "graphing" or null (no button)
+      // what the question on screen allows: "scientific", "graphing" or null (greyed out)
       setKind(k) {
         if (k === state.kind) return;
         const focused = panel && panel.contains(document.activeElement);
         state.kind = k;
-        button.hidden = !k;
-        if (!k) { close(false); if (focused) button.blur(); return; }
+        paintButton();
+        if (!k) { close(false); if (focused) button.focus(); return; }
         if (built) built.showScreen();
       },
     };

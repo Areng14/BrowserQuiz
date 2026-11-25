@@ -1098,14 +1098,15 @@
     main.addEventListener('mouseup', () => setTimeout(hlBar.update, 0));
     main.addEventListener('keyup', (e) => { if (e.shiftKey || e.key === 'Shift') hlBar.update(); });
     main.addEventListener('scroll', hlBar.hide, { passive: true });
-    const scratchBtn = h('button', { class: 'btn small ghost scratch-btn', type: 'button', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() }, penIcon(), h('span', { class: 'scratch-label', text: 'Scratchpad' }));
+    const scratchBtn = h('button', { class: 'icon-btn scratch-btn', type: 'button', title: 'Scratchpad', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() }, penIcon(), h('span', { class: 'icon-label', text: 'Scratchpad' }));
     const scratch = h('aside', { class: 'scratch', id: 'scratch', 'aria-label': 'Scratchpad' });
     scratch.hidden = true;
     // A calculator, on the questions that allow one (calculator.js; its maths loads the first time it's
-    // opened). Each question says which: its own, its part's or the quiz's (renderQuestion sets it).
+    // opened). Each question says which: its own, its part's or the quiz's (renderQuestion sets it), and the
+    // button is greyed out on the others. No question with one: no button at all.
     const calcKinds = S.quiz.questions.map((x) => x.calculator).filter(Boolean);
     const calc = calcKinds.length && window.BQCalculator && !cfg.watch
-      ? window.BQCalculator.create({ kind: calcKinds.includes('graphing') ? 'graphing' : 'scientific', base: cfg.vendorBase || '/vendor/', host: () => (S.el ? S.el.wrap : root), onError: () => toast('The calculator did not load. Check the connection and try again.') })
+      ? window.BQCalculator.create({ kind: calcKinds.includes('graphing') ? 'graphing' : 'scientific', base: cfg.vendorBase || '/vendor/', host: () => (S.el ? S.el.wrap : root), dock: () => S.el && S.el.main, onError: () => toast('The calculator did not load. Check the connection and try again.') })
       : null;
     const wrap = h('div', { class: 'quiz' },
       // Title, name and save state | timer, centered | tools
