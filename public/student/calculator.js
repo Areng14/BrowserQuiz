@@ -397,13 +397,16 @@
       if (trace) {
         const c = curves[trace.curve];
         reading = `${trace.kind ? trace.kind + ' · ' : 'y' + (c.row + 1) + ' · '}(${C.present(trace.x)}, ${C.present(trace.y)})`;
-        const lw = Math.max(58, reading.length * 4.6), left = toX(trace.x) + 8 + lw > W;
-        const lx = left ? toX(trace.x) - 8 - lw : toX(trace.x) + 8, ly = Math.min(Math.max(toY(trace.y) - 9, 2), HT - 20);
+        const ly = Math.min(Math.max(toY(trace.y) - 9, 2), HT - 20);
+        const rect = svg('rect', { y: ly, height: 18, rx: 3 }), label = svg('text', { y: ly + 12 }, reading);
         plot.append(svg('g', { class: 'trace c' + (c.row + 1) },
           svg('line', { x1: toX(trace.x), y1: 0, x2: toX(trace.x), y2: HT }),
           svg('circle', { cx: toX(trace.x), cy: toY(trace.y), r: trace.kind ? 4.4 : 3.2, class: trace.kind ? 'snapped' : null }),
-          svg('rect', { x: lx, y: ly, width: lw, height: 18, rx: 3 }),
-          svg('text', { x: lx + lw / 2, y: ly + 12 }, reading)));
+          rect, label));
+        // size the box to the text as drawn (the font isn't known until then)
+        let tw = 0; try { tw = label.getComputedTextLength(); } catch (e) { /* not laid out */ }
+        const lw = Math.max(58, (tw || reading.length * 5.2) + 12), lx = toX(trace.x) + 8 + lw > W ? toX(trace.x) - 8 - lw : toX(trace.x) + 8;
+        rect.setAttribute('x', lx); rect.setAttribute('width', lw); label.setAttribute('x', lx + lw / 2);
       }
       const bad = exprs.map((e, i) => e.trim() && !curves.some((c) => c.row === i) ? 'y' + (i + 1) : '').filter(Boolean);
       const complaint = error || (bad.length ? 'Syntax error in ' + bad.join(' and ') : '');
