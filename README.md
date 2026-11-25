@@ -90,6 +90,7 @@ It prints the address to open. Sign in at `/teacher` as `admin`, with the passwo
 
 ## Docs
 
+- [Teacher onboarding](docs/onboarding.md): a walkthrough from first sign-in to grading
 - [Setup](docs/setup.md): hosting, HTTPS, Railway, Safe Exam Browser, AI grading keys, accounts, backups
 - [Security](docs/security.md): how it works, and what it can't do
 - [Quiz format](docs/quiz-format.md): writing quizzes by hand or with AI
