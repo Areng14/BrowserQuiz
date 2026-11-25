@@ -1101,9 +1101,11 @@
     const scratchBtn = h('button', { class: 'btn small ghost scratch-btn', type: 'button', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() }, penIcon(), h('span', { class: 'scratch-label', text: 'Scratchpad' }));
     const scratch = h('aside', { class: 'scratch', id: 'scratch', 'aria-label': 'Scratchpad' });
     scratch.hidden = true;
-    // A calculator, when the quiz allows one (calculator.js; its maths loads the first time it's opened)
-    const calc = S.quiz.calculator && window.BQCalculator && !cfg.watch
-      ? window.BQCalculator.create({ kind: S.quiz.calculator, base: cfg.vendorBase || '/vendor/', host: () => (S.el ? S.el.wrap : root), onError: () => toast('The calculator did not load. Check the connection and try again.') })
+    // A calculator, on the questions that allow one (calculator.js; its maths loads the first time it's
+    // opened). Each question says which: its own, its part's or the quiz's (renderQuestion sets it).
+    const calcKinds = S.quiz.questions.map((x) => x.calculator).filter(Boolean);
+    const calc = calcKinds.length && window.BQCalculator && !cfg.watch
+      ? window.BQCalculator.create({ kind: calcKinds.includes('graphing') ? 'graphing' : 'scientific', base: cfg.vendorBase || '/vendor/', host: () => (S.el ? S.el.wrap : root), onError: () => toast('The calculator did not load. Check the connection and try again.') })
       : null;
     const wrap = h('div', { class: 'quiz' },
       // Title, name and save state | timer, centered | tools
@@ -1217,7 +1219,11 @@
     const paused = !!S.pausedAt;
     S.el.nav.hidden = paused;
     S.el.scratchBtn.disabled = paused;
-    if (S.el.calc) S.el.calc.setDisabled(paused);
+    if (S.el.calc) {
+      S.el.calc.setDisabled(paused);
+      // the question's own calculator, or none; on the review page, the quiz's
+      S.el.calc.setKind(S.reviewOpen ? S.quiz.calculator || null : q.calculator || null);
+    }
     if (paused) {
       document.title = `Paused - ${S.quiz.title}`;
       if (S.el.hlBar) S.el.hlBar.hide();

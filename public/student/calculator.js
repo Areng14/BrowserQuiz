@@ -438,7 +438,9 @@
     const base = (opts && opts.base) || '/vendor/';
     const graphing = opts && opts.kind === 'graphing';
     const place = recall();
-    const state = { mode: place.mode, screen: graphing ? place.screen : 'calculate', position: place.position, disabled: false };
+    // graphing: the Graph screen is built (some question allows it); kind: what the question on screen allows
+    const state = { mode: place.mode, screen: graphing ? place.screen : 'calculate', position: place.position, disabled: false, kind: opts.kind };
+    const screenNow = () => (state.kind === 'graphing' ? state.screen : 'calculate');
     const button = h('button', { class: 'btn small ghost calc-btn', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'calc-panel' }, calcIcon(), h('span', { class: 'calc-btn-label', text: 'Calculator' }));
     let panel = null, screens = null, built = null;
 
@@ -486,9 +488,14 @@
       screens = { calc, graph, tabs, modes };
       function setPressed() { for (const b of modes.children) b.setAttribute('aria-pressed', String(b.dataset.v === state.mode)); }
       function showScreen() {
-        calc.el.hidden = state.screen !== 'calculate';
-        if (graph) graph.el.hidden = state.screen !== 'graph';
-        if (tabs) for (const b of tabs.children) b.setAttribute('aria-selected', String(b.dataset.v === state.screen));
+        const now = screenNow();
+        calc.el.hidden = now !== 'calculate';
+        if (graph) graph.el.hidden = now !== 'graph';
+        if (tabs) {
+          tabs.hidden = state.kind !== 'graphing';
+          for (const b of tabs.children) b.setAttribute('aria-selected', String(b.dataset.v === now));
+        }
+        panel.setAttribute('aria-label', state.kind === 'graphing' ? 'Graphing calculator' : 'Calculator');
       }
       setPressed(); showScreen();
       built = { calc, graph, showScreen };
@@ -511,7 +518,8 @@
         if (built.calc.mounted && !built.mountedOnce) { built.calc.mounted(); built.mountedOnce = true; }
         if (state.position && !phone()) Object.assign(panel.style, { left: state.position.x + 'px', top: state.position.y + 'px', right: 'auto', bottom: 'auto' });
         else Object.assign(panel.style, { left: '', top: '', right: '', bottom: '' });
-        requestAnimationFrame(() => { onResize(); (state.screen === 'graph' && built.graph ? built.graph : built.calc).focus(); });
+        built.showScreen();
+        requestAnimationFrame(() => { onResize(); (screenNow() === 'graph' && built.graph ? built.graph : built.calc).focus(); });
         window.addEventListener('resize', onResize);
         if (opts.onToggle) opts.onToggle(true);
       } catch (e) {
@@ -535,6 +543,15 @@
       close: () => close(false),
       isOpen: () => !!(panel && panel.isConnected),
       setDisabled(v) { state.disabled = !!v; button.disabled = !!v; if (v) close(false); },
+      // what the question on screen allows: "scientific", "graphing" or null (no button)
+      setKind(k) {
+        if (k === state.kind) return;
+        const focused = panel && panel.contains(document.activeElement);
+        state.kind = k;
+        button.hidden = !k;
+        if (!k) { close(false); if (focused) button.blur(); return; }
+        if (built) built.showScreen();
+      },
     };
   }
 

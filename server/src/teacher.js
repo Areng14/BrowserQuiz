@@ -311,6 +311,7 @@ function quizSource(quiz) {
   out.questions = quiz.questions.map((qq) => {
     const o = { id: qq.id, type: qq.type, prompt: qq.prompt, points: qq.points };
     if (qq.name) o.name = qq.name;
+    if (qq.calculator) o.calculator = qq.calculator;
     if (qq.pool) o.pool = qq.pool;
     if (qq.vars) o.vars = qq.vars;
     if (qq.explanation) o.explanation = qq.explanation;

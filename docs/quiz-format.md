@@ -34,12 +34,12 @@ dashboard (New quiz) and check how one looks with Preview. Both save this same f
 | `shuffleChoices` | `true` | Shuffle multiple choice options per student |
 | `lockParts` | `false` | Once a student moves on to a later part, the parts before it are final: they can't go back to them. The page asks first. Not in corrections |
 | `turnInEarly` | `false` | A timed exam turns in when time is up. `true` lets students turn it in before that. Students with extra time can always turn in once the normal time is up |
-| `calculator` | `"none"` | `"scientific"` or `"graphing"`: a calculator students can open from the top bar during the quiz. `"graphing"` adds a Graph screen. Off unless set |
+| `calculator` | `"none"` | `"scientific"` or `"graphing"`: a calculator students can open from the top bar during the quiz. `"graphing"` adds a Graph screen. Off unless set. A section or a question can have its own (below) |
 | `integrity.graceStrikes` | | No longer used: the first time a student leaves the window invalidates the attempt. Older quizzes may still have it. |
 | `directions` | built in | `"quiz"`: your own directions for the whole quiz (Markdown), shown before it starts and with each part's. The type keys replace that part's directions: `{ "quiz": "No calculators.", "single": "...", "code": "..." }` |
 | `shared` | none | Shared material that several questions use (below) |
 | `pools` | none | How many questions each student gets from each question pool: `{ "loops": 2 }` (below). A pool not listed gives 1 |
-| `sections` | none | Your own section dividers: `[{ "before": "q5", "title": "Part B: Strings", "directions": "..." }]`. Each starts at the question named in `before` and runs to the next one, whatever the questions' types, with its own title and directions (Markdown). Questions before the first are grouped by type. Shuffling stays inside a section. Give every section a `timeLimitMin` for timed parts (below) |
+| `sections` | none | Your own section dividers: `[{ "before": "q5", "title": "Part B: Strings", "directions": "..." }]`. Each starts at the question named in `before` and runs to the next one, whatever the questions' types, with its own title and directions (Markdown). Questions before the first are grouped by type. Shuffling stays inside a section. Give every section a `timeLimitMin` for timed parts (below). `"calculator"` (`"none"`, `"scientific"` or `"graphing"`) gives a section its own calculator, over the quiz's |
 | `questions` | required | List of questions |
 
 **Timed parts.** Like the SAT: each section gets its own minutes, and the parts run one after another.
@@ -114,6 +114,7 @@ picked at random, so a neighbor's screen doesn't help:
 | `shared` | none | The `id` of a shared material this question uses, or a list of up to 3 (`["s1", "s2"]`), shown in that order |
 | `explanation` | none | Why the answer is right (Markdown, up to 4000 characters). Students see it with the answer in a practice quiz's review, after turning it in; never during a quiz. It's in reports, and AI grading reads it as your notes |
 | `pool` | none | A question pool's name (letters, digits, `-`, `_`): each student gets some of the pool's questions (see Question pools) |
+| `calculator` | the section's, or the quiz's | `"none"`, `"scientific"` or `"graphing"`: this question's own calculator, over its section's and the quiz's |
 | `vars` | none | Random values: 2 to 30 rows of values, and each student gets one row (below). `single`, `multi`, `text`, `output` and `trace` only |
 
 **Random values** (`vars`) give different students different numbers in the same question, so

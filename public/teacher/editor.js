@@ -489,7 +489,7 @@
   function collect(quiz) {
     const out = Object.assign({}, quiz, { questions: [] });
     out.sections = (quiz.sections || []).filter((d) => quiz.questions[d.at])
-      .map((d) => Object.assign({ before: quiz.questions[d.at].id, title: (d.title || '').trim(), directions: (d.directions || '').trim() }, d.timeLimitMin > 0 ? { timeLimitMin: d.timeLimitMin } : {}));
+      .map((d) => Object.assign({ before: quiz.questions[d.at].id, title: (d.title || '').trim(), directions: (d.directions || '').trim() }, d.timeLimitMin > 0 ? { timeLimitMin: d.timeLimitMin } : {}, d.calculator ? { calculator: d.calculator } : {}));
     if (!out.sections.length) delete out.sections;
     // Shared material that no question uses is left out.
     const used = new Set(quiz.questions.flatMap((q) => [].concat(q.shared || [])));
@@ -683,7 +683,7 @@
     quiz.questions.forEach(withUi);
     // Section dividers: here each sits at a place in the list (before question number at+1), so moving a question
     // across one moves it into that section. Saved as the id of the question each starts at (collect).
-    quiz.sections = (quiz.sections || []).map((sec) => ({ at: quiz.questions.findIndex((q) => q.id === sec.before), title: sec.title || '', directions: sec.directions || '', timeLimitMin: sec.timeLimitMin || 0 }))
+    quiz.sections = (quiz.sections || []).map((sec) => Object.assign({ at: quiz.questions.findIndex((q) => q.id === sec.before), title: sec.title || '', directions: sec.directions || '', timeLimitMin: sec.timeLimitMin || 0 }, sec.calculator ? { calculator: sec.calculator } : {}))
       .filter((d) => d.at >= 0).sort((a, b) => a.at - b.at);
 
     let sel = quiz.questions.length ? 0 : -1; // -1 is Settings
@@ -1449,8 +1449,12 @@
       const explanation = field('Explanation', area(q, q.explanation || '', (v) => { if (v.trim()) q.explanation = v; else delete q.explanation; },
         { rows: 2, spellcheck: 'true', placeholder: 'Optional. Shown with the answer after a practice quiz.' }));
       // Pools and shared material: most questions have neither, so they're folded away until used
-      const more = h('details', { class: 'qe-more', open: !!(q.pool || q.shared || q.vars) }, h('summary', { text: 'More options' }),
-        h('div', { class: 'qe-stack' }, pool, sharedEditor(q, i), VAR_TYPES.has(q.type) ? varsEditor(q) : null));
+      // the calculator: the section's (or the quiz's), unless this question says otherwise
+      const secAbove = [...(quiz.sections || [])].filter((d) => d.at <= i).sort((a, b) => b.at - a.at)[0];
+      const inherited = (secAbove && secAbove.calculator) || quiz.calculator || 'none';
+      const calcField = field('Calculator', calcOverrideSelect(q, `Same as the ${secAbove && secAbove.calculator ? 'section' : 'quiz'} (${CALC_NAMES[inherited]})`));
+      const more = h('details', { class: 'qe-more', open: !!(q.pool || q.shared || q.vars || q.calculator) }, h('summary', { text: 'More options' }),
+        h('div', { class: 'qe-stack' }, pool, calcField, sharedEditor(q, i), VAR_TYPES.has(q.type) ? varsEditor(q) : null));
       const main = h('div', { class: 'qe-stack' },
         card(null, name, promptEditor(q)),
         answer.length ? card(answerTitle, ...answer) : null,
@@ -1619,6 +1623,14 @@
       if (first.at !== 0) return { k: secs.indexOf(first), text: 'With timed sections, the first one starts at question 1. Add a section there.' };
       return null;
     }
+    // A part's or a question's own calculator, over the one above it (the quiz's, or the part's)
+    function calcOverrideSelect(obj, inherit) {
+      const sel = h('select', { class: 'input qe-narrow' }, [['', inherit], ['none', 'None'], ['scientific', 'Scientific'], ['graphing', 'Graphing']]
+        .map(([v, t]) => h('option', { value: v, text: t, selected: (obj.calculator || '') === v })));
+      sel.addEventListener('change', () => { if (sel.value) obj.calculator = sel.value; else delete obj.calculator; touch(); });
+      return sel;
+    }
+    const CALC_NAMES = { none: 'none', scientific: 'scientific', graphing: 'graphing' };
     function dividerPane(k) {
       const d = quiz.sections[k];
       const title = input(null, d.title, (v) => { d.title = v; renderOutline(); }, { id: 'qe-div-title', maxlength: '120', placeholder: `Section ${k + 1}` });
@@ -1631,7 +1643,8 @@
       const del = h('button', { class: 'btn small', type: 'button', text: 'Remove section', onclick: () => { quiz.sections.splice(k, 1); touch(); select(d.at); } });
       paneTick = null;
       return [h('div', { class: 'qe-head' }, h('h1', { class: 'qe-n', text: 'Section' }), h('span', { class: 'qe-grow' }), del),
-        h('div', { class: 'qe-stack' }, field('Title', title), field('Time limit (minutes)', mins, timeMsg), field('Directions', dirs))];
+        h('div', { class: 'qe-stack' }, field('Title', title), field('Time limit (minutes)', mins, timeMsg),
+          field('Calculator', calcOverrideSelect(d, `Same as the quiz (${CALC_NAMES[quiz.calculator] || 'none'})`)), field('Directions', dirs))];
     }
 
     // A quiz with no questions yet opens on the kinds of question to start with

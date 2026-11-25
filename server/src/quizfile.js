@@ -162,6 +162,27 @@ function checkVars(where, q, type) {
 }
 
 const CALCULATORS = ['scientific', 'graphing'];
+// A part's or a question's own calculator, over the quiz's: "none", "scientific" or "graphing" (unset: the quiz's)
+function calcOverride(v, where) {
+  if (v == null || v === '') return undefined;
+  if (v === false) return 'none';
+  if (v !== 'none' && !CALCULATORS.includes(v)) fail(`${where}.calculator must be "none", "scientific" or "graphing".`);
+  return v;
+}
+
+// The calculator a question has: its own, else its section's, else the quiz's. null: none.
+function calculatorOf(quiz) {
+  const at = new Map(quiz.questions.map((qq, i) => [qq.id, i]));
+  const starts = (quiz.sections || []).map((sec) => ({ i: at.get(sec.before), calc: sec.calculator })).filter((x) => x.i != null).sort((a, b) => a.i - b.i);
+  const out = new Map();
+  quiz.questions.forEach((qq, i) => {
+    let sec;
+    for (const s of starts) if (s.i <= i) sec = s; else break;
+    const c = qq.calculator || (sec && sec.calc) || quiz.calculator || 'none';
+    out.set(qq.id, c === 'none' ? null : c);
+  });
+  return out;
+}
 
 // ---------- quiz ----------
 function normalizeQuiz(raw, assetNames) {
@@ -252,6 +273,8 @@ function normalizeQuiz(raw, assetNames) {
       // Why the answer is right (Markdown): in the practice review after turning in, and in reports.
       if (q.explanation != null && typeof q.explanation !== 'string') fail(`${where}: explanation must be text.`);
       if (typeof q.explanation === 'string' && q.explanation.trim()) out.explanation = q.explanation.trim().slice(0, 4000);
+      const calc = calcOverride(q.calculator, where);
+      if (calc) out.calculator = calc;
       // A question pool: each student gets some of its questions, picked at random (quiz.pools says how many).
       if (q.pool != null && q.pool !== '') {
         const pool = String(q.pool);
@@ -334,6 +357,8 @@ function normalizeQuiz(raw, assetNames) {
         if (!(mins > 0)) fail(`${where}.timeLimitMin should be a number of minutes, more than 0.`);
         out.timeLimitMin = Math.max(1, Math.round(mins));
       }
+      const calc = calcOverride(sec.calculator, where);
+      if (calc) out.calculator = calc;
       return out;
     }).sort((a, b) => at.get(a.before) - at.get(b.before));
     if (!quiz.sections.length) delete quiz.sections;
@@ -725,4 +750,4 @@ function normalizeCode(where, q) {
   return out;
 }
 
-module.exports = { loadQuizFile, normalizeQuiz, putVars, markdownImages, checkValue, elementType, isRange, rangeLength, QuizError, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };
+module.exports = { loadQuizFile, normalizeQuiz, calculatorOf, putVars, markdownImages, checkValue, elementType, isRange, rangeLength, QuizError, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };

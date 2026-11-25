@@ -648,7 +648,7 @@ h1[tabindex="-1"]:focus { outline: none; }
 .calc-close { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; color: var(--ink-2); background: none; border: 0; border-radius: 6px; cursor: pointer; }
 .calc-close:hover { color: var(--ink); background: var(--soft); }
 .calc-bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
-.calc-bar:has(> :only-child) { justify-content: flex-end; }
+.calc-bar:has(> :only-child), .calc-bar:has(> [role="tablist"][hidden]) { justify-content: flex-end; }
 .calc-seg { display: inline-flex; gap: 2px; padding: 2px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; }
 .calc-seg button { min-height: 30px; padding: 0 12px; font: 600 13px var(--font); color: var(--ink-2); background: none; border: 0; border-radius: 6px; cursor: pointer; }
 .calc-seg button:hover { color: var(--ink); }

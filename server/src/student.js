@@ -10,7 +10,7 @@ const T = require('../../public/teacher/types.js');
 const W = require('./watch');
 const { runSamples } = require('./coderun');
 const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } = require('./grade');
-const { fillTemplate } = require('./quizfile');
+const { fillTemplate, calculatorOf } = require('./quizfile');
 const C = require('./corrections');
 const Parts = require('./parts');
 const Pause = require('./pause');
@@ -219,6 +219,7 @@ function current(req, { mustBeOpen = true } = {}) {
 function publicQuiz(quiz, layout) {
   const byId = new Map(store.quizFor(quiz, layout).questions.map((qq) => [qq.id, qq])); // with their random values
   const used = new Set(layout.order.flatMap((id) => [].concat(byId.get(id).shared || []))); // shared material their questions use
+  const calcs = calculatorOf(quiz); // the calculator each question has (its own, its part's or the quiz's)
   return {
     title: quiz.title,
     timeLimitMin: quiz.timeLimitMin,
@@ -234,6 +235,7 @@ function publicQuiz(quiz, layout) {
     questions: layout.order.map((id) => {
       const qq = byId.get(id);
       const pub = { id, type: qq.type, prompt: qq.prompt, points: qq.points };
+      if (calcs.get(id)) pub.calculator = calcs.get(id);
       if (qq.name) pub.name = qq.name;
       if (qq.partialCredit) pub.partialCredit = true;
       if (qq.shared) pub.shared = qq.shared;
