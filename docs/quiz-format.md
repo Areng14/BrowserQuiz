@@ -22,7 +22,7 @@ node scripts/pack-quiz.mjs path/to/folder out.quiz
 dashboard (New quiz) and check how one looks with Preview. Both save this same format.
 <!-- /not-in-prompt -->
 
-## Top level
+## Quiz settings
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -99,7 +99,7 @@ picked at random, so a neighbor's screen doesn't help:
 - Write a pool's questions next to each other, of one type and about as hard as each other.
 - Reports and the CSV show each student only the questions they got.
 
-## Every question
+## Settings for every question
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -154,7 +154,7 @@ Links show as their text only, so nothing on the page leads out of the quiz. No 
 choice with a line break in it (`\n` in JSON) is Markdown like a prompt, so it can hold a code
 block, a table or a list.
 
-## single and multi (multiple choice)
+## Multiple choice (single and multi)
 
 ```json
 { "id": "q1", "type": "single", "prompt": "What is `7 / 2` in Java?",
@@ -168,7 +168,7 @@ block, a table or a list.
   never below 0. Students see "partial credit" next to the points.
 - `"shuffleChoices": false` keeps this question's choices in order, for "I only", "I and II", … answers.
 
-## text (short answer)
+## Short answer (text)
 
 ```json
 { "id": "q3", "type": "text", "prompt": "Worst-case time of binary search?", "answer": ["O(log n)", "O(logn)"] }
@@ -182,7 +182,7 @@ block, a table or a list.
   accept a blank answer. Students never see patterns, even in the practice review.
 - To make capitals count, set `"caseSensitive": true`.
 
-## output (predict the output)
+## Predict the output (output)
 
 ```json
 { "id": "q4", "type": "output", "prompt": "What does this print?",
@@ -204,7 +204,7 @@ block, a table or a list.
 - Matching ignores spaces at the ends of lines and blank lines at the start and end. Everything
   else counts, including capital letters.
 
-## trace (trace table)
+## Trace tables (trace)
 
 ```json
 { "id": "q5", "type": "trace", "points": 3, "prompt": "Fill in i and sum at the end of each pass.",
@@ -221,7 +221,7 @@ block, a table or a list.
 - Each graded cell is worth the same. Spaces around a value and quotes around a string
   (`"abc"` for `abc`) don't matter.
 
-## fill (fill in the blanks)
+## Fill in the blanks (fill)
 
 ```json
 { "id": "q6", "type": "fill", "points": 2, "prompt": "Complete the code so total is the sum of nums.",
@@ -240,7 +240,7 @@ block, a table or a list.
   - The `answer` blanks are the reference solution.
   - The code must be the whole `Solution` class (or the class from `class`).
 
-## essay (written answer)
+## Written answers (essay)
 
 ```json
 { "id": "q7", "type": "essay", "points": 3, "prompt": "Explain why a == b can be false for two equal Strings.",
@@ -251,7 +251,7 @@ block, a table or a list.
 - `"language": "java"` (or any code language) gives students a code box instead of a text box. Use it
   for AP-style free response graded by rubric.
 
-## code
+## Code questions (code)
 
 Students write code in an editor and press Run examples to test against the sample tests.
 Grading uses the hidden tests, which students never see.
@@ -273,7 +273,7 @@ Grading uses the hidden tests, which students never see.
 | `support` | none | `{ "java": "...", "python": "..." }` extra code compiled with the student's (helper classes). In JavaScript and TypeScript it runs first as a script, so its functions and classes are globals |
 | `limits` | 2000 ms, 256 MB | `{ "timeMs": 200–5000, "memoryMb": 64–512 }` per test |
 
-### Types
+### Parameter and return types
 
 Every parameter and return value uses one of these:
 
@@ -391,7 +391,7 @@ The upload check says which of these a question runs into. With `"languages": "a
 languages that can't run the question are just left out (a map leaves out C, a speed test leaves the languages that have one and a reference). References are
 optional per language there; tests' expected values come from the ones you give.
 
-### Tests
+### Test cases
 
 Method mode. `expected` can be left out when there's a reference: it's filled in at upload.
 
@@ -445,7 +445,7 @@ slow solution can't finish in time. Method mode only.
   that the code is fast enough, not how. To require a particular algorithm, add a rubric item for it
   or ban the shortcut.
 
-### Scoring
+### How code questions are scored
 
 The code part is worth `points` minus the rubric points. Students earn the share of hidden
 test weight they pass. Rubric items with a check (below) grade themselves; the teacher ticks
