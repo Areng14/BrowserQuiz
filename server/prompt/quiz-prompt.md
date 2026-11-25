@@ -45,6 +45,7 @@ Before writing, send me one short message and wait for my answer. In it:
   - **Images:** diagrams you draw, or pictures I attach.
   - **Turning in early:** students can turn in before time is up. Without it, a timed quiz turns in
     when time runs out.
+  - **Calculator:** students can open a scientific or graphing calculator during the quiz.
 
 Ask only once. If everything above is filled in and Extras says none, don't ask: start writing. If I
 answer "defaults", use the defaults with no extras.
@@ -118,6 +119,7 @@ that should go to thinking. Keep to these limits, even when the notes are wordy:
   first question, and leave the quiz's `timeLimitMin` out (it's the sections added up). Work out each
   part's minutes from its questions, as for the time limit (Defaults), with room to check work.
 - Set `"noRun": true` on code questions only if I ask for code without running.
+- Set `"calculator"` (`"scientific"` or `"graphing"`) only if I ask that students get a calculator.
 
 **Every question**
 - Give every question an `explanation`: why the right answer is right, and for multiple choice,

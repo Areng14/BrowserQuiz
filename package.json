@@ -12,6 +12,8 @@
   "devDependencies": {
     "esbuild": "0.21.5",
     "katex": "0.19.1",
+    "mathjs": "15.2.0",
+    "mathlive": "0.110.0",
     "monaco-editor": "0.45.0"
   }
 }

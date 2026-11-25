@@ -30,6 +30,8 @@ Monaco editor, and each question type has its own options.
   and earn back points. No lockdown, so they can ask around. Explanations show once they turn it in.
 - **Exam lockdown.** Full screen, leaving the window gets flagged quietly, and if that isn't safe
   enough, Safe Exam Browser is an option.
+- **Calculator.** A scientific or graphing calculator students can open during a quiz, if the teacher
+  turns it on.
 - **Student tools.** Scratchpad, highlighting, mark for review, cross out choices, dark mode. Bluebook
   style. Works with a keyboard and screen readers.
 - **Multiple teachers.** Each one only sees their own stuff.

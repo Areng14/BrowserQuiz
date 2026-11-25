@@ -39,3 +39,24 @@ for (const f of readdirSync('node_modules/katex/dist/fonts').filter((x) => x.end
   copyFileSync('node_modules/katex/dist/fonts/' + f, `${katexDir}/fonts/${f}`);
 }
 console.log('katex copied ->', katexDir);
+
+// The calculator: its engine (scripts/calc, from AlgebraLoop) with mathjs' parser, as window.BQCalc,
+// and MathLive (the maths input) with its fonts. Both load only when a quiz has a calculator.
+await esbuild.build({
+  entryPoints: { calc: 'scripts/calc-entry.js' },
+  bundle: true,
+  minify: true,
+  format: 'iife',
+  target: 'es2020',
+  outdir: 'public/vendor/calc',
+  legalComments: 'none',
+  logLevel: 'warning',
+});
+const mathliveDir = 'public/vendor/mathlive';
+mkdirSync(mathliveDir + '/fonts', { recursive: true });
+copyFileSync('node_modules/mathlive/mathlive.min.js', `${mathliveDir}/mathlive.min.js`);
+copyFileSync('node_modules/mathlive/LICENSE.txt', `${mathliveDir}/LICENSE.txt`);
+for (const f of readdirSync('node_modules/mathlive/fonts').filter((x) => x.endsWith('.woff2'))) {
+  copyFileSync('node_modules/mathlive/fonts/' + f, `${mathliveDir}/fonts/${f}`);
+}
+console.log('calculator bundled -> public/vendor/calc, mathlive copied ->', mathliveDir);

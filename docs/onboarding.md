@@ -32,7 +32,7 @@ Students sign in by picking their name and typing their student ID, so we need t
 - **Quiz maker.** **Quizzes**, then **New quiz**. 8 question types: multiple choice, select-all, short answer, predict the output, trace tables, fill in the blanks, written answers and code.
 - **Writing it with AI.** Click **Copy AI prompt**, paste it into ChatGPT or Claude, fill in the blanks at the top, and upload the `.quiz` or `quiz.json` it gives back. Chat won't take something that long? Download it with the button next to it and attach the file.
 - **Preview.** Shows exactly what students see, runs code, and gives you a score. Check it before you give a quiz.
-- **Other options.** You can allow the quiz to have time limits, timed parts, a question pool, etc.
+- **Other options.** You can allow the quiz to have time limits, timed parts, a question pool, a calculator, etc.
 
 ## Giving a quiz
 

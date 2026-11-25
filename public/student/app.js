@@ -1101,6 +1101,10 @@
     const scratchBtn = h('button', { class: 'btn small ghost scratch-btn', type: 'button', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() }, penIcon(), h('span', { class: 'scratch-label', text: 'Scratchpad' }));
     const scratch = h('aside', { class: 'scratch', id: 'scratch', 'aria-label': 'Scratchpad' });
     scratch.hidden = true;
+    // A calculator, when the quiz allows one (calculator.js; its maths loads the first time it's opened)
+    const calc = S.quiz.calculator && window.BQCalculator && !cfg.watch
+      ? window.BQCalculator.create({ kind: S.quiz.calculator, base: cfg.vendorBase || '/vendor/', host: () => (S.el ? S.el.wrap : root), onError: () => toast('The calculator did not load. Check the connection and try again.') })
+      : null;
     const wrap = h('div', { class: 'quiz' },
       // Title, name and save state | timer, centered | tools
       h('header', { class: 'qbar' },
@@ -1109,7 +1113,7 @@
             S.me && S.me.name && (!cfg.preview || cfg.watch) ? h('span', { class: 'qbar-who', title: 'Signed in as', text: S.me.name }) : null),
           save),
         timer,
-        h('div', { class: 'qbar-side qbar-end' }, scratchBtn, themeButton(),
+        h('div', { class: 'qbar-side qbar-end' }, calc ? calc.button : null, scratchBtn, themeButton(),
           // no Exit in Safe Exam Browser with our settings: there's nowhere to go until they turn in
           (cfg.preview && !cfg.watch) || (S.run && S.run.sebQuit) ? null : h('button', { class: 'btn small ghost', type: 'button', text: 'Exit', onclick: () => openExit() }))),
       conn,
@@ -1117,7 +1121,7 @@
       scratch,
       h('footer', { class: 'qnav' }, prev, mid, next),
       live, hlBar.bar);
-    S.el = { wrap, main, timer, jump, prev, next, save, conn, scratch, scratchBtn, live, hlBar, fsOverlay: null, scratchGrip: scratchGrip(wrap, scratch), gameBtn, nav: wrap.querySelector('.qnav') };
+    S.el = { wrap, main, timer, jump, prev, next, save, conn, scratch, scratchBtn, calc, live, hlBar, fsOverlay: null, scratchGrip: scratchGrip(wrap, scratch), gameBtn, nav: wrap.querySelector('.qnav') };
     wrap.addEventListener('scroll', hlBar.hide, { passive: true }); // a short window scrolls the whole quiz
     if (!keysBound) { document.addEventListener('keydown', quizKeys); keysBound = true; }
     S.saveState = 'saved';
@@ -1213,6 +1217,7 @@
     const paused = !!S.pausedAt;
     S.el.nav.hidden = paused;
     S.el.scratchBtn.disabled = paused;
+    if (S.el.calc) S.el.calc.setDisabled(paused);
     if (paused) {
       document.title = `Paused - ${S.quiz.title}`;
       if (S.el.hlBar) S.el.hlBar.hide();

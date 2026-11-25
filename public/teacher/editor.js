@@ -1557,6 +1557,9 @@
       });
       const langSel = h('select', { class: 'input' }, Object.entries(Object.assign({}, LANGS, { none: 'None' })).map(([v, t]) => h('option', { value: v, text: t, selected: quiz.language === v })));
       langSel.addEventListener('change', () => { quiz.language = langSel.value; touch(); });
+      // a calculator students can open during the quiz
+      const calcSel = h('select', { class: 'input' }, [['', 'None'], ['scientific', 'Scientific'], ['graphing', 'Graphing']].map(([v, t]) => h('option', { value: v, text: t, selected: (quiz.calculator || '') === v })));
+      calcSel.addEventListener('change', () => { if (calcSel.value) quiz.calculator = calcSel.value; else delete quiz.calculator; touch(); });
       paneTick = null;
       const pools = poolSettings(q);
       // timed sections set the quiz's time (their total) and lock each part
@@ -1569,7 +1572,8 @@
             h('div', { class: 'qe-settings-grid' },
               timedSum ? field('Time limit (minutes, the sections added up)', input(q, timedSum, () => {}, { type: 'number', disabled: true }))
                 : field('Time limit (minutes, 0 = none)', input(q, quiz.timeLimitMin, (v) => { quiz.timeLimitMin = Number(v) || 0; }, { type: 'number', min: '0', max: '600' })),
-              field('Code highlighting', langSel)),
+              field('Code highlighting', langSel),
+              field('Calculator', calcSel)),
             h('div', { class: 'qe-line' },
               check(q, quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { quiz.shuffleQuestions = v; }),
               check(q, quiz.shuffleChoices !== false, 'Shuffle choices', (v) => { quiz.shuffleChoices = v; }),

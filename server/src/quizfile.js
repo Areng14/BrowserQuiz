@@ -161,6 +161,8 @@ function checkVars(where, q, type) {
   return out;
 }
 
+const CALCULATORS = ['scientific', 'graphing'];
+
 // ---------- quiz ----------
 function normalizeQuiz(raw, assetNames) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('quiz.json must be an object.');
@@ -182,6 +184,11 @@ function normalizeQuiz(raw, assetNames) {
     directions: {},
     questions: [],
   };
+  // A calculator students can open during the quiz: "scientific", or "graphing" (adds a Graph screen).
+  if (raw.calculator != null && raw.calculator !== false && raw.calculator !== 'none' && raw.calculator !== '') {
+    if (!CALCULATORS.includes(raw.calculator)) fail('calculator must be "scientific", "graphing" or "none".');
+    quiz.calculator = raw.calculator;
+  }
   if (raw.directions && typeof raw.directions === 'object') {
     for (const t of PART_TYPES) {
       if (typeof raw.directions[t] === 'string' && raw.directions[t].trim()) quiz.directions[t] = raw.directions[t].trim().slice(0, 2000);

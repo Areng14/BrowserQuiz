@@ -303,6 +303,7 @@ function quizSource(quiz) {
     shuffleQuestions: quiz.shuffleQuestions, shuffleChoices: quiz.shuffleChoices, integrity: quiz.integrity };
   if (quiz.lockParts && !quiz.timedParts) out.lockParts = true; // timed sections lock their parts anyway
   if (quiz.turnInEarly) out.turnInEarly = true;
+  if (quiz.calculator) out.calculator = quiz.calculator;
   if (Object.keys(quiz.directions || {}).length) out.directions = quiz.directions;
   if (quiz.shared && quiz.shared.length) out.shared = quiz.shared;
   if (quiz.sections && quiz.sections.length) out.sections = quiz.sections;
