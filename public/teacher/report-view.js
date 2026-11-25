@@ -329,7 +329,9 @@
       q.image ? h('img', { class: 'r-img', src: o.assetUrl ? o.assetUrl(q.image) : `/api/t/quizzes/${encodeURIComponent(quiz.id)}/asset?path=${encodeURIComponent(q.image)}`, alt: q.imageAlt || '' }) : null,
       body(quiz, q, o),
       q.why ? h('div', { class: 'r-side' }, h('p', { class: 'r-label', text: 'What went wrong' }), h('p', { class: 'r-essay', text: q.why })) : null,
-      q.explanation ? h('div', { class: 'r-explain' }, h('p', { class: 'r-label', text: 'Explanation' }), md(q.explanation, quiz.language, img)) : null);
+      q.explanation ? h('div', { class: 'r-explain' }, h('p', { class: 'r-label', text: 'Explanation' }), md(q.explanation, quiz.language, img)) : null,
+      // the teacher's feedback on this answer (left out where it's being written: grading by question)
+      q.feedback && !o.noFeedback ? h('div', { class: 'r-explain r-feedback' }, h('p', { class: 'r-label', text: 'Feedback' }), h('p', { class: 'r-essay', text: q.feedback })) : null);
   }
 
   function student(quiz, s, opts) {

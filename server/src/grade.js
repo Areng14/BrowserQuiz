@@ -345,6 +345,9 @@ function studentReport(fullQuiz, a, name, opts = {}) {
         row.rubric = (qq.rubric || []).map((r) => ({ text: r.text, points: r.points, met: rubricMet(r, m, auto), graded: rubricGraded(r, m, auto) }));
       }
       if (opts.forStudent && row.rubric) row.rubric = [];
+      // the teacher's feedback on this answer (grading by question): on the student's report too
+      const fb = ((res.manual || {})[qq.id] || {}).feedback;
+      if (fb) row.feedback = fb;
       return row;
     }),
   };

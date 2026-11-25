@@ -1374,6 +1374,45 @@ module.exports = function teacherRoutes(r) {
   });
 
 
+  // Grading by question: the questions a teacher grades by hand (written answers, rubric items the server
+  // can't check), how many answers each still needs, and one question's answers from everyone who got it.
+  r.get('/api/t/runs/:id/grade', (req, res, p) => {
+    const me = requireTeacher(req);
+    const run = getRun(me, p.id);
+    notWhileOpen(run);
+    const quiz = store.getQuiz(run.quiz_id);
+    const rows = q(`SELECT attempts.id, bq_name(roster_students.name, roster_students.id, roster_students.roster_id) AS name FROM attempts
+      JOIN roster_students ON roster_students.id = attempts.student_id
+      WHERE attempts.run_id = ? AND attempts.archived = 0 AND attempts.status = 'submitted' ORDER BY name`).all(run.id);
+    const attempts = rows.map((x) => store.getAttempt(x.id));
+    const byHand = (qq) => qq.type === 'essay' || (qq.rubric || []).some((r) => r.points > 0 && !r.require && !r.forbid);
+    const questions = [];
+    quiz.questions.forEach((qq, i) => {
+      let total = 0;
+      let toGrade = 0;
+      for (const a of attempts) {
+        if (!a.result || !store.quizFor(quiz, a.layout).questions.some((x) => x.id === qq.id)) continue;
+        total++;
+        if (questionScore(qq, a.result, a.answers).review) toGrade++;
+      }
+      if (total && (byHand(qq) || toGrade)) questions.push({ id: qq.id, n: i + 1, type: qq.type, title: qq.name || '', toGrade, total });
+    });
+    const url = new URL(req.url, 'http://x');
+    const pick = questions.find((x) => x.id === url.searchParams.get('q')) || questions.find((x) => x.toGrade) || questions[0];
+    const students = [];
+    if (pick) {
+      rows.forEach((row, k) => {
+        const a = attempts[k];
+        if (!a.result) return;
+        const report = studentReport(quiz, a, row.name);
+        const at = report.questions.findIndex((x) => x.id === pick.id);
+        if (at < 0) return; // a pool gave them other questions
+        students.push({ attemptId: a.id, name: row.name, rq: report.questions[at], x: answerReport(quiz, a)[at], feedback: ((a.result.manual || {})[pick.id] || {}).feedback || '' });
+      });
+    }
+    json(res, 200, { run: { id: run.id, code: run.code, title: quiz.title }, questions, q: pick ? pick.id : null, quiz: pick ? reportQuiz(quiz, run.quiz_id) : null, students });
+  });
+
   r.get('/api/t/runs/:id/export.csv', (req, res, p) => {
     const me = requireTeacher(req);
     const run = getRun(me, p.id);
@@ -1579,7 +1618,9 @@ module.exports = function teacherRoutes(r) {
       // The AI's reasons stay to read, marked as changed by the teacher.
       const prev = (a.result.manual || {})[qq.id];
       const ai = prev && prev.ai ? Object.assign({}, prev.ai, { changed: true }) : undefined;
-      a.result.manual = Object.assign({}, a.result.manual, { [qq.id]: Object.assign({ rubric, override, reviewed: true }, ai ? { ai } : {}) });
+      // Feedback for the student (grading by question), on their report; a save without it keeps what's there
+      const feedback = body.feedback === undefined ? (prev && prev.feedback) || '' : String(body.feedback || '').trim().slice(0, 2000);
+      a.result.manual = Object.assign({}, a.result.manual, { [qq.id]: Object.assign({ rubric, override, reviewed: true }, ai ? { ai } : {}, feedback ? { feedback } : {}) });
       store.logEvent(a, 'grade', 'info', `${qq.id}: ${override != null ? override + ' pts (override)' : Object.keys(rubric).length + ' rubric item(s)'}`);
       store.save(a);
     } else throw new HttpError(404, 'not_found');
