@@ -467,6 +467,39 @@ button.t-joincode:hover { background: var(--soft); }
 .t-adjust summary { cursor: pointer; color: var(--accent); width: max-content; }
 .t-adjust .t-row { margin-top: 8px; align-items: center; gap: 8px; }
 .t-head { display: flex; align-items: center; gap: 12px; }
+/* Grading by question: a bar to move between questions, students down the left, their answer and the
+   grading on the right. On a phone the list sits above. */
+.t-gq-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; }
+.t-gq-bar h1 { margin: 0; }
+.t-gq-qnav { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.t-gq-pick { position: relative; display: inline-flex; min-width: 0; }
+.input.t-gq-select { width: auto; max-width: min(460px, 100%); min-width: 0; padding: 0 44px 0 12px; appearance: none; -webkit-appearance: none; cursor: pointer; text-overflow: ellipsis; }
+.t-gq-pick > svg { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-2); pointer-events: none; }
+.t-gq-hide { margin-left: auto; }
+.t-gq { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 24px; align-items: start; }
+.t-gq-list { margin: 0; padding: 6px; list-style: none; display: grid; gap: 2px; border: 1px solid var(--line); border-radius: 8px; position: sticky; top: 16px; max-height: calc(100vh / var(--zoom, 1) - 32px); overflow: auto; }
+.t-gq-who { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 6px; background: none; font: inherit; color: var(--ink); text-align: left; cursor: pointer; }
+.t-gq-who:hover { background: var(--soft); }
+.t-gq-who.on { background: color-mix(in srgb, var(--accent) 16%, var(--bg)); font-weight: 600; }
+.t-gq-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.t-gq-st { flex: none; font-size: 14px; font-weight: 500; color: var(--ink-2); }
+.t-gq-st.ok { color: var(--good); font-weight: 600; }
+.t-gq-pane { display: grid; gap: 16px; min-width: 0; }
+.t-gq-pane > h2 { margin: 0; font-size: 18px; }
+.t-gq-pane > .t-answers { margin: 0; gap: 0; }
+.t-gq-pane > .t-answers > .r-q { margin: 0; }
+.t-gq-grade { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
+.t-gq-grade .t-rubric { margin: 0; }
+.t-gq-points { display: flex; align-items: center; gap: 10px; }
+.t-gq-points label, .t-gq-fb label { font-weight: 600; }
+.t-gq-points .input.t-points { height: 40px; min-height: 40px; }
+.t-gq-fb { display: grid; gap: 6px; }
+.t-gq-feedback { width: 100%; resize: vertical; font: inherit; }
+@media (max-width: 820px) {
+  .t-gq { grid-template-columns: minmax(0, 1fr); }
+  .t-gq-list { position: static; max-height: 240px; }
+  .t-gq-hide { margin-left: 0; }
+}
 /* Sortable column headers: the whole header is the button; an arrow on the sorted one, faint on hover */
 .t-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
 th.num .t-sort { flex-direction: row-reverse; }

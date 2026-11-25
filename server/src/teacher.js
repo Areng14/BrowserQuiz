@@ -290,6 +290,8 @@ function staleRuns(me, quizId) {
   }
   return out;
 }
+// Graded by the teacher: written answers, and rubric items the server can't check (no require/forbid)
+const handGraded = (qq) => qq.type === 'essay' || (qq.rubric || []).some((r) => r.points > 0 && !r.require && !r.forbid);
 function getQuizRow(me, id) {
   const row = q('SELECT id, title FROM quizzes WHERE id = ? AND owner_id = ?').get(String(id || ''), me.id);
   if (!row) throw new HttpError(404, 'not_found');
@@ -1358,6 +1360,7 @@ module.exports = function teacherRoutes(r) {
     json(res, 200, {
       run: { id: run.id, code: run.code, status: run.status, pausedMs: run.paused_at ? Math.max(0, Date.now() - run.paused_at) : null, ipLock: !!run.ip_lock, released: !!run.released, practice: run.mode === 'practice', seb: !!run.seb_key, sebFile: !!run.seb_config, sebQuit: run.seb_quit || null, title: quiz.title, questions: quiz.questions.length, timeLimitMin: quiz.timeLimitMin,
         timedParts: quiz.timedParts && !run.corrects ? quiz.sections.length : undefined, // how many timed parts
+        byHand: quiz.questions.filter(handGraded).length, // questions graded by hand (grading by question)
         corrections: run.corrects ? { earnBack: run.earn_back, why: !!run.ask_why } : null,
         joinUrl: joinOrigin(req), // where students go (not localhost)
         // an exam's answers still waiting for the teacher: corrections leave those out
@@ -1385,7 +1388,6 @@ module.exports = function teacherRoutes(r) {
       JOIN roster_students ON roster_students.id = attempts.student_id
       WHERE attempts.run_id = ? AND attempts.archived = 0 AND attempts.status = 'submitted' ORDER BY name`).all(run.id);
     const attempts = rows.map((x) => store.getAttempt(x.id));
-    const byHand = (qq) => qq.type === 'essay' || (qq.rubric || []).some((r) => r.points > 0 && !r.require && !r.forbid);
     const questions = [];
     quiz.questions.forEach((qq, i) => {
       let total = 0;
@@ -1395,7 +1397,7 @@ module.exports = function teacherRoutes(r) {
         total++;
         if (questionScore(qq, a.result, a.answers).review) toGrade++;
       }
-      if (total && (byHand(qq) || toGrade)) questions.push({ id: qq.id, n: i + 1, type: qq.type, title: qq.name || '', toGrade, total });
+      if (total && (handGraded(qq) || toGrade)) questions.push({ id: qq.id, n: i + 1, type: qq.type, title: qq.name || '', toGrade, total });
     });
     const url = new URL(req.url, 'http://x');
     const pick = questions.find((x) => x.id === url.searchParams.get('q')) || questions.find((x) => x.toGrade) || questions[0];
