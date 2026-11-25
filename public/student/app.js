@@ -85,7 +85,7 @@
   const mount = (node) => {
     root.replaceChildren(node);
     const head = node.querySelector && node.querySelector('h1');
-    if (head) document.title = `${head.textContent} – BrowserQuiz`;
+    if (head) document.title = `${head.textContent} - BrowserQuiz`;
     requestAnimationFrame(() => {
       const a = document.activeElement;
       if (!head || !head.isConnected || (a && a !== document.body && root.contains(a))) return;
@@ -1196,7 +1196,7 @@
     S.el.nav.hidden = paused;
     S.el.scratchBtn.disabled = paused;
     if (paused) {
-      document.title = `Paused – ${S.quiz.title}`;
+      document.title = `Paused - ${S.quiz.title}`;
       if (S.el.hlBar) S.el.hlBar.hide();
       S.el.main.classList.remove('code-fit', 'split-fit');
       S.el.main.replaceChildren(pausedView());
@@ -1206,7 +1206,7 @@
       S.el.prev.disabled = false;
       reviewButtons();
       S.el.jump.hidden = true;
-      document.title = `Check your work – ${S.quiz.title}`;
+      document.title = `Check your work - ${S.quiz.title}`;
       if (S.el.hlBar) S.el.hlBar.hide();
       S.el.main.classList.remove('code-fit', 'split-fit');
       S.el.main.replaceChildren(reviewView());
@@ -1232,7 +1232,7 @@
       view = h('div', { class: 'shared-split' }, shared, view);
     }
     const where = S.dirOpen ? partOf(S.idx).title : `Question ${S.idx + 1} of ${total}${q.name ? `: ${q.name}` : ''}`;
-    document.title = `${where} – ${S.quiz.title}`;
+    document.title = `${where} - ${S.quiz.title}`;
     if (S.el.hlBar) S.el.hlBar.hide();
     // Code questions and shared material fill the window, each side scrolling on its own (app.css).
     S.el.main.classList.toggle('code-fit', view.classList.contains('wide'));

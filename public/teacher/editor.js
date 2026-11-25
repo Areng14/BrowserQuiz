@@ -1856,6 +1856,7 @@
         if (shown && shown.image) pane.querySelectorAll('img.qe-thumb, img.qimg').forEach((img) => { img.src = imageSrc(shown); });
         refreshSoon();
         setStatus(dirty ? '' : 'Saved');
+        if (r.past) pastScores(r.id, r.past);
         return r.id;
       } catch (e) {
         if (e.message === 'login') return null;
@@ -1865,6 +1866,19 @@
         setStatus('Not saved', true);
         return null;
       } finally { saving = false; saveBtn.disabled = false; }
+    }
+    // The answers changed on a quiz already given: those classes can be scored again with the new ones
+    // (server: rekey.js). past: { classes: [names], questions: how many changed }.
+    async function pastScores(id, past) {
+      const names = past.classes.length > 3 ? [...past.classes.slice(0, 2), `${past.classes.length - 2} more`] : past.classes;
+      const who = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+      const yes = await window.BQAsk.confirm({ title: 'Update past scores?', ok: 'Update scores', no: 'Keep old scores',
+        text: `${who} took this quiz with the old ${past.questions === 1 ? 'answer' : 'answers'}. Grades you gave by hand stay.` });
+      if (!yes) return;
+      try {
+        await post(`/api/t/quizzes/${encodeURIComponent(id)}/rekey`, {});
+        if (!dirty) setStatus('Saved. Scores updated');
+      } catch (e) { if (e.message !== 'login') window.BQAsk.notice({ title: "Scores weren't updated", text: e.message }); }
     }
     const saveBtn = h('button', { class: 'btn primary', type: 'button', text: 'Save', title: `${MOD}S`, onclick: () => save() });
     const previewBtn = h('button', { class: 'btn', type: 'button', text: 'Preview' });

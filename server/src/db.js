@@ -121,6 +121,10 @@ addColumn('attempts', 'ready_at', 'INTEGER');
 addColumn('roster_students', 'time_x', 'REAL NOT NULL DEFAULT 1');
 // When the teacher paused the quiz (pause.js); null while it runs.
 addColumn('runs', 'paused_at', 'INTEGER');
+// The quiz's newest version, on the versions before it (editing saves a new copy, teacher.js saveQuiz):
+// a fixed answer can then reach runs given with an older one (rekey.js).
+addColumn('quizzes', 'replaced_by', 'TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS quizzes_replaced_by ON quizzes(replaced_by)');
 // Passkeys (passkeys.js): id is the credential id, public_key its SPKI DER. key_wrap is the teacher's quiz
 // key sealed with what the passkey's PRF gives (vault.js); null for admin while its key comes from .env.
 // pk_user is the random user handle a teacher's passkeys carry. A session's passkey flag: it was made

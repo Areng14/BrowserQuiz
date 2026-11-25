@@ -102,7 +102,7 @@
     leaveGuard = null;
     root.replaceChildren(...nodes);
     const head = root.querySelector('main h1, h1');
-    document.title = head && head.textContent ? `${head.textContent} – BrowserQuiz` : 'BrowserQuiz (Teacher Panel)';
+    document.title = head && head.textContent ? `${head.textContent} - BrowserQuiz` : 'BrowserQuiz (Teacher Panel)';
     requestAnimationFrame(() => {
       const a = document.activeElement;
       if (!head || !head.isConnected || (a && a !== document.body && root.contains(a))) return;
@@ -621,13 +621,27 @@
       quizBtn.disabled = true; quizBtn.textContent = 'Checking…'; quizMsg.textContent = '';
       try { await api('/api/t/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() }); showHome(); } catch (e) { quizMsg.textContent = e.message; quizBtn.disabled = false; quizBtn.textContent = 'Upload .quiz'; }
     });
-    return h('section', { class: 't-section' },
+    // Search by title, once the list is long enough to need it; kept while the tab redraws.
+    const none = h('p', { class: 't-muted', text: 'None found.', hidden: true });
+    const filter = () => {
+      const want = quizFind.trim().toLowerCase();
+      const rows = [...section.querySelectorAll('tbody tr[data-title]')];
+      for (const tr of rows) tr.hidden = !!want && !tr.dataset.title.includes(want);
+      none.hidden = !rows.length || rows.some((tr) => !tr.hidden);
+      const wrap = section.querySelector('.t-table-wrap');
+      if (wrap) wrap.hidden = !none.hidden;
+    };
+    const findBox = h('input', { class: 'input t-search', type: 'search', value: quizFind, placeholder: 'Search quizzes', 'aria-label': 'Search quizzes', autocomplete: 'off', spellcheck: 'false' });
+    findBox.addEventListener('input', () => { quizFind = findBox.value; filter(); });
+    const search = data.quizzes.length > 6 ? h('div', { class: 't-search-row' }, findBox, none) : null;
+    const section = h('section', { class: 't-section' },
       h('div', { class: 't-head t-head-wrap' }, h('h1', { text: 'Quizzes' }),
         copyPromptBtn(),
         h('button', { class: 'btn small primary', type: 'button', text: 'New quiz', onclick: () => openQuiz(null) })),
+      search,
       data.quizzes.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
         h('thead', { class: 'sr-only' }, h('tr', {}, ['Quiz', 'Questions', 'Time limit', 'Added'].map((x) => h('th', { text: x })), actionsHead())),
-        h('tbody', {}, data.quizzes.map((x) => h('tr', {},
+        h('tbody', {}, data.quizzes.map((x) => h('tr', { 'data-title': x.title.toLowerCase() },
           h('td', { role: 'rowheader', class: 't-rowhead', text: x.title }),
           h('td', { class: 't-muted', text: plural(x.questions, 'question') }),
           h('td', { class: 't-muted', text: x.timeLimitMin ? `${x.timeLimitMin} min` : 'No time limit' }),
@@ -636,12 +650,18 @@
             h('button', { class: 'btn small', type: 'button', text: 'Edit', 'aria-label': `Edit ${x.title}`, onclick: () => openQuiz(x.id) }),
             moreMenu(`More for ${x.title}`, `quiz:${x.id}`, [
               linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true),
+              // a copy to change, opened straight in the quiz maker
+              { text: 'Duplicate', onclick: async () => {
+                try { openQuiz((await post(`/api/t/quizzes/${encodeURIComponent(x.id)}/duplicate`)).id); } catch (e) { if (e.message !== 'login') quizMsg.textContent = e.message; }
+              } },
               linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
               { text: 'Delete', danger: true, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}?`, 'Past results stay.') }]))))))) : null,
       h('div', { class: 't-row t-add' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizBtn),
       h('details', { class: 't-paste' }, h('summary', { text: 'Paste a quiz.json' }),
         h('label', { class: 'field', for: 'paste-quiz' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteJson), h('div', {}, pasteBtn)),
       quizMsg);
+    if (search) filter();
+    return section;
   }
 
   function classesTab(data) {
@@ -1184,6 +1204,7 @@
   // or an element (a link, say), or a function that gives them, asked each time it opens. The live table
   // doesn't redraw while one is open (menuOpen), so it stays put; onClose catches it up.
   let menuOpen = false;
+  let quizFind = ''; // the Quizzes tab's search, kept while it redraws
   // opts.text: a button with that text and a chevron (the account menu) instead of ⋯.
   function moreMenu(label, key, items, onClose, opts) {
     const named = opts && opts.text;
@@ -1379,7 +1400,7 @@
       corrBtn.hidden = run.practice || !!run.corrections || run.status === 'open';
       msgBtn.hidden = run.status !== 'open';
       code.textContent = run.code;
-      document.title = `${run.code} · ${run.title} – BrowserQuiz`;
+      document.title = `${run.code} - ${run.title} - BrowserQuiz`;
       const count = (f) => data.students.filter((x) => x.attempt && f(x.attempt)).length;
       const said = [[count((a) => a.status === 'waiting' && a.ready && !gone(a)), 'ready'], [count((a) => a.status === 'waiting' && !a.ready && !gone(a)), 'reading the rules'], [count((a) => a.status === 'admitted' && !gone(a)), 'starting'], [count(gone), 'no signal'], [count((a) => a.status === 'active'), paused ? 'paused' : 'working'],
         [count((a) => a.status === 'submitted'), 'turned in'], [count((a) => a.integrity === 'invalidated'), 'invalidated']]

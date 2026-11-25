@@ -15,6 +15,7 @@ const { fillTemplate } = require('./quizfile');
 const { submit, hashSid, publicQuiz } = require('./student');
 const Parts = require('./parts');
 const Pause = require('./pause');
+const Rekey = require('./rekey');
 const W = require('./watch');
 const { similarCode } = require('./similar');
 const { sameWrong } = require('./samewrong');
@@ -271,9 +272,23 @@ function saveQuiz(me, quiz, assets, replaces) {
   tx(() => {
     q('INSERT INTO quizzes (id, title, json, created_at, owner_id, enc) VALUES (?, ?, ?, ?, ?, 1)').run(id, quiz.title, V.sealText(key, JSON.stringify(quiz), V.quizAad(id)), Date.now(), me.id);
     for (const a of assets) q('INSERT INTO assets (quiz_id, path, mime, bytes, enc) VALUES (?, ?, ?, ?, 1)').run(id, a.path, a.mime, V.seal(key, Buffer.from(a.bytes), V.assetAad(id, a.path)));
+    // every earlier version now points at this one (rekey.js)
+    if (replaces) q('UPDATE quizzes SET replaced_by = ? WHERE owner_id = ? AND (id = ? OR replaced_by = ?)').run(id, me.id, replaces, replaces);
     if (replaces) retireQuiz(replaces);
   });
   return id;
+}
+// Runs given with an earlier version of this quiz whose answers differ from this one's: what the quiz
+// maker offers to update after a save ("Update past scores?").
+function staleRuns(me, quizId) {
+  const head = store.getQuiz(quizId);
+  const out = [];
+  for (const row of q(`SELECT runs.id, runs.quiz_id, rosters.name AS roster FROM runs JOIN rosters ON rosters.id = runs.roster_id
+      WHERE runs.owner_id = ? AND runs.quiz_id IN (SELECT id FROM quizzes WHERE replaced_by = ? AND owner_id = ?) ORDER BY runs.created_at`).all(me.id, quizId, me.id)) {
+    const m = Rekey.merge(store.getQuiz(row.quiz_id), head);
+    if (m.changed.length) out.push({ id: row.id, quizId: row.quiz_id, roster: row.roster, changed: m.changed });
+  }
+  return out;
 }
 function getQuizRow(me, id) {
   const row = q('SELECT id, title FROM quizzes WHERE id = ? AND owner_id = ?').get(String(id || ''), me.id);
@@ -809,7 +824,41 @@ module.exports = function teacherRoutes(r) {
     } catch (e) { return quizError(res, e); }
     const id = saveQuiz(me, quiz, assets, old && old.id);
     audit(me, old ? 'edit-quiz' : 'create-quiz', null, quiz.title);
-    json(res, 200, { id, title: quiz.title });
+    // answers changed on a quiz already given: the classes it was given to, and how many questions
+    const stale = old ? staleRuns(me, id) : [];
+    const past = stale.length ? { classes: [...new Set(stale.map((r) => r.roster))], questions: new Set(stale.flatMap((r) => r.changed)).size } : undefined;
+    json(res, 200, { id, title: quiz.title, past });
+  });
+
+  // "Update past scores?": runs given with an earlier version get this version's answers (rekey.js), each
+  // on a copy of the quiz it was given with, and are graded again. Grades the teacher gave by hand stay.
+  r.post('/api/t/quizzes/:id/rekey', async (req, res, p) => {
+    const me = requireTeacher(req);
+    const row = getQuizRow(me, p.id);
+    const head = store.getQuiz(row.id);
+    const stale = staleRuns(me, row.id);
+    let regraded = 0;
+    for (const oldId of [...new Set(stale.map((r) => r.quizId))]) {
+      const m = Rekey.merge(store.getQuiz(oldId), head);
+      if (!m.changed.length) continue;
+      const fixed = saveQuiz(me, m.quiz, store.listAssets(oldId), null);
+      q('UPDATE quizzes SET archived = 1, replaced_by = ? WHERE id = ?').run(row.id, fixed);
+      q('UPDATE runs SET quiz_id = ? WHERE quiz_id = ? AND owner_id = ?').run(fixed, oldId, me.id);
+      retireQuiz(oldId); // nothing uses it now
+      const quiz = store.getQuiz(fixed);
+      const runIds = q('SELECT id FROM runs WHERE quiz_id = ? AND owner_id = ?').all(fixed, me.id).map((x) => x.id);
+      for (const runId of runIds) {
+        for (const a of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'submitted'").all(runId)) {
+          const att = store.getAttempt(a.id);
+          // code answers whose tests changed run again; the rest is scored from the new answers
+          if (att.result && att.result.code) for (const qid of m.changed) delete att.result.code[qid];
+          gradeAttempt(att, quiz).catch((e) => console.error('regrading failed', att.id, e));
+          regraded++;
+        }
+      }
+    }
+    audit(me, 'rekey-quiz', null, row.title);
+    json(res, 200, { ok: true, regraded });
   });
 
   // Pasted quiz.json -> the quiz maker. Validates without checking references or saving; images it
@@ -850,6 +899,17 @@ module.exports = function teacherRoutes(r) {
       'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store',
       'Content-Disposition': `attachment; filename="${row.title.replace(/[^\w -]/g, '').slice(0, 60) || 'quiz'}.quiz"`,
     });
+  });
+
+  // A copy to change (a version B, next year's): its own quiz, images and all, with no past runs.
+  r.post('/api/t/quizzes/:id/duplicate', async (req, res, p) => {
+    const me = requireTeacher(req);
+    const row = getQuizRow(me, p.id);
+    const quiz = Object.assign({}, store.getQuiz(row.id));
+    quiz.title = `${quiz.title} (copy)`.slice(0, 120);
+    const id = saveQuiz(me, quiz, store.listAssets(row.id), null);
+    audit(me, 'duplicate-quiz', null, quiz.title);
+    json(res, 200, { id, title: quiz.title });
   });
 
   r.post('/api/t/quizzes/:id/delete', async (req, res, p) => {

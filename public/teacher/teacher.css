@@ -467,6 +467,9 @@ button.t-joincode:hover { background: var(--soft); }
 .t-adjust summary { cursor: pointer; color: var(--accent); width: max-content; }
 .t-adjust .t-row { margin-top: 8px; align-items: center; gap: 8px; }
 .t-head { display: flex; align-items: center; gap: 12px; }
+/* The Quizzes tab's search, over the list it filters */
+.t-search-row { display: grid; gap: 12px; }
+.t-search { width: min(100%, 360px); }
 .t-head h1, .t-head h2 { flex: 1; }
 .t-textarea { min-height: 120px; padding: 8px 10px; font: 14px/1.5 var(--mono); resize: vertical; }
 .t-removed td:first-child { text-decoration: line-through; color: var(--ink-2); }

@@ -1,5 +1,5 @@
 // The teacher pages' own dialogs, in place of the browser's alert(), confirm() and prompt().
-//   BQAsk.confirm({ title, text, ok, danger })        -> Promise<boolean>
+//   BQAsk.confirm({ title, text, ok, no, danger })    -> Promise<boolean> (no: the Cancel button's words)
 //   BQAsk.notice({ title, text })                      -> Promise<void>
 //   BQAsk.ask({ title, text, label, value, ok, danger, copy, password }) -> Promise<string | null> (null: cancelled)
 // One at a time; Escape or Cancel says no. A destructive one starts on Cancel, so Enter can't delete.
@@ -18,13 +18,13 @@
     return n;
   };
 
-  function open({ title, text, ok = 'OK', danger = false, cancel = true, field = null }) {
+  function open({ title, text, ok = 'OK', no = 'Cancel', danger = false, cancel = true, field = null }) {
     return new Promise((resolve) => {
       const id = `bq-ask-${++seq}`;
       const back = document.activeElement;
       let answer = null;
       const okBtn = el('button', { class: `btn ${danger ? 'danger' : 'primary'}`, type: 'button', text: ok });
-      const noBtn = cancel ? el('button', { class: 'btn', type: 'button', text: 'Cancel' }) : null;
+      const noBtn = cancel ? el('button', { class: 'btn', type: 'button', text: no }) : null;
       const dlg = el('dialog', { class: 't-dialog t-ask', 'aria-labelledby': `${id}-t`, 'aria-describedby': text ? `${id}-d` : null },
         el('header', { class: 't-dialog-head' }, el('h2', { id: `${id}-t`, text: title })),
         text || field ? el('div', { class: 't-ask-body' }, text ? el('p', { id: `${id}-d`, text }) : null, field ? field.node : null) : null,
