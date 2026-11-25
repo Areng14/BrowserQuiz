@@ -1,51 +1,43 @@
-# Hosting it at school
+# Hosting it on a school server
 
-How to run BrowserQuiz for free on a computer the school already has. Give this page to whoever looks
-after the school's servers. The full reference is [setup.md](setup.md).
+BrowserQuiz runs on one server on your school's own network, and it's free. The full reference is [setup.md](setup.md).
 
 ## What it needs
 
-- One computer that's on whenever there's a class: a spare PC, a server, or a virtual machine. Linux
-  (Ubuntu 22.04 or newer, or Debian 12) is best. Windows 10 or 11 with Docker Desktop works too.
-- 2 CPU cores and 4 GB of RAM for a class of about 30. It runs on 2 GB, but code questions are slower.
-- About 15 GB of free disk. The code runner holds Java, Python, JavaScript, C and C++, C#, Go and Rust.
-- Internet only to install and update. During a quiz, the students' devices just have to reach it.
+- **A Linux server or VM:** Ubuntu 22.04 or newer, or Debian 12, with Docker (Quick Install sets it up).
+- **Size:** 2 CPU cores, 4 GB of RAM and about 15 GB of disk for a class of about 30.
+- **Up during school hours.** The server needs to be on during school hours so it can administer exams. After a restart, each teacher has to sign in again before their quizzes work.
+- **Internet only to install and update.** During a quiz it only talks to the students' devices and the teacher's browser. If a teacher adds an AI grading key, it also calls that AI provider. The student code runner only runs in a separate box with no internet.
 
-## Install
+## Quick Install
 
-1. Install Docker. On Linux: `curl -fsSL https://get.docker.com | sh`. On Windows: Docker Desktop.
+1. Install Docker: `curl -fsSL https://get.docker.com | sh`
 2. Get BrowserQuiz and run the setup script:
 
    ```bash
    git clone https://github.com/Areng14/BrowserQuiz.git && cd BrowserQuiz
    ./setup.sh
    ```
+3. The script asks for the admin password (or makes one up), writes the secrets to `.env`, builds everything and prints the address.
+4. The admin signs in at `/teacher` as `admin` and picks their own username and password. Admin adds any other teachers from the **Teachers** tab.
 
-   On Windows, double-click `setup.cmd` instead.
-3. The script prints the address. Open it from a classroom computer, and sign in at `/teacher` as
-   `admin` with the password the script showed.
-
-It comes back on its own after a reboot. On Linux, Docker starts at boot. On Windows, turn on **Start
-Docker Desktop when you sign in to your computer**; someone has to sign in to that PC after a restart.
+It starts again on its own after a reboot: Docker starts at boot, and the containers restart with it.
 
 ## The network
 
-- Give the computer a fixed address (a DHCP reservation), so the address students type never changes.
-- Open the port the script printed in the firewall (8080 unless something else had it), or 443 with
-  HTTPS (below).
-- Only devices on the school network can reach it. That's fine for exams. For practice quizzes from
-  home it has to be reachable from the internet; that's the school's call.
+- **A fixed address** (a static IP or a DHCP reservation). Safe Exam Browser quizzes have the server's address written into them when they start, so it cannot change.
+- **A name** in your DNS, like `browserquiz.school.example`, so students type a name instead of an IP.
+- **The firewall:** students' devices reach ports 80 and 443 with HTTPS, or the port the setup script printed without it. Default is 8080.
+- **School network only** is the default and fine for exams. Practice quizzes from home need it reachable from the internet, which is up to you.
+- The teacher's **Only students on my current network** option accepts any private (10.x / 192.168.x) address on a server like this.
 
 ## HTTPS
 
-Plain HTTP on the school network is fine for trying it out. Before real exams, set up HTTPS:
-passwords and student IDs are encrypted on the way, passkeys work, and exam mode can do more.
+HTTPS makes exam mode stronger, since browsers do not let a non HTTPS site check monitor count, or block `ALT + TAB` or `WIN`. It also adds support for passkeys and TLS encryption. It isn't required, but it's recommended.
 
-Pick whichever of these the school can do:
+Pick whichever you can do:
 
-- **The school's own certificate.** Many schools have one, or a certificate authority their devices
-  already trust. Put `cert.pem` and `key.pem` in a `certs` folder next to `docker-compose.yml`. Add
-  `- ./certs:/certs:ro` under the `caddy` service's `volumes`, and change `Caddyfile` to:
+- **Your own certificate.** Many schools have a certificate authority their devices already trust. Get a certificate for the server's name (like `browserquiz.school.example`) and put `cert.pem` and `key.pem` in a `certs` folder next to `docker-compose.yml`. Add `- ./certs:/certs:ro` under the `caddy` service's `volumes`, and change `Caddyfile` to:
 
   ```
   {$DOMAIN} {
@@ -54,51 +46,104 @@ Pick whichever of these the school can do:
   	reverse_proxy app:8080
   }
   ```
+- **A public domain.** Point it at your public address and forward ports 80 and 443 from the internet to the server. Caddy then gets a free certificate by itself and renews it.
 
-- **A public domain.** Point the domain at the school's public address and open ports 80 and 443 from
-  the internet to this computer. Caddy then gets a free certificate by itself.
-- **No open ports.** A Cloudflare Tunnel (free, if the domain's DNS is on Cloudflare) gives it an HTTPS
-  address without opening the firewall. Point the tunnel at `http://localhost:8080`, and skip the
-  `docker compose` command below.
-
-For the first two, set these in `.env`, then start it with HTTPS:
+Either way, set these in `.env`:
 
 ```
-DOMAIN=quiz.yourschool.org
+DOMAIN=browserquiz.school.example
 APP_BIND=127.0.0.1
 TRUST_PROXY=1
 ```
+
+Then start it with HTTPS:
 
 ```bash
 docker compose --profile https up -d --build
 ```
 
-With a tunnel, set `APP_BIND=127.0.0.1` and `TRUST_PROXY=1` too, then run `docker compose up -d`.
-Leave `DOMAIN` empty.
+### Certificate example
 
-## Keep it safe
+The server is `browserquiz.school.example`, and your certificate authority gave you a certificate for that name. The folder ends up like this:
 
-- Back up the data between terms. The command is under [Day to day](setup.md#day-to-day).
+```
+BrowserQuiz/
+  docker-compose.yml
+  Caddyfile
+  .env
+  certs/
+    cert.pem   <- the certificate, then any intermediate certificates under it
+    key.pem    <- its private key
+```
+
+The `caddy` service in `docker-compose.yml`, with the new line at the end:
+
+```yaml
+  caddy:
+    image: caddy:2
+    profiles: [https]
+    ...
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - ./certs:/certs:ro
+```
+
+Got a `.pfx` file instead (common from Windows servers)? Split it into the two files:
+
+```bash
+openssl pkcs12 -in browserquiz.pfx -clcerts -nokeys -out certs/cert.pem
+openssl pkcs12 -in browserquiz.pfx -nocerts -nodes -out certs/key.pem
+```
+
+If `openssl` says `unsupported`, it's an older kind of `.pfx`: add `-legacy` to both commands.
+
+### Public domain example
+
+Your domain is `quiz.yourschool.org`, your public IP is `203.0.113.10`, and the server is `10.0.5.20` on your network.
+
+| Where | What |
+| --- | --- |
+| DNS | An `A` record: `quiz.yourschool.org` → `203.0.113.10` |
+| Router or firewall | Forward TCP 80 and 443 to `10.0.5.20` |
+| `.env` | `DOMAIN=quiz.yourschool.org`, `APP_BIND=127.0.0.1`, `TRUST_PROXY=1` |
+
+The `Caddyfile` stays as it comes. The first start takes a minute while Caddy gets the certificate.
+
+### Check it worked
+
+```bash
+curl -I https://browserquiz.school.example/healthz
+```
+
+An `HTTP/2 200` means it's up. If it isn't, `docker compose logs caddy` says why (a wrong file path, or a certificate for another name).
+
+## Safe Exam Browser
+
+Optional, for locked-down exams. SEB has to be installed on the student devices, which needs an administrator. BrowserQuiz makes the SEB settings for each quiz itself: students click **Open Safe Exam Browser**, SEB downloads the quiz's `.seb` file from your server, and opens the quiz.
+
+- **Open the dashboard at the server's name** (`https://browserquiz.school.example/teacher`). That's the address each SEB quiz is sent to.
+- **SEB has to be allowed to open exam links.** If your SEB is locked to one exam system (a client config for Moodle, say), turn on downloading and opening SEB config files (`downloadAndOpenSebConfig`). Otherwise the link does nothing and students cannot take the BrowserQuiz SEB exam.
+- A student stuck in SEB can quit with the quit password on the quiz's live page.
+
+## Running it
+
+| Task | How |
+| --- | --- |
+| Update | `git pull && docker compose up -d --build`, when no quiz is running |
+| Logs | `docker compose logs -f app` |
+| Back up | `docker compose stop app && docker compose cp app:/data ./backup-$(date +%F) && docker compose start app` |
+| Restore | Under [Day to day](setup.md#day-to-day) in setup.md |
+
+- Everything lives in one SQLite database in the `bq-data` volume. Back it up between terms, or let your VM backups cover it.
 - Keep a copy of `.env` somewhere safe. Without its `ID_PEPPER`, no student can sign in again.
-- To update: `git pull && docker compose up -d --build`, when no quiz is running.
+- Quizzes and student data are encrypted with each teacher's key, so a backup doesn't expose them.
 
-## Moving over from Railway
+## Test the setup
 
-Before switching, download each quiz (its **⋯** menu on the Quizzes tab, then **Download**), and use
-**Export CSV** on each past quiz you want to keep scores for. On the new server, upload the quizzes and
-the class CSVs again.
+1. Sign in at `/teacher` as admin. Add a class with one test student, and a one-question quiz.
+2. Start the quiz. If you set up Safe Exam Browser, start it as a Safe Exam Browser quiz.
+3. On a student device, on the network students will use, open the address, join with the code, answer, and turn it in.
+4. On the live page the test student shows as turned in. Close the quiz, and their score shows up.
 
-## If the school says no
-
-Oracle Cloud's Always Free tier includes a virtual machine with up to 4 cores and 24 GB of RAM, and it
-doesn't cost anything. Sign-up asks for a card to check who you are, but Always Free resources aren't
-charged.
-
-1. Create an instance with the Ubuntu image and an Ampere (ARM) shape. If it says it's out of
-   capacity, try another availability domain, or try again later.
-2. In its virtual cloud network's security list, allow ports 80 and 443 from anywhere.
-3. Point a domain at its public address. A free DuckDNS name works.
-4. Follow **Install** above, then **A public domain** under HTTPS.
-
-Oracle's Ubuntu images come with a strict firewall of their own. If the site still doesn't load, that's
-the next place to look.
+If that works, the server, the network, HTTPS and SEB all work. You are ready to administer a BrowserQuiz exam now.
