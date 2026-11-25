@@ -92,18 +92,16 @@
 
   // ---------- the Calculate screen ----------
   // label, then the LaTeX it writes: #0 is where the caret lands, #@ takes what precedes it
+  // Seven columns: functions on the left, numbers on the right. Clear is in the display, by what it
+  // clears. Lists ([ ]), commas and ∞ are still there to type.
   const KEYS = [
-    ['sin', '\\sin(#0)'], ['cos', '\\cos(#0)'], ['tan', '\\tan(#0)'], ['ln', '\\ln(#0)'],
-    ['sin⁻¹', '\\arcsin(#0)'], ['cos⁻¹', '\\arccos(#0)'], ['tan⁻¹', '\\arctan(#0)'], ['√', '\\sqrt{#0}'],
-    ['log', '\\log(#0)'], ['eˣ', '\\exp(#0)'], ['n!', '!'], [',', ','],
-    ['xʸ', '#@^{#0}'], ['x²', '#@^2'], ['(', '('], [')', ')'],
-    ['[', '\\lbrack'], [']', '\\rbrack'], ['π', '\\pi'], ['e', 'e'],
-    ['7', '7'], ['8', '8'], ['9', '9'], ['÷', '\\frac{#@}{#0}'],
-    ['4', '4'], ['5', '5'], ['6', '6'], ['×', '\\times'],
-    ['1', '1'], ['2', '2'], ['3', '3'], ['−', '-'],
-    ['0', '0'], ['.', '.'], ['∞', '\\infty'], ['+', '+'],
+    ['sin', '\\sin(#0)'], ['cos', '\\cos(#0)'], ['tan', '\\tan(#0)'], ['(', '('], [')', ')'], ['⌫'], ['÷', '\\frac{#@}{#0}'],
+    ['sin⁻¹', '\\arcsin(#0)'], ['cos⁻¹', '\\arccos(#0)'], ['tan⁻¹', '\\arctan(#0)'], ['7', '7'], ['8', '8'], ['9', '9'], ['×', '\\times'],
+    ['ln', '\\ln(#0)'], ['log', '\\log(#0)'], ['eˣ', '\\exp(#0)'], ['4', '4'], ['5', '5'], ['6', '6'], ['−', '-'],
+    ['x²', '#@^2'], ['xʸ', '#@^{#0}'], ['√', '\\sqrt{#0}'], ['1', '1'], ['2', '2'], ['3', '3'], ['+', '+'],
+    ['π', '\\pi'], ['e', 'e'], ['n!', '!'], ['0', '0'], ['.', '.'], ['Ans'], ['='],
   ];
-  const FUNCTION_KEYS = 20;
+  const FUNCTION_KEYS = new Set(['sin', 'cos', 'tan', 'sin⁻¹', 'cos⁻¹', 'tan⁻¹', 'ln', 'log', 'eˣ', 'x²', 'xʸ', '√', 'π', 'e', 'n!']);
   const OPERATORS = ['+', '-', '\\times', '\\frac{#@}{#0}'];
   const KEY_NAMES = {
     '√': 'Square root', 'xʸ': 'Power', 'x²': 'Squared', ln: 'Natural logarithm', log: 'Logarithm base ten',
@@ -132,7 +130,7 @@
     field.className = 'calc-mathfield';
     field.mathVirtualKeyboardPolicy = 'manual';
     field.setAttribute('aria-label', 'Calculator expression');
-    const display = h('div', { class: 'calc-display' }, field);
+    const display = h('div', { class: 'calc-display' }, field);  // the result row joins it below
     const below = h('div', { class: 'calc-below' });
     const said = h('span', { class: 'calc-sr', 'aria-live': 'polite' });
     let result = null; // { value, mode }
@@ -207,18 +205,21 @@
 
     const keep = (e) => e.preventDefault(); // keep the caret in the display
     const ans = h('button', { type: 'button', 'aria-label': 'Insert the last answer', disabled: true, onmousedown: keep, onclick: () => ans.rows && type(asLatex(ans.rows)) }, 'Ans');
+    const special = {
+      '⌫': () => h('button', { type: 'button', 'aria-label': 'Backspace', onmousedown: keep, onclick: () => { field.executeCommand('deleteBackward'); field.focus(); } }, icon(['M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z', 'M18 9l-6 6M12 9l6 6'], 18)),
+      Ans: () => ans,
+      '=': () => h('button', { type: 'button', class: 'eq', 'aria-label': 'Calculate', onmousedown: keep, onclick: submit }, '='),
+    };
     const keys = h('div', { class: 'calc-keys' },
-      KEYS.map(([label, latex], i) => h('button', {
-        type: 'button', class: i < FUNCTION_KEYS ? 'fn' : OPERATORS.includes(latex) ? 'op' : null,
+      KEYS.map(([label, latex]) => special[label] ? special[label]() : h('button', {
+        type: 'button', class: FUNCTION_KEYS.has(label) ? 'fn' : OPERATORS.includes(latex) ? 'op' : null,
         'aria-label': KEY_NAMES[label] || label, onmousedown: keep, onclick: () => type(latex),
-      }, label)),
-      h('button', { type: 'button', onmousedown: keep, onclick: () => { field.setValue(''); last = ''; result = null; error = ''; show(); readPrefix(); field.focus(); } }, 'Clear'),
-      h('button', { type: 'button', 'aria-label': 'Backspace', onmousedown: keep, onclick: () => { field.executeCommand('deleteBackward'); field.focus(); } }, icon(['M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z', 'M18 9l-6 6M12 9l6 6'], 18)),
-      ans,
-      h('button', { type: 'button', class: 'eq', 'aria-label': 'Calculate', onmousedown: keep, onclick: submit }, '='));
+      }, label)));
+    const clear = h('button', { type: 'button', class: 'calc-clear', onmousedown: keep, onclick: () => { field.setValue(''); last = ''; result = null; error = ''; show(); readPrefix(); field.focus(); } }, 'Clear');
+    display.append(h('div', { class: 'calc-result' }, clear, out));
 
     const el = h('div', { class: 'calc-screen' },
-      h('div', { class: 'calc-editor' }, display, below), said, out, keys);
+      h('div', { class: 'calc-editor' }, display, below), said, keys);
     show();
     return {
       el,
@@ -429,7 +430,7 @@
       h('div', { class: 'calc-area' },
         h('label', {}, h('span', { text: 'Area from' }), from),
         h('label', {}, h('span', { text: 'to' }), to),
-        h('button', { type: 'button', class: 'btn small', onclick: area }, 'Area')),
+        h('button', { type: 'button', class: 'btn small', onclick: area }, 'Find')),
       out);
     draw();
     return { el, focus: () => rows[0].querySelector('input').focus(), modeChanged: compile };
@@ -486,25 +487,37 @@
       const tabs = graphing ? h('div', { class: 'calc-seg', role: 'tablist', 'aria-label': 'Calculator screen' },
         [['calculate', 'Calculate'], ['graph', 'Graph']].map(([v, t]) => h('button', { type: 'button', role: 'tab', 'data-v': v, onclick: () => { state.screen = v; remember(state); showScreen(); } }, t))) : null;
       const modes = h('div', { class: 'calc-seg', role: 'group', 'aria-label': 'Angle mode' },
-        [['radians', 'Radians'], ['degrees', 'Degrees']].map(([v, t]) => h('button', { type: 'button', 'data-v': v, onclick: () => { state.mode = v; remember(state); setPressed(); calc.modeChanged(); if (graph) graph.modeChanged(); } }, t)));
+        [['radians', 'Rad', 'Radians'], ['degrees', 'Deg', 'Degrees']].map(([v, t, name]) => h('button', { type: 'button', 'data-v': v, 'aria-label': name, title: name, onclick: () => { state.mode = v; remember(state); setPressed(); calc.modeChanged(); if (graph) graph.modeChanged(); } }, t)));
+      // one row: the screens (or the name), the angle mode and close; all of it moves the panel
+      const title = h('h2', { text: 'Calculator' });
       const head = h('div', { class: 'calc-head', tabindex: 0, role: 'group', 'aria-label': 'Calculator. Drag, or use the arrow keys, to move it.' },
-        h('h2', { text: 'Calculator' }),
+        title, tabs, h('span', { class: 'calc-head-gap' }), modes,
         h('button', { type: 'button', class: 'calc-close', 'aria-label': 'Close calculator', onpointerdown: (e) => e.stopPropagation(), onclick: () => close(true) }, icon(['M18 6 6 18', 'M6 6l12 12'])));
-      let drag = null;
+      // A press only becomes a drag once it moves a little, so the buttons in the row still click; the
+      // panel takes the pointer from then on, and the click a drag ends in goes nowhere.
+      let drag = null, dragged = false;
       head.addEventListener('pointerdown', (e) => {
         if (e.button !== 0 || phone()) return;
         const r = panel.getBoundingClientRect();
-        drag = { x: e.clientX, y: e.clientY, left: r.left, top: r.top, moved: false };
-        head.setPointerCapture(e.pointerId); e.preventDefault();
+        drag = { id: e.pointerId, x: e.clientX, y: e.clientY, left: r.left, top: r.top, moved: false };
+        if (!e.target.closest('button')) e.preventDefault();
       });
       head.addEventListener('pointermove', (e) => {
-        if (!drag) return;
-        // a click on the head isn't a drag (it would undock it)
-        if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
-        drag.moved = true;
+        if (!drag || e.pointerId !== drag.id) return;
+        if (!drag.moved) {
+          if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+          drag.moved = true;
+          try { head.setPointerCapture(e.pointerId); } catch (err) { /* it ended already */ }
+          head.classList.add('dragging');
+        }
         move(drag.left + e.clientX - drag.x, drag.top + e.clientY - drag.y);
       });
-      for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) head.addEventListener(ev, () => { if (drag && drag.moved) dockIfAt(24); drag = null; });
+      const endDrag = () => {
+        if (drag && drag.moved) { dockIfAt(24); dragged = true; setTimeout(() => { dragged = false; }, 0); }
+        drag = null; head.classList.remove('dragging');
+      };
+      for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) head.addEventListener(ev, endDrag);
+      head.addEventListener('click', (e) => { if (dragged) { e.preventDefault(); e.stopPropagation(); } }, true);
       head.addEventListener('keydown', (e) => {
         if (e.target !== head || phone()) return;
         const d = { ArrowLeft: [-20, 0], ArrowRight: [20, 0], ArrowUp: [0, -20], ArrowDown: [0, 20] }[e.key];
@@ -515,7 +528,7 @@
         if (e.key === 'ArrowRight') dockIfAt(1);
       });
       panel = h('section', { class: 'calc-panel', id: 'calc-panel', 'aria-label': graphing ? 'Graphing calculator' : 'Calculator' },
-        head, h('div', { class: 'calc-bar' }, tabs, modes), calc.el, graph ? graph.el : null);
+        head, calc.el, graph ? graph.el : null);
       panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !e.defaultPrevented) { e.stopPropagation(); close(true); } });
       // keystrokes in the calculator are the calculator's, not the quiz's
       panel.addEventListener('keyup', (e) => e.stopPropagation());
@@ -527,6 +540,7 @@
         if (graph) graph.el.hidden = now !== 'graph';
         if (tabs) {
           tabs.hidden = state.kind !== 'graphing';
+          title.hidden = !tabs.hidden; // the screens say what it is
           for (const b of tabs.children) b.setAttribute('aria-selected', String(b.dataset.v === now));
         }
         panel.setAttribute('aria-label', state.kind === 'graphing' ? 'Graphing calculator' : 'Calculator');
