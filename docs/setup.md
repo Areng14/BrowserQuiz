@@ -139,6 +139,10 @@ SEB mutes the computer's sound while the quiz is open, so music or a video left 
 goes quiet. Turn off **Mute the computer's sound** when you start the quiz if a student uses a screen
 reader.
 
+Inside SEB there's nothing else to switch to, so the quiz losing focus (SEB's own toolbar, a notification)
+never counts against a student, and the quiz has no **Exit** button. Any time away still shows on the live
+page.
+
 When students turn in, **Quit Safe Exam Browser** closes it. A stuck student can also quit with the
 **SEB quit password** on the quiz's page; that counts as leaving the quiz.
 

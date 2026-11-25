@@ -1093,7 +1093,8 @@
           save),
         timer,
         h('div', { class: 'qbar-side qbar-end' }, scratchBtn, themeButton(),
-          cfg.preview && !cfg.watch ? null : h('button', { class: 'btn small ghost', type: 'button', text: 'Exit', onclick: () => openExit() }))),
+          // no Exit in Safe Exam Browser with our settings: there's nowhere to go until they turn in
+          (cfg.preview && !cfg.watch) || (S.run && S.run.sebQuit) ? null : h('button', { class: 'btn small ghost', type: 'button', text: 'Exit', onclick: () => openExit() }))),
       conn,
       main,
       scratch,
@@ -2612,7 +2613,7 @@
         h('h2', { id: 'fs-title', text: 'You left fullscreen' }),
         // waiting for the teacher's Start (no quiz yet): leaving doesn't count until it starts (store.record)
         h('p', { text: !S.quiz ? 'Once the quiz starts, this counts as cheating.' : S.pausedAt ? 'Once the quiz goes on, this counts as cheating.' : 'Leaving fullscreen counts as cheating, and your teacher can see that you left. Go back to keep working.' }),
-        h('div', { class: 'row-actions' }, btn, S.quiz ? h('button', { class: 'btn', type: 'button', text: 'Exit', onclick: () => openExit() }) : null)));
+        h('div', { class: 'row-actions' }, btn, S.quiz && !(S.run && S.run.sebQuit) ? h('button', { class: 'btn', type: 'button', text: 'Exit', onclick: () => openExit() }) : null)));
     S.el.fsOverlay = ov;
     S.el.wrap.append(ov);
     S.el.fsRelease = holdFocus(ov);
@@ -2647,7 +2648,7 @@
 
   // Students can always get out: turn in now, or leave with answers saved and come back later.
   function openExit() {
-    if (S.done || !S.el || S.el.wrap.querySelector('.modal-backdrop')) return;
+    if (S.done || !S.el || S.el.wrap.querySelector('.modal-backdrop') || (S.run && S.run.sebQuit)) return;
     let backdrop;
     let release = null;
     const close = () => { backdrop.remove(); release(); };

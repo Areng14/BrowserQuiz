@@ -69,10 +69,11 @@ const SERVER_EVENTS = {
   'restore': 'info', 'invalidate': 'info', 'let-in': 'info', 'extend': 'info', 'grade': 'info', 'pause': 'info', 'unpause': 'info',
 };
 // In Safe Exam Browser with BrowserQuiz's own settings, SEB blocks every other app, so the page losing focus
-// for a moment is SEB's own doing (its toolbar, a system dialog): no strike. But the SEB check can be faked
-// from a normal browser, so losing focus still starts the away clock: the teacher sees the time, and a long
-// absence invalidates (back()). SEB isn't full screen through the browser, and its window can't be left with
-// the mouse or resized, so those are only logged. Quitting SEB to leave still counts, as the reload after.
+// is SEB's own doing (its toolbar, a system dialog, an iPad's notifications): only logged, no strike, and it
+// never invalidates (back()). The SEB check can be faked from a normal browser, though, so losing focus still
+// runs the away clock: the teacher sees the time and can invalidate by hand. SEB isn't full screen through
+// the browser, and its window can't be left with the mouse or resized, so those are only logged too.
+// Quitting SEB to leave still counts, as the reload after.
 const SEB_QUIET = new Set(['fullscreen-exit', 'mouse-left', 'resize']);
 const SEB_SOFT = new Set(['blur', 'hidden', 'unfocused-beat']);
 const MERGE_MS = 2000;
@@ -154,7 +155,8 @@ function back(a, t) {
     a.awayMs = (a.awayMs || 0) + ms;
     a.awayMax = Math.max(a.awayMax || 0, ms);
     // Gone longer than a stray popup takes: cheating, whatever the grace strikes. Quietly, like any invalidation.
-    if (ms > AWAY_LIMIT_MS && !a.practice && a.integrity === 'clean' && watched(a)) {
+    // Not in Safe Exam Browser with our settings, where there's nothing to go to (SEB_QUIET above).
+    if (ms > AWAY_LIMIT_MS && !a.practice && !a.lockedSeb && a.integrity === 'clean' && watched(a)) {
       a.integrity = 'invalidated';
       a.reason = 'away-long';
       a.invalidatedAt = t;
@@ -179,7 +181,7 @@ function record(a, type, detail, quiz, at) {
   if (!severity) return;
   let soft = false;
   if (a.lockedSeb && SEB_QUIET.has(type)) severity = 'info';
-  else if (a.lockedSeb && SEB_SOFT.has(type) && severity === 'violation') { severity = 'warning'; soft = true; }
+  else if (a.lockedSeb && SEB_SOFT.has(type) && severity === 'violation') { severity = 'info'; soft = true; }
   if (a.lockedSeb && (soft || SEB_QUIET.has(type))) detail = [detail, 'in Safe Exam Browser'].filter(Boolean).join(', ');
   // Before the quiz starts (in lockdown, waiting for the teacher's Start), leaving doesn't count: the page
   // tells them they left, and the teacher's log has it, without a strike.
@@ -188,7 +190,7 @@ function record(a, type, detail, quiz, at) {
   const t = at == null ? now : at;
   // Nor while the teacher has the quiz paused (pause.js): the questions are hidden, and a fire drill
   // shouldn't leave everyone with lost connections.
-  if (a.pausedAt && t >= a.pausedAt && severity !== 'info') { severity = 'info'; soft = false; detail = [detail, 'while paused'].filter(Boolean).join(', '); }
+  if (a.pausedAt && t >= a.pausedAt && (severity !== 'info' || soft)) { severity = 'info'; soft = false; detail = [detail, 'while paused'].filter(Boolean).join(', '); }
   if (a.practice && severity !== 'info') return; // practice runs aren't monitored
   if (soft && watched(a) && !a.away) { a.away = true; a.awaySince = t; } // the away clock, without a strike
   if (severity === 'warning') {
