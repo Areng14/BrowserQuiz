@@ -1,6 +1,6 @@
 ---
 name: arenguidesign
-description: Areng's UI design rules for building or changing any user interface (pages, screens, dialogs, tables, forms, menus, reports), grounded in minimalist and intuitive design (Nielsen's heuristics, Don Norman, Dieter Rams, Hick's and Fitts's laws, Gestalt) - no slogans or taglines, no pill or badge statuses, one consistent set of control sizes and spacing, no scrolling unless the content needs it, few visible buttons with the rest under a menu, layouts anyone can pick up without help, and balanced alignment with breathing room. Use whenever you design, build, restyle, clean up or review UI, even small changes like adding a button, a column or a dialog, and before calling any UI work done.
+description: Areng's UI design rules for building or changing any user interface (pages, screens, dialogs, tables, forms, menus, reports), grounded in minimalist and intuitive design (Nielsen's heuristics, Don Norman, Dieter Rams, Hick's and Fitts's laws, Gestalt) - no slogans or taglines, no pill or badge statuses, buttons colored by role (primary, success, warning, danger) with icons and words, hover tips for hard terms, one consistent set of control sizes and spacing, no scrolling unless the content needs it, few visible buttons with the rest under a menu, layouts anyone can pick up without help, and balanced alignment with breathing room. Use whenever you design, build, restyle, clean up or review UI, even small changes like adding a button, a column or a dialog, and before calling any UI work done.
 ---
 
 # arenguidesign: good UI, the Areng way
@@ -25,6 +25,9 @@ it, so removing things comes before styling them.
   never "Restore" somewhere else.
 - **Errors sit next to what caused them** and say how to fix it, in plain words.
 - **Empty states are one short line** ("None found."), not a paragraph.
+- **Hard terms get a hover tip, not an explainer line.** A setting, status or flag a newcomer may
+  not know shows one or two plain sentences on hover and keyboard focus, read by screen readers as
+  its description. Say what it does or what the student gets. Obvious labels get no tip.
 
 ## 2. Status: plain text, never pills
 
@@ -34,7 +37,24 @@ it, so removing things comes before styling them.
   tooltip, and for screen readers.
 - A small count next to a nav item is fine (a number, not a decorated tag).
 
-## 3. Consistency: one system everywhere
+## 3. Buttons: color, icon and words say what kind of action
+
+- **Color by role, the same everywhere.** Primary (accent): the main action. Success (green): start,
+  go on, finish ("Start quiz", "Resume", "Submit"). Warning (amber): hold ("Pause"). Danger (red):
+  ends, removes or invalidates ("Close quiz", "End quiz", "Remove", "Exit"). Everything else is
+  plain. Use the app's role classes, never a one-off color.
+- **Solid for the one main action, outlined beside others.** A bar or dialog has one solid button. A
+  red or amber action that sits beside other buttons is outlined; it's solid red in its own confirm.
+- **Icon and words on the main actions.** Buttons people use often get an icon before their words,
+  all from one icon set (Lucide), one size and one gap everywhere.
+- **Icon only when anyone can tell what it does:** pause, edit, preview, settings, close, more. The
+  button is square, as tall as its row, and still has its name, shown on hover and keyboard focus and
+  said to screen readers.
+- **Keep the words** on the primary action, on anything destructive, and wherever the icon alone could
+  mean something else (a megaphone isn't obviously "Announce", a square isn't obviously "Close quiz").
+- **No icons in menus or table cells**, except a row's own action buttons.
+
+## 4. Consistency: one system everywhere
 
 - **One height per control size.** Buttons, selects, inputs and menu buttons that sit in a row are
   the same height. Pick from a fixed set (e.g. 40px regular, 34px small) and never mix sizes in one
@@ -48,7 +68,7 @@ it, so removing things comes before styling them.
 - **Same pattern, same place.** If rows end with their actions on the right, every list does.
   If the primary button is first, it's first everywhere.
 
-## 4. No scrolling unless needed
+## 5. No scrolling unless needed
 
 - **Fit the screen.** A page that can fit the viewport should not scroll. Work out fixed chrome
   (bars, headers) and let the content take exactly the rest.
@@ -58,20 +78,21 @@ it, so removing things comes before styling them.
   cut short with "…" and the whole thing on hover; long code scrolls inside its own box.
 - **Don't nest scrollbars** when one will do.
 
-## 5. No clutter: few buttons, the rest one tap away
+## 6. No clutter: few buttons, the rest one tap away
 
 - **Show only what's needed now.** A row or a toolbar shows its one or two most likely actions.
   Everything else goes under a `⋯` menu (or "More"), which keeps its place while things update.
 - **One primary action per screen or dialog**, visually stronger than the rest.
 - **Destructive actions** (Delete, Reset) live in the menu, in red, and ask before acting, in the
-  app's own dialog, not the browser's.
+  app's own dialog, not the browser's. One that has to be one click away (Close quiz) is an outlined
+  red button, and still asks.
 - **No duplicate paths.** If a list lives in its own tab, don't repeat it on another page.
 - **Fold away what's rarely used** (advanced options in a collapsed section), and open it on its
   own when it's in use.
 - **Remove columns and fields nobody acts on.** If two columns say the same thing, merge them
   ("3 · 0:06" instead of separate Strikes and Time away columns).
 
-## 6. Easy to pick up
+## 7. Easy to pick up
 
 - **Familiar patterns over clever ones:** a sidebar for places, a table for records, a dialog for a
   decision, a menu for extra actions.
@@ -86,7 +107,7 @@ it, so removing things comes before styling them.
   touch targets are at least 40px.
 - **Dark mode counts.** Use the app's color tokens, never hard-coded colors, and check it.
 
-## 7. Balance and breathing room
+## 8. Balance and breathing room
 
 - **Align to edges.** Things in a column share a left edge; things in a row share a center line
   (or a baseline for text). A section under a form lines up with the form.
@@ -99,7 +120,7 @@ it, so removing things comes before styling them.
 - **Same width for things that stack.** A list under a form is the form's width, not its own.
 - **Line lengths stay readable** (about 60-80 characters for prose).
 
-## 8. The principles underneath
+## 9. The principles underneath
 
 The rules above come from these. When a case isn't covered, reason from them.
 
@@ -112,8 +133,8 @@ The rules above come from these. When a case isn't covered, reason from them.
   and minimalist design). Leave out what's irrelevant or rarely needed; rarely needed goes behind a
   menu or a collapsed section.
 - **Make hierarchy with scale, weight, contrast and space, not decoration.** No borders, shadows,
-  colors or icons that don't carry meaning. Keep the palette small: color means something (red bad,
-  green done, accent for actions).
+  colors or icons that don't carry meaning. Keep the palette small: color means something (red bad or
+  destructive, green done or go, amber hold, accent for the main action).
 - **Whitespace is part of the design.** Negative space groups things and points the eye; it isn't
   wasted room.
 - **Minimal isn't hidden.** Flat design can strip the cues that say "you can click this". Buttons
@@ -175,7 +196,7 @@ Further reading: [Nielsen's 10 usability heuristics](https://www.nngroup.com/art
 [Laws of UX](https://lawsofux.com/),
 [Dieter Rams' ten principles](https://ixdf.org/literature/article/dieter-rams-10-timeless-commandments-for-good-design).
 
-## 9. Verify before calling it done
+## 10. Verify before calling it done
 
 Look at it, don't just reason about it:
 
@@ -197,6 +218,9 @@ Look at it, don't just reason about it:
 3. **Check the checklist:**
    - [ ] No taglines or explainer lines the UI could have shown instead
    - [ ] No pills, badges or tags for status
+   - [ ] Buttons colored by role; one solid button per bar or dialog
+   - [ ] Icons from the one set; icon-only only when obvious, and named on hover and for screen readers
+   - [ ] Hard terms have a hover tip; no explainer lines instead
    - [ ] Every control in a row is the same height and lines up
    - [ ] Spacing comes from the scale; sibling gaps are equal
    - [ ] No page scroll that isn't needed; no sideways scroll at 360px
