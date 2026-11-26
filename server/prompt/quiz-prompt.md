@@ -11,7 +11,7 @@ Number and kinds of questions:
 Time limit:
 Languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust; one or several, or any):
 Rubric points on code questions (graded automatically, by me, or none):
-Extras (any from the list in step 1, or none):
+Extras (step 1 lists them; the recommended ones are on unless I say no):
 Anything else:
 
 ## 1. Ask before you write
@@ -27,28 +27,33 @@ Before writing, send me one short message and wait for my answer. In it:
      [the topic's language, or Java]
   6. Code questions can have rubric points for things tests can't check, like private fields.
      Should those be graded automatically, by you, or left out? [automatically]
-- Unless Extras is already filled in, list these extras in one line each and ask which I want
-  [none]. Teachers often don't know BrowserQuiz has them:
-  - **Question pools:** each student gets a random few questions from a bigger set, so neighbors'
-    screens don't match.
-  - **Random values:** the numbers in a question change per student, each with its own answer.
-  - **Locked parts:** once a student moves on to the next part, they can't go back.
-  - **Sections:** named parts, like "Part A: Arrays, Part B: Strings".
-  - **Timed parts:** each section gets its own minutes, like the SAT. Students stay in a part until
-    its time is up, then it locks and the next one starts.
-  - **Shared material:** one passage, table or piece of code that several questions use.
-  - **Speed tests:** a code question that needs an efficient solution (Java, Python, JavaScript and
-    TypeScript).
-  - **Banned methods:** rule out shortcuts on code questions, like a built-in sort.
-  - **Code without running:** students write code questions without running them, like on paper.
-    The tests still grade them.
-  - **Images:** diagrams you draw, or pictures I attach.
-  - **Turning in early:** students can turn in before time is up. Without it, a timed quiz turns in
-    when time runs out.
-  - **Calculator:** students can open a scientific or graphing calculator during the quiz.
+- Unless Extras is already filled in, list these extras in one line each and ask which I want.
+  Teachers often don't know BrowserQuiz has them. Make clear which ones are recommended.
+  - **Recommended**, so on unless I say no. They make copying from a neighbor much harder. Leave one
+    out only where it doesn't fit this quiz, and say why:
+    - **Random values:** the numbers in a question change per student, each with its own answer. For
+      questions with numbers to change (calculations, output, tracing, math), not ones about a concept.
+    - **Question pools:** each student gets a random few questions from a bigger set, so neighbors'
+      screens don't match. Means writing extra questions. Not for a quiz under 5 questions.
+    - **Locked parts:** once a student moves on to the next part, they can't go back. Only for a quiz
+      with parts, and not when a later part needs an earlier one.
+  - **The rest**, off unless I ask:
+    - **Sections:** named parts, like "Part A: Arrays, Part B: Strings".
+    - **Timed parts:** each section gets its own minutes, like the SAT. Students stay in a part until
+      its time is up, then it locks and the next one starts.
+    - **Shared material:** one passage, table or piece of code that several questions use.
+    - **Speed tests:** a code question that needs an efficient solution (Java, Python, JavaScript and
+      TypeScript).
+    - **Banned methods:** rule out shortcuts on code questions, like a built-in sort.
+    - **Code without running:** students write code questions without running them, like on paper.
+      The tests still grade them.
+    - **Images:** diagrams you draw, or pictures I attach.
+    - **Turning in early:** students can turn in before time is up. Recommended off: a timed quiz turns
+      in when time runs out, so nobody finishes early and passes answers to classmates still taking it.
+    - **Calculator:** students can open a scientific or graphing calculator during the quiz.
 
-Ask only once. If everything above is filled in and Extras says none, don't ask: start writing. If I
-answer "defaults", use the defaults with no extras.
+Ask only once. If everything above is filled in, don't ask: start writing. If I answer "defaults",
+use the defaults and the recommended extras.
 
 ## 2. Defaults
 
@@ -68,6 +73,7 @@ Use these for anything still blank, and list the ones you used in your answer.
 - **Points:** 1 per multiple choice, 2 per select-all, 1 per short answer, 1–2 per math or graph question,
   6–9 per code question.
 - **Rubric points:** graded automatically.
+- **Extras:** the recommended ones (step 1), where they fit. Turning in early stays off.
 
 ## 3. Difficulty
 
@@ -113,16 +119,21 @@ that should go to thinking. Keep to these limits, even when the notes are wordy:
 - For "what is printed" questions use `output`, and for tracing loops use `trace`.
 - Use select-all only when 2 or more choices are correct.
 - Use short answer only when there are few ways to write the answer, and list all of them.
-- Use question pools only if I ask for them (Extras).
-- Use random values (`vars`, see the format) only if I ask for them: give 3 to 6 rows, and work
-  out each row's answer and put it in the row.
-- Set `"lockParts": true` only if I ask that students can't go back to earlier parts.
-- Add `sections` only if I ask for named parts. Set `"turnInEarly": true` only if I ask that students can
-  turn in before time is up.
+- Random values (`vars`, see the format), unless I said no: on every multiple choice, select-all,
+  short answer, math, graph, output or trace question with numbers to change. Give 3 to 6 rows, and
+  work out each row's answer and put it in the row.
+- Set `"noRun": true` on code questions only if I ask for code without running.
+
+**The whole quiz**
+- Question pools, unless I said no (Extras): put the multiple choice questions in one pool, with
+  about half again as many as each student gets (write 9 for 6 each), all worth the same and about
+  as hard as each other. Not for a quiz under 5 questions.
+- Add `sections` only if I ask for named parts. When there are sections, set `"lockParts": true`
+  unless I said no or a later part needs an earlier one.
+- Set `"turnInEarly": true` only if I ask that students can turn in before time is up.
 - Timed parts only if I ask for them: give every section a `timeLimitMin`, start the first one at the
   first question, and leave the quiz's `timeLimitMin` out (it's the sections added up). Work out each
   part's minutes from its questions, as for the time limit (Defaults), with room to check work.
-- Set `"noRun": true` on code questions only if I ask for code without running.
 - Set `"calculator"` (`"scientific"` or `"graphing"`) only if I ask that students get a calculator.
 
 **Every question**
@@ -236,7 +247,7 @@ If you can create files, make a `.quiz` file:
 If you can't create files, answer with the whole `quiz.json` in one ```json code block instead,
 without images.
 
-Either way, then list the defaults you used.
+Either way, then list the defaults and recommended extras you used, and any you left out and why.
 
 ## The format
 

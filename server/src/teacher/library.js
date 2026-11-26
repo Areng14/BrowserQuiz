@@ -161,7 +161,9 @@ function questionPrompt() {
   const quiz = readRel('server/prompt/quiz-prompt.md');
   const part = (from, to) => quiz.slice(quiz.indexOf(from), quiz.indexOf(to)).trim();
   let n = 1;
-  const rules = [part('## 3. Difficulty', '## 7. Images'), part('## 8. Check your work', '## 9. Your answer')].join('\n\n')
+  // not the quiz-wide settings (pools, sections, turning in early): one question has none of them
+  const section = (text, from, to) => text.slice(0, text.indexOf(from)) + text.slice(text.indexOf(to));
+  const rules = [section(part('## 3. Difficulty', '## 7. Images'), '**The whole quiz**', '**Every question**'), part('## 8. Check your work', '## 9. Your answer')].join('\n\n')
     .replace(/^## \d+\. /gm, () => `## ${++n}. `);
   const sample = JSON.parse(readRel('examples/ap-csa-unit4/quiz.json')).questions.find((x) => x.type === 'single');
   return readRel('server/prompt/question-prompt.md').replace('{{RULES}}', () => rules).replace('{{FORMAT}}', promptFormat)

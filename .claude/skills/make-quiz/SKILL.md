@@ -70,21 +70,28 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
 - **Prompts** say exactly what's asked, including edge cases ("return 0 for an empty array").
   No flavor text, no hints, nothing that gives away the answer. Put code in backticks or
   fenced blocks.
-- **Random values:** only when asked ("different numbers for each student"). Put `"vars"`, 3 to 6
+- **Recommended extras** (random values, question pools, locked parts) are on unless the teacher
+  says no, because they make copying from a neighbor much harder. Leave one out where it doesn't fit
+  (no numbers to change, a quiz under 5 questions, a later part that needs an earlier one) and say so.
+- **Random values** (recommended): on every question with numbers to change. Put `"vars"`, 3 to 6
   rows like `{ "x": 7, "y": 2, "out": 1 }`, on a `single`, `multi`, `text`, `output` or `trace`
   question and write `{{x}}` where each value goes, answers included. Work out every row's answer
   yourself and check each one: a wrong row is a wrong answer key for some students.
-- **Locked parts:** `"lockParts": true` only when asked that students can't go back to earlier parts.
+- **Locked parts** (recommended): `"lockParts": true` whenever the quiz has sections, unless the
+  teacher says no or a later part needs an earlier one.
 - **Code without running:** `"noRun": true` on a code question only when asked that students write it
   without running it, like on paper.
-- **Turning in early:** `"turnInEarly": true` only when asked that students can turn in before time is up.
+- **Turning in early:** off unless asked. `"turnInEarly": true` only when the teacher asks that students
+  can turn in before time is up; otherwise nobody finishes early and passes answers to classmates.
 - **Math:** write it in LaTeX, `$x^2$` in a line and `$$...$$` on its own line.
 - **Timed parts:** only when asked for a time per part ("15 minutes for multiple choice, then 20 for
   code"). Give every section a `timeLimitMin`, start the first one at the first question, and leave the
   quiz's `timeLimitMin` out: it's the sections added up. Parts lock on their own.
-- **Question pools:** only when asked ("each student gets 2 of these 5"). Give those questions the same
-  `"pool"`, set `"pools": { "<name>": 2 }`, and make them worth the same, of one type, next to each
-  other and about as hard as each other.
+- **Question pools** (recommended, not for a quiz under 5 questions): put the multiple choice
+  questions in one pool with about half again as many as each student gets (write 9 for 6 each), or
+  the teacher's own split ("each student gets 2 of these 5"). Give those questions the same `"pool"`,
+  set `"pools": { "<name>": 6 }`, and make them worth the same, of one type, next to each other and
+  about as hard as each other.
 - **Shared material:** when several questions use the same case, passage or code, write it
   once in top-level `shared` and give each question `"shared": "<id>"`. Keep the set's
   questions next to each other.
