@@ -92,4 +92,4 @@ It prints the address to open. Sign in at `/teacher` as `admin`, with the passwo
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Icons are from [Lucide](https://lucide.dev) (ISC); other libraries it uses are in [NOTICE](NOTICE.md).
