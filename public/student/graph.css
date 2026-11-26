@@ -7,7 +7,10 @@
 .gr-grid line { stroke: var(--line); stroke-width: 0.6; }
 .gr-grid line.major { stroke-width: 1; }
 .gr-grid line.axis { stroke: var(--ink-2); stroke-width: 1.4; }
-.gr-grid .tick { fill: var(--ink-2); font: 10px var(--font, system-ui, sans-serif); font-variant-numeric: tabular-nums; }
+.gr-ticks .tick {
+  fill: var(--ink-2); font: 10px var(--font, system-ui, sans-serif); font-variant-numeric: tabular-nums;
+  paint-order: stroke; stroke: var(--editor, var(--bg)); stroke-width: 3px; stroke-linejoin: round;
+}
 .gr-curve { fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .gr-shade { fill: var(--accent); fill-opacity: 0.14; stroke: none; }
 .gr-dot { fill: var(--accent); stroke: var(--editor, var(--bg)); stroke-width: 2; }
@@ -15,7 +18,7 @@
 .gr-label { fill: var(--ink); font: 600 12px var(--font, system-ui, sans-serif); }
 .gr-shape.picked .gr-curve { stroke-width: 3.4; }
 .gr-asym { stroke: var(--ink-2); stroke-width: 1.4; stroke-dasharray: 4 4; }
-.gr-block { margin: 8px 0; }
+.gr-block { margin: 12px auto; }
 .gr-problem { margin: 6px 0 0; font-size: 13px; color: var(--bad); }
 /* a correct answer drawn beside a student's */
 .gr-view.answer .gr-curve { stroke: var(--good); }
@@ -23,7 +26,7 @@
 .gr-view.answer .gr-dot { fill: var(--good); }
 
 /* ---------- drawing on it ---------- */
-.gr-editor { display: grid; gap: 8px; max-width: 460px; }
+.gr-editor { display: grid; gap: 8px; width: 100%; margin: 0 auto; }
 .gr-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .gr-tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .gr-add { display: inline-flex; align-items: center; gap: 4px; }
@@ -44,7 +47,14 @@
 .gr-handle:focus-visible .gr-hit { fill: none; stroke: var(--accent); stroke-width: 2; }
 .gr-coord { fill: var(--ink); font: 600 11px var(--font, system-ui, sans-serif); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
 /* the grid fits the screen's height too, so the whole of it shows at once */
-.gr-editor .gr-view { max-width: min(460px, calc((100dvh - 240px) * var(--gr-aspect, 1))); }
+.gr-editor { max-width: min(460px, calc((100dvh - 240px) * var(--gr-aspect, 1))); }
+.gr-editor .gr-view { max-width: none; }
+/* a graph question whose prompt ends in a graph: that graph beside the grid on wide screens, above it on narrow */
+.gr-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px 32px; align-items: end; margin-top: 4px; }
+.gr-pair > .gr-block { margin: 0 auto; }
+/* math in a report's answer boxes sits on the left, like the rest of the answers */
+.r-math .katex-display { margin: 0; text-align: left; }
+.r-math .katex-display > .katex { text-align: left; }
 
 /* ---------- the math answer box ---------- */
 .math-box { max-width: 560px; }

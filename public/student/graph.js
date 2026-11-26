@@ -43,8 +43,10 @@
     const fy = (Y) => y1 - (Y / H) * (y1 - y0);
     return { x0, x1, y0, y1, W, H, px, py, fx, fy, step };
   }
+  // The grid's lines (under the shapes) and its numbers (over them, so a curve never hides one).
   function grid(F) {
     const g = svg('g', { class: 'gr-grid', 'aria-hidden': 'true' });
+    const nums = svg('g', { class: 'gr-ticks', 'aria-hidden': 'true' });
     const { x0, x1, y0, y1, W, H, px, py, step } = F;
     const cellX = px(x0 + step) - px(x0);
     const cellY = py(y0) - py(y0 + step);
@@ -67,15 +69,15 @@
       if (i === 0 || i % ex) continue;
       const X = px(i * step);
       if (X < 8 || X > W - 8) continue;
-      g.append(svg('text', { class: 'tick', x: X, y: labelY, 'text-anchor': 'middle' }, num(i * step)));
+      nums.append(svg('text', { class: 'tick', x: X, y: labelY, 'text-anchor': 'middle' }, num(i * step)));
     }
     for (let i = first(y0); i * step <= y1 + 1e-9; i++) {
       if (i === 0 || i % ey) continue;
       const Y = py(i * step);
       if (Y < 8 || Y > H - 8) continue;
-      g.append(svg('text', { class: 'tick', x: ay != null ? labelX : 4, y: Y + 4, 'text-anchor': ay != null ? 'end' : 'start' }, num(i * step)));
+      nums.append(svg('text', { class: 'tick', x: ay != null ? labelX : 4, y: Y + 4, 'text-anchor': ay != null ? 'end' : 'start' }, num(i * step)));
     }
-    return g;
+    return { lines: g, nums };
   }
 
   // ---------- drawing a shape ----------
@@ -149,9 +151,10 @@
     const id = 'grc' + ++uid;
     const root = svg('svg', { class: 'gr-svg', viewBox: `0 0 ${F.W} ${F.H}`, role: 'img', 'aria-label': label });
     root.append(svg('defs', {}, svg('clipPath', { id }, svg('rect', { x: 0, y: 0, width: F.W, height: F.H }))));
-    root.append(svg('rect', { class: 'gr-bg', x: 0, y: 0, width: F.W, height: F.H }), grid(F));
+    const g = grid(F);
+    root.append(svg('rect', { class: 'gr-bg', x: 0, y: 0, width: F.W, height: F.H }), g.lines);
     const layer = svg('g', { 'clip-path': `url(#${id})` });
-    root.append(layer);
+    root.append(layer, g.nums);
     return { root, layer };
   }
   const windowText = (F) => `x from ${num(F.x0)} to ${num(F.x1)}, y from ${num(F.y0)} to ${num(F.y1)}`;
@@ -265,7 +268,7 @@
     const shade = h('div', { class: 'gr-seg', role: 'group', 'aria-label': 'Shading' }, ...sideBtns);
     const style = h('div', { class: 'gr-style', hidden: '' }, edge, shade);
     const bar = h('div', { class: 'gr-bar' }, h('div', { class: 'gr-tools', role: 'group', 'aria-label': 'Draw' }, ...addBtns), remove);
-    const el = h('div', { class: 'gr-editor' }, bar, o.shade ? style : null, h('div', { class: 'gr-view', style: `--gr-aspect: ${(F.W / F.H).toFixed(3)}` }, root), list, said);
+    const el = h('div', { class: 'gr-editor', style: `--gr-aspect: ${(F.W / F.H).toFixed(3)}` }, bar, o.shade ? style : null, h('div', { class: 'gr-view' }, root), list, said);
     root.setAttribute('aria-describedby', id + '-list');
 
     function plusIcon() {
