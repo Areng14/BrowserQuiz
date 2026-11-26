@@ -97,8 +97,8 @@ There are two ways to use it:
 How to make and give quizzes is in [onboarding.md](onboarding.md). Here are some extra details:
 
 - **Quiz files.** A `.quiz` file is a zip of a folder with `quiz.json` and an optional `assets/` folder for images. The format is in [quiz-format.md](quiz-format.md).
-- **Trying the example.** Zip `examples/ap-csa-unit4` and upload it, then upload `examples/roster-demo.csv` as a class (Ava Martinez, ID 204511).
-- **Checking a quiz before uploading.** `node scripts/check-quiz.mjs examples/ap-csa-unit4 --run` checks the quiz and runs its reference solutions.
+- **Trying the example.** Zip `examples/sample-exam` and upload it, then upload `examples/roster-demo.csv` as a class (Ava Martinez, ID 204511).
+- **Checking a quiz before uploading.** `node scripts/check-quiz.mjs examples/sample-exam --run` checks the quiz and runs its reference solutions.
 - **AI coding assistants.** Assistants working in this repo follow `AGENTS.md`. They write the quiz, run the reference solutions and pack the `.quiz` for you.
 - **Extra time.** 1.25×, 1.5× or 2× applies from the next quiz the student starts.
 - **Corrections.** By default a fixed answer earns back 50% of the points it lost, on top of the exam score. The CSV adds `exam_score`, `earned_back` and `with_corrections`. An invalidated exam stays at 0, and students never see their total. Answers that are still waiting to be graded are not in corrections, so grade those first.

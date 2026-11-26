@@ -1,0 +1,97 @@
+{
+  "format": 1,
+  "title": "Unit exam: loops and functions",
+  "timeLimitMin": 25,
+  "language": "python",
+  "lockParts": true,
+  "pools": { "concepts": 2 },
+  "sections": [
+    { "before": "c1", "title": "Part A: Concepts" },
+    { "before": "r1", "title": "Part B: Reading code" },
+    { "before": "w1", "title": "Part C: Writing code" }
+  ],
+  "questions": [
+    {
+      "id": "c1", "name": "Loop count",
+      "type": "single", "pool": "concepts",
+      "prompt": "How many times does the body of `for i in range(n):` run?",
+      "explanation": "`range(n)` gives `0, 1, ..., n - 1`, which is `n` values. Picking `n - 1` comes from counting up to `n - 1` instead of counting the values.",
+      "choices": ["`n - 1` times", "`n` times", "`n + 1` times", "It depends on what the body does"],
+      "answer": 1
+    },
+    {
+      "id": "c2", "name": "No return",
+      "type": "single", "pool": "concepts",
+      "prompt": "A function reaches its last line without running a `return` statement. What does the call give back?",
+      "explanation": "A Python function with no `return` gives back `None`. Picking `0` mixes it up with languages where a missing return is an error or a default number.",
+      "choices": ["`0`", "`None`", "An empty string", "Nothing: it raises an error"],
+      "answer": 1
+    },
+    {
+      "id": "c3", "name": "Nested list length",
+      "type": "single", "pool": "concepts",
+      "prompt": "What is `len([3, [4, 5], 6])`?",
+      "explanation": "`len` counts the outer list's items: `3`, the list `[4, 5]`, and `6`. The inner list counts as one item, so it's `3`, not `4`.",
+      "choices": ["`2`", "`3`", "`4`", "`6`"],
+      "answer": 1
+    },
+    {
+      "id": "c4", "name": "Lists of 0 to 4",
+      "type": "multi", "points": 2,
+      "prompt": "Which of these make the list `[0, 1, 2, 3, 4]`?",
+      "explanation": "`list(range(5))` and the list comprehension both build it from `range(5)`, which stops before 5. `range(0, 4)` stops before 4 and isn't a list.",
+      "choices": ["`list(range(5))`", "`[0, 1, 2, 3, 4]`", "`range(0, 4)`", "`[i for i in range(5)]`"],
+      "answer": [0, 1, 3]
+    },
+    {
+      "id": "c5", "name": "Counting steps",
+      "type": "math",
+      "prompt": "A program does {{b}} steps of setup, then a loop that runs $n$ times and does {{a}} steps each time. Write the total number of steps in terms of $n$.",
+      "explanation": "The loop does {{a}} steps $n$ times, which is ${{a}}n$, and the setup adds {{b}}: ${{a}}n + {{b}}$.",
+      "answer": "{{a}}n + {{b}}",
+      "vars": [{ "a": 3, "b": 2 }, { "a": 4, "b": 5 }, { "a": 2, "b": 7 }, { "a": 5, "b": 1 }]
+    },
+    {
+      "id": "r1", "name": "Division and remainder",
+      "type": "output",
+      "prompt": "What does this print?",
+      "code": "x = {{x}}\ny = {{y}}\nprint(x // y, x % y)",
+      "explanation": "`//` divides and drops the remainder, and `%` gives the remainder: {{x}} is {{y}} × the first number, plus the second.",
+      "answer": "{{out}}",
+      "vars": [{ "x": 17, "y": 5, "out": "3 2" }, { "x": 23, "y": 4, "out": "5 3" }, { "x": 19, "y": 6, "out": "3 1" }, { "x": 29, "y": 8, "out": "3 5" }]
+    },
+    {
+      "id": "r2", "name": "Running total",
+      "type": "text",
+      "prompt": "What is `total` after this runs?\n\n```python\ntotal = 0\nfor i in range(1, 5):\n    total += i\n```",
+      "explanation": "`range(1, 5)` is `1, 2, 3, 4`, and `1 + 2 + 3 + 4` is `10`. Getting `15` means counting up to 5 as well.",
+      "answer": ["10"]
+    },
+    {
+      "id": "w1", "name": "count_above",
+      "type": "code", "points": 6,
+      "languages": ["python"],
+      "prompt": "Write `count_above(nums, limit)`, which returns how many numbers in `nums` are greater than `limit`. Numbers equal to `limit` don't count. An empty list gives `0`.",
+      "explanation": "Keep a count, loop over the numbers, and add one for each number greater than `limit`. Using `>=` instead of `>` counts the ones equal to `limit` too.",
+      "signature": { "name": "count_above", "params": [{ "name": "nums", "type": "int[]" }, { "name": "limit", "type": "int" }], "returns": "int" },
+      "tests": {
+        "sample": [
+          { "args": [[1, 5, 8, 3], 4], "expected": 2 },
+          { "args": [[], 10], "expected": 0 }
+        ],
+        "hidden": [
+          { "args": [[1, 5, 8, 3], 4] },
+          { "args": [[], 10] },
+          { "args": [[4, 4, 4], 4] },
+          { "args": [[-3, -1, 0, 2], -2] },
+          { "args": [[7], 6] },
+          { "args": [[10, 20, 30, 40, 50, 60], 25], "weight": 2 }
+        ]
+      },
+      "rubric": [{ "id": "r1", "text": "Uses a loop", "points": 1, "require": { "python": "\\b(for|while)\\b" } }],
+      "reference": {
+        "python": "class Solution:\n    def count_above(self, nums: list[int], limit: int) -> int:\n        count = 0\n        for n in nums:\n            if n > limit:\n                count += 1\n        return count\n"
+      }
+    }
+  ]
+}

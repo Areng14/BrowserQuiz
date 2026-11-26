@@ -10,7 +10,6 @@ Difficulty (easy, medium, hard, or mixed):
 Number and kinds of questions:
 Time limit:
 Languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust; one or several, or any):
-Rubric points on code questions (graded automatically, by me, or none):
 Extras (step 1 lists them; the recommended ones are on unless I say no):
 Anything else:
 
@@ -24,9 +23,7 @@ Before writing, send me one short message and wait for my answer. In it:
   3. How many questions, and what kinds? [6 multiple choice, 1 select-all, 1 predict the output, 1 code]
   4. Time limit? [worked out from the questions]
   5. Which languages for code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust)?
-     [the topic's language, or Java]
-  6. Code questions can have rubric points for things tests can't check, like private fields.
-     Should those be graded automatically, by you, or left out? [automatically]
+     [the topic's language, or Python]
 - Unless Extras is already filled in, list these extras in one line each and ask which I want.
   Teachers often don't know BrowserQuiz has them. Make clear which ones are recommended.
   - **Recommended**, so on unless I say no. They make copying from a neighbor much harder. Leave one
@@ -59,7 +56,7 @@ use the defaults and the recommended extras.
 
 Use these for anything still blank, and list the ones you used in your answer.
 
-- **Style, level and language:** match the topic and notes. If nothing says otherwise, use Java.
+- **Style, level and language:** match the topic and notes. If nothing says otherwise, use Python.
 - **Topics that aren't about code** (networking, math, theory): set `"language": "none"` and write
   no code questions unless I ask for them. Concept, scenario and calculation questions fit better.
   A quiz about TCP handshakes doesn't need a method to write. Write math in LaTeX (`$x^2$`), as the
@@ -72,7 +69,8 @@ Use these for anything still blank, and list the ones you used in your answer.
   or graph question, 3–4 per trace table, 2–4 per fill in the blanks, 5–15 per code question (by difficulty), 5 per written answer.
 - **Points:** 1 per multiple choice, 2 per select-all, 1 per short answer, 1–2 per math or graph question,
   6–9 per code question.
-- **Rubric points:** graded automatically.
+- **Grading:** automatic. Everything grades itself, rubric points included, unless I say I'll
+  grade something by hand.
 - **Extras:** the recommended ones (step 1), where they fit. Turning in early stays off.
 
 ## 3. Difficulty
@@ -177,20 +175,17 @@ that should go to thinking. Keep to these limits, even when the notes are wordy:
     `"BinaryHeap"` in Rust).
   - The reference solutions have to keep to the bans. Say in the prompt what isn't allowed.
   - For a point off instead of a zero, use a rubric item with a `forbid` regex instead.
-- Use a rubric only for things tests can't check (1–2 points). How depends on my answer
-  about rubric points:
-  - **Automatically:** give every rubric item a `require` or `forbid` regex (see "Rubric
-    checks" in the format), like private fields or recursion. Leave out items a pattern
-    can't decide.
-  - **By me:** rubric items with no `require` or `forbid`. I tick them on the dashboard.
-  - **Left out:** no rubric. The tests are worth all the points.
+- Use a rubric only for things tests can't check (1–2 points), like using a loop, recursion or
+  private fields. Give every rubric item a `require` or `forbid` regex (see "Rubric checks" in
+  the format), so it grades itself, and leave out items a pattern can't decide. Only if I say I'll
+  grade them by hand: rubric items with no `require` or `forbid`, which I tick on the dashboard.
 
 ## 6. Keep it fair
 
 Students should lose points for not knowing the material, never for guessing what you meant.
 
 - Use only the language features and library methods the notes cover. If there are no notes,
-  stick to what an intro course in that language teaches (for AP CSA, the Java Quick Reference).
+  stick to what an intro course in that language teaches.
   No trivia.
 - No trick questions: no misleading names, no typos planted in code, no wording traps. A question
   that asks what's NOT true says **NOT** in bold.
@@ -255,7 +250,8 @@ Either way, then list the defaults and recommended extras you used, and any you 
 
 ## A complete example
 
-This example is an AP CSA quiz in Java. Copy its format, not its course, level or language.
+This example is a unit exam in Python, with parts that lock, a question pool, random values and rubric
+points that grade themselves. Copy its format, not its topic, level or language.
 
 ```json
 {{EXAMPLE}}

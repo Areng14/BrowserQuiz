@@ -1,8 +1,8 @@
 // Checks a quiz before you upload it: the same validation the server runs, warnings for likely
 // mistakes (typo'd keys, missing references), and with --run, every reference solution run against
 // its tests on this computer.
-//   node scripts/check-quiz.mjs examples/ap-csa-unit4          a folder, .quiz or .zip
-//   node scripts/check-quiz.mjs examples/ap-csa-unit4 --run    also run references (python3; a JDK for Java; gcc/g++ for C/C++; go; rustc)
+//   node scripts/check-quiz.mjs examples/sample-exam          a folder, .quiz or .zip
+//   node scripts/check-quiz.mjs examples/sample-exam --run    also run references (python3; a JDK for Java; gcc/g++ for C/C++; go; rustc)
 // Exit code 0 means the server will accept it (with --run: and the references pass).
 import { createRequire } from 'node:module';
 import { readFileSync, readdirSync, statSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';

@@ -19,7 +19,7 @@ Upload the folder zipped, or pack it first:
 node scripts/pack-quiz.mjs path/to/folder out.quiz
 ```
 
-`examples/ap-csa-unit4/quiz.json` uses most features. Teachers can also build quizzes in the
+`examples/sample-exam/quiz.json` uses most features. Teachers can also build quizzes in the
 dashboard (New quiz) and check how one looks with Preview. Both save this same format.
 <!-- /not-in-prompt -->
 

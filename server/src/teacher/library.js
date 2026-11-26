@@ -152,7 +152,7 @@ const promptFormat = () => readRel('docs/quiz-format.md')
   .replace(/^## /gm, '### ')
   .trim();
 function quizPrompt() {
-  const example = readRel('examples/ap-csa-unit4/quiz.json').trim();
+  const example = readRel('examples/sample-exam/quiz.json').trim();
   return readRel('server/prompt/quiz-prompt.md').replace('{{FORMAT}}', promptFormat).replace('{{EXAMPLE}}', () => example);
 }
 // The prompt for one question, to add to the quiz being made: the quiz prompt's rules for writing
@@ -165,7 +165,7 @@ function questionPrompt() {
   const section = (text, from, to) => text.slice(0, text.indexOf(from)) + text.slice(text.indexOf(to));
   const rules = [section(part('## 3. Difficulty', '## 7. Images'), '**The whole quiz**', '**Every question**'), part('## 8. Check your work', '## 9. Your answer')].join('\n\n')
     .replace(/^## \d+\. /gm, () => `## ${++n}. `);
-  const sample = JSON.parse(readRel('examples/ap-csa-unit4/quiz.json')).questions.find((x) => x.type === 'single');
+  const { pool, ...sample } = JSON.parse(readRel('examples/sample-exam/quiz.json')).questions.find((x) => x.type === 'single'); // one question has no pool
   return readRel('server/prompt/question-prompt.md').replace('{{RULES}}', () => rules).replace('{{FORMAT}}', promptFormat)
     .replace('{{EXAMPLE}}', () => JSON.stringify(sample, null, 2));
 }

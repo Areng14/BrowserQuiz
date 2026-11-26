@@ -1,5 +1,5 @@
 // Packs a quiz folder (quiz.json + assets/) into a .quiz file.
-//   node scripts/pack-quiz.mjs examples/ap-csa-unit4 [out.quiz]
+//   node scripts/pack-quiz.mjs examples/sample-exam [out.quiz]
 import { createRequire } from 'node:module';
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, basename, relative } from 'node:path';

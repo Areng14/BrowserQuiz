@@ -14,7 +14,7 @@ Anything else:
 ## 1. Ask before you write
 
 If the topic is blank, ask what the question is about and wait for my answer. Otherwise don't ask:
-use the defaults for anything blank (multiple choice, medium, the topic's language or Java, and
+use the defaults for anything blank (multiple choice, medium, the topic's language or Python, and
 `"language": "none"` topics that aren't about code), and write the question.
 
 {{RULES}}

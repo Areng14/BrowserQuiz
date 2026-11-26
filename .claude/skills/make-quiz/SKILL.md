@@ -5,7 +5,7 @@ description: Write BrowserQuiz quizzes (a quiz.json packed into a .quiz) with mu
 
 # Make a BrowserQuiz quiz
 
-The format spec is `docs/quiz-format.md`. Read it first, and look at `examples/ap-csa-unit4/quiz.json`
+The format spec is `docs/quiz-format.md`. Read it first, and look at `examples/sample-exam/quiz.json`
 for a working example of every question type.
 
 ## 1. Pin down what's wanted
@@ -14,8 +14,8 @@ Use what the user gave you: topic or unit, source material (notes, a worksheet, 
 number of questions and mix of types, time limit, languages, and difficulty.
 Fill gaps with these defaults and say which ones you used. Don't stop to ask.
 - Match the style, level and language of the topic and notes. If nothing says otherwise, use
-  Java. If an AP unit number is given, say which course outline you assumed (AP CSA renumbered
-  its units in 2025).
+  Python. If only a unit number is given, say which course outline you assumed (courses renumber
+  their units, as AP CSA did in 2025).
 - Topics that aren't about code (networking, math, theory): `"language": "none"` and no code
   questions unless asked.
 - Minutes per question: 1 for multiple choice, 2 for select-all, 1–2 for short answer or output,
@@ -158,7 +158,7 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
 - **Fair to students:** they lose points for not knowing the material, never for guessing what
   was meant.
   - Only the language features and library methods the notes cover. With no notes, stick to what
-    an intro course in that language teaches (for AP CSA, the Java Quick Reference). No trivia,
+    an intro course in that language teaches. No trivia,
     trick questions, misleading names or planted typos. "NOT" questions say **NOT** in bold.
   - Every hidden test checks something the prompt says (empty input, negatives, ties); a speed
     test means the prompt names the speed needed.
