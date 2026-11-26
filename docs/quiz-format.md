@@ -2,7 +2,7 @@
 
 A quiz is a `quiz.json` file. Upload it as is, or as a `.quiz` file: a zip with `quiz.json`
 at the root (or inside one top-level folder) and an optional `assets/` folder of images
-(png, jpg, gif or webp). Limits: 25 MB, 500 files, 300 questions.
+(png, jpg, gif, webp or svg). Limits: 25 MB, 500 files, 300 questions.
 
 <!-- not-in-prompt -->
 Check a quiz before uploading. `--run` also runs the reference solutions, which needs
@@ -149,8 +149,50 @@ questions can't have them.
 - `\` before a character keeps it as is: `\*not italic\*`
 - images from `assets/`: `![a binary tree](assets/tree.png)`, as many as you like, in prompts,
   choices, shared material and directions. File names can't have spaces here
+- diagrams: an SVG written in the text, in a block labeled ```` ```svg ```` (below)
 
 Links show as their text only, so nothing on the page leads out of the quiz. No HTML.
+
+**Diagrams (SVG).** Trees, linked lists, memory boxes, circuits, state machines: write the SVG in a
+```` ```svg ```` block, or put an `.svg` file in `assets/` and show it like any image.
+
+```svg
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 60" width="160" height="60">
+  <title>Two linked nodes, 3 then 8</title>
+  <g stroke="#16191d" stroke-width="2">
+    <rect x="4" y="14" width="44" height="32" rx="6" fill="#ffffff"/>
+    <rect x="100" y="14" width="44" height="32" rx="6" fill="#cfe2ff"/>
+    <line x1="48" y1="30" x2="98" y2="30"/>
+  </g>
+  <text x="26" y="35" text-anchor="middle" fill="#16191d">3</text>
+  <text x="122" y="35" text-anchor="middle" fill="#16191d">8</text>
+</svg>
+```
+
+- Diagrams follow the student's light or dark theme when they use these colors. Each is swapped for
+  its dark-mode partner. Black and white swap too (black for ink, white for paper), so a plain
+  black-on-white diagram works either way. Any other color stays as it is.
+
+  | Color | Use it for | Light | Dark |
+  | --- | --- | --- | --- |
+  | ink | lines, text | `#16191d` | `#e6e8eb` |
+  | muted | labels, notes | `#5b6470` | `#9aa3ad` |
+  | line | grid, faint lines | `#d9dde2` | `#2e333b` |
+  | paper | box fills | `#ffffff` | `#16181d` |
+  | soft | shaded boxes | `#f4f5f7` | `#1f2329` |
+  | blue | highlights, pointers | `#2257d6` | `#7ea3ff` |
+  | green | right, done | `#1b7f45` | `#5ccb8a` |
+  | red | wrong, removed | `#c0352d` | `#ff7a70` |
+  | orange | warnings | `#9a5b00` | `#e2a64a` |
+  | yellow | highlighted fill | `#fff2b3` | `#3a3300` |
+  | light blue | highlighted fill | `#cfe2ff` | `#13305a` |
+  | light green | highlighted fill | `#c8f0d2` | `#0f3a20` |
+  | pink | highlighted fill | `#ffd6e8` | `#47162f` |
+
+- Give it a `<title>`: screen readers read it, so say what the diagram shows.
+- Set a `viewBox` and a `width`, so it keeps its size on big screens and shrinks on phones.
+- A diagram is shown as a picture: no `<script>`, event handlers (`onclick`), `<foreignObject>`,
+  DOCTYPE, or links to anything outside it (`href="#id"` inside it is fine). Up to 300 KB.
 
 **Choices** on one line take inline Markdown: code, bold, italic, struck, `$math$` and images. A
 choice with a line break in it (`\n` in JSON) is Markdown like a prompt, so it can hold a code

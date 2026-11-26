@@ -105,6 +105,9 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
   "I only / I and II" style answers, set `"shuffleChoices": false` on that question.
 - **More than one image:** `![alt](assets/name.png)` anywhere in the text (no spaces in the file
   name). `image` is still the one big picture under the prompt.
+- **Diagrams:** draw trees, lists, memory and circuits as SVG in a ```` ```svg ```` block in the text.
+  Use the palette colors in `docs/quiz-format.md` (Diagrams) so they follow dark mode, give each a
+  `<title>`, and keep them to shapes and text (no scripts or outside links).
 - **Select all:** use only when 2+ choices are correct. Scoring is all or nothing unless the question
   has `"partialCredit": true` (right picks earn, wrong picks take back).
 - **Short answer:** use only when there are few ways to say the answer. List every accepted

@@ -89,7 +89,7 @@ function sortable(rows, onMove, handleOf) {
 const snippet = (md) => String(md || '').replace(/```[\w+#-]*/g, ' ').replace(/[`*]/g, '').replace(/\s+/g, ' ').trim().slice(0, 90);
 
 // ---------- the editor ----------
-const IMAGE_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
+const IMAGE_MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
 const extOf = (p) => (String(p).match(/\.[A-Za-z0-9]+$/) || [''])[0].toLowerCase();
 const MOD = /Mac|iP(hone|ad)/.test(navigator.platform || '') ? '⌘' : 'Ctrl+';
 const ALT = MOD === '⌘' ? '⌥' : 'Alt+';

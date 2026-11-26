@@ -129,7 +129,7 @@ function sharedEditor(q, i) {
     const m = ed.quiz.shared.find((x) => x.id === ids[k]);
     const others = m ? ed.quiz.questions.map((x, j) => ([].concat(x.shared || []).includes(m.id) && j !== i ? j + 1 : null)).filter(Boolean) : [];
     // Images work like a question's: the button, or paste or drop one into the text.
-    const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp' });
+    const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml' });
     file.addEventListener('change', () => addImage(m, file.files[0]));
     const text = m ? area(q, m.text, (v) => { m.text = v; }, { rows: 6, placeholder: 'The case, passage or code every question in the set uses. Markdown works.', 'aria-label': 'Shared material' }) : null;
     const takeImage = (files, e) => { const f = [...(files || [])].find((x) => /^image\//.test(x.type)); if (f) { e.preventDefault(); if (m.image) addInlineImage(text, f); else addImage(m, f); } };

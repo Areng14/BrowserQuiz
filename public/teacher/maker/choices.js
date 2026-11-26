@@ -97,12 +97,21 @@ function choicesEditor(q) {
 }
 
 // ---------- images ----------
+// A diagram that can't be used says why (svg.js), here rather than on save.
+function svgRefused(f, dataUrl) {
+  if (extOf(f.name) !== '.svg') return false;
+  let why;
+  try { why = window.BQSvg.problem(decodeURIComponent(escape(atob(String(dataUrl).split(',')[1])))); } catch (e) { why = "can't be read."; }
+  if (why) window.BQAsk.notice({ title: "That diagram can't be used", text: `It ${why}` });
+  return !!why;
+}
 function addImage(q, f) {
   if (!f) return;
-  if (!IMAGE_MIME[extOf(f.name)]) { window.BQAsk.notice({ title: "That image can't be used", text: 'Images must be png, jpg, gif or webp.' }); return; }
+  if (!IMAGE_MIME[extOf(f.name)]) { window.BQAsk.notice({ title: "That image can't be used", text: 'Images must be png, jpg, gif, webp or svg.' }); return; }
   if (f.size > 5 * 1024 * 1024) { window.BQAsk.notice({ title: 'That image is too big', text: 'Images can be up to 5 MB.' }); return; }
   const reader = new FileReader();
   reader.onload = () => {
+    if (svgRefused(f, reader.result)) return;
     const base = f.name.replace(/[^A-Za-z0-9 _.-]/g, '_').slice(-80);
     // The file for a missing image takes that image's name, so the pasted quiz.json still points at it.
     let p2 = q.image && imageMissing(q.image) && extOf(q.image) === extOf(base) ? q.image : `assets/${base}`;
@@ -120,10 +129,11 @@ const imageSrc = (q) => assetSrc(q.image);
 // More images go into the text as Markdown, ![](assets/name.png), at the cursor.
 function addInlineImage(ta, f) {
   if (!f) return;
-  if (!IMAGE_MIME[extOf(f.name)]) { window.BQAsk.notice({ title: "That image can't be used", text: 'Images must be png, jpg, gif or webp.' }); return; }
+  if (!IMAGE_MIME[extOf(f.name)]) { window.BQAsk.notice({ title: "That image can't be used", text: 'Images must be png, jpg, gif, webp or svg.' }); return; }
   if (f.size > 5 * 1024 * 1024) { window.BQAsk.notice({ title: 'That image is too big', text: 'Images can be up to 5 MB.' }); return; }
   const reader = new FileReader();
   reader.onload = () => {
+    if (svgRefused(f, reader.result)) return;
     const base = f.name.replace(/\s+/g, '-').replace(/[^A-Za-z0-9_.-]/g, '_').slice(-80);
     let p2 = `assets/${base}`;
     for (let n = 2; ed.existingAssets.has(p2) || ed.newAssets[p2]; n++) p2 = `assets/${base.replace(/(\.[^.]+)$/, `-${n}$1`)}`;

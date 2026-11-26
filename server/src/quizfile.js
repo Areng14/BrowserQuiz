@@ -5,9 +5,10 @@ const { readZip } = require('./zip');
 const R = require('./rubric');
 const B = require('./bans');
 const T = require('../../public/teacher/types.js');
+const SVG = require('../../public/student/svg.js');
 
 const LIMITS = { uploadBytes: 25 * 1024 * 1024, files: 500, questions: 300, arrayLen: 1000 };
-const ASSET_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
+const ASSET_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
 const LANGS = T.LANGS;
 const langName = (l) => T.LANG_NAMES[l] || l;
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
@@ -53,11 +54,16 @@ function loadQuizFile(buf) {
     if (!name.startsWith(prefix + 'assets/')) continue;
     const rel = name.slice(prefix.length);
     const ext = (rel.match(/\.[A-Za-z0-9]+$/) || [''])[0].toLowerCase();
-    if (!ASSET_TYPES[ext]) fail(`${rel}: only png, jpg, gif and webp images are allowed in assets/.`);
+    if (!ASSET_TYPES[ext]) fail(`${rel}: only png, jpg, gif, webp and svg images are allowed in assets/.`);
+    const why = svgProblem(ext, data);
+    if (why) fail(`${rel} ${why}`);
     assets.set(rel, { mime: ASSET_TYPES[ext], bytes: data });
   }
   return { quiz: normalizeQuiz(raw, new Set(assets.keys())), assets };
 }
+
+// A diagram (svg.js): shown as an image, so it can't run anything, but checked all the same.
+const svgProblem = (ext, bytes) => (ext === '.svg' ? SVG.problem(bytes.toString('utf8')) : null);
 
 // ---------- values ----------
 // Types and their values live in public/teacher/types.js, shared with the quiz maker.
@@ -377,12 +383,14 @@ function normalizeQuiz(raw, assetNames) {
   }
   // Images written into the text as Markdown, ![alt](assets/name.png), have to be in assets/ too.
   for (const img of markdownImages(quiz)) if (!assetNames.has(img)) fail(`The image "${img}" in the text isn't in the assets folder.`);
+  // Diagrams written into the text (```svg blocks) are checked like svg files.
+  for (const { where, svg } of svgBlocks(quiz)) { const why = SVG.problem(svg); if (why) fail(`${where}: a diagram (svg block) ${why}`); }
   return quiz;
 }
 
 // Every assets/ image a quiz's text shows as Markdown: prompts, choices, explanations, shared material
 // and directions. Works on a raw quiz.json too.
-const MD_IMAGE = /!\[[^\]\n]*\]\((?:\.\/)?(assets\/[A-Za-z0-9_.-]{1,100}\.(?:png|jpe?g|gif|webp))\)/gi;
+const MD_IMAGE = /!\[[^\]\n]*\]\((?:\.\/)?(assets\/[A-Za-z0-9_.-]{1,100}\.(?:png|jpe?g|gif|webp|svg))\)/gi;
 function markdownImages(quiz) {
   const texts = [];
   const qs = quiz && Array.isArray(quiz.questions) ? quiz.questions : [];
@@ -392,6 +400,21 @@ function markdownImages(quiz) {
   for (const sec of quiz && Array.isArray(quiz.sections) ? quiz.sections : []) if (sec) texts.push(sec.directions);
   const out = new Set();
   for (const t of texts) if (typeof t === 'string') for (const m of t.matchAll(MD_IMAGE)) out.add(m[1]);
+  return out;
+}
+
+// The ```svg blocks in a quiz's text, with where each is.
+function svgBlocks(quiz) {
+  const texts = [];
+  (quiz.questions || []).forEach((q, i) => { for (const t of [q.prompt, q.explanation, ...(q.choices || [])]) texts.push([`Question ${i + 1}`, t]); });
+  for (const m of quiz.shared || []) texts.push([`Shared material ${m.id}`, m.text]);
+  for (const t of Object.values(quiz.directions || {})) texts.push(['Directions', t]);
+  for (const sec of quiz.sections || []) texts.push([`Section "${sec.title}"`, sec.directions]);
+  const out = [];
+  for (const [where, t] of texts) {
+    if (typeof t !== 'string') continue;
+    for (const m of t.matchAll(/^```\s*svg\s*\n([\s\S]*?)\n```\s*$/gim)) out.push({ where, svg: m[1] });
+  }
   return out;
 }
 
@@ -750,4 +773,4 @@ function normalizeCode(where, q) {
   return out;
 }
 
-module.exports = { loadQuizFile, normalizeQuiz, calculatorOf, putVars, markdownImages, checkValue, elementType, isRange, rangeLength, QuizError, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };
+module.exports = { svgProblem, loadQuizFile, normalizeQuiz, calculatorOf, putVars, markdownImages, checkValue, elementType, isRange, rangeLength, QuizError, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };

@@ -12,7 +12,7 @@ import { renderPane } from './pane.js';
 // ---------- prompt ----------
 function promptEditor(q) {
   const ta = area(q, q.prompt, (v) => { q.prompt = v; }, { id: 'qe-prompt', rows: 4, spellcheck: 'true' });
-  const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp' });
+  const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml' });
   file.addEventListener('change', () => addImage(q, file.files[0]));
   const fence = () => { const s = ta.value.slice(0, ta.selectionStart); wrap(ta, `${s && !s.endsWith('\n') ? '\n' : ''}\`\`\`${ed.quiz.language === 'none' ? '' : ed.quiz.language}\n`, '\n```\n'); };
   const tool = (text, title, fn, cls) => h('button', { class: `qe-tool ${cls || ''}`, type: 'button', text, title, onclick: fn });
@@ -33,7 +33,7 @@ function promptEditor(q) {
   const takeImage = (files, e) => { const f = [...(files || [])].find((x) => /^image\//.test(x.type)); if (f) { e.preventDefault(); if (q.image) addInlineImage(ta, f); else addImage(q, f); } };
   ta.addEventListener('paste', (e) => takeImage(e.clipboardData && e.clipboardData.files, e));
   ta.addEventListener('drop', (e) => takeImage(e.dataTransfer && e.dataTransfer.files, e));
-  const moreFile = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp' });
+  const moreFile = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml' });
   moreFile.addEventListener('change', () => { addInlineImage(ta, moreFile.files[0]); moreFile.value = ''; });
   return [h('div', { class: 'field' },
     h('div', { class: 'qe-tools' },

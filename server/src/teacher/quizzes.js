@@ -4,7 +4,7 @@
 const { q } = require('../db');
 const store = require('../store');
 const { json, readBody, readJson, send, HttpError } = require('../http');
-const { normalizeQuiz, loadQuizFile, ASSET_TYPES, QuizError, fillTemplate } = require('../quizfile');
+const { normalizeQuiz, loadQuizFile, ASSET_TYPES, QuizError, fillTemplate, svgProblem } = require('../quizfile');
 const Rekey = require('../rekey');
 const { gradeAttempt, isRun, cleanAnswers, gradeAuto } = require('../grade');
 const { writeZip } = require('../zip');
@@ -58,11 +58,13 @@ module.exports = function quizRoutes(r) {
       // Images added in the quiz maker arrive as base64, keyed by their assets/ path.
       for (const [p2, b64] of Object.entries(body.assets && typeof body.assets === 'object' ? body.assets : {})) {
         const ext = (p2.match(/\.[A-Za-z0-9]+$/) || [''])[0].toLowerCase();
-        if (!/^assets\/[A-Za-z0-9 _.-]{1,100}$/.test(p2) || p2.includes('..') || !ASSET_TYPES[ext]) throw new QuizError(`${p2}: images must be png, jpg, gif or webp.`);
+        if (!/^assets\/[A-Za-z0-9 _.-]{1,100}$/.test(p2) || p2.includes('..') || !ASSET_TYPES[ext]) throw new QuizError(`${p2}: images must be png, jpg, gif, webp or svg.`);
         const bytes = Buffer.from(String(b64), 'base64');
         if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new QuizError(`${p2}: images can be up to 5 MB.`);
         const i = assets.findIndex((a) => a.path === p2);
         if (i >= 0) assets.splice(i, 1);
+        const why = svgProblem(ext, bytes);
+        if (why) throw new QuizError(`${p2} ${why}`);
         assets.push({ path: p2, mime: ASSET_TYPES[ext], bytes });
       }
       quiz = normalizeQuiz(body.quiz, new Set(assets.map((a) => a.path)));

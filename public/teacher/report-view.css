@@ -180,6 +180,8 @@
 .r-view .r-bar-fill.low { background: var(--bad); }
 .r-view .r-bar-pct { display: inline-block; width: 44px; text-align: right; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .r-view .md-img { display: inline-block; vertical-align: middle; max-width: 100%; height: auto; margin: 4px 8px 4px 0; }
+.r-view .md-svg { display: block; max-width: 100%; height: auto; margin: 8px 0; }
+.r-view .md-svg-problem { margin: 8px 0; font-size: 14px; color: var(--bad); }
 .r-view .r-choice-rich { display: grid; gap: 4px; }
 .r-view .r-choice-rich > * { margin: 0; }
 

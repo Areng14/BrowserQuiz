@@ -318,6 +318,8 @@ mark.hl[data-c="u"] { background: none; box-shadow: none; text-decoration: under
 .shared-stack { display: grid; gap: 12px; align-content: start; } /* a question that uses more than one */
 /* images written in Markdown, and choices with more than one line */
 .md-img { display: inline-block; vertical-align: middle; max-width: 100%; height: auto; margin: 4px 8px 4px 0; border-radius: 4px; }
+.md-svg { display: block; max-width: 100%; height: auto; margin: 8px 0; }
+.md-svg-problem { margin: 8px 0; font-size: 14px; color: var(--bad); }
 .choice-rich { display: grid; gap: 6px; min-width: 0; }
 .choice-rich > * { margin: 0; }
 .choice-rich pre { margin: 0; overflow-x: auto; }
