@@ -64,6 +64,7 @@ const NAMES = {
   bookmark: 'Bookmark', // mark for review
   lock: 'Lock', // a part that hasn't opened, a game not earned yet
   game: 'Gamepad2', // Play snake
+  exit: 'LogOut', // leave the quiz
   eraser: 'Eraser',
   undo: 'Undo2',
   calculator: 'Calculator',

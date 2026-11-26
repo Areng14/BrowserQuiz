@@ -86,6 +86,8 @@
 .icon-btn:disabled, .icon-btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
 /* icon-only: the name is still there for screen readers, and in a tooltip (title) */
 .icon-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.icon-btn.exit-btn { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); } /* leaving: red, like Exit's dialog */
+.icon-btn.exit-btn:hover { background: color-mix(in srgb, var(--bad) 8%, var(--bg)); border-color: var(--bad); }
 .link-btn { min-height: 24px; padding: 0; margin-left: 8px; font: inherit; color: var(--accent); background: none; border: 0; cursor: pointer; }
 .link-btn:hover { text-decoration: underline; }
 

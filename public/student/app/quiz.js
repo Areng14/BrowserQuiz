@@ -66,7 +66,8 @@ function screenQuiz() {
       timer,
       h('div', { class: 'qbar-side qbar-end' }, calc ? calc.button : null, scratchBtn, themeButton(),
         // no Exit in Safe Exam Browser with our settings: there's nowhere to go until they turn in
-        (cfg.preview && !cfg.watch) || (S.run && S.run.sebQuit) ? null : h('button', { class: 'btn small outline-danger', type: 'button', text: 'Exit', onclick: () => openExit() }))),
+        (cfg.preview && !cfg.watch) || (S.run && S.run.sebQuit) ? null
+          : h('button', { class: 'icon-btn exit-btn', type: 'button', title: 'Exit', onclick: () => openExit() }, icon('exit', 16), h('span', { class: 'icon-label', text: 'Exit' })))),
     conn,
     main,
     scratch,
