@@ -4,24 +4,28 @@ A self-hosted quiz and exam app for CS and math classes.
 
 ## Features
 
-- **Code questions.** A code editor with hints and snippets off.
+- **Code questions.** Questions with a code editor with hints and snippets off.
 - **10 question types.** Multiple choice, select-all, short answer, math, graphing, predict the output,
   trace tables, fill in the blanks, written answers and code.
-- **Quiz maker.** Every question on one page with its answer. Markdown, math, images and diagrams.
-- **AI prompts.** For a whole quiz, or for one question.
-- **Random values.** Numbers that change per student.
-- **Question pools.** A random set of questions per student.
-- **Timed parts.** A clock for each part.
-- **Live dashboard.** Start, pause, extra time, who left and for how long, and each student's screen live.
-- **Exam lockdown.** Full screen, flags for leaving the window, Safe Exam Browser.
-- **Auto grading.** Answers next to the key, code diffs, CSV export, regrading after a key fix.
-- **AI grading.** ChatGPT, Claude or Gemini, with a reason for each grade.
-- **Copied code detection.** Near-identical code, even renamed or reformatted.
-- **Corrections.** Students redo what they missed for points back.
-- **Calculator.** Scientific or graphing.
-- **Student tools.** Scratchpad, highlighter, mark for review, cross out, dark mode, keyboard and screen
-  reader support.
-- **Multiple teachers.** Each with their own quizzes and classes.
+- **Quiz maker.** Use the inbuilt quiz editor, or copy a prompt and let an AI do it for you.
+- **Random values.** The numbers in a question can change for each student, and each one gets their own
+  answer.
+- **Question pools.** Each student gets a random few questions from a pool.
+- **Timed parts.** Each part has its own clock, and the next one opens when time's up.
+- **Live dashboard.** Start everyone at once, pause, give extra time, see who left and for how long, and
+  watch any student's screen live.
+- **Exam lockdown.** Full screen, and leaving the window gets flagged quietly. Safe Exam Browser works too.
+- **Auto grading.** Every answer next to the right one, with a diff for code, and a CSV export. If a key
+  was wrong, fix it and everyone gets regraded.
+- **AI grading.** Paste a prompt into ChatGPT, Claude or Gemini, or add your own API key. Every grade
+  comes with its reasons, and you can change any of them.
+- **Copied code detection.** Flags students whose code is near-identical, even with renamed variables or
+  different formatting.
+- **Corrections.** After an exam, students redo what they missed and earn back points.
+- **Calculator.** Turn on a scientific or graphing calculator for a quiz.
+- **Student tools.** Scratchpad, highlighting, mark for review, cross out choices and dark mode. Works
+  with a keyboard and screen readers.
+- **Multiple teachers.** Each teacher only sees their own stuff.
 
 ## Question types
 
