@@ -110,7 +110,10 @@ const runsTable = (runs) => h('div', { class: 't-table-wrap' }, sortableTable(h(
 function giveTab(data, me) {
   const runner = !me || !me.runner || me.runnerOk ? null
     : h('p', { class: 't-error t-small' }, h('span', { class: 'dot bad' }), 'Code runner offline. Code questions get graded once it is back.');
-  const quizSel = picker('run-quiz', 'Quiz', data.quizzes.map((x) => ({ value: x.id, label: x.title, meta: [plural(x.questions, 'question'), date(x.createdAt)] })));
+  // Give, from a quiz's ⋯ on the Quizzes tab: that quiz is picked, and the class is next
+  const given = dash.giveQuiz;
+  dash.giveQuiz = null;
+  const quizSel = picker('run-quiz', 'Quiz', data.quizzes.map((x) => ({ value: x.id, label: x.title, meta: [plural(x.questions, 'question'), date(x.createdAt)] })), given);
   const rosterSel = picker('run-roster', 'Class', data.rosters.map((x) => ({ value: x.id, label: x.name, meta: [plural(x.students, 'student')] })));
   // level: how locked down, out of 3.
   const MODES = [
@@ -156,6 +159,7 @@ function giveTab(data, me) {
     } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
   });
   const missing = [!data.quizzes.length && ['quiz', '#quizzes'], !data.rosters.length && ['class', '#classes']].filter(Boolean);
+  if (given && quizSel.value === given) requestAnimationFrame(() => document.getElementById('run-roster').focus());
   return [
     h('section', { class: 't-section' },
       h('h1', { text: 'Give a quiz' }),
@@ -231,6 +235,7 @@ function quizzesTab(data) {
         h('td', { class: 't-actions' },
           h('button', { class: 'btn small', type: 'button', text: 'Edit', 'aria-label': `Edit ${x.title}`, onclick: () => openQuiz(x.id) }),
           moreMenu(`More for ${x.title}`, `quiz:${x.id}`, [
+            { text: 'Give', onclick: () => { dash.giveQuiz = x.id; showHome('give'); } },
             linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true),
             // a copy to change, opened straight in the quiz maker
             { text: 'Duplicate', onclick: async () => {
@@ -284,10 +289,11 @@ function linkBtn(text, href, newTab) {
 }
 
 // A dropdown whose rows have a name on the left and details lined up on the right, which a native
-// select can't do. items: [{ value, label, meta: [column, ...] }]. Keyboard: arrows, Home/End,
+// select can't do. items: [{ value, label, meta: [column, ...] }]; start: the value picked first (else the
+// first). Keyboard: arrows, Home/End,
 // Enter or Space to pick, Escape to close.
-function picker(id, labelText, items) {
-  let value = items.length ? items[0].value : '';
+function picker(id, labelText, items, start) {
+  let value = items.some((x) => x.value === start) ? start : items.length ? items[0].value : '';
   let active = 0;
   const row = (it) => [h('span', { class: 'pick-label', text: it.label }), h('span', { class: 'pick-meta' }, it.meta.map((m) => h('span', { text: m })))];
   const face = h('span', { class: 'pick-face', id: id + '-value' });
