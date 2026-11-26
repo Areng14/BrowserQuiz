@@ -754,7 +754,8 @@ h1[tabindex="-1"]:focus { outline: none; }
 .calc-area input { width: 72px; }
 .calc-area .btn { flex: none; margin-left: auto; border-radius: 10px; }
 @media (max-width: 560px) {
-  .calc-panel { left: 12px !important; right: 12px !important; top: auto !important; bottom: max(12px, env(safe-area-inset-bottom, 0px)) !important; width: auto; max-height: calc(100dvh - 24px); }
+  /* docked at the bottom, above the question bar (Back, Next) rather than over it */
+  .calc-panel { left: 12px !important; right: 12px !important; top: auto !important; bottom: calc(77px + env(safe-area-inset-bottom, 0px)) !important; width: auto; max-height: calc(100dvh - 146px - env(safe-area-inset-bottom, 0px)); }
   .calc-head { cursor: default; touch-action: auto; }
   .calc-keys button { min-height: 44px; }
 }
