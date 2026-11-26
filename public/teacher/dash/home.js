@@ -251,8 +251,12 @@ function quizzesTab(data) {
             } },
             linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
             { text: 'Delete', danger: true, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}?`, 'Past results stay.') }]))))))) : null,
-    h('div', { class: 't-row t-add' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizBtn),
-    h('details', { class: 't-paste' }, h('summary', { text: 'Paste a quiz.json' }),
+    h('div', { class: 't-row t-add' }, tip(h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizFile,
+      "A quiz saved as a file: a .quiz from Download in a quiz's ⋯ menu, or a quiz.json an AI wrote from Copy AI prompt."), quizBtn),
+    h('details', { class: 't-paste' }, (() => {
+      const s = h('summary', { text: 'Paste a quiz.json' });
+      return tip(s, s, 'The quiz.json an AI wrote from Copy AI prompt. Paste it from its first { to its last }.');
+    })(),
       h('label', { class: 'field', for: 'paste-quiz' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteJson), h('div', {}, pasteBtn)),
     quizMsg);
   if (search) filter();
