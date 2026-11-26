@@ -399,7 +399,7 @@
         const c = curves[trace.curve];
         reading = `${trace.kind ? trace.kind + ' · ' : 'y' + (c.row + 1) + ' · '}(${C.present(trace.x)}, ${C.present(trace.y)})`;
         const ly = Math.min(Math.max(toY(trace.y) - 9, 2), HT - 20);
-        const rect = svg('rect', { y: ly, height: 18, rx: 3 }), label = svg('text', { y: ly + 12 }, reading);
+        const rect = svg('rect', { y: ly, height: 18, rx: 6 }), label = svg('text', { y: ly + 12 }, reading);
         plot.append(svg('g', { class: 'trace c' + (c.row + 1) },
           svg('line', { x1: toX(trace.x), y1: 0, x2: toX(trace.x), y2: HT }),
           svg('circle', { cx: toX(trace.x), cy: toY(trace.y), r: trace.kind ? 4.4 : 3.2, class: trace.kind ? 'snapped' : null }),
