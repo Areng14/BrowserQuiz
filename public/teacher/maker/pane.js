@@ -1,12 +1,12 @@
 // The open question, shared material, Settings and section dividers.
 
-import { ICONS, h, icon, plural, post } from '../dash/core.js';
+import { ICONS, h, icon, plural, post, tip } from '../dash/core.js';
 import { moreMenu } from '../dash/cells.js';
 import { ed } from './state.js';
 import { LANGS, TYPES } from './formats.js';
 import { blank } from './model.js';
 import { grow, sortable } from './editing.js';
-import { FORMS, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, input, poolSettings, problemsOf, touch, typeset, varsEditor } from './core.js';
+import { FORMS, FORM_TIP, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, input, poolSettings, problemsOf, touch, typeset, varsEditor } from './core.js';
 
 // Done: what's open goes back to being a row
 const doneBtn = () => h('button', { class: 'btn small qe-done', type: 'button', text: 'Done', onclick: () => closeOpen() });
@@ -52,6 +52,7 @@ function questionPane(q, i) {
   const pool = field('Question pool', input(q, q.pool || '', (v) => { const t = v.trim(); if (t) q.pool = t; else delete q.pool; renderOutline(); },
     { class: 'input qe-pool', maxlength: '40', placeholder: 'Optional', list: 'qe-pool-names', autocomplete: 'off', spellcheck: 'false' }),
   h('datalist', { id: 'qe-pool-names' }, poolNames.map((p) => h('option', { value: p }))));
+  tip(pool, pool.querySelector('input'), 'Questions with the same pool name share a spot: each student gets some of them, picked at random. How many is in Settings.');
   // What's to be answered, by type (a code question's parts come under the columns)
   const answer = [];
   const add = (nodes) => answer.push(...nodes.filter(Boolean));
@@ -71,10 +72,13 @@ function questionPane(q, i) {
       reads.replaceChildren(...(list.length ? [h('span', { class: 'field-label', text: 'Reads as' }), ...list] : []));
     };
     const form = h('select', { class: 'input qe-narrow' }, FORMS.map(([v, t]) => h('option', { value: v, text: t, selected: (q.form || '') === v })));
-    form.addEventListener('change', () => { if (form.value) q.form = form.value; else delete q.form; touch(q); });
+    form.addEventListener('change', () => { if (form.value) q.form = form.value; else delete q.form; tip.text(form, FORM_TIP[form.value]); touch(q); });
     answer.push(field('One per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'x = 4' })), reads,
-      h('div', { class: 'qe-line qe-fields' }, field('Answer form', form),
-        field('Tolerance', input(q, q.tolerance || '', (v) => { if (Number(v) > 0) q.tolerance = Number(v); else delete q.tolerance; }, { type: 'number', min: '0', step: 'any', class: 'input t-points', placeholder: '0' }))));
+      h('div', { class: 'qe-line qe-fields' }, tip(field('Answer form', form), form, FORM_TIP[q.form || '']),
+        (() => {
+          const tol = input(q, q.tolerance || '', (v) => { if (Number(v) > 0) q.tolerance = Number(v); else delete q.tolerance; }, { type: 'number', min: '0', step: 'any', class: 'input t-points', placeholder: '0' });
+          return tip(field('Tolerance', tol), tol, 'How far off a number can be and still count: 0.01 takes 3.14 for 3.1416. Empty means exact.');
+        })()));
   }
   if (q.type === 'graph') {
     answerTitle = 'What students draw';
@@ -92,7 +96,10 @@ function questionPane(q, i) {
         h('div', { class: 'qe-line' },
           field('x from', num(0, 'x from')), field('x to', num(1, 'x to')), field('y from', num(2, 'y from')), field('y to', num(3, 'y to')),
           field('Grid step', input(q, q.step, (v) => { const n = Number(v); if (n > 0) q.step = n; }, { type: 'number', min: '0', step: 'any', class: 'input t-points' }))),
-        check(q, q.partialCredit, 'Partial credit when there\'s more than one', (v) => { if (v) q.partialCredit = true; else delete q.partialCredit; })),
+        (() => {
+          const pc = check(q, q.partialCredit, 'Partial credit when there\'s more than one', (v) => { if (v) q.partialCredit = true; else delete q.partialCredit; });
+          return tip(pc, pc.querySelector('input'), 'Each one drawn right earns its share of the points, and each extra one takes a share back.');
+        })()),
       pic));
   }
   let fillParts = null;
@@ -174,8 +181,12 @@ function sharedEditor(q, i) {
       text.addEventListener('drop', (e) => takeImage(e.dataTransfer && e.dataTransfer.files, e));
     }
     return h('div', { class: 'qe-shared' + (m ? ' on' : '') },
-      h('div', { class: 'qe-line' }, h('label', { class: 'field-label', for: `qe-shared-${k}`, text: k ? 'Also uses' : 'Shared material' }), picker(k),
-        others.length ? h('span', { class: 't-small t-muted', text: `Also on question${others.length > 1 ? 's' : ''} ${others.join(', ')}` }) : null),
+      (() => {
+        const pick = picker(k);
+        const line = h('div', { class: 'qe-line' }, h('label', { class: 'field-label', for: `qe-shared-${k}`, text: k ? 'Also uses' : 'Shared material' }), pick,
+          others.length ? h('span', { class: 't-small t-muted', text: `Also on question${others.length > 1 ? 's' : ''} ${others.join(', ')}` }) : null);
+        return k ? line : tip(line, pick, 'A passage, case or code shown with this question and every other one that picks it. Shuffling keeps them together.');
+      })(),
       m ? [
         input(q, m.title, (v) => { m.title = v; }, { type: 'text', placeholder: 'Title, like Case A', 'aria-label': 'Shared material title', maxlength: '120' }),
         text, file,
@@ -220,12 +231,15 @@ function settingsPane() {
   langSel.addEventListener('change', () => { ed.quiz.language = langSel.value; touch(); });
   // a calculator students can open during the quiz
   const calcSel = h('select', { class: 'input' }, [['', 'None'], ['scientific', 'Scientific'], ['graphing', 'Graphing']].map(([v, t]) => h('option', { value: v, text: t, selected: (ed.quiz.calculator || '') === v })));
+  // what the less obvious settings do (shown on hover), each on its control
+  const tipped = (el, text) => tip(el, el.querySelector('input, select'), text);
   calcSel.addEventListener('change', () => { if (calcSel.value) ed.quiz.calculator = calcSel.value; else delete ed.quiz.calculator; touch(); });
   ed.paneTick = null;
   const pools = poolSettings(q);
   // timed sections set the quiz's time (their total) and lock each part
   const timedSum = (ed.quiz.sections || []).reduce((t, d) => t + (d.timeLimitMin || 0), 0);
-  const lockParts = check(q, ed.quiz.lockParts === true || timedSum > 0, timedSum ? 'Lock each part once it\'s done (timed sections do)' : 'Lock each part once it\'s done', (v) => { if (v) ed.quiz.lockParts = true; else delete ed.quiz.lockParts; });
+  const lockParts = tipped(check(q, ed.quiz.lockParts === true || timedSum > 0, timedSum ? 'Lock each part once it\'s done (timed sections do)' : 'Lock each part once it\'s done', (v) => { if (v) ed.quiz.lockParts = true; else delete ed.quiz.lockParts; }),
+    "Once a student moves on from a part, they can't go back to change its answers. A part is a section, or a run of one type of question.");
   if (timedSum) lockParts.querySelector('input').disabled = true;
   return [h('div', { class: 'qe-head' }, h('h2', { class: 'qe-n', text: 'Settings' }), h('span', { class: 'qe-grow' }), doneBtn()),
     h('div', { class: 'qe-settings-cards' },
@@ -233,13 +247,14 @@ function settingsPane() {
         h('div', { class: 'qe-settings-grid' },
           timedSum ? field('Time limit (minutes, the sections added up)', input(q, timedSum, () => {}, { type: 'number', disabled: true }))
             : field('Time limit (minutes, 0 = none)', input(q, ed.quiz.timeLimitMin, (v) => { ed.quiz.timeLimitMin = Number(v) || 0; }, { type: 'number', min: '0', max: '600' })),
-          field('Code highlighting', langSel),
-          field('Calculator', calcSel)),
+          tipped(field('Code highlighting', langSel), 'How code in your questions is colored. None, for a quiz without code.'),
+          tipped(field('Calculator', calcSel), 'A calculator students can open during the quiz. Graphing adds a screen for graphs. A section or a question can have its own.')),
         h('div', { class: 'qe-line' },
-          check(q, ed.quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { ed.quiz.shuffleQuestions = v; }),
+          tipped(check(q, ed.quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { ed.quiz.shuffleQuestions = v; }), 'Each student gets their own order, mixed within each part.'),
           check(q, ed.quiz.shuffleChoices !== false, 'Shuffle choices', (v) => { ed.quiz.shuffleChoices = v; }),
           lockParts,
-          check(q, ed.quiz.turnInEarly === true, 'Students can turn in before time is up', (v) => { if (v) ed.quiz.turnInEarly = true; else delete ed.quiz.turnInEarly; }))),
+          tipped(check(q, ed.quiz.turnInEarly === true, 'Students can turn in before time is up', (v) => { if (v) ed.quiz.turnInEarly = true; else delete ed.quiz.turnInEarly; }),
+            "Off: students who finish early wait, and can't turn in until time is nearly up."))),
       pools ? card('Question pools', pools) : null,
       card('Directions',
         field('For the whole quiz', area(q, dirs.quiz, (v) => setDir('quiz', v), Object.assign({ rows: 3, placeholder: 'Optional' }, prose))),

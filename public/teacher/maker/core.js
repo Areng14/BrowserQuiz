@@ -1,6 +1,6 @@
 // The editor's plumbing (status, redraws, what's wrong with a question) and its form fields.
 
-import { ICONS, h, icon } from '../dash/core.js';
+import { ICONS, h, icon, tip } from '../dash/core.js';
 import { ed } from './state.js';
 import { countBlanks } from './formats.js';
 import { readCode, readTrace } from './model.js';
@@ -97,6 +97,14 @@ const VAR_TYPES = new Set(['single', 'multi', 'text', 'math', 'graph', 'output',
 // first row's.
 const M = window.BQMath;
 const FORMS = [['', 'Any equivalent form'], ['expanded', 'Expanded'], ['factored', 'Factored'], ['exact', 'Exact, no decimals'], ['lowest', 'Lowest terms']];
+// What each form asks of a student's answer, besides being equal to an accepted one (shown on hover)
+const FORM_TIP = {
+  '': 'Anything equal to an accepted answer counts, even the problem typed back in. Pick a form to stop that.',
+  expanded: 'Multiplied out, with no brackets left to multiply: x^2 + 5x + 6, not (x + 2)(x + 3).',
+  factored: 'Written as a product: (x + 2)(x + 3), not x^2 + 5x + 6.',
+  exact: 'No decimals: 3/4 or sqrt(2)/2, not 0.75 or 0.707.',
+  lowest: 'A fraction in lowest terms, without decimals: 3/4, not 6/8 or 0.75.',
+};
 const FORM_WORDS = { expanded: 'expanded', factored: 'factored', exact: 'exact (no decimals)', lowest: 'in lowest terms' };
 const answersOf = (q) => {
   const qa = Array.isArray(q.vars) && q.vars[0] ? firstRow(q, q.vars[0]) : q;
@@ -142,13 +150,15 @@ const varsText = (rows) => {
   const cell = (v) => (/[",]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
   return [names.join(', '), ...rows.map((r) => names.map((n) => cell(r[n] ?? '')).join(', '))].join('\n');
 };
-const varsEditor = (q) => field('Random values: names, then one row per line. Each student gets a row; write {{name}} where it goes',
-  area(q, varsText(q.vars), (v) => {
+const varsEditor = (q) => { const box = area(q, varsText(q.vars), (v) => {
     const lines = v.split('\n').filter((l) => l.trim());
     if (lines.length < 2) { delete q.vars; return; }
     const names = cells(lines[0]);
     q.vars = lines.slice(1).map((l) => { const vals = cells(l); return Object.fromEntries(names.map((n, k) => [n, vals[k] ?? ''])); });
-  }, { rows: 3, placeholder: 'x, y, out\n7, 2, 1\n9, 4, 1' }));
+  }, { rows: 3, placeholder: 'x, y, out\n7, 2, 1\n9, 4, 1' });
+  return tip(field('Random values: names, then one row per line. Each student gets a row; write {{name}} where it goes', box), box,
+    'Say the first line is a, b and the next two are 3, 4 and 5, 12. Each student gets one of those rows, and {{a}} in the question shows as 3 or 5.');
+};
 const area = (q, value, on, attrs) => {
   const el = h('textarea', Object.assign({ class: 'input qe-area', spellcheck: 'false', rows: 2 }, attrs || {}));
   el.value = value || '';
@@ -182,4 +192,4 @@ const poolSettings = (q) => {
 };
 const xBtn = (label, onclick, disabled) => h('button', { class: 'btn small qe-x', type: 'button', 'aria-label': label, title: label, disabled, onclick }, icon(ICONS.x, 16));
 
-export { FORMS, FORM_WORDS, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, imageMissing, input, markdownImages, nextId, poolSettings, problemsOf, refreshSoon, setStatus, touch, typeset, varsEditor, xBtn };
+export { FORMS, FORM_TIP, FORM_WORDS, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, imageMissing, input, markdownImages, nextId, poolSettings, problemsOf, refreshSoon, setStatus, touch, typeset, varsEditor, xBtn };

@@ -1,6 +1,6 @@
 // Code: what students read (output, trace and fill questions), and code questions with their tests.
 
-import { ICONS, h, icon, plural } from '../dash/core.js';
+import { ICONS, h, icon, plural, tip } from '../dash/core.js';
 import { ed } from './state.js';
 import { BT, LANGS, countBlanks } from './formats.js';
 import { readCode, realign, refLangsOf, starterCode } from './model.js';
@@ -197,8 +197,10 @@ function codeEditor(q) {
   const banLangs = fill ? [] : q.languages.filter(BT.hasBans); // a fill question has no languages of its own, nor bans
   const parse = (v) => v.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
   const cppOnly = (l) => l === 'cpp' || (!l && banLangs.length === 1 && banLangs[0] === 'cpp');
-  const banField = (label, list, set, hint, l) => field(label, input(q, list.map((b) => (cppOnly(l) ? b.replace('.', '::') : b)).join(', '), (v) => set(parse(v)),
-    { class: 'input qe-mono', placeholder: hint, spellcheck: 'false' }));
+  const banField = (label, list, set, hint, l) => {
+    const box = input(q, list.map((b) => (cppOnly(l) ? b.replace('.', '::') : b)).join(', '), (v) => set(parse(v)), { class: 'input qe-mono', placeholder: hint, spellcheck: 'false' });
+    return tip(field(label, box), box, 'An answer that uses any of these scores 0.');
+  };
   let bans = null;
   if (!fill) {
     const perLang = !!q.ban && !Array.isArray(q.ban);
