@@ -13,18 +13,18 @@ import { insertQuestions } from './outline.js';
 function jsonIn(text) {
   const fenced = /```(?:json)?[ \t]*\n([\s\S]*?)\n```/i.exec(text);
   const src = (fenced ? fenced[1] : text).trim();
-  try { return JSON.parse(src); } catch (e) { throw new Error("That isn't JSON. Paste the AI's answer, or just its ```json block."); }
+  try { return JSON.parse(src); } catch (e) { throw new Error("That isn't an answer from the AI. Paste the prompt into ChatGPT, Claude or Gemini first, then paste what it writes here."); }
 }
 // A question, a list of them, or a quiz.json with questions: what to add
 function questionsIn(v) {
   const list = Array.isArray(v) ? v : v && Array.isArray(v.questions) ? v.questions : v && typeof v === 'object' && v.type ? [v] : null;
-  if (!list || !list.length) throw new Error('No question in it. Ask the AI for the question as JSON.');
+  if (!list || !list.length) throw new Error("No question in it. Paste the AI's whole answer.");
   return list;
 }
 
 function aiCard(close) {
   // not part of the quiz, so typing here doesn't count as a change to save
-  const paste = h('textarea', { class: 'input qe-area qe-mono', id: 'qe-ai-paste', rows: 6, spellcheck: 'false', placeholder: '```json\n{ "type": "single", "prompt": "…", … }\n```' });
+  const paste = h('textarea', { class: 'input qe-area qe-mono', id: 'qe-ai-paste', rows: 6, spellcheck: 'false' });
   paste.addEventListener('input', () => grow(paste));
   const msg = h('p', { class: 't-error qe-ai-msg', role: 'alert' });
   const addBtn = h('button', { class: 'btn small', type: 'button', text: 'Add question' });
@@ -50,10 +50,11 @@ function aiCard(close) {
   });
   return [h('div', { class: 'qe-head' }, h('h2', { class: 'qe-n', text: 'Question from an AI' }), h('span', { class: 'qe-grow' }),
     h('button', { class: 'btn small qe-done', type: 'button', text: 'Cancel', onclick: close })),
-  h('div', { class: 'qe-stack' },
-    h('div', { class: 'qe-line' }, copyPromptBtn('question')),
-    field('What the AI wrote', paste),
-    h('div', { class: 'qe-line' }, addBtn), msg)];
+  // Two steps, said in so many words: the prompt goes to an AI chat, and what it writes comes back here
+  h('ol', { class: 'qe-stack qe-ai-steps' },
+    h('li', {}, h('div', { class: 'qe-line' }, copyPromptBtn('question'),
+      h('span', { text: 'Paste it into ChatGPT, Claude or Gemini, and say what the question is about.' }))),
+    h('li', {}, field("Paste the AI's answer here", paste), h('div', { class: 'qe-line' }, addBtn), msg))];
 }
 
 export { aiCard };

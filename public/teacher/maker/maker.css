@@ -90,6 +90,8 @@
 .qe-start { display: grid; gap: 16px; }
 .qe-keys { padding: 0 4px; color: var(--ink-2); }
 .qe-ai-msg { margin: 0; white-space: pre-wrap; }
+.qe-ai-steps { margin: 0; padding: 0; list-style: none; }
+.qe-ai-steps > li { display: grid; gap: 12px; }
 .qe-ai-msg:empty { display: none; }
 .qe-title { max-width: 440px; font-weight: 600; }
 .qe-grow { flex: 1; }

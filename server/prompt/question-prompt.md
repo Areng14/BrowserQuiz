@@ -1,6 +1,6 @@
 # Write one BrowserQuiz question
 
-You're writing one question for a quiz in BrowserQuiz, a quiz app for CS classes. Your answer is that
+You're writing one question for a quiz in BrowserQuiz, a quiz app for CS and math classes. Your answer is that
 question as JSON, in the format described below. The teacher pastes it into the quiz they're making.
 
 ## The question I want

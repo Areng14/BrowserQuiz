@@ -1,6 +1,6 @@
 # Write a BrowserQuiz quiz
 
-You're writing a quiz for BrowserQuiz, a quiz app for CS classes. Your answer is one file,
+You're writing a quiz for BrowserQuiz, a quiz app for CS and math classes. Your answer is one file,
 `quiz.json`, in the format described below. The teacher uploads it on the BrowserQuiz dashboard.
 
 ## The quiz I want
