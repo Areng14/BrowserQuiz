@@ -102,13 +102,14 @@ module.exports = function attemptRoutes(r) {
     json(res, 200, { edits: out });
   });
 
+  const tzOf = (me) => (q('SELECT tz FROM teachers WHERE id = ?').get(me.id) || {}).tz || null;
   r.get('/api/t/attempts/:id/report', (req, res, p) => {
     const me = requireTeacher(req);
     const { a, run } = getAttemptRun(me, p.id);
     notWhileOpen(run);
     const quiz = store.getQuiz(run.quiz_id);
     const student = q('SELECT bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ?').get(a.studentId);
-    json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: [studentReport(quiz, a, student ? student.name : '')] });
+    json(res, 200, { quiz: reportQuiz(quiz, run.quiz_id), students: [studentReport(quiz, a, student ? student.name : '')], tz: tzOf(me) });
   });
 
   r.get('/api/t/runs/:id/report', (req, res, p) => {
@@ -125,6 +126,7 @@ module.exports = function attemptRoutes(r) {
       similar: similarCode(quiz, attempts.map((attempt, who) => ({ who, attempt }))), // who: a place in students
       sameWrong: sameWrong(quiz, attempts.map((attempt, who) => ({ who, attempt }))),
       fast: fastRight(quiz, attempts.map((attempt, who) => ({ who, attempt }))),
+      tz: tzOf(me), // the time zone from Settings, for when each one submitted
     });
   });
 

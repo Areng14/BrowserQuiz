@@ -4,6 +4,7 @@
 // things through them (teacher/common.js and library.js), so another teacher's ids are simply not found.
 module.exports = function teacherRoutes(r) {
   require('./teacher/auth')(r);
+  require('./teacher/settings')(r);
   require('./teacher/quizzes')(r);
   require('./teacher/rosters')(r);
   require('./teacher/runs')(r);

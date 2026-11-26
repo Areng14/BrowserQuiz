@@ -233,6 +233,9 @@ const rosterStudentsForRun = (run) => q(`SELECT id, bq_name(name, id, roster_id)
 
 // Signed in, by password or passkey: the session cookie.
 function startSession(req, res, teacherId, passkey) {
+  // Signing in again in the same browser replaces its session, so Settings counts browsers, not sign-ins.
+  const before = cookies(req)[TCH];
+  if (before) q('DELETE FROM sessions WHERE token_hash = ?').run(sha256(before));
   const token = newToken();
   q('INSERT INTO sessions (token_hash, created_at, teacher_id, passkey) VALUES (?, ?, ?, ?)').run(sha256(token), Date.now(), teacherId, passkey ? 1 : 0);
   q('DELETE FROM sessions WHERE created_at < ?').run(Date.now() - SESSION_MS);

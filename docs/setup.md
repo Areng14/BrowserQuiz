@@ -33,7 +33,7 @@ If students cannot reach it, open the port the script printed in the server's fi
 - **Reset password** gives the teacher a new temporary password and signs them out.
 - **Disable** stops the teacher from signing in, but keeps their quizzes and results.
 
-**Passkeys.** Teachers can sign in with a fingerprint, face or PIN instead of a password by going to **Password**, then **Add a passkey**. Passkeys need HTTPS, and a passkey from iCloud Keychain, Google Password Manager or most security keys. If a passkey cannot unlock quizzes, it will be turned away when it is added.
+**Passkeys.** Teachers can sign in with a fingerprint, face or PIN instead of a password in **Settings**, under **Passkeys**. Passkeys need HTTPS, and a passkey from iCloud Keychain, Google Password Manager or most security keys. If a passkey cannot unlock quizzes, it will be turned away when it is added.
 
 ## HTTPS and where to host it
 

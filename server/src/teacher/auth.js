@@ -10,6 +10,7 @@ const { runnerConfigured, runnerHealthy } = require('../coderun');
 const PK = require('../passkeys');
 const { TCH, audit, dropQuizzes, requireAdmin, requireTeacher } = require('./common');
 const { TDEV, acctFails, devMisses, devSig, knownDevice, loginBucket, startSession } = require('./library');
+const { quizDefaults } = require('./settings');
 
 module.exports = function authRoutes(r) {
   // Username + password. No username means admin, the account from .env.
@@ -85,6 +86,7 @@ module.exports = function authRoutes(r) {
         // temporary password alone would open them).
         // A passkey sign-in unlocked it, though: only the teacher has that.
         needsRecovery: !!me.must_change && !!A.byId(me.id).key_wrap && !(me.passkey && V.keyFor(me.id)),
+        tz: A.byId(me.id).tz || null, defaults: quizDefaults(A.byId(me.id)),
       },
     });
   });

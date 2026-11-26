@@ -46,6 +46,7 @@ const NAMES = {
   classes: 'Users',
   teachers: 'Shield',
   live: 'Radio', // open quizzes
+  settings: 'Settings',
   // question types (the quiz maker), and a section between them
   single: 'CircleDot',
   multi: 'SquareCheck',

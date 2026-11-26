@@ -2,12 +2,14 @@
 
 import { showQuizEditor } from '../maker/main.js';
 import { dash } from './state.js';
-import { ICONS, accountMenu, actionsHead, api, ask, date, ghLink, h, heads, icon, iconButton, mount, plural, post, labeled, sortableTable, themeButton, tip } from './core.js';
-import { teachersSection } from './account.js';
+import { ICONS, accountMenu, actionsHead, api, ask, date, ghLink, h, heads, icon, iconButton, mount, pendingCode, plural, post, labeled, sortableTable, themeButton, tip } from './core.js';
+import { showRecoveryCode, teachersSection } from './account.js';
+import { settingsTab } from './settings.js';
 import { showRoster } from './roster.js';
 import { moreMenu } from './cells.js';
 import { showRun } from './run.js';
 import { showGrade } from './grade.js';
+import { lockdownFields } from './modes.js';
 
 // ---------- dashboard: a sidebar of tabs, each with its own address (#give, #run/<id>, ...) ----------
 const TABS = [
@@ -16,6 +18,7 @@ const TABS = [
   { id: 'quizzes', label: 'Quizzes', icon: 'quizzes' },
   { id: 'classes', label: 'Classes', icon: 'classes' },
   { id: 'teachers', label: 'Teachers', icon: 'teachers', admin: true },
+  { id: 'settings', label: 'Settings', icon: 'settings', wide: true }, // on phones, in the account menu
 ];
 // Open quizzes: one goes straight to its live page, two or more to a list of them (#open).
 const OPEN = { id: 'open', label: 'Open quizzes', short: 'Open', icon: 'live' };
@@ -45,6 +48,9 @@ async function route() {
     if (!go) { history.pushState(null, '', dash.here); return; }
   }
   dash.leaveGuard = null;
+  // a recovery code not saved yet stays on screen, even after a reload (account.js showRecoveryCode)
+  const code = pendingCode();
+  if (code) { if (!dash.who) { try { dash.who = (await api('/api/t/me')).teacher; } catch (e) { /* shown anyway */ } } showRecoveryCode(code.code, code.again); return; }
   if (!dash.who) { try { dash.who = (await api('/api/t/me')).teacher; } catch (e) { return; } } // signs in first if needed
   const [a, b, c] = location.hash.slice(1).split('/');
   const id = b ? decodeURIComponent(b) : null;
@@ -67,7 +73,7 @@ function shell(active, ...content) {
   return h('div', { class: 't-shell' },
     h('nav', { class: 't-side', 'aria-label': 'Dashboard' },
       h('div', { class: 't-brand' }, h('img', { class: 't-brand-icon', src: '/icon.svg', alt: '', width: 26, height: 26 }), 'BrowserQuiz'),
-      h('div', { class: 't-nav' }, tabs.map((t) => h('a', { class: 't-nav-item', href: t.href || '#' + t.id, title: t.title || null, 'aria-current': t.id === active ? 'page' : null },
+      h('div', { class: 't-nav' }, tabs.map((t) => h('a', { class: t.wide ? 't-nav-item t-nav-wide' : 't-nav-item', href: t.href || '#' + t.id, title: t.title || null, 'aria-current': t.id === active ? 'page' : null },
         icon(t.icon), h('span', { class: 't-nav-label' }, t.short || t.label, t.short ? h('span', { class: 't-nav-more', text: t.label.slice(t.short.length) }) : null),
         t.id === 'open' && dash.live > 1 ? h('span', { class: 't-badge', title: `${dash.live} open`, 'aria-label': `${dash.live} open`, text: String(dash.live) }) : null))),
       h('div', { class: 't-side-foot' }, accountMenu(), themeButton())),
@@ -88,7 +94,7 @@ async function showHome(next) {
   if (dash.tab === 'teachers' && !(dash.who && dash.who.role === 'admin')) { showHome('give'); return; }
   noteRuns(data.runs);
   if (dash.tab === 'open' && dash.live < 2) { if (dash.live) { history.replaceState(null, '', '#run/' + encodeURIComponent(dash.openRuns[0].id)); showRun(dash.openRuns[0].id); } else showHome('give'); return; }
-  const page = { open: openTab, give: giveTab, results: resultsTab, quizzes: quizzesTab, classes: classesTab, teachers: teachersSection }[dash.tab](data, me);
+  const page = { open: openTab, give: giveTab, results: resultsTab, quizzes: quizzesTab, classes: classesTab, teachers: teachersSection, settings: settingsTab }[dash.tab](data, me);
   const y = same ? window.scrollY : 0;
   mount(shell(dash.tab, page));
   window.scrollTo(0, y);
@@ -115,53 +121,20 @@ function giveTab(data, me) {
   dash.giveQuiz = null;
   const quizSel = picker('run-quiz', 'Quiz', data.quizzes.map((x) => ({ value: x.id, label: x.title, meta: [plural(x.questions, 'question'), date(x.createdAt)] })), given);
   const rosterSel = picker('run-roster', 'Class', data.rosters.map((x) => ({ value: x.id, label: x.name, meta: [plural(x.students, 'student')] })));
-  // level: how locked down, out of 3.
-  // what: what students get, for a teacher who hasn't used it (shown on hover)
-  const MODES = [
-    { id: 'exam', title: 'Exam', level: 2, security: 'Medium security',
-      what: "The quiz runs in full screen in any browser. If a student leaves it for another tab, window or app, their quiz is invalidated and they aren't told." },
-    { id: 'seb', title: 'Safe Exam Browser', level: 3, security: 'High security',
-      what: "Students take the quiz in Safe Exam Browser, an app that locks the computer until they turn in. It must be installed on each student's computer." },
-    { id: 'practice', title: 'Practice', level: 0, security: 'No security',
-      what: "The quiz doesn't use full screen and nothing is flagged. Students see the right answers after they turn in." },
-  ];
-  let mode = 'exam';
-  // Safe Exam Browser: BrowserQuiz makes the settings, unless the teacher has their own .seb file
-  // (then its Config Key, from SEB Config Tool's Exam tab).
-  const sebKey = h('input', { class: 'input t-mono', id: 'seb-key', autocomplete: 'off', spellcheck: 'false', maxlength: '64', placeholder: '64 letters and digits' });
-  const sebSummary = h('summary', { text: 'Use my own .seb file' });
-  tip(sebSummary, sebSummary, "Use this if you made your own settings in SEB Config Tool. You give students your .seb file, and only Safe Exam Browser with those settings can join.");
-  const sebOwn = h('details', { class: 't-seb' }, sebSummary,
-    h('label', { class: 'field', for: 'seb-key' }, h('span', { class: 'field-label', text: 'Config Key (SEB Config Tool, Exam tab)' }), sebKey));
-  sebOwn.hidden = true;
-  sebOwn.addEventListener('toggle', () => { if (sebOwn.open) sebKey.focus(); muteRow.hidden = mode !== 'seb' || sebOwn.open; }); // their own file has its own sound setting
-  const modeCards = MODES.map((m) => {
-    const input = h('input', { type: 'radio', name: 'mode', id: 'mode-' + m.id, value: m.id, checked: m.id === mode });
-    input.addEventListener('change', () => { mode = m.id; sebOwn.hidden = mode !== 'seb'; muteRow.hidden = mode !== 'seb' || sebOwn.open; });
-    return tip(h('label', { class: 't-mode', for: 'mode-' + m.id, 'data-level': String(m.level) }, input,
-      h('span', { class: 't-mode-title', text: m.title }),
-      h('span', { class: 't-mode-sec' },
-        h('span', { class: 't-meter', 'aria-hidden': 'true' }, [1, 2, 3].map((i) => h('span', { class: i <= m.level ? 'on' : null }))),
-        m.security)), input, m.what);
-  });
-  const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', class: 't-switch', role: 'switch', checked: false });
-  // SEB only: mute the computer's sound (other apps and tabs included) while the quiz is open
-  const sebMute = h('input', { type: 'checkbox', id: 'seb-mute', class: 't-switch', role: 'switch', checked: true });
-  const muteRow = tip(h('label', { class: 't-check t-switch-row', for: 'seb-mute' }, sebMute, h('span', { text: "Mute the computer's sound" })), sebMute,
-    "Safe Exam Browser mutes the computer when it starts, so music or video playing in another app stops. Turn this off if a student uses a screen reader.");
-  muteRow.hidden = true;
+  // what Settings says it starts with (dash/modes.js)
+  const lock = lockdownFields(me && me.teacher && me.teacher.defaults);
   const startMsg = h('p', { class: 't-error', role: 'alert' });
   const ready = data.quizzes.length && data.rosters.length;
   const startBtn = labeled(h('button', { class: 'btn primary t-start', type: 'button', disabled: !ready }), 'play', 'Start quiz');
   startBtn.addEventListener('click', async () => {
     const pick = data.quizzes.find((x) => x.id === quizSel.value);
-    if (mode !== 'practice' && pick && pick.practiced
+    if (lock.read().mode !== 'practice' && pick && pick.practiced
       && !(await ask.confirm({ title: 'Give it as a graded quiz?', text: `Students who practiced "${pick.title}" have seen its answers.`, ok: 'Give it anyway' }))) return;
     startBtn.disabled = true;
     startMsg.textContent = '';
     try {
-      const own = mode === 'seb' && sebOwn.open && sebKey.value.trim();
-      const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: ipLock.checked, practice: mode === 'practice', seb: mode === 'seb', sebKey: own || null, sebMute: sebMute.checked });
+      const l = lock.read();
+      const r = await post('/api/t/runs', { quizId: quizSel.value, rosterId: rosterSel.value, ipLock: l.ipLock, practice: l.mode === 'practice', seb: l.mode === 'seb', sebKey: l.sebKey || null, sebMute: l.sebMute });
       showRun(r.id);
     } catch (e) { startMsg.textContent = e.message; startBtn.disabled = false; }
   });
@@ -173,11 +146,7 @@ function giveTab(data, me) {
       missing.length ? h('p', { class: 't-muted' }, 'Add a ', missing.map(([w, href], i) => [i ? ' and a ' : '', h('a', { href, text: w })]), ' first.') : null,
       h('div', { class: 't-start-form' },
         h('div', { class: 't-row' }, quizSel.el, rosterSel.el),
-        h('fieldset', { class: 't-modes' }, h('legend', { class: 'field-label', text: 'Mode' }), modeCards),
-        muteRow,
-        sebOwn,
-        tip(h('label', { class: 't-check t-switch-row', for: 'ip-lock' }, ipLock, h('span', { text: 'Only students on my current network' })),
-          ipLock, "Students on a different network, such as at home, can't join."),
+        lock.nodes,
         h('div', { class: 't-row t-start-row' }, startBtn, startMsg), runner)),
   ];
 }

@@ -136,6 +136,10 @@ db.exec(`CREATE TABLE IF NOT EXISTS passkeys (
 CREATE INDEX IF NOT EXISTS passkeys_teacher ON passkeys(teacher_id);`);
 addColumn('teachers', 'pk_user', 'TEXT');
 addColumn('sessions', 'passkey', 'INTEGER NOT NULL DEFAULT 0');
+// Settings (teacher/settings.js): the time zone dates are shown in (an IANA name, null: the browser's), and
+// what Give a quiz starts with (JSON: mode, ipLock, sebMute, sebKey).
+addColumn('teachers', 'tz', 'TEXT');
+addColumn('teachers', 'defaults', 'TEXT');
 db.exec(`CREATE INDEX IF NOT EXISTS quizzes_owner ON quizzes(owner_id);
 CREATE INDEX IF NOT EXISTS rosters_owner ON rosters(owner_id);
 CREATE INDEX IF NOT EXISTS runs_owner ON runs(owner_id);`);

@@ -592,3 +592,32 @@ th.num .t-sort { flex-direction: row-reverse; }
 .t-toast-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
 .btn.t-toast-x { flex: none; width: 34px; padding: 0; }
 @media (max-width: 820px) { .t-toasts { left: 16px; right: 16px; width: auto; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); } }
+/* Settings (dash/settings.js): one column of sections, each with its own button */
+.t-set { display: grid; gap: 24px; max-width: 760px; }
+.t-set-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-content: start; padding: 24px; border: 1px solid var(--line); border-radius: 12px; }
+.t-set-card > h2 { font-size: 18px; }
+.t-set-note { max-width: 62ch; color: var(--ink-2); line-height: 1.5; }
+.t-set-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.t-set-grid .field, .t-set-card .t-tip-host { min-width: 0; }
+.t-set-foot { align-items: center; gap: 12px; }
+.t-set-msg:empty { display: none; }
+.t-set-card > div:has(> .btn), .t-set-card > .t-tip-host { justify-self: start; }
+.t-set-card .t-error:empty { display: none; }
+/* Other devices: the words, and the button at the end of the same row */
+.t-set-inline { grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 24px; padding-block: 20px; }
+.t-set-what { display: grid; gap: 6px; }
+.t-set-inline > .t-error { grid-column: 1 / -1; }
+.t-ai-keyed { display: grid; gap: 10px; }
+.t-set-card .t-ai-ready { margin: 0; }
+.t-recovery { max-width: 540px; }
+.t-code-row { flex-wrap: nowrap; align-items: stretch; gap: 8px; }
+.t-code-row .t-code-big { flex: 1 0 auto; justify-content: center; white-space: nowrap; }
+.t-code-row > .btn.t-icon-only { width: auto; aspect-ratio: 1; }
+@media (max-width: 820px) {
+  .t-nav-item.t-nav-wide { display: none; } /* Settings is in the account menu on phones */
+  .t-set-card { padding: 18px; }
+  .t-set-grid { grid-template-columns: minmax(0, 1fr); }
+  .t-set-inline { grid-template-columns: minmax(0, 1fr); }
+  .t-set-inline > .btn { justify-self: start; }
+}
+@media (max-width: 540px) { .t-code-row { flex-wrap: wrap; } .t-code-row .t-code-big { flex-basis: 100%; min-height: 48px; } }

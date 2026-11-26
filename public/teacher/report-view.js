@@ -35,6 +35,8 @@
   const fmtPts = (n) => String(Math.round(n * 100) / 100);
   const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
   // assetUrl: where the quiz's images are, for images written in Markdown.
+  // in the teacher's time zone from Settings (tz), or this browser's
+  const when = (t, tz) => { const how = { dateStyle: 'medium', timeStyle: 'short' }; try { return new Date(t).toLocaleString([], Object.assign({ timeZone: tz || undefined }, how)); } catch (e) { return new Date(t).toLocaleString([], how); } };
   const md = (src, lang, assetUrl) => h('div', { class: 'r-prompt' }, window.BQ.md.render(src, { lang, assetUrl }));
   const inlineMath = (src) => { const t = window.BQMath ? window.BQMath.toTex(src) : null; return t == null ? h('code', { text: src }) : window.BQ.md.renderInline(`$${t}$`); };
   const inline = (src, lang, assetUrl) => (/\n/.test(src) // a choice with more than one line is set as blocks
@@ -375,7 +377,7 @@
         h('div', { class: 'r-head-main' },
           h('p', { class: 'r-eyebrow', text: quiz.title }),
           h('h1', { text: s.name }),
-          s.submittedAt ? h('p', { class: 'r-sub', text: new Date(s.submittedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) }) : null),
+          s.submittedAt ? h('p', { class: 'r-sub', text: when(s.submittedAt, o.tz) }) : null),
         scoreBox),
       h('nav', { class: 'r-chips', 'aria-label': 'Questions' }, s.questions.map((q, i) => {
         const [st, words] = status(q);

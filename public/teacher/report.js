@@ -25,7 +25,7 @@
     if (!data.students.length) { status.textContent = 'Nobody has submitted yet.'; return; }
     const assetUrl = practice ? (p) => '/asset/' + String(p).split('/').map(encodeURIComponent).join('/') : null;
     const many = data.students.length > 1;
-    const pages = data.students.map((s, i) => student(data.quiz, s, { assetUrl, key: `s${i}` }));
+    const pages = data.students.map((s, i) => student(data.quiz, s, { assetUrl, key: `s${i}`, tz: data.tz }));
     root.replaceChildren(...(many ? [classOverview(data.quiz, data.students), similarCode(data.students, data.similar), sameWrong(data.students, data.sameWrong, data.quiz), fastRight(data.students, data.fast)].filter(Boolean) : []), ...pages);
     if (many) {
       jump.replaceChildren(h('option', { value: '', text: 'Jump to a student' }), ...data.students.map((s, i) => h('option', { value: `s${i}`, text: s.name })));

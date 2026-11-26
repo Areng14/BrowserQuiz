@@ -1,7 +1,8 @@
 // Grading with AI: the dialog, with an API key or by pasting into any chat.
 
 import { ICONS, api, ask, h, icon, plural, post, root } from './core.js';
-import { CHATS, KEY_PAGES } from './cells.js';
+import { CHATS } from './cells.js';
+import { aiKeyEditor } from './aikey.js';
 
 async function aiDialog(runId, attemptId, done) {
   const qs = attemptId ? `?attempt=${encodeURIComponent(attemptId)}` : '';
@@ -89,33 +90,14 @@ async function aiDialog(runId, attemptId, done) {
   // The API key way: ready (which key, change or remove it) or a field to add one.
   const keyPanel = h('div', { class: 't-ai-key', role: 'tabpanel', id: 't-ai-p-key', 'aria-labelledby': 't-ai-t-key' });
   const gradeBtn = h('button', { class: 'btn primary', type: 'button', text: `Grade ${plural(p.answers, 'answer')}` });
-  const linkBtn2 = (text, onclick) => h('button', { class: 't-linkbtn', type: 'button', text, onclick });
-  const drawKey = (editing, focus) => {
-    const has = ks.mine || ks.server;
-    gradeBtn.disabled = !has || editing;
-    if (has && !editing) {
-      keyPanel.replaceChildren(h('p', { class: 't-ai-ready' },
-        h('b', { text: ks.name }), ` · ${ks.mine ? `${ks.company} key ${ks.hint}` : `Server's ${ks.server} key`} · `,
-        linkBtn2(ks.mine ? 'Change' : 'Use my own', () => drawKey(true, true)),
-        ks.mine ? [' · ', linkBtn2('Remove', async () => { try { ks = await post('/api/t/ai-key', { key: null }); } catch (e) { /* stays */ } drawKey(false, true); })] : null));
-      if (focus) setTimeout(() => gradeBtn.focus(), 0);
-      return;
-    }
-    const input = h('input', { class: 'input', type: 'password', id: 't-ai-keyin', autocomplete: 'off', spellcheck: 'false', placeholder: 'sk-ant-…, sk-… or AIza…' });
-    const msg = h('p', { class: 't-small', role: 'status' });
-    const save = h('button', { class: 'btn', type: 'button', text: 'Save key' });
-    save.addEventListener('click', async () => {
-      save.disabled = true; msg.className = 't-small t-muted'; msg.textContent = 'Checking it…';
-      try { ks = await post('/api/t/ai-key', { key: input.value }); drawKey(false, true); } catch (e) { msg.className = 't-small t-error'; msg.textContent = e.message; save.disabled = false; }
-    });
-    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save.click(); });
-    keyPanel.replaceChildren(
-      h('label', { class: 'field', for: 't-ai-keyin' }, h('span', { class: 'field-label', text: 'Your API key' }), h('div', { class: 't-row t-ai-keyrow' }, input, save)),
-      h('div', { class: 't-ai-chats', role: 'group', 'aria-label': 'Make a key' }, KEY_PAGES.map(([name, url]) => h('a', { class: 't-chip', href: url, target: '_blank', rel: 'noopener noreferrer', text: name }))),
-      msg);
-    if (has) keyPanel.append(linkBtn2('Cancel', () => drawKey(false, true)));
-    if (focus) setTimeout(() => input.focus(), 0);
-  };
+  // which key (change or remove it), or a field to add one (aikey.js, as in Settings)
+  const keys = aiKeyEditor(ks, (now, editing, focus) => {
+    ks = now;
+    gradeBtn.disabled = !(ks.mine || ks.server) || editing;
+    if (!editing && focus) setTimeout(() => gradeBtn.focus(), 0);
+  });
+  keyPanel.append(keys.el);
+  const drawKey = (editing, focus) => keys.draw(editing, focus);
   gradeBtn.addEventListener('click', async () => {
     gradeBtn.disabled = true;
     try { await post(attemptId ? `/api/t/attempts/${attemptId}/ai-grade` : `/api/t/runs/${runId}/ai-grade`); close(); done(''); } catch (e) {

@@ -1,7 +1,7 @@
 // One running quiz: its live table, and everything a teacher does from it.
 
 import { dash } from './state.js';
-import { EVENT_TIP, ICONS, LABEL, actionsHead, api, ask, clock, glyph, h, icon, iconButton, labeled, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, tip } from './core.js';
+import { actionsHead, api, ask, clock, EVENT_TIP, glyph, h, icon, iconButton, ICONS, LABEL, labeled, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, timeZone, tip } from './core.js';
 import { noteRuns, sebButtons, setHash, shell } from './home.js';
 import { LIVE_SORT, beforeAdmit, browserName, correctionsDialog, drawTrail, gone, grading, integrityCell, moreMenu, phone, progressCell, projector, statusCell, strikesCell, tick, ticks, watchLink } from './cells.js';
 import { aiDialog, checkWhy } from './ai.js';
@@ -57,7 +57,7 @@ async function showRun(runId) {
   // Read out when the counts change, not on every 2-second refresh.
   const summary = h('p', { class: 'sr-only', 'aria-live': 'polite' });
   // a spreadsheet of the grades, its times in this computer's time zone
-  const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } })();
+  const tz = timeZone() || (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } })(); // Settings' time zone, or this browser's
   const exportLink = h('a', { class: 'btn', href: `/api/t/runs/${runId}/export.csv${tz ? '?tz=' + encodeURIComponent(tz) : ''}`, download: true, text: 'Download grades' });
   const classReport = h('a', { class: 'btn', href: `/teacher/report.html?run=${encodeURIComponent(runId)}`, target: '_blank', rel: 'noopener', text: 'Class report' });
   for (const a of [exportLink, classReport]) {

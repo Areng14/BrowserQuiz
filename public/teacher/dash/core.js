@@ -54,7 +54,13 @@ dash.pollTimer = 0;
 dash.tickTimer = 0;
 dash.selected = null;
 
-try { const t = localStorage.getItem(THEME_KEY); if (t === 'dark' || t === 'light') document.documentElement.dataset.theme = t; } catch (e) { /* ignore */ }
+// light, dark, or '' to match the computer (this browser only)
+function themeChoice() { try { const t = localStorage.getItem(THEME_KEY); return t === 'dark' || t === 'light' ? t : ''; } catch (e) { return ''; } }
+function setTheme(t) {
+  if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  try { if (t) localStorage.setItem(THEME_KEY, t); else localStorage.removeItem(THEME_KEY); } catch (e) { /* this page only */ }
+}
+if (themeChoice()) document.documentElement.dataset.theme = themeChoice();
 
 // Tables say what they are, so they still read as tables when phones lay their rows out as cards.
 const ROLES = { table: 'table', thead: 'rowgroup', tbody: 'rowgroup', tr: 'row', th: 'columnheader', td: 'cell' };
@@ -72,8 +78,14 @@ function h(tag, attrs, ...kids) {
   for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : String(kid));
   return el;
 }
-const clock = (t) => (t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '');
-const date = (t) => new Date(t).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+// Times in the teacher's time zone from Settings, or this browser's.
+const timeZone = () => (dash.who && dash.who.tz) || undefined;
+function when(t, how, opts) {
+  try { return new Date(t)[how]([], Object.assign({ timeZone: timeZone() }, opts)); } catch (e) { return new Date(t)[how]([], opts); } // a zone this browser doesn't know
+}
+const clock = (t) => (t ? when(t, 'toLocaleTimeString', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '');
+const date = (t) => when(t, 'toLocaleString', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+const day = (t) => when(t, 'toLocaleDateString', { month: 'short', day: 'numeric', year: 'numeric' });
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const mmss = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 
@@ -100,26 +112,26 @@ function themeButton() {
   const b = h('button', { class: 'theme-btn', type: 'button' });
   const paint = () => { const d = isDark(); b.replaceChildren(icon(d ? ICONS.sun : ICONS.moon)); b.setAttribute('aria-label', d ? 'Switch to light mode' : 'Switch to dark mode'); };
   paint();
-  b.addEventListener('click', () => {
-    const next = isDark() ? 'light' : 'dark';
-    document.documentElement.dataset.theme = next;
-    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* ignore */ }
-    paint();
-  });
+  b.addEventListener('click', () => { setTheme(isDark() ? 'light' : 'dark'); paint(); });
   return b;
 }
 dash.who = null; // the signed-in teacher, from /api/t/me
 // The password just typed at sign-in, so picking a new one doesn't ask for it again (memory only).
 dash.justTyped = null;
-// The signed-in teacher's name, opening a menu: their password (or, for admin with the password in
-// .env, which is changed there, only passkeys) and Sign out.
+// The signed-in teacher's name, opening a menu: Settings (in the sidebar too, but not on phones) and Sign out.
 function accountMenu() {
   if (!dash.who) return null;
-  const items = [];
-  if (!(dash.who.passwordFromEnv && !PASSKEYS)) items.push({ text: dash.who.passwordFromEnv ? 'Passkeys' : 'Password', onclick: () => showSetPassword(false) });
-  items.push({ text: 'Sign out', onclick: async () => { await post('/api/t/logout'); dash.who = null; showLogin(); } });
-  return moreMenu(`Account, ${dash.who.name}`, 'account', items, null, { text: dash.who.name });
+  return moreMenu(`Account, ${dash.who.name}`, 'account', [
+    { text: 'Settings', onclick: () => { location.hash = '#settings'; } },
+    { text: 'Sign out', onclick: async () => { await post('/api/t/logout'); dash.who = null; forgetCode(); showLogin(); } },
+  ], null, { text: dash.who.name });
 }
+// A recovery code waiting to be saved (account.js showRecoveryCode): this tab keeps it until "I saved it",
+// so a reload doesn't lose it.
+const CODE_KEY = 'bq-recovery';
+function pendingCode() { try { return JSON.parse(sessionStorage.getItem(CODE_KEY) || 'null'); } catch (e) { return null; } }
+function keepCode(code, again) { try { sessionStorage.setItem(CODE_KEY, JSON.stringify({ code, again: !!again })); } catch (e) { /* shown until they leave the page */ } }
+function forgetCode() { try { sessionStorage.removeItem(CODE_KEY); } catch (e) { /* nothing kept */ } }
 function bar(...left) {
   return h('header', { class: 't-bar' }, h('span', { class: 'grow' }, ...left), themeButton(), accountMenu());
 }
@@ -230,4 +242,4 @@ function iconButton(btn, name, text, more) {
 // Filled pause and play marks (the paused quiz's banner)
 function glyph(kind, size = 16) { return icon(kind, size, { fill: 'currentColor', stroke: 'none' }); }
 
-export { EVENT_TIP, ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, ghLink, glyph, h, heads, icon, iconButton, labeled, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, sortableTable, themeButton, tip };
+export { EVENT_TIP, ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, day, forgetCode, ghLink, keepCode, pendingCode, setTheme, themeChoice, timeZone, glyph, h, heads, icon, iconButton, labeled, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, sortableTable, themeButton, tip };

@@ -1,7 +1,7 @@
 // Signing in: passwords, passkeys, and teacher accounts (the admin's).
 
 import { dash } from './state.js';
-import { PASSKEYS, actionsHead, api, ask, date, ghLink, h, heads, mount, post, sortableTable, tip } from './core.js';
+import { ICONS, PASSKEYS, actionsHead, api, ask, date, day, forgetCode, ghLink, h, heads, icon, iconButton, keepCode, mount, post, sortableTable, tip } from './core.js';
 import { copyText, route, showHome } from './home.js';
 import { moreMenu } from './cells.js';
 
@@ -18,7 +18,7 @@ function showLogin() {
     h('h1', { text: 'Teacher sign in' }),
     h('label', { class: 'field', for: 'user' }, h('span', { class: 'field-label', text: 'Username' }), user),
     h('label', { class: 'field', for: 'pw' }, h('span', { class: 'field-label', text: 'Password' }), pw),
-    btn, pk ? tip(h('div', { class: 't-tip-grid' }, pk), pk, "Sign in with your fingerprint, face or phone instead of a password. Add a passkey first, under Password in the menu under your name.") : null, msg);
+    btn, pk ? tip(h('div', { class: 't-tip-grid' }, pk), pk, "Sign in with your fingerprint, face or phone instead of a password. Add a passkey first, in Settings.") : null, msg);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     btn.disabled = true; msg.textContent = '';
@@ -28,12 +28,9 @@ function showLogin() {
   user.focus();
 }
 
-// A teacher on a temporary password picks their own before anything else (first), or changes it later.
+// A teacher on a temporary password picks their own before anything else (first). Later, it's changed in
+// Settings (settings.js).
 async function showSetPassword(first) {
-  if (!first && dash.who && dash.who.passwordFromEnv) {
-    mount(h('main', {}, passkeysSection(true), h('div', { class: 't-pk' }, h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => showHome() })))));
-    return;
-  }
   // After an admin reset, with the quiz key not in memory: the recovery code keeps their quizzes.
   let recover = false;
   let fromEnv = false; // admin's first sign-in, with ADMIN_PASSWORD: it isn't a temporary one
@@ -84,7 +81,7 @@ async function showSetPassword(first) {
       if (ex.code === 'bad_password' && curField.hidden) { curField.hidden = false; cur.value = ''; cur.focus(); }
     }
   });
-  mount(h('main', { class: 't-login-page' }, form, !first && PASSKEYS ? passkeysSection(false) : null));
+  mount(h('main', { class: 't-login-page' }, form));
   (needName ? account : known ? next : cur).focus();
 }
 
@@ -166,17 +163,18 @@ async function addPasskey(password) {
 }
 
 // The signed-in teacher's passkeys: each one's name, when it was added and last used, and Remove.
-function passkeysSection(top) {
+// card: a section of Settings.
+function passkeysSection(card) {
   const list = h('ul', { class: 't-pk-list' });
   list.hidden = true;
   const msg = h('p', { class: 't-error', role: 'alert' });
-  const add = h('button', { class: 'btn', type: 'button', text: 'Add a passkey' });
+  const add = h('button', { class: 'btn t-ib', type: 'button' }, icon(ICONS.plus, 16), 'Add a passkey');
   const paint = (keys) => {
     list.hidden = !keys.length;
     list.replaceChildren(...keys.map((k) => h('li', {},
       h('span', { class: 't-pk-what' }, h('span', { class: 't-pk-name', text: k.name }),
         h('span', { class: 't-small t-muted t-pk-meta' },
-          h('span', { text: `Added ${new Date(k.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}` }), ' · ',
+          h('span', { text: `Added ${day(k.createdAt)}` }), ' · ',
           h('span', { text: k.lastUsedAt ? `Last used ${date(k.lastUsedAt)}` : 'Not used yet' }))),
       h('button', { class: 'btn small outline-danger', type: 'button', text: 'Remove', 'aria-label': `Remove ${k.name}`, onclick: async () => {
         if (!(await ask.confirm({ title: `Remove ${k.name}?`, text: "You can't sign in with it after this.", ok: 'Remove', danger: true }))) return;
@@ -196,22 +194,25 @@ function passkeysSection(top) {
     add.disabled = false;
   });
   api('/api/t/passkeys').then((r) => paint(r.passkeys)).catch(() => {});
-  return h('section', { class: top ? 't-pk t-pk-top' : 't-pk', 'aria-labelledby': 'pk-title' },
-    top ? h('p', { class: 'eyebrow', text: 'BrowserQuiz' }) : null,
-    h(top ? 'h1' : 'h2', { id: 'pk-title', text: 'Passkeys' }), list, tip(h('div', { class: 't-tip-host' }, add), add, "A passkey lets you sign in with your fingerprint, face or phone instead of a password, on this computer or your phone."), msg);
+  return h('section', { class: card ? 't-set-card' : 't-pk', 'aria-labelledby': 'pk-title' },
+    h('h2', { id: 'pk-title', text: 'Passkeys' }), list, tip(h('div', { class: 't-tip-host' }, add), add, "A passkey lets you sign in with your fingerprint, face or phone instead of a password, on this computer or your phone."), msg);
 }
 
-// Shown once, when a teacher's quiz key is made: the only way back to their quizzes without the password.
-function showRecoveryCode(codeText) {
-  const copy = h('button', { class: 'btn', type: 'button', text: 'Copy' }); // as tall as the code beside it
-  copy.addEventListener('click', async () => { if (await copyText(codeText)) copy.textContent = 'Copied'; });
+// Shown once, when a teacher's quiz key is made, or they make a new code in Settings (again): the only way
+// back to their quizzes without the password. This tab keeps it until "I saved it" (core.js keepCode).
+function showRecoveryCode(codeText, again) {
+  keepCode(codeText, again);
+  const copy = h('button', { class: 'btn t-ib', type: 'button' }, icon(ICONS.copy, 16), 'Copy'); // as tall as the code beside it
+  copy.addEventListener('click', async () => { if (await copyText(codeText)) copy.lastChild.textContent = 'Copied'; });
+  const file = URL.createObjectURL(new Blob([`BrowserQuiz recovery code for ${dash.who ? dash.who.username : 'your account'}\r\n${codeText}\r\n`], { type: 'text/plain' }));
+  const dl = iconButton(h('a', { class: 'btn', href: file, download: 'BrowserQuiz recovery code.txt' }), 'download', 'Download as a file');
   mount(h('main', { class: 't-login t-recovery' },
     h('p', { class: 'eyebrow', text: 'BrowserQuiz' }),
-    h('h1', { text: 'Save your recovery code' }),
-    h('p', { text: 'Your quizzes are encrypted with your password, so only you can open them, not whoever runs this server. If you forget your password, this code is the only way to get them back.' }),
-    h('div', { class: 't-row' }, h('code', { class: 't-code-big', text: codeText }), copy),
+    h('h1', { text: again ? 'Save your new recovery code' : 'Save your recovery code' }),
+    h('p', { text: `Your quizzes are encrypted with your password, so only you can open them, not whoever runs this server. If you forget your password, this code is the only way to get them back.${again ? ' Your old code no longer works.' : ''}` }),
+    h('div', { class: 't-row t-code-row' }, h('code', { class: 't-code-big', text: codeText }), copy, dl),
     h('p', { class: 't-small t-muted', text: "It isn't shown again. Keep it somewhere other than this computer." }),
-    h('div', {}, h('button', { class: 'btn primary', type: 'button', text: 'I saved it', onclick: () => route() }))));
+    h('div', {}, h('button', { class: 'btn primary', type: 'button', text: 'I saved it', onclick: () => { forgetCode(); URL.revokeObjectURL(file); route(); } }))));
 }
 
 // ---------- teacher accounts (admin) ----------
@@ -264,4 +265,4 @@ function teachersSection() {
   return h('section', { class: 't-section' }, h('h1', { text: 'Teachers' }), list, form, msg);
 }
 
-export { showLogin, showSetPassword, teachersSection };
+export { passkeysSection, showLogin, showRecoveryCode, showSetPassword, teachersSection };

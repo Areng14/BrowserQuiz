@@ -15,8 +15,18 @@ BrowserQuiz is quizzes and CS exams in the browser. Students join with a 6-lette
 ## First sign-in
 
 - **Your account.** The admin adds you as a teacher and gives you a temporary password. You pick your own the first time you sign in.
-- **Recovery code.** Shown once, so copy it somewhere safe. Your quizzes and your students' data are encrypted with your own key, and this code is the only way back in if you forget your password.
-- **Passkey.** Optional. Sign in with a fingerprint or Windows Hello instead of a password for a faster and safer sign in.
+- **Recovery code.** Shown once, so copy it somewhere safe. Your quizzes and your students' data are encrypted with your own key, and this code is the only way back in if you forget your password. Lost it? Make a new one in **Settings** while you still know your password. The old one stops working.
+- **Passkey.** Optional. Sign in with a fingerprint or Windows Hello instead of a password for a faster and safer sign in. Add one in **Settings**.
+
+## Settings
+
+**Settings** is in the sidebar, and in the menu under your name (on a phone, only there). Each section saves on its own button.
+
+- **You.** Your name, the time zone your quizzes, results and downloaded grades show times in, and light or dark on this computer.
+- **Password, recovery code and passkeys.** Changing your password signs you out everywhere else.
+- **Other devices.** How many other browsers are signed in as you, and a button to sign them all out.
+- **Quiz defaults.** What **Give a quiz** starts with: the mode, your own `.seb` file's Config Key, muting the sound, and the network lock. You can still change them each time.
+- **AI grading key.** Your own key for **Grade with AI**.
 
 ## Setting up a class
 
