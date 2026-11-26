@@ -94,7 +94,7 @@ function quizSource(quiz) {
     if (qq.type === 'math') { o.answer = qq.answer; if (qq.form) o.form = qq.form; if (qq.tolerance) o.tolerance = qq.tolerance; }
     if (qq.type === 'graph') {
       Object.assign(o, { answer: qq.answer, window: qq.window, step: qq.step });
-      const need = new Set(qq.shapes.map((sh) => sh.kind));
+      const need = new Set((qq.rowShapes ? qq.rowShapes.flat() : qq.shapes).map((sh) => sh.kind));
       if (qq.tools.some((k) => !need.has(k))) o.tools = qq.tools; // tools beyond what the answer needs
       if (qq.partialCredit) o.partialCredit = true;
     }

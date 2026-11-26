@@ -319,8 +319,10 @@ function makeLayout(quiz) {
 }
 // A question with random values, as the student with row `r` of them sees it (the first row without one).
 function withVars(qq, r) {
-  const out = putVars(qq, qq.vars[r] || qq.vars[0]);
+  const i = qq.vars[r] ? r : 0;
+  const out = putVars(qq, qq.vars[i]);
   if (out.type === 'output') out.answer = normOutput(out.answer);
+  if (out.rowShapes) { out.shapes = out.rowShapes[i] || out.rowShapes[0]; delete out.rowShapes; } // a graph: this row's drawing
   return out;
 }
 

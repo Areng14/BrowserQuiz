@@ -2,7 +2,8 @@
 
 A quiz is a `quiz.json` file. Upload it as is, or as a `.quiz` file: a zip with `quiz.json`
 at the root (or inside one top-level folder) and an optional `assets/` folder of images
-(png, jpg, gif, webp or svg). Limits: 25 MB, 500 files, 300 questions.
+(png, jpg, gif, webp or svg). Limits: 25 MB, 500 files, 300 questions, and 1,000,000 characters of
+math and graph answers, counting each row of random values.
 
 <!-- not-in-prompt -->
 Check a quiz before uploading. `--run` also runs the reference solutions, which needs
@@ -131,7 +132,8 @@ and put it in the row too:
 ```
 
 Every row needs the same names (letters, digits and `_`, up to 10), and every `{{name}}` must be
-one of them. Each row is checked like a question of its own when the quiz is uploaded. Reports
+one of them. Each row is checked like a question of its own when the quiz is uploaded, so a
+graph's answer can use them too (`"y = {{m}}x + {{b}}"`), and each student draws their own. Reports
 show each student their own version; the preview shows the first row. Code, fill and essay
 questions can't have them.
 

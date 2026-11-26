@@ -8,7 +8,17 @@ const T = require('../../public/teacher/types.js');
 const SVG = require('../../public/student/svg.js');
 const M = require('../../public/student/mathexpr.js');
 
-const LIMITS = { uploadBytes: 25 * 1024 * 1024, files: 500, questions: 300, arrayLen: 1000 };
+// mathChars: the math and graph answers a quiz has checked when it's saved, counted once per row of random
+// values. Checking runs on the one server thread, at up to about 2 seconds per million characters.
+const LIMITS = { uploadBytes: 25 * 1024 * 1024, files: 500, questions: 300, arrayLen: 1000, mathChars: 1000000 };
+let mathLeft = Infinity; // what normalizeQuiz has left of LIMITS.mathChars
+function spendMath(list) {
+  mathLeft -= list.reduce((n, a) => n + a.length, 0);
+  if (mathLeft >= 0) return;
+  const e = new QuizError(`This quiz has too much math to check: over ${LIMITS.mathChars.toLocaleString('en-US')} characters of answers, counting each row of random values. Use fewer rows or fewer accepted answers.`);
+  e.whole = true; // about the whole quiz, not the question it ran out on
+  throw e;
+}
 const ASSET_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
 const LANGS = T.LANGS;
 const langName = (l) => T.LANG_NAMES[l] || l;
@@ -194,6 +204,7 @@ function calculatorOf(quiz) {
 // ---------- quiz ----------
 function normalizeQuiz(raw, assetNames) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('quiz.json must be an object.');
+  mathLeft = LIMITS.mathChars;
   const g = raw.integrity || {};
   const quiz = {
     format: 1,
@@ -319,15 +330,22 @@ function normalizeQuiz(raw, assetNames) {
       return out;
     };
     const rows = q.vars != null ? checkVars(where, q, type) : null;
-    const out = build(q);
+    // A graph's answer with {{x}} in it can't be drawn until a row is put in: the first row stands in
+    const out = build(rows && type === 'graph' ? Object.assign({}, q, { answer: putVars(q.answer, rows[0]) }) : q);
     if (rows) {
       out.vars = rows;
-      rows.forEach((row, r) => {
-        try { build(putVars(q, row)); } catch (e) {
-          if (e instanceof QuizError) fail(`${where}, random values row ${r + 1}: ${e.message.replace(/^Question \d+: /, '')}`);
+      const each = rows.map((row, r) => {
+        try { return build(putVars(q, row)); } catch (e) {
+          if (e instanceof QuizError && !e.whole) fail(`${where}, random values row ${r + 1}: ${e.message.replace(/^Question \d+: /, '')}`);
           throw e;
         }
       });
+      if (type === 'graph') {
+        // each row draws its own shapes (store.withVars gives a student theirs); the tools cover every row's
+        out.answer = [].concat(q.answer).map((a) => String(a).trim().slice(0, 200));
+        out.rowShapes = each.map((b) => b.shapes);
+        if (q.tools == null) out.tools = M.shapes.KINDS.filter((k) => each.some((b) => b.tools.includes(k)));
+      }
     }
     quiz.questions.push(out);
   });
@@ -508,6 +526,7 @@ function normalizeMath(where, q) {
     fail(`${where}: answer must be math, like "2x + 3" or "x = 4", or a list of accepted answers.`);
   }
   out.answer = ans.map((a) => String(a).trim().slice(0, 500));
+  spendMath(out.answer);
   if (q.form != null && q.form !== '' && q.form !== 'any') {
     if (!M.FORM_NAMES.includes(q.form)) fail(`${where}: form must be "expanded", "factored", "exact" or "lowest".`);
     out.form = q.form;
@@ -534,6 +553,7 @@ function normalizeGraph(where, q) {
     fail(`${where}: answer must be what to draw, like "y = 2x - 1" or "(2, -3)", or a list of them.`);
   }
   out.answer = ans.map((a) => a.trim().slice(0, 200));
+  spendMath(out.answer);
   const win = q.window == null ? [-10, 10, -10, 10] : q.window;
   if (!Array.isArray(win) || win.length !== 4 || !win.every((v) => typeof v === 'number' && Number.isFinite(v))) {
     fail(`${where}: window must be [xmin, xmax, ymin, ymax], like [-10, 10, -10, 10].`);
