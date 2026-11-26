@@ -5,7 +5,7 @@ import { actionsHead, api, ask, clock, EVENT_TIP, glyph, h, icon, iconButton, IC
 import { noteRuns, sebButtons, setHash, shell } from './home.js';
 import { LIVE_SORT, beforeAdmit, browserName, correctionsDialog, drawTrail, gone, grading, integrityCell, moreMenu, phone, progressCell, projector, statusCell, strikesCell, tick, ticks, watchLink } from './cells.js';
 import { aiDialog, checkWhy } from './ai.js';
-import { POINTS_TIP, showGrade } from './grade.js';
+import { POINTS_TIP, livePoints, showGrade } from './grade.js';
 
 async function showRun(runId) {
   setHash('#run/' + encodeURIComponent(runId));
@@ -410,7 +410,8 @@ async function showRun(runId) {
         r.auto ? h('span', { class: 't-auto', text: 'Auto', title: 'Checked by the server. Change it and press Save to grade it yourself.' }) : null,
         x.ai && x.ai.items && x.ai.items[r.id] ? h('span', { class: 't-ai-why' }, h('b', { text: 'AI: ' }), x.ai.items[r.id].why) : null) };
     });
-    const over = h('input', { class: 'input t-points', type: 'number', min: '0', max: String(x.max), step: '0.5', id: `ov-${x.id}`, placeholder: 'auto', value: x.overridePoints != null ? String(x.overridePoints) : '' });
+    const over = h('input', { class: 'input t-points', type: 'number', min: '0', max: String(x.max), step: '0.5', id: `ov-${x.id}`, value: x.overridePoints != null ? String(x.overridePoints) : '' });
+    if (boxes.length) livePoints(over, boxes, x); else over.placeholder = 'auto';
     const msg = h('span', { class: 't-small t-muted', role: 'status' });
     const save = h('button', { class: 'btn small', type: 'button', text: 'Save' });
     save.addEventListener('click', async () => {

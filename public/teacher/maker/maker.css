@@ -269,3 +269,4 @@ th .qe-gridcell { font: 600 13px var(--font); }
 .qe-cell .qe-tool { min-height: 30px; } /* a trace column's remove button, as tall as its name */
 @media (pointer: coarse) { .qe-tool { min-height: 40px; min-width: 40px; } .qe-grip { min-width: 40px; } }
 
+.qe-off { color: var(--warn); font-weight: 600; } /* the rubric doesn't add up to the question's points */

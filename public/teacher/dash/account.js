@@ -77,7 +77,9 @@ async function showSetPassword(first) {
       dash.justTyped = null;
       if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else showHome();
     } catch (ex) {
-      msg.textContent = ex.message; btn.disabled = false;
+      // the same words as the field: it's the temporary password on a first sign-in
+      msg.textContent = ex.code === 'bad_password' && first && !fromEnv ? 'The temporary password is wrong. Use the one your admin gave you.' : ex.message;
+      btn.disabled = false;
       if (ex.code === 'bad_password' && curField.hidden) { curField.hidden = false; cur.value = ''; cur.focus(); }
     }
   });

@@ -82,7 +82,17 @@ function gradePane(runId, q, s, name, quiz) {
   return h('section', { class: 't-gq-pane', 'aria-labelledby': 'gq-name' }, h('h2', { id: 'gq-name', tabindex: '-1', text: name }),
     h('div', { class: 't-answers r-view' }, card), gradeBox(runId, q, s)); // the report's styles, as in a student's panel
 }
-// With a rubric, the points box can stay empty (it says "auto")
+// With a rubric, the points box can stay empty: it shows, greyed, the total the ticked items come to (with
+// any automatic score), updated as boxes are ticked. A number typed in replaces it.
+function livePoints(input, boxes, x) {
+  if (!boxes.length) return;
+  const ticked = () => boxes.reduce((n, b) => n + (b.cb.checked ? b.r.points : 0), 0);
+  // the part that isn't the rubric (tests), worked out from the score as it was saved; unknown once overridden
+  const base = x.overridePoints != null ? null : (x.points != null ? x.points : 0) - x.rubric.reduce((n, r) => n + (r.checked ? r.points : 0), 0);
+  const paint = () => { input.placeholder = base == null ? 'auto' : String(Math.round((Math.max(0, base) + ticked()) * 100) / 100); };
+  for (const b of boxes) b.cb.addEventListener('change', paint);
+  paint();
+}
 const POINTS_TIP = "If this is empty, the score is the total of the ticked items plus any automatic score. A number entered here replaces it.";
 // The rubric (with the AI's reasons, when it graded), the points, and feedback for the student. Save and
 // next: Enter in the points box, or Ctrl+Enter in the feedback.
@@ -95,7 +105,8 @@ function gradeBox(runId, q, s) {
       x.ai && x.ai.items && x.ai.items[r.id] ? h('span', { class: 't-ai-why' }, h('b', { text: 'AI: ' }), x.ai.items[r.id].why) : null) };
   });
   const pts = h('input', { class: 'input t-points', type: 'number', min: '0', max: String(x.max), step: '0.5', id: 'gq-points',
-    placeholder: boxes.length ? 'auto' : '', value: x.overridePoints != null ? String(x.overridePoints) : (!boxes.length && x.points != null && !x.review ? String(x.points) : '') });
+    value: x.overridePoints != null ? String(x.overridePoints) : (!boxes.length && x.points != null && !x.review ? String(x.points) : '') });
+  livePoints(pts, boxes, x);
   const fb = h('textarea', { class: 'input t-gq-feedback', id: 'gq-feedback', rows: '3', text: s.feedback || '' });
   fb.value = s.feedback || '';
   const msg = h('span', { class: 't-small t-muted', role: 'status' });
@@ -121,4 +132,4 @@ function gradeBox(runId, q, s) {
     h('div', { class: 't-row' }, save, msg));
 }
 
-export { POINTS_TIP, showGrade };
+export { POINTS_TIP, livePoints, showGrade };

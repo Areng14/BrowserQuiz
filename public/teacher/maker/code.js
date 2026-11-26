@@ -233,7 +233,12 @@ function codeEditor(q) {
       notes[kind].classList.toggle('t-error', !!p.errors.length);
     }
     for (const s of starters) { s.btn.hidden = !!s.ta.value.trim(); s.btn.disabled = !r.shape; }
-    if (rubric) rubric.worth.textContent = q.rubric.some((x) => x.text.trim()) && r.rubric < Number(q.points) ? `Tests are worth ${Number(q.points) - r.rubric} of ${q.points}` : '';
+    if (rubric) {
+      const any = q.rubric.some((x) => x.text.trim());
+      rubric.worth.textContent = !any ? '' : r.rubric < Number(q.points) ? `Tests are worth ${Number(q.points) - r.rubric} of ${q.points}`
+        : `The rubric is worth all ${q.points} points, so the tests count for nothing.`;
+      rubric.worth.classList.toggle('qe-off', any && r.rubric >= Number(q.points));
+    }
   };
 
   const emptyClass = isClass && !fill ? check(q, q.starter === 'empty', 'Start with an empty class', (v) => { if (v) q.starter = 'empty'; else delete q.starter; }) : null;

@@ -112,7 +112,18 @@ function questionPane(q, i) {
   if (q.type === 'essay') {
     const kind = h('select', { class: 'input qe-narrow' }, [['', 'Text'], ...Object.entries(LANGS).map(([l, n]) => [l, `${n} code`])].map(([v, t]) => h('option', { value: v, text: t, selected: (q.language || '') === v })));
     kind.addEventListener('change', () => { if (kind.value) q.language = kind.value; else delete q.language; touch(q); });
-    add([h('div', { class: 'qe-line' }, field('Students write', kind)), rubricEditor(q, 'Says == compares references').node]);
+    const rubric = rubricEditor(q, 'Gives a reason and an example');
+    // a written answer's grade is its ticked items: say when they can't add up to the question's points
+    const sumUp = () => {
+      const total = q.rubric.filter((x) => String(x.text || '').trim()).reduce((n, x) => n + (Number(x.points) || 0), 0);
+      const pts = Number(q.points) || 0;
+      rubric.worth.textContent = total && total !== pts ? `The rubric adds up to ${total} of the question's ${pts} points.` : '';
+      rubric.worth.classList.toggle('qe-off', !!rubric.worth.textContent);
+    };
+    rubric.node.addEventListener('input', sumUp);
+    requestAnimationFrame(() => { const p = rubric.node.closest('.qe-open') && rubric.node.closest('.qe-open').querySelector('.qe-pts input'); if (p) p.addEventListener('input', sumUp); });
+    sumUp();
+    add([h('div', { class: 'qe-line' }, field('Students write', kind)), rubric.node]);
   }
   // Why the answer is right: with the answer in a practice quiz's review, in reports, and for AI grading
   const explanation = field('Explanation', area(q, q.explanation || '', (v) => { if (v.trim()) q.explanation = v; else delete q.explanation; },
