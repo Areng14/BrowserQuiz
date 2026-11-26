@@ -5,6 +5,7 @@
   "description": "Hosted quiz and CS exam app with server-side grading and silent integrity checks",
   "license": "MIT",
   "scripts": {
+    "build:icons": "node scripts/build-icons.mjs",
     "build:monaco": "node scripts/build-monaco.mjs",
     "build:demo": "node scripts/build-demo.mjs",
     "build": "npm run build:monaco && npm run build:demo"
@@ -12,6 +13,7 @@
   "devDependencies": {
     "esbuild": "0.21.5",
     "katex": "0.19.1",
+    "lucide": "1.70.0",
     "mathjs": "15.2.0",
     "mathlive": "0.110.0",
     "monaco-editor": "0.45.0"
