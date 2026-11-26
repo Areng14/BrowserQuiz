@@ -406,13 +406,15 @@ input[type="file"].input { padding: 6px 10px; }
   /* line 2: the bar, where they are and the time left; anything else after */
   .t-run td { order: 2; }
   .t-run td:nth-child(-n+3) { order: 0; }
-  .t-run td.t-progress, .t-run td[data-tick="left"] { order: 1; }
+  .t-run td.t-progress, .t-run td:has(> [data-tick="left"]) { order: 1; }
   .t-run td.t-actions { order: 3; }
   .t-run td.t-progress { flex: 0 1 auto; padding-top: 4px; text-align: left; }
   .t-run td.t-progress::before { content: none; }
-  .t-run td[data-tick="left"] { padding-top: 4px; }
-  .t-run td[data-tick="left"]::before { content: none; }
-  .t-run td[data-tick="left"]::after { content: " left"; }
+  /* the clock is on the span inside the cell; no clock (waiting, turned in): no "Time left:" with nothing after it */
+  .t-run td:has(> [data-tick="left"]) { padding-top: 4px; }
+  .t-run td:has(> [data-tick="left"])::before { content: none; }
+  .t-run td:has(> [data-tick="left"])::after { content: " left"; }
+  .t-run td:has(> span:only-child:empty) { display: none; }
   .t-run .t-prog { width: 64px; }
   .t-run .t-prog.t-prog-parts { width: 88px; }
   .t-run .t-on { display: inline; font-size: inherit; }
