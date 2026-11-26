@@ -47,8 +47,8 @@ async function showGrade(runId, qid, opts) {
   const nameOf = (s) => (dash.hideNames ? `Student ${students.indexOf(s) + 1}` : s.name);
   const label = (x) => `Question ${x.n}: ${QTYPE[x.type] || x.type}${x.title ? `, ${x.title}` : ''}${x.toGrade ? ` (${x.toGrade} to grade)` : ''}`;
   const go = (x) => showGrade(runId, x.id);
-  const prevQ = h('button', { class: 'btn icon', type: 'button', 'aria-label': 'Previous question', disabled: at === 0, onclick: () => go(qs[at - 1]) }, icon(['M15 6l-6 6 6 6'], 18));
-  const nextQ = h('button', { class: 'btn icon', type: 'button', 'aria-label': 'Next question', disabled: at === qs.length - 1, onclick: () => go(qs[at + 1]) }, icon(['M9 6l6 6-6 6'], 18));
+  const prevQ = h('button', { class: 'btn icon', type: 'button', 'aria-label': 'Previous question', disabled: at === 0, onclick: () => go(qs[at - 1]) }, icon(ICONS.prev, 18));
+  const nextQ = h('button', { class: 'btn icon', type: 'button', 'aria-label': 'Next question', disabled: at === qs.length - 1, onclick: () => go(qs[at + 1]) }, icon(ICONS.next, 18));
   const pickQ = h('select', { class: 'input t-gq-select', 'aria-label': 'Question' }, qs.map((x) => h('option', { value: x.id, text: label(x), selected: x.id === q.id })));
   pickQ.addEventListener('change', () => go(qs.find((x) => x.id === pickQ.value)));
   const hide = h('input', { type: 'checkbox', id: 'gq-hide', checked: dash.hideNames });
@@ -69,7 +69,7 @@ async function showGrade(runId, qid, opts) {
     back,
     h('div', { class: 't-gq-bar' },
       h('h1', { text: 'Grade' }),
-      h('div', { class: 't-gq-qnav' }, prevQ, h('span', { class: 't-gq-pick' }, pickQ, icon(['M6 9l6 6 6-6'], 16)), nextQ),
+      h('div', { class: 't-gq-qnav' }, prevQ, h('span', { class: 't-gq-pick' }, pickQ, icon(ICONS.chevron, 16)), nextQ),
       h('span', { class: 't-muted', text: `${done} of ${students.length} graded` }),
       h('label', { class: 't-check t-gq-hide', for: 'gq-hide' }, hide, h('span', { text: 'Hide names' }))),
     h('div', { class: 't-gq' }, list, pane))));

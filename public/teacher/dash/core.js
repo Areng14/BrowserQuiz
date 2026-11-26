@@ -159,7 +159,7 @@ const tip = window.BQTip;
 function sortHeads(names, nums, sort, onSort, tipsFor = {}) {
   return names.map((x) => {
     const on = sort && sort.by === x;
-    const arrow = icon([on && sort.dir < 0 ? 'M12 5v14M6 13l6 6 6-6' : 'M12 19V5M6 11l6-6 6 6'], 14);
+    const arrow = icon(on && sort.dir < 0 ? ICONS.down : ICONS.up, 14);
     arrow.classList.add('t-sort-arrow');
     const btn = h('button', { class: 't-sort', type: 'button', onclick: () => onSort(!on ? { by: x, dir: 1 } : sort.dir > 0 ? { by: x, dir: -1 } : null) }, x, arrow);
     const th = h('th', { class: (nums.includes(x) ? 'num ' : '') + (on ? 't-sorted' : ''), 'aria-sort': on ? (sort.dir > 0 ? 'ascending' : 'descending') : null }, btn);
@@ -200,53 +200,10 @@ function sortableTable(table, nums = []) {
 const scoreText = (score, max) => `${score} / ${max}${max ? ` · ${Math.round((score / max) * 100)}%` : ''}`;
 
 
-// Line icons (24x24, stroked), so buttons look the same everywhere instead of as each phone's emoji.
-const ICONS = {
-  sun: ['M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8z', 'M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41'],
-  moon: ['M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'],
-  x: ['M18 6L6 18', 'M6 6l12 12'],
-  check: ['M5 12.5l4.5 4.5L19 7.5'],
-  cross: ['M7 7l10 10', 'M17 7L7 17'],
-  up: ['M12 19V5', 'M5 12l7-7 7 7'],
-  down: ['M12 5v14', 'M19 12l-7 7-7-7'],
-  back: ['M19 12H5', 'M12 19l-7-7 7-7'],
-  grip: ['M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01'],
-  plus: ['M12 5v14', 'M5 12h14'],
-  // on buttons, before their words (labeled)
-  play: ['M7 5l12 7-12 7z'],
-  pause: ['M8 5v14', 'M16 5v14'],
-  stop: ['M6 6h12v12H6z'],
-  reopen: ['M3 12a9 9 0 1 0 3-6.7', 'M3 4v5h5'],
-  megaphone: ['M3 11l18-5v12L3 14v-3z', 'M11.6 16.8a3 3 0 1 1-5.8-1.6'],
-  pencil: ['M12 20h9', 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z'],
-  eye: ['M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z'],
-  sliders: ['M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3', 'M1 14h6M9 8h6M17 16h6'],
-  copy: ['M9 9h11v11H9z', 'M5 15H4V4h11v1'],
-  download: ['M12 4v11', 'M7 10l5 5 5-5', 'M5 20h14'],
-  trash: ['M3 6h18', 'M8 6V4h8v2', 'M19 6l-1 14H6L5 6', 'M10 11v6', 'M14 11v6'],
-  chevron: ['M6 9l6 6 6-6'],
-  dots: ['M5 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z', 'M12 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z', 'M19 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3z'], // filled (rowMenu)
-  // question types (the quiz maker)
-  single: ['M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18z', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z'],
-  multi: ['M4 4h16v16H4z', 'M8 12l3 3 5-6'],
-  text: ['M4 7V5h16v2', 'M9 19h6', 'M12 5v14'],
-  math: ['M3 13h3l3 7 5-16h7'],
-  graph: ['M4 3v17h17', 'M7 16c3-9 7-11 12-9'],
-  output: ['M4 17l6-5-6-5', 'M12 19h8'],
-  trace: ['M3 4h18v16H3z', 'M3 10h18', 'M3 15h18', 'M10 4v16'],
-  fill: ['M3 6h18v12H3z', 'M8 14h8'],
-  code: ['M16 18l6-6-6-6', 'M8 6l-6 6 6 6'],
-  essay: ['M4 6h16', 'M4 10h16', 'M4 14h16', 'M4 18h10'],
-  section: ['M3 12h18', 'M8 6h8', 'M8 18h8'],
-  spark: ['M12 3l1.9 6.1L20 11l-6.1 1.9L12 19l-1.9-6.1L4 11l6.1-1.9z', 'M19 3v4M17 5h4'], // something an AI writes
-};
-function icon(paths, size = 18) {
-  const ns = 'http://www.w3.org/2000/svg';
-  const s = document.createElementNS(ns, 'svg');
-  for (const [k, v] of Object.entries({ width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) s.setAttribute(k, String(v));
-  for (const d of paths) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); s.append(p); }
-  return s;
-}
+// Line icons (Lucide, from /icons.js), so buttons look the same everywhere instead of as each phone's emoji.
+// icon(ICONS.pause, 16); the names, and the Lucide icon each one is, are in scripts/build-icons.mjs.
+const ICONS = Object.freeze(Object.fromEntries(window.BQIcons.names.map((n) => [n, n])));
+function icon(name, size = 18, attrs) { return window.BQIcons.svg(name, size, attrs); }
 // A button's icon and words (ICONS[name], 16px). Called again with new words, it changes only if they did.
 function labeled(btn, name, text) {
   if (btn.dataset.label === text && btn.dataset.icon === name) return btn;
@@ -271,13 +228,6 @@ function iconButton(btn, name, text, more) {
   return btn;
 }
 // Filled pause and play marks (the paused quiz's banner)
-function glyph(kind, size = 16) {
-  const ns = 'http://www.w3.org/2000/svg';
-  const s = document.createElementNS(ns, 'svg');
-  for (const [k, v] of Object.entries({ width: size, height: size, viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': 'true' })) s.setAttribute(k, String(v));
-  const shapes = kind === 'pause' ? [['rect', { x: 6, y: 5, width: 4, height: 14, rx: 1 }], ['rect', { x: 14, y: 5, width: 4, height: 14, rx: 1 }]] : [['path', { d: 'M7 5l12 7-12 7z' }]];
-  for (const [tag, attrs] of shapes) { const el = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v)); s.append(el); }
-  return s;
-}
+function glyph(kind, size = 16) { return icon(kind, size, { fill: 'currentColor', stroke: 'none' }); }
 
 export { EVENT_TIP, ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, ghLink, glyph, h, heads, icon, iconButton, labeled, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, sortableTable, themeButton, tip };

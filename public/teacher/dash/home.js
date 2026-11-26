@@ -11,14 +11,14 @@ import { showGrade } from './grade.js';
 
 // ---------- dashboard: a sidebar of tabs, each with its own address (#give, #run/<id>, ...) ----------
 const TABS = [
-  { id: 'give', label: 'Give a quiz', short: 'Give', icon: ['M6 4l14 8-14 8z'] },
-  { id: 'results', label: 'Results', icon: ['M3 3v18h18', 'M18 17V9', 'M13 17V5', 'M8 17v-3'] },
-  { id: 'quizzes', label: 'Quizzes', icon: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6', 'M16 13H8', 'M16 17H8'] },
-  { id: 'classes', label: 'Classes', icon: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'] },
-  { id: 'teachers', label: 'Teachers', icon: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z'], admin: true },
+  { id: 'give', label: 'Give a quiz', short: 'Give', icon: 'play' },
+  { id: 'results', label: 'Results', icon: 'results' },
+  { id: 'quizzes', label: 'Quizzes', icon: 'quizzes' },
+  { id: 'classes', label: 'Classes', icon: 'classes' },
+  { id: 'teachers', label: 'Teachers', icon: 'teachers', admin: true },
 ];
 // Open quizzes: one goes straight to its live page, two or more to a list of them (#open).
-const OPEN = { id: 'open', label: 'Open quizzes', short: 'Open', icon: ['M12 10a2 2 0 1 0 0 4a2 2 0 1 0 0-4z', 'M16.24 7.76a6 6 0 0 1 0 8.49', 'M7.76 16.24a6 6 0 0 1 0-8.49', 'M19.07 4.93a10 10 0 0 1 0 14.14', 'M4.93 19.07a10 10 0 0 1 0-14.14'] };
+const OPEN = { id: 'open', label: 'Open quizzes', short: 'Open', icon: 'live' };
 dash.openRuns = null; // [{ id, title, code }], newest first; null until the overview says
 function noteRuns(runs) {
   dash.openRuns = runs.filter((r) => r.status === 'open').map((r) => ({ id: r.id, title: r.quiz_title, code: r.code }));

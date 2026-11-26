@@ -51,17 +51,9 @@
     if (q.type === 'graph') return !!(q.drawn && q.drawn.length);
     return q.answer != null;
   }
-  // Marks as thin line icons: the text ✓ and ✗ look hand-drawn in most fonts.
-  const MARKS = { yes: 'M5 12.5l4.5 4.5L19 7.5', no: 'M7 7l10 10M17 7L7 17', dash: 'M7 12h10' };
-  function mark(kind) {
-    const ns = 'http://www.w3.org/2000/svg';
-    const s = document.createElementNS(ns, 'svg');
-    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.25, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) s.setAttribute(k, v);
-    const p = document.createElementNS(ns, 'path');
-    p.setAttribute('d', MARKS[kind]);
-    s.append(p);
-    return s;
-  }
+  // Marks as line icons (/icons.js), sized by the text around them: the text ✓ and ✗ look hand-drawn in most fonts.
+  const MARKS = { yes: 'check', no: 'x', dash: 'minus' };
+  function mark(kind) { return window.BQIcons.svg(MARKS[kind], null, { 'stroke-width': 2.25 }); }
   // a mark with words for screen readers
   const markSpan = (kind, label) => h('span', { class: 'r-mark', role: 'img', 'aria-label': label }, mark(kind));
   const ICON = { full: 'yes', partial: 'yes', zero: 'no', pending: 'dash' };

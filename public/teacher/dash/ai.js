@@ -16,7 +16,7 @@ async function aiDialog(runId, attemptId, done) {
   const step = (n, title, ...body) => {
     const num = h('span', { class: 't-step-n', 'aria-hidden': 'true', text: String(n) });
     const li = h('li', { class: 't-step' }, num, h('div', { class: 't-step-body' }, h('h3', { text: title }), ...body));
-    li.done = (on) => { li.classList.toggle('done', on); num.replaceChildren(on ? icon(['M20 6L9 17l-5-5'], 14) : String(n)); };
+    li.done = (on) => { li.classList.toggle('done', on); num.replaceChildren(on ? icon(ICONS.check, 14) : String(n)); };
     return li;
   };
 
