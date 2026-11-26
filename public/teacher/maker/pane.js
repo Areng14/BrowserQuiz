@@ -244,7 +244,7 @@ function settingsPane() {
   const lockParts = tipped(check(q, ed.quiz.lockParts === true || timedSum > 0, timedSum ? 'Lock each part once it\'s done (timed sections do)' : 'Lock each part once it\'s done', (v) => { if (v) ed.quiz.lockParts = true; else delete ed.quiz.lockParts; }),
     "After a student moves on from a part, they can't go back to change its answers. A part is a section, or a run of questions of one type.");
   if (timedSum) lockParts.querySelector('input').disabled = true;
-  return [h('div', { class: 'qe-head' }, h('h2', { class: 'qe-n', text: 'Settings' }), h('span', { class: 'qe-grow' }), doneBtn()),
+  return [h('div', { class: 'qe-head' }, h('h2', { class: 'qe-n', text: 'Quiz settings' }), h('span', { class: 'qe-grow' }), doneBtn()),
     h('div', { class: 'qe-settings-cards' },
       card('Quiz',
         h('div', { class: 'qe-settings-grid' },
@@ -391,7 +391,7 @@ function renderPane() {
   const ai = ed.aiOpen ? h('section', { class: 'qe-open qe-open-ai', 'aria-label': 'Question from an AI' }, aiCard(closeOpen)) : null;
   // Settings at the top when open; a quiz with no questions yet shows the kinds to start with (under
   // Settings too, so the first question is never more than a click away)
-  const settings = settingsOpen() ? h('section', { class: 'qe-open qe-open-settings', 'aria-label': 'Settings' }, settingsPane()) : null;
+  const settings = settingsOpen() ? h('section', { class: 'qe-open qe-open-settings', 'aria-label': 'Quiz settings' }, settingsPane()) : null;
   const start = !qs.length && !ai ? h('section', { class: 'qe-start' }, startPane()) : null;
   ed.pane.replaceChildren(...[settings, start, ed.outline, ai, qs.length && !ai ? ed.addWrap : null, ed.keysEl].filter(Boolean));
   ed.pane.querySelectorAll('textarea.qe-area').forEach(grow);

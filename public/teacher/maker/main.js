@@ -58,7 +58,7 @@ async function showQuizEditor(id, preset) {
     if (settingsOpen()) { closeOpen(); return; }
     ed.wantSettings = true;
     select(-1);
-  } }), 'sliders', 'Settings');
+  } }), 'sliders', 'Quiz settings'); // "Settings" alone is the teacher's own (dash/settings.js)
   ed.queued = false;
   ed.saveBtn = labeled(h('button', { class: 'btn primary', type: 'button', title: `${MOD}S`, onclick: () => save() }), 'check', 'Save');
   ed.previewBtn = iconButton(h('button', { class: 'btn', type: 'button' }), 'eye', 'Preview');

@@ -16,6 +16,12 @@ function statusCell(s) {
   // Waiting for the start: reading the rules, or agreed and in full screen (Ready)
   // their screen stopped checking in (closed the browser, quit Safe Exam Browser): not ready any more
   if (gone(a)) return h('td', { class: 't-late', text: `No signal for ${mmss(a.seenAgo)}` });
+  // a sign-in that looks off (another student's browser, a new network): says so, and why, before Start
+  if (a.status === 'waiting' && a.checks && a.checks.length) {
+    return h('td', { class: 't-check-first' },
+      h('span', { class: 'st-waiting t-check-head' }, icon(ICONS.warn, 15), a.ready ? 'Check first' : 'Reading the rules'),
+      h('span', { class: 't-small t-muted', text: a.checks.map(checkWhy).join('; ') }));
+  }
   if (a.status === 'waiting') return a.ready ? h('td', { class: 'st-good', text: 'Ready' }) : h('td', { class: 'st-waiting', text: 'Reading the rules' });
   if (a.status === 'admitted') return h('td', { text: 'Starting' });
   // a heartbeat every few seconds; much longer without one and they've lost their connection

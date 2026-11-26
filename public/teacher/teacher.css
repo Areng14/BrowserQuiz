@@ -621,3 +621,13 @@ th.num .t-sort { flex-direction: row-reverse; }
   .t-set-inline > .btn { justify-self: start; }
 }
 @media (max-width: 540px) { .t-code-row { flex-wrap: wrap; } .t-code-row .t-code-big { flex-basis: 100%; min-height: 48px; } }
+/* A waiting student whose sign-in looks off (cells.js statusCell): the status with a warning mark, and why */
+.t-check-first > span { display: block; }
+.t-check-first > .t-check-head { display: flex; align-items: center; gap: 6px; }
+.t-check-head > svg { flex: none; }
+@media (max-width: 820px) {
+  /* on a card: still beside the name, right-aligned, the reason wrapping under it */
+  .t-run tr:has(> td.t-check-first) > td:first-child { flex-basis: 40%; }
+  .t-run td.t-check-first { flex: 0 1 55%; min-width: 0; text-align: right; }
+  .t-check-first > .t-check-head { justify-content: flex-end; }
+}

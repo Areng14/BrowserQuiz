@@ -78,7 +78,7 @@ async function showRun(runId) {
   const LIVE_NUMS = ['Strikes', 'Progress', 'Time left', 'Score'];
   const liveHead = h('tr', {});
   const LIVE_TIPS = {
-    Status: "Ready means the student agreed to the rules and is waiting for you to start them. No signal means their computer stopped checking in.",
+    Status: "Ready means the student agreed to the rules and is waiting for you to start them. Check first means something about their sign-in looks off, written under it, so look before you start them. No signal means their computer stopped checking in.",
     Integrity: "Invalidated means the student left the quiz or you invalidated it, and Restored means you un-invalidated it. Otherwise it's Clean. Students aren't told.",
     Strikes: "The number of times the student left the quiz for another tab, window or app, and their total time away.",
     Progress: "Questions answered out of the total. The bar is green if they answered in the last 30 seconds, blue while they're reading, and gray after 2 minutes idle.",
