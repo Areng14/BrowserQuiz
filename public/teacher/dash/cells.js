@@ -281,8 +281,7 @@ function drawTrail(canvas, pts) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
   const hh = canvas.height;
-  ctx.fillStyle = css.getPropertyValue('--bg').trim() || '#fff';
-  ctx.fillRect(0, 0, w, hh);
+  ctx.clearRect(0, 0, w, hh); // see-through: the box's background follows light and dark (teacher.css)
   if (pts.length < 2) return;
   ctx.strokeStyle = css.getPropertyValue('--accent').trim() || '#2257d6';
   ctx.globalAlpha = 0.6;
