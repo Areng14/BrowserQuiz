@@ -245,7 +245,7 @@ function teachersSection() {
           { text: x.disabled ? 'Enable' : 'Disable', danger: !x.disabled, onclick: () => act(x, x.disabled ? 'enable' : 'disable') },
         ])))))), ['Quizzes', 'Classes'])));
   }
-  const form = h('form', { class: 't-row' },
+  const form = h('form', { class: 't-row t-add' }, // apart from the list, like adding a quiz or a class
     h('label', { class: 'field', for: 'teacher-name' }, h('span', { class: 'field-label', text: 'Name' }), name),
     h('label', { class: 'field', for: 'teacher-user' }, h('span', { class: 'field-label', text: 'Username' }), username), add);
   form.addEventListener('submit', async (e) => {
