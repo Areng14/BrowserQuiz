@@ -10,7 +10,9 @@ import { setHash, shell } from './home.js';
 // the next one still to grade. AI grades count as graded: the teacher chose AI, and can still change one.
 // #grade/<run id>/<question id>
 const QTYPE = { single: 'Multiple choice', multi: 'Select-all', text: 'Short answer', math: 'Math', graph: 'Graph', output: 'Predict the output', trace: 'Trace table', fill: 'Fill in the blanks', essay: 'Written answer', code: 'Code' };
-dash.hideNames = false;
+// Hide names is kept in this browser: a teacher who grades blind does it every time
+const HIDE_KEY = 'bq-hide-names';
+try { dash.hideNames = localStorage.getItem(HIDE_KEY) === '1'; } catch (e) { dash.hideNames = false; }
 async function showGrade(runId, qid, opts) {
   const o = opts || {};
   const seq = ++dash.navSeq;
@@ -50,7 +52,11 @@ async function showGrade(runId, qid, opts) {
   const pickQ = h('select', { class: 'input t-gq-select', 'aria-label': 'Question' }, qs.map((x) => h('option', { value: x.id, text: label(x), selected: x.id === q.id })));
   pickQ.addEventListener('change', () => go(qs.find((x) => x.id === pickQ.value)));
   const hide = h('input', { type: 'checkbox', id: 'gq-hide', checked: dash.hideNames });
-  hide.addEventListener('change', () => { dash.hideNames = hide.checked; showGrade(runId, q.id, { pick: cur && cur.attemptId }); });
+  hide.addEventListener('change', () => {
+    dash.hideNames = hide.checked;
+    try { localStorage.setItem(HIDE_KEY, hide.checked ? '1' : '0'); } catch (e) { /* this page only */ }
+    showGrade(runId, q.id, { pick: cur && cur.attemptId });
+  });
   const done = students.filter(graded).length;
   const list = h('ul', { class: 't-gq-list', 'aria-label': 'Students' }, students.map((s) => {
     const st = s.x.state === 'pending' ? 'Grading…' : s.x.state === 'failed' ? 'Grading failed' : !graded(s) ? 'Not graded'
