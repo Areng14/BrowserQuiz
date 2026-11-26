@@ -13,7 +13,8 @@ function blank(type, keep) {
   if (keep.shared) q.shared = keep.shared;
   if (type === 'single') Object.assign(q, { choices: ['', '', '', ''], answer: null });
   if (type === 'multi') Object.assign(q, { choices: ['', '', '', ''], answer: [] });
-  if (type === 'text') q.answer = [''];
+  if (type === 'text' || type === 'math') q.answer = [''];
+  if (type === 'graph') Object.assign(q, { answer: [''], window: [-10, 10, -10, 10], step: 1 });
   if (type === 'output' || type === 'trace' || type === 'fill') {
     q.code = typeof keep.code === 'string' ? keep.code : '';
     if (keep.language) q.language = keep.language;
@@ -168,7 +169,9 @@ function collect(quiz) {
     delete o._ui;
     delete o.languagesAny;
     if (q.languagesAny) o.languages = 'any';
-    if (q.type === 'text') o.answer = q.answer.map((a) => a.trim()).filter(Boolean);
+    if (q.type === 'text' || q.type === 'math' || q.type === 'graph') o.answer = q.answer.map((a) => a.trim()).filter(Boolean);
+    if (q.type === 'math' && !(Number(q.tolerance) > 0)) delete o.tolerance;
+    if (q.type === 'graph' && o.answer.length < 2) delete o.partialCredit;
     if (q.type === 'single' || q.type === 'multi') { // empty rows are left out
       const keep = q.choices.map((c, k) => k).filter((k) => q.choices[k].trim());
       o.choices = keep.map((k) => q.choices[k].trim());

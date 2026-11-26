@@ -5,7 +5,7 @@ import { ed } from './state.js';
 import { BLANK, BT, LANGS } from './formats.js';
 import { readCode, readTrace, starterCode } from './model.js';
 import { MOD, insert, wrap } from './editing.js';
-import { area, input, touch, xBtn } from './core.js';
+import { M, area, graphShapes, input, touch, xBtn } from './core.js';
 import { addImage, addInlineImage, assetSrc, imageEditor, imageSrc } from './choices.js';
 import { renderPane } from './pane.js';
 
@@ -82,6 +82,20 @@ function studentView(q0) {
     })));
   }
   if (q.type === 'text') out.push(h('input', { class: 'input text-answer', tabindex: '-1', 'aria-hidden': 'true' }));
+  if (q.type === 'math') {
+    out.push(h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'Your answer' }), h('div', { class: 'math-box' }, h('div', { class: 'math-field' })),
+      h('div', { class: 'math-keys' }, ['a/b', '√', 'x²', 'xʸ', 'π', '|x|', '≤', '≥', '±'].map((k) => h('span', { class: 'math-key', text: k })))));
+  }
+  if (q.type === 'graph' && window.BQGraph && M) {
+    const g = graphShapes(q0);
+    const kinds = [...new Set((g.shapes || []).map((s) => s.kind))];
+    const tools = Array.isArray(q.tools) && q.tools.length ? q.tools : kinds.length ? kinds : ['point'];
+    if (!g.problem || g.shapes) {
+      try {
+        out.push(window.BQGraph.editor({ window: q.window, step: q.step, tools: M.shapes.KINDS.filter((k) => tools.includes(k)), shade: (g.shapes || []).some((s) => s.side), value: [], onChange: () => {} }).el);
+      } catch (e) { /* a window that can't be drawn yet: the problem says so */ }
+    }
+  }
   const codeBlock = () => ((q.code || '').trim() ? h('pre', { class: 'md-code' }, h('code', { text: q.code.trimEnd() })) : null);
   const box = (label, rows, mono) => h('div', { class: 'field' }, h('span', { class: 'field-label', text: label }),
     h('textarea', { class: `input long-answer${mono ? ' mono' : ''}`, rows, tabindex: '-1', 'aria-hidden': 'true' }));
@@ -164,4 +178,4 @@ function rubricEditor(q, placeholder, langs) {
     h('div', { class: 'qe-line' }, h('button', { class: 'btn small', type: 'button', text: 'Add rubric item', onclick: add }), worth)) };
 }
 
-export { BAN_HINT, promptEditor, rubricEditor, studentView };
+export { BAN_HINT, firstRow, promptEditor, rubricEditor, studentView };

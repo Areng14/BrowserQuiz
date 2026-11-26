@@ -6,7 +6,7 @@ import { ed } from './state.js';
 import { LANGS, TYPES } from './formats.js';
 import { blank } from './model.js';
 import { grow } from './editing.js';
-import { VAR_TYPES, area, card, check, field, input, poolSettings, problemsOf, touch, varsEditor } from './core.js';
+import { FORMS, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, input, poolSettings, problemsOf, touch, typeset, varsEditor } from './core.js';
 import { addImage, addInlineImage, choicesEditor, imageEditor } from './choices.js';
 import { promptEditor, rubricEditor, studentView } from './prompt.js';
 import { codeEditor, fillEditor, outputEditor, traceEditor } from './code.js';
@@ -57,6 +57,36 @@ function questionPane(q, i) {
     answer.push(field('One per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: '3.5\n/^(binary|bin) search$/' })),
       check(q, q.caseSensitive, 'Capital letters count', (v) => { if (v) q.caseSensitive = true; else delete q.caseSensitive; }));
   }
+  let answerTick = null;
+  if (q.type === 'math') {
+    answerTitle = 'Accepted answers';
+    const reads = h('div', { class: 'qe-math-reads' });
+    answerTick = () => {
+      const list = answersOf(q).map(typeset).filter(Boolean);
+      reads.replaceChildren(...(list.length ? [h('span', { class: 'field-label', text: 'Reads as' }), ...list] : []));
+    };
+    const form = h('select', { class: 'input qe-narrow' }, FORMS.map(([v, t]) => h('option', { value: v, text: t, selected: (q.form || '') === v })));
+    form.addEventListener('change', () => { if (form.value) q.form = form.value; else delete q.form; touch(q); });
+    answer.push(field('One per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'x = 4' })), reads,
+      h('div', { class: 'qe-line' }, field('Answer form', form),
+        field('Tolerance', input(q, q.tolerance || '', (v) => { if (Number(v) > 0) q.tolerance = Number(v); else delete q.tolerance; }, { type: 'number', min: '0', step: 'any', class: 'input t-points', placeholder: '0' }))));
+  }
+  if (q.type === 'graph') {
+    answerTitle = 'What students draw';
+    const pic = h('div', { class: 'qe-graph-answer' });
+    answerTick = () => {
+      const g = M ? graphShapes(q) : { shapes: [] };
+      pic.replaceChildren(...(g.shapes && g.shapes.length && window.BQGraph ? [h('span', { class: 'field-label', text: 'Answer' }), window.BQGraph.view({ window: q.window, step: q.step, shapes: g.shapes, label: 'Answer' })] : []));
+      if (pic.querySelector('.gr-view')) pic.querySelector('.gr-view').classList.add('answer');
+    };
+    const num = (k, label) => input(q, q.window[k], (v) => { const n = Number(v); if (v.trim() !== '' && Number.isFinite(n)) q.window[k] = n; }, { type: 'number', step: 'any', class: 'input t-points', 'aria-label': label });
+    answer.push(field('Equations, inequalities or points, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'y = 2x - 1' })),
+      h('div', { class: 'qe-line' },
+        field('x from', num(0, 'x from')), field('x to', num(1, 'x to')), field('y from', num(2, 'y from')), field('y to', num(3, 'y to')),
+        field('Grid step', input(q, q.step, (v) => { const n = Number(v); if (n > 0) q.step = n; }, { type: 'number', min: '0', step: 'any', class: 'input t-points' }))),
+      check(q, q.partialCredit, 'Partial credit when there\'s more than one', (v) => { if (v) q.partialCredit = true; else delete q.partialCredit; }),
+      pic);
+  }
   let fillParts = null;
   if (q.type === 'output') add(outputEditor(q));
   if (q.type === 'trace') add(traceEditor(q));
@@ -83,6 +113,7 @@ function questionPane(q, i) {
     more);
   const code = q.type === 'code' || (q.type === 'fill' && q._ui.run) ? codeEditor(q) : null;
   ed.paneTick = () => {
+    if (answerTick) answerTick();
     view.replaceChildren(...studentView(q));
     const list = ed.tried || ed.fromServer.has(q) ? problemsOf(q) : [];
     probs.replaceChildren(...list.map((p) => h('li', { text: p })));

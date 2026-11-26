@@ -1,7 +1,8 @@
 // Safe Markdown for question prompts, choices and shared material.
 // Builds DOM nodes with textContent only. Never innerHTML, so quiz text can't inject markup.
 // Blocks: paragraphs, # headings, - / 1. lists, > quotes, --- lines, | tables |, ```fenced code```, $$math$$,
-// and ```svg diagrams (svg.js: shown as an image, in the page's light or dark colors).
+// ```svg diagrams (svg.js: shown as an image, in the page's light or dark colors), and ```graph blocks:
+// a graph drawn from equations and points (graph.js).
 // Inline: `code`, **bold**, *italic*, ~~struck~~, $math$, [links](url) (shown as their text, so a click
 // can't take a student out of the quiz), ![images](assets/x.png), and \ to escape a character.
 // opts.lang tags code (inline and unlabeled fences) so the app can syntax-highlight it.
@@ -148,6 +149,10 @@
         i++;
         if ((fence[1] || '').toLowerCase() === 'svg' && window.BQSvg) {
           frag.append(window.BQSvg.block(buf.join('\n')));
+          continue;
+        }
+        if ((fence[1] || '').toLowerCase() === 'graph' && window.BQGraph) {
+          frag.append(window.BQGraph.block(buf.join('\n')));
           continue;
         }
         const pre = document.createElement('pre');

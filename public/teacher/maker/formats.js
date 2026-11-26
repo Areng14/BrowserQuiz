@@ -2,7 +2,7 @@
 
 // In the order the parts usually come in a quiz.
 const TYPES = {
-  single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', output: 'Predict the output',
+  single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', math: 'Math', graph: 'Graph', output: 'Predict the output',
   trace: 'Trace table', fill: 'Fill in the blanks', code: 'Code', essay: 'Written answer',
 };
 const BLANK = /_{3,}/g;

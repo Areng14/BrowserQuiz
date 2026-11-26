@@ -9,7 +9,7 @@ import { setHash, shell } from './home.js';
 // Not graded), the one picked on the right with the rubric, points and feedback. Save and next goes on to
 // the next one still to grade. AI grades count as graded: the teacher chose AI, and can still change one.
 // #grade/<run id>/<question id>
-const QTYPE = { single: 'Multiple choice', multi: 'Select-all', text: 'Short answer', output: 'Predict the output', trace: 'Trace table', fill: 'Fill in the blanks', essay: 'Written answer', code: 'Code' };
+const QTYPE = { single: 'Multiple choice', multi: 'Select-all', text: 'Short answer', math: 'Math', graph: 'Graph', output: 'Predict the output', trace: 'Trace table', fill: 'Fill in the blanks', essay: 'Written answer', code: 'Code' };
 dash.hideNames = false;
 async function showGrade(runId, qid, opts) {
   const o = opts || {};

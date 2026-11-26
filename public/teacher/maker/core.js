@@ -6,6 +6,7 @@ import { countBlanks } from './formats.js';
 import { readCode, readTrace } from './model.js';
 import { grow } from './editing.js';
 import { renderOutline } from './outline.js';
+import { firstRow } from './prompt.js';
 
 const imageMissing = (p) => !ed.newAssets[p] && !ed.existingAssets.has(p);
 // The images written into text as Markdown: prompts, choices, shared material and directions.
@@ -59,6 +60,7 @@ function problemsOf(q) {
     else if (marked.some((k) => !(q.choices[k] || '').trim())) out.push('A choice marked correct is empty.');
   }
   if (q.type === 'text' && !q.answer.some((a) => a.trim())) out.push('Add an accepted answer.');
+  if (q.type === 'math' || q.type === 'graph') out.push(...mathProblems(q));
   if (q.type === 'code') out.push(...readCode(q).problems);
   if (q.type === 'output' && !(q.code || '').trim()) out.push('Write the code.');
   if (q.type === 'trace') {
@@ -90,7 +92,48 @@ const input = (q, value, on, attrs) => {
 };
 // Random values: a little table, names on the first line, then a row of values per line. Each student
 // gets one row, put in for {{name}} in the question (server: quizfile.js checkVars).
-const VAR_TYPES = new Set(['single', 'multi', 'text', 'output', 'trace']);
+const VAR_TYPES = new Set(['single', 'multi', 'text', 'math', 'graph', 'output', 'trace']);
+// Math and graph answers, read the way the server reads them (mathexpr.js). With random values, the
+// first row's.
+const M = window.BQMath;
+const FORMS = [['', 'Any equivalent form'], ['expanded', 'Expanded'], ['factored', 'Factored'], ['exact', 'Exact, no decimals'], ['lowest', 'Lowest terms']];
+const FORM_WORDS = { expanded: 'expanded', factored: 'factored', exact: 'exact (no decimals)', lowest: 'in lowest terms' };
+const answersOf = (q) => {
+  const qa = Array.isArray(q.vars) && q.vars[0] ? firstRow(q, q.vars[0]) : q;
+  return qa.answer.map((a) => String(a).trim()).filter(Boolean);
+};
+// The shapes a graph question's answer draws, or the first thing wrong with it
+function graphShapes(q) {
+  const shapes = [];
+  const [x0, x1, y0, y1] = q.window;
+  if (!(x0 < x1 && y0 < y1)) return { problem: 'The window needs each "from" below its "to".' };
+  if (!(q.step > 0)) return { problem: 'The grid step has to be more than 0.' };
+  const across = (x1 - x0) / q.step;
+  const high = (y1 - y0) / q.step;
+  if (across < 4 || high < 4 || across > 100 || high > 100) return { problem: 'Make the window 4 to 100 grid steps across and high.' };
+  for (const a of answersOf(q)) {
+    try { for (const s of M.shapes.shapesOf(a)) { M.shapes.checkDrawable(s, q.window, q.step, a); shapes.push(s); } } catch (e) { return { problem: e.message, shapes }; }
+  }
+  return { shapes };
+}
+function mathProblems(q) {
+  const list = answersOf(q);
+  if (!list.length) return [q.type === 'graph' ? 'Add what students should draw.' : 'Add an accepted answer.'];
+  if (!M) return [];
+  if (q.type === 'graph') { const g = graphShapes(q); return g.problem ? [g.problem] : []; }
+  const out = [];
+  for (const a of list) {
+    const why = M.checkAnswer(a);
+    if (why) out.push(`Can't read "${a}". ${why}`);
+    else if (q.form && !M.inForm(a, q.form)) out.push(`"${a}" isn't ${FORM_WORDS[q.form]} itself.`);
+  }
+  return out;
+}
+// A math answer typeset, to check it reads as meant
+const typeset = (src) => {
+  const t = M ? M.toTex(src) : null;
+  return t == null ? null : h('span', { class: 'qe-math' }, window.BQ.md.renderInline(`$${t}$`));
+};
 const cells = (line) => [...line.matchAll(/\s*("(?:[^"]|"")*"|[^,]*)\s*(?:,|$)/g)].map((m) => m[1]).slice(0, -1)
   .map((c) => (/^".*"$/.test(c) ? c.slice(1, -1).replace(/""/g, '"') : c.trim()));
 const varsText = (rows) => {
@@ -139,4 +182,4 @@ const poolSettings = (q) => {
 };
 const xBtn = (label, onclick, disabled) => h('button', { class: 'btn small qe-x', type: 'button', 'aria-label': label, title: label, disabled, onclick }, icon(ICONS.x, 16));
 
-export { VAR_TYPES, area, card, check, field, imageMissing, input, markdownImages, nextId, poolSettings, problemsOf, refreshSoon, setStatus, touch, varsEditor, xBtn };
+export { FORMS, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, imageMissing, input, markdownImages, nextId, poolSettings, problemsOf, refreshSoon, setStatus, touch, typeset, varsEditor, xBtn };

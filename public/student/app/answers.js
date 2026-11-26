@@ -92,7 +92,8 @@ function isAnswered(q) {
   const a = S.answers[q.id];
   if (a == null) return false;
   if (q.type === 'multi') return Array.isArray(a) && a.length > 0;
-  if (q.type === 'text') return String(a).trim() !== '';
+  if (q.type === 'text' || q.type === 'math') return String(a).trim() !== '';
+  if (q.type === 'graph') return Array.isArray(a) && a.length > 0;
   if (q.type === 'code') return (a.code[a.language] || '').trim() !== ((q.starter && q.starter[a.language]) || '').trim();
   if (q.type === 'output' || q.type === 'essay') return String(a).trim() !== '';
   if (q.type === 'fill') return Array.isArray(a) && a.some((x) => String(x || '').trim());

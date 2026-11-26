@@ -6,6 +6,7 @@ const R = require('./rubric');
 const B = require('./bans');
 const T = require('../../public/teacher/types.js');
 const SVG = require('../../public/student/svg.js');
+const M = require('../../public/student/mathexpr.js');
 
 const LIMITS = { uploadBytes: 25 * 1024 * 1024, files: 500, questions: 300, arrayLen: 1000 };
 const ASSET_TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
@@ -16,7 +17,7 @@ const QID = /^[A-Za-z0-9_-]{1,40}$/;
 const RESERVED = new Set(('abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null var record yield sealed permits '
   + 'and as async await def del elif except from global in is lambda nonlocal not or pass raise with None True False print '
   + '__proto__ constructor prototype Main BQJ bqh solution support').split(/\s+/));
-const PART_TYPES = ['single', 'multi', 'text', 'code', 'output', 'trace', 'fill', 'essay'];
+const PART_TYPES = ['single', 'multi', 'text', 'math', 'graph', 'code', 'output', 'trace', 'fill', 'essay'];
 const BLANK = /_{3,}/g;
 
 // Program output, compared ignoring trailing spaces on each line and blank lines at the start and end.
@@ -124,7 +125,7 @@ function checkArgs(where, params, args, D) {
 // Not on code, fill or essay questions: their hidden tests, runs and grading don't change per student.
 const VAR_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,19}$/;
 const VAR_REF = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g;
-const VAR_TYPES = new Set(['single', 'multi', 'text', 'output', 'trace']);
+const VAR_TYPES = new Set(['single', 'multi', 'text', 'math', 'graph', 'output', 'trace']);
 function putVars(v, row) {
   if (typeof v === 'string') return v.replace(VAR_REF, (m, name) => (Object.hasOwn(row, name) ? row[name] : m));
   if (Array.isArray(v)) return v.map((x) => putVars(x, row));
@@ -136,7 +137,7 @@ function putVars(v, row) {
   return v;
 }
 function checkVars(where, q, type) {
-  if (!VAR_TYPES.has(type)) fail(`${where}: random values (vars) work on single, multi, text, output and trace questions.`);
+  if (!VAR_TYPES.has(type)) fail(`${where}: random values (vars) work on single, multi, text, math, graph, output and trace questions.`);
   const rows = q.vars;
   if (!Array.isArray(rows) || rows.length < 2 || rows.length > 30) fail(`${where}: vars must be a list of 2 to 30 rows, like [{ "x": 3 }, { "x": 5 }].`);
   let names = null;
@@ -260,7 +261,7 @@ function normalizeQuiz(raw, assetNames) {
     if (ids.has(id)) fail(`${where}: duplicate id "${id}".`);
     ids.add(id);
     const type = q.type || 'single';
-    if (!PART_TYPES.includes(type)) fail(`${where}: type must be single, multi, text, code, output, trace, fill or essay.`);
+    if (!PART_TYPES.includes(type)) fail(`${where}: type must be single, multi, text, math, graph, code, output, trace, fill or essay.`);
     // The question from its raw form. Run once as written, and once per row of random values to check them.
     const build = (q) => {
       if (typeof q.prompt !== 'string' || !q.prompt.trim()) fail(`${where}: prompt is required.`);
@@ -481,6 +482,10 @@ function normalizeNewType(where, type, q, quizLang, points) {
       }));
       Object.assign(out, c, { run: true, language: lang, code: out.code, answer: out.answer });
     }
+  } else if (type === 'math') {
+    Object.assign(out, normalizeMath(where, q));
+  } else if (type === 'graph') {
+    Object.assign(out, normalizeGraph(where, q));
   } else if (type === 'essay') {
     // Graded by the teacher. With a language, students get a code box instead of a text box.
     out.language = LANGS.includes(q.language) ? q.language : null;
@@ -490,6 +495,78 @@ function normalizeNewType(where, type, q, quizLang, points) {
     });
     if (out.rubric.reduce((s, r) => s + r.points, 0) > points) fail(`${where}: rubric points add up to more than the question is worth.`);
   }
+  return out;
+}
+
+// A math answer (mathexpr.js): accepted answers as math, matched by value, not by spelling. form asks for
+// the answer written a certain way (expanded, factored, exact, lowest terms); tolerance accepts rounding.
+const FORM_WORDS = { expanded: 'expanded', factored: 'factored', exact: 'exact (no decimals)', lowest: 'in lowest terms' };
+function normalizeMath(where, q) {
+  const out = {};
+  const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
+  if (!ans.length || ans.length > 20 || ans.some((a) => (typeof a !== 'string' && typeof a !== 'number') || !String(a).trim())) {
+    fail(`${where}: answer must be math, like "2x + 3" or "x = 4", or a list of accepted answers.`);
+  }
+  out.answer = ans.map((a) => String(a).trim().slice(0, 500));
+  if (q.form != null && q.form !== '' && q.form !== 'any') {
+    if (!M.FORM_NAMES.includes(q.form)) fail(`${where}: form must be "expanded", "factored", "exact" or "lowest".`);
+    out.form = q.form;
+  }
+  for (const a of out.answer) {
+    const why = M.checkAnswer(a);
+    if (why) fail(`${where}: can't read the answer "${a}". ${why}`);
+    if (out.form && !M.inForm(a, out.form)) fail(`${where}: the answer "${a}" isn't ${FORM_WORDS[out.form]} itself.`);
+  }
+  if (q.tolerance != null && q.tolerance !== '') {
+    const t = Number(q.tolerance);
+    if (!(t >= 0) || t > 1e9) fail(`${where}: tolerance must be a number, 0 or more (0.01 accepts answers within 0.01).`);
+    if (t > 0) out.tolerance = t;
+  }
+  return out;
+}
+
+// A graph question: the student draws shapes on a grid (mathexpr.js shapes). answer: equations,
+// inequalities or points to draw; window: [xmin, xmax, ymin, ymax]; step: the grid, where points snap.
+function normalizeGraph(where, q) {
+  const out = {};
+  const ans = Array.isArray(q.answer) ? q.answer : [q.answer];
+  if (!ans.length || ans.length > 10 || ans.some((a) => typeof a !== 'string' || !a.trim())) {
+    fail(`${where}: answer must be what to draw, like "y = 2x - 1" or "(2, -3)", or a list of them.`);
+  }
+  out.answer = ans.map((a) => a.trim().slice(0, 200));
+  const win = q.window == null ? [-10, 10, -10, 10] : q.window;
+  if (!Array.isArray(win) || win.length !== 4 || !win.every((v) => typeof v === 'number' && Number.isFinite(v))) {
+    fail(`${where}: window must be [xmin, xmax, ymin, ymax], like [-10, 10, -10, 10].`);
+  }
+  const step = q.step == null || q.step === '' ? 1 : Number(q.step);
+  if (!(step > 0) || !Number.isFinite(step)) fail(`${where}: step must be a number more than 0, like 1 or 0.5.`);
+  if (!(win[0] < win[1] && win[2] < win[3])) fail(`${where}: the window is [xmin, xmax, ymin, ymax], each min below its max.`);
+  const across = (win[1] - win[0]) / step;
+  const high = (win[3] - win[2]) / step;
+  if (across < 4 || high < 4 || across > 100 || high > 100) fail(`${where}: the window should be 4 to 100 grid steps across and high (step ${step}).`);
+  out.window = win;
+  out.step = step;
+  const shapes = [];
+  for (const a of out.answer) {
+    try {
+      for (const sh of M.shapes.shapesOf(a)) { M.shapes.checkDrawable(sh, win, step, a); shapes.push(sh); }
+    } catch (e) {
+      if (e instanceof M.MathError) fail(`${where}: ${e.message}`);
+      throw e;
+    }
+  }
+  if (shapes.length > 10) fail(`${where}: at most 10 things to draw.`);
+  out.shapes = shapes;
+  // The drawing tools students get: what the answer needs, plus any the teacher adds
+  const need = [...new Set(shapes.map((sh) => sh.kind))];
+  let tools = need;
+  if (q.tools != null) {
+    if (!Array.isArray(q.tools) || q.tools.some((t) => !M.shapes.KINDS.includes(t))) fail(`${where}: tools can be ${M.shapes.KINDS.map((k) => `"${k}"`).join(', ')}.`);
+    for (const k of need) if (!q.tools.includes(k)) fail(`${where}: tools has to include "${k}", which the answer needs.`);
+    tools = q.tools;
+  }
+  out.tools = M.shapes.KINDS.filter((k) => tools.includes(k));
+  if (q.partialCredit === true && shapes.length > 1) out.partialCredit = true;
   return out;
 }
 

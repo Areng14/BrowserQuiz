@@ -11,6 +11,7 @@ import { basicView, essayView, fillView, outputView, traceView, whyBox } from '.
 import { codeView, confirmFinishParts } from './code.js';
 import { openGame, openNavigator, renderSheet, reviewView, snakeGlyph, startTimer } from './nav.js';
 import { openExit, openSubmit, quizKeys, timedExam } from './overlays.js';
+import { graphView, mathView } from './mathq.js';
 
 // ---------- quiz ----------
 function screenQuiz() {
@@ -197,7 +198,7 @@ function renderQuestion() {
   S.el.next.disabled = false;
   S.el.next.textContent = S.dirOpen ? 'Continue' : last ? 'Review' : 'Next';
   S.el.next.className = 'btn' + (last && !S.dirOpen ? ' primary' : '');
-  const views = { code: codeView, output: outputView, trace: traceView, fill: fillView, essay: essayView };
+  const views = { code: codeView, output: outputView, trace: traceView, fill: fillView, essay: essayView, math: mathView, graph: graphView };
   let view = S.dirOpen ? directionsView(partOf(S.idx)) : (views[q.type] || basicView)(q);
   // Corrections: a "What went wrong?" box under the answer (in a code question's left column)
   if (!S.dirOpen && S.quiz.corrections && S.quiz.corrections.why && S.quiz.corrections.fix[q.id]) (view.querySelector('.code-left') || view).append(whyBox(q));

@@ -5,9 +5,20 @@
 (function () {
   'use strict';
   const KIND = {
-    single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', method: 'Write a method', class: 'Write a class',
+    single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', math: 'Math', graph: 'Graph', method: 'Write a method', class: 'Write a class',
     output: 'Predict the output', trace: 'Trace table', fill: 'Fill in the blanks', essay: 'Written answer',
   };
+  // Math, typeset: a student's answer is LaTeX from the math box, a teacher's is plain math (mathexpr.js)
+  const texOf = (src, latex) => {
+    if (latex) return String(src).replace(/\$/g, '');
+    const t = window.BQMath ? window.BQMath.toTex(src) : null;
+    return t == null ? null : t;
+  };
+  const mathEl = (src, latex) => {
+    const t = texOf(src, latex);
+    return t == null ? h('code', { text: src }) : h('div', { class: 'r-math' }, window.BQ.md.render(`$$${t}$$`));
+  };
+  const FORM_NOTE = { expanded: 'Has to be expanded.', factored: 'Has to be factored.', exact: 'Has to be exact, without decimals.', lowest: 'Has to be in lowest terms.' };
   const LANG = { java: 'Java', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', c: 'C', cpp: 'C++', csharp: 'C#', go: 'Go', rust: 'Rust' };
 
   function h(tag, attrs, ...kids) {
@@ -25,6 +36,7 @@
   const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
   // assetUrl: where the quiz's images are, for images written in Markdown.
   const md = (src, lang, assetUrl) => h('div', { class: 'r-prompt' }, window.BQ.md.render(src, { lang, assetUrl }));
+  const inlineMath = (src) => { const t = window.BQMath ? window.BQMath.toTex(src) : null; return t == null ? h('code', { text: src }) : window.BQ.md.renderInline(`$${t}$`); };
   const inline = (src, lang, assetUrl) => (/\n/.test(src) // a choice with more than one line is set as blocks
     ? h('div', { class: 'r-choice-rich' }, window.BQ.md.render(src, { lang, assetUrl }))
     : h('span', {}, window.BQ.md.renderInline(src, { lang, assetUrl })));
@@ -36,6 +48,7 @@
     if (q.type === 'single' || q.type === 'multi') return q.picked.length > 0;
     if (q.type === 'trace') return q.cells.some((r) => r.some((c) => !c.given && c.value));
     if (q.type === 'fill') return q.blanks.some((b) => b.value);
+    if (q.type === 'graph') return !!(q.drawn && q.drawn.length);
     return q.answer != null;
   }
   // Marks as thin line icons: the text ✓ and ✗ look hand-drawn in most fonts.
@@ -99,6 +112,21 @@
       const right = h('div', {}, h('p', { class: 'r-text', text: q.accepted[0] }),
         q.accepted.length > 1 ? h('p', { class: 'r-also', text: `Also accepted: ${q.accepted.slice(1).join(', ')}` }) : null);
       return compare(o, q.answer == null ? none() : h('p', { class: 'r-text', text: q.answer }), q.answer == null ? false : ok, right);
+    }
+    if (q.type === 'math') {
+      const notes = [q.form ? FORM_NOTE[q.form] : null, q.tolerance ? `Within ${q.tolerance}.` : null].filter(Boolean).join(' ');
+      const right = h('div', {}, mathEl(q.accepted[0]),
+        q.accepted.length > 1 ? h('div', { class: 'r-also' }, 'Also accepted: ', q.accepted.slice(1).map((x, k) => [k ? ', ' : '', inlineMath(x)])) : null,
+        notes ? h('p', { class: 'r-also', text: notes }) : null);
+      return compare(o, q.answer == null ? none() : mathEl(q.answer, true), q.answer == null ? false : ok, right);
+    }
+    if (q.type === 'graph') {
+      if (!window.BQGraph) return null;
+      const mine = q.drawn.length ? window.BQGraph.view({ window: q.window, step: q.step, drawn: q.drawn, label: o.teacher ? 'Their graph' : 'Your graph' }) : none();
+      const right = h('div', {}, window.BQGraph.view({ window: q.window, step: q.step, shapes: q.shapes, label: 'Correct graph' }),
+        h('div', { class: 'r-also' }, q.accepted.map((x, k) => [k ? ', ' : '', inlineMath(x)])));
+      right.firstChild.classList.add('answer');
+      return compare(o, mine, q.drawn.length ? ok : false, right, 'Correct graph');
     }
     if (q.type === 'output') {
       return [codeBox(q.code, q.codeLang),
@@ -530,7 +558,7 @@
         h('thead', {}, h('tr', {}, h('th', { class: 'num', text: 'Question' }), h('th', { text: 'Their answer' }), h('th', { class: 'num', text: 'Gave it' }))),
         h('tbody', {}, p.same.map((x) => h('tr', {},
           h('td', { class: 'num', text: String(x.n) }),
-          h('td', {}, x.choices ? x.choices.map((c, i) => [i ? ', ' : '', inline(c, quiz.language)]) : h('code', { text: x.text })),
+          h('td', {}, x.choices ? x.choices.map((c, i) => [i ? ', ' : '', inline(c, quiz.language)]) : x.math ? mathEl(x.text, true) : h('code', { text: x.text })),
           h('td', { class: 'num', text: x.of > 2 ? `${x.of} students` : 'Only these two' }))))),
     ]));
     return pairSection('r-same-wrong', 'Same wrong answers', rows);
