@@ -1,7 +1,7 @@
 // The roster maker: a class from a pasted list or a CSV.
 
 import { dash } from './state.js';
-import { api, ask, h, mount, plural, post } from './core.js';
+import { api, ask, h, mount, plural, post, tip } from './core.js';
 import { guard, setHash, shell, showHome } from './home.js';
 
 // ---------- roster maker ----------
@@ -52,7 +52,8 @@ async function showRoster(id) {
     h('label', { class: 'field', for: 'class-name' }, h('span', { class: 'field-label', text: 'Class name' }), name),
     id ? h('h2', { text: plural(roster.students.length, 'student') }) : null,
     list,
-    h('label', { class: 'field', for: 'class-add' }, h('span', { class: 'field-label', text: id ? 'Add students: name, student ID (one per line)' : 'Students: name, student ID (one per line)' }), add),
+    tip(h('label', { class: 'field', for: 'class-add' }, h('span', { class: 'field-label', text: id ? 'Add students: name, student ID (one per line)' : 'Students: name, student ID (one per line)' }), add), add,
+      "Students pick their name and type their ID to sign in. IDs can't be shown again after you save, so keep your own list."),
     h('div', { class: 't-row' }, save, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: async () => { if (await leaveOk()) showHome('classes'); } })),
     msg);
   mount(shell('classes', page));

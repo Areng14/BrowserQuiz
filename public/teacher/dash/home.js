@@ -288,7 +288,8 @@ function classesTab(data) {
             { text: 'Delete', danger: true, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}?`, 'Past results stay.') }]))))))) : null,
     h('div', { class: 't-row t-add' },
       h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
-      h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile),
+      tip(h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile), rosterFile,
+        'A spreadsheet saved as CSV: a first row with name and student_id, then a student on each row. Students type their ID to sign in.'),
       rosterBtn),
     rosterMsg);
 }
