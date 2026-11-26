@@ -605,5 +605,6 @@
     };
   }
 
-  window.BQCalculator = { create };
+  // MathLive on its own, for the math answer box (app.js)
+  window.BQCalculator = { create, mathlive };
 })();

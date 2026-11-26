@@ -30,6 +30,10 @@ function keyOf(oldQ, newQ) {
       return { answer: [...new Set(picks)].sort((a, b) => a - b), partialCredit: newQ.partialCredit === true || undefined };
     }
     case 'text': return { answer: newQ.answer, caseSensitive: !!newQ.caseSensitive };
+    case 'math': return { answer: newQ.answer, form: newQ.form, tolerance: newQ.tolerance };
+    case 'graph': // the same grid and tools students drew with
+      if (!same(newQ.window, oldQ.window) || newQ.step !== oldQ.step || !same(newQ.tools, oldQ.tools)) return null;
+      return { answer: newQ.answer, shapes: newQ.shapes, partialCredit: newQ.partialCredit === true || undefined };
     case 'output': return newQ.answer != null ? { answer: newQ.answer } : null;
     case 'trace': {
       // the same table, with the cells shown filled in unchanged

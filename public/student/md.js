@@ -1,6 +1,7 @@
 // Safe Markdown for question prompts, choices and shared material.
 // Builds DOM nodes with textContent only. Never innerHTML, so quiz text can't inject markup.
-// Blocks: paragraphs, # headings, - / 1. lists, > quotes, --- lines, | tables |, ```fenced code```, $$math$$.
+// Blocks: paragraphs, # headings, - / 1. lists, > quotes, --- lines, | tables |, ```fenced code```, $$math$$,
+// and ```graph blocks: a graph drawn from equations and points (graph.js).
 // Inline: `code`, **bold**, *italic*, ~~struck~~, $math$, [links](url) (shown as their text, so a click
 // can't take a student out of the quiz), ![images](assets/x.png), and \ to escape a character.
 // opts.lang tags code (inline and unlabeled fences) so the app can syntax-highlight it.
@@ -145,6 +146,10 @@
         i++;
         while (i < lines.length && !/^```\s*$/.test(lines[i])) buf.push(lines[i++]);
         i++;
+        if ((fence[1] || '').toLowerCase() === 'graph' && window.BQGraph) {
+          frag.append(window.BQGraph.block(buf.join('\n')));
+          continue;
+        }
         const pre = document.createElement('pre');
         pre.className = 'md-code';
         const code = document.createElement('code');

@@ -7,7 +7,7 @@
   'use strict';
   // In the order the parts usually come in a quiz.
   const TYPES = {
-    single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', output: 'Predict the output',
+    single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', math: 'Math', graph: 'Graph', output: 'Predict the output',
     trace: 'Trace table', fill: 'Fill in the blanks', code: 'Code', essay: 'Written answer',
   };
   const BLANK = /_{3,}/g;
@@ -349,7 +349,8 @@
     if (keep.shared) q.shared = keep.shared;
     if (type === 'single') Object.assign(q, { choices: ['', '', '', ''], answer: null });
     if (type === 'multi') Object.assign(q, { choices: ['', '', '', ''], answer: [] });
-    if (type === 'text') q.answer = [''];
+    if (type === 'text' || type === 'math') q.answer = [''];
+    if (type === 'graph') Object.assign(q, { answer: [''], window: [-10, 10, -10, 10], step: 1 });
     if (type === 'output' || type === 'trace' || type === 'fill') {
       q.code = typeof keep.code === 'string' ? keep.code : '';
       if (keep.language) q.language = keep.language;
@@ -504,7 +505,9 @@
       delete o._ui;
       delete o.languagesAny;
       if (q.languagesAny) o.languages = 'any';
-      if (q.type === 'text') o.answer = q.answer.map((a) => a.trim()).filter(Boolean);
+      if (q.type === 'text' || q.type === 'math' || q.type === 'graph') o.answer = q.answer.map((a) => a.trim()).filter(Boolean);
+      if (q.type === 'math' && !(Number(q.tolerance) > 0)) delete o.tolerance;
+      if (q.type === 'graph' && o.answer.length < 2) delete o.partialCredit;
       if (q.type === 'single' || q.type === 'multi') { // empty rows are left out
         const keep = q.choices.map((c, k) => k).filter((k) => q.choices[k].trim());
         o.choices = keep.map((k) => q.choices[k].trim());
@@ -758,6 +761,7 @@
         else if (marked.some((k) => !(q.choices[k] || '').trim())) out.push('A choice marked correct is empty.');
       }
       if (q.type === 'text' && !q.answer.some((a) => a.trim())) out.push('Add an accepted answer.');
+      if (q.type === 'math' || q.type === 'graph') out.push(...mathProblems(q));
       if (q.type === 'code') out.push(...readCode(q).problems);
       if (q.type === 'output' && !(q.code || '').trim()) out.push('Write the code.');
       if (q.type === 'trace') {
@@ -789,7 +793,48 @@
     };
     // Random values: a little table, names on the first line, then a row of values per line. Each student
     // gets one row, put in for {{name}} in the question (server: quizfile.js checkVars).
-    const VAR_TYPES = new Set(['single', 'multi', 'text', 'output', 'trace']);
+    const VAR_TYPES = new Set(['single', 'multi', 'text', 'math', 'graph', 'output', 'trace']);
+    // Math and graph answers, read the way the server reads them (mathexpr.js). With random values, the
+    // first row's.
+    const M = window.BQMath;
+    const FORMS = [['', 'Any equivalent form'], ['expanded', 'Expanded'], ['factored', 'Factored'], ['exact', 'Exact, no decimals'], ['lowest', 'Lowest terms']];
+    const FORM_WORDS = { expanded: 'expanded', factored: 'factored', exact: 'exact (no decimals)', lowest: 'in lowest terms' };
+    const answersOf = (q) => {
+      const qa = Array.isArray(q.vars) && q.vars[0] ? firstRow(q, q.vars[0]) : q;
+      return qa.answer.map((a) => String(a).trim()).filter(Boolean);
+    };
+    // The shapes a graph question's answer draws, or the first thing wrong with it
+    function graphShapes(q) {
+      const shapes = [];
+      const [x0, x1, y0, y1] = q.window;
+      if (!(x0 < x1 && y0 < y1)) return { problem: 'The window needs each "from" below its "to".' };
+      if (!(q.step > 0)) return { problem: 'The grid step has to be more than 0.' };
+      const across = (x1 - x0) / q.step;
+      const high = (y1 - y0) / q.step;
+      if (across < 4 || high < 4 || across > 100 || high > 100) return { problem: 'Make the window 4 to 100 grid steps across and high.' };
+      for (const a of answersOf(q)) {
+        try { for (const s of M.shapes.shapesOf(a)) { M.shapes.checkDrawable(s, q.window, q.step, a); shapes.push(s); } } catch (e) { return { problem: e.message, shapes }; }
+      }
+      return { shapes };
+    }
+    function mathProblems(q) {
+      const list = answersOf(q);
+      if (!list.length) return [q.type === 'graph' ? 'Add what students should draw.' : 'Add an accepted answer.'];
+      if (!M) return [];
+      if (q.type === 'graph') { const g = graphShapes(q); return g.problem ? [g.problem] : []; }
+      const out = [];
+      for (const a of list) {
+        const why = M.checkAnswer(a);
+        if (why) out.push(`Can't read "${a}". ${why}`);
+        else if (q.form && !M.inForm(a, q.form)) out.push(`"${a}" isn't ${FORM_WORDS[q.form]} itself.`);
+      }
+      return out;
+    }
+    // A math answer typeset, to check it reads as meant
+    const typeset = (src) => {
+      const t = M ? M.toTex(src) : null;
+      return t == null ? null : h('span', { class: 'qe-math' }, window.BQ.md.renderInline(`$${t}$`));
+    };
     const cells = (line) => [...line.matchAll(/\s*("(?:[^"]|"")*"|[^,]*)\s*(?:,|$)/g)].map((m) => m[1]).slice(0, -1)
       .map((c) => (/^".*"$/.test(c) ? c.slice(1, -1).replace(/""/g, '"') : c.trim()));
     const varsText = (rows) => {
@@ -1048,6 +1093,20 @@
         })));
       }
       if (q.type === 'text') out.push(h('input', { class: 'input text-answer', tabindex: '-1', 'aria-hidden': 'true' }));
+      if (q.type === 'math') {
+        out.push(h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'Your answer' }), h('div', { class: 'math-box' }, h('div', { class: 'math-field' })),
+          h('div', { class: 'math-keys' }, ['a/b', '√', 'x²', 'xʸ', 'π', '|x|', '≤', '≥', '±'].map((k) => h('span', { class: 'math-key', text: k })))));
+      }
+      if (q.type === 'graph' && window.BQGraph && M) {
+        const g = graphShapes(q0);
+        const kinds = [...new Set((g.shapes || []).map((s) => s.kind))];
+        const tools = Array.isArray(q.tools) && q.tools.length ? q.tools : kinds.length ? kinds : ['point'];
+        if (!g.problem || g.shapes) {
+          try {
+            out.push(window.BQGraph.editor({ window: q.window, step: q.step, tools: M.shapes.KINDS.filter((k) => tools.includes(k)), shade: (g.shapes || []).some((s) => s.side), value: [], onChange: () => {} }).el);
+          } catch (e) { /* a window that can't be drawn yet: the problem says so */ }
+        }
+      }
       const codeBlock = () => ((q.code || '').trim() ? h('pre', { class: 'md-code' }, h('code', { text: q.code.trimEnd() })) : null);
       const box = (label, rows, mono) => h('div', { class: 'field' }, h('span', { class: 'field-label', text: label }),
         h('textarea', { class: `input long-answer${mono ? ' mono' : ''}`, rows, tabindex: '-1', 'aria-hidden': 'true' }));
@@ -1436,6 +1495,36 @@
         answer.push(field('One per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: '3.5\n/^(binary|bin) search$/' })),
           check(q, q.caseSensitive, 'Capital letters count', (v) => { if (v) q.caseSensitive = true; else delete q.caseSensitive; }));
       }
+      let answerTick = null;
+      if (q.type === 'math') {
+        answerTitle = 'Accepted answers';
+        const reads = h('div', { class: 'qe-math-reads' });
+        answerTick = () => {
+          const list = answersOf(q).map(typeset).filter(Boolean);
+          reads.replaceChildren(...(list.length ? [h('span', { class: 'field-label', text: 'Reads as' }), ...list] : []));
+        };
+        const form = h('select', { class: 'input qe-narrow' }, FORMS.map(([v, t]) => h('option', { value: v, text: t, selected: (q.form || '') === v })));
+        form.addEventListener('change', () => { if (form.value) q.form = form.value; else delete q.form; touch(q); });
+        answer.push(field('One per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'x = 4' })), reads,
+          h('div', { class: 'qe-line' }, field('Answer form', form),
+            field('Tolerance', input(q, q.tolerance || '', (v) => { if (Number(v) > 0) q.tolerance = Number(v); else delete q.tolerance; }, { type: 'number', min: '0', step: 'any', class: 'input t-points', placeholder: '0' }))));
+      }
+      if (q.type === 'graph') {
+        answerTitle = 'What students draw';
+        const pic = h('div', { class: 'qe-graph-answer' });
+        answerTick = () => {
+          const g = M ? graphShapes(q) : { shapes: [] };
+          pic.replaceChildren(...(g.shapes && g.shapes.length && window.BQGraph ? [h('span', { class: 'field-label', text: 'Answer' }), window.BQGraph.view({ window: q.window, step: q.step, shapes: g.shapes, label: 'Answer' })] : []));
+          if (pic.querySelector('.gr-view')) pic.querySelector('.gr-view').classList.add('answer');
+        };
+        const num = (k, label) => input(q, q.window[k], (v) => { const n = Number(v); if (v.trim() !== '' && Number.isFinite(n)) q.window[k] = n; }, { type: 'number', step: 'any', class: 'input t-points', 'aria-label': label });
+        answer.push(field('Equations, inequalities or points, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'y = 2x - 1' })),
+          h('div', { class: 'qe-line' },
+            field('x from', num(0, 'x from')), field('x to', num(1, 'x to')), field('y from', num(2, 'y from')), field('y to', num(3, 'y to')),
+            field('Grid step', input(q, q.step, (v) => { const n = Number(v); if (n > 0) q.step = n; }, { type: 'number', min: '0', step: 'any', class: 'input t-points' }))),
+          check(q, q.partialCredit, 'Partial credit when there\'s more than one', (v) => { if (v) q.partialCredit = true; else delete q.partialCredit; }),
+          pic);
+      }
       let fillParts = null;
       if (q.type === 'output') add(outputEditor(q));
       if (q.type === 'trace') add(traceEditor(q));
@@ -1462,6 +1551,7 @@
         more);
       const code = q.type === 'code' || (q.type === 'fill' && q._ui.run) ? codeEditor(q) : null;
       paneTick = () => {
+        if (answerTick) answerTick();
         view.replaceChildren(...studentView(q));
         const list = tried || fromServer.has(q) ? problemsOf(q) : [];
         probs.replaceChildren(...list.map((p) => h('li', { text: p })));

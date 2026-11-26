@@ -12,6 +12,7 @@ const isGiven = (qq, r, c) => qq.given.some((g) => g[0] === r && g[1] === c);
 
 const norm = (s, cs) => { const t = String(s).trim().replace(/\s+/g, ' '); return cs ? t : t.toLowerCase(); };
 const R = require('./rubric');
+const M = require('../../public/student/mathexpr.js');
 
 // A short answer against the accepted ones. Spacing, capitals (unless caseSensitive) and a trailing period
 // don't matter; numbers match by value (3.5, 3.50, 7/2); an accepted answer written /like this/ is a
@@ -34,6 +35,30 @@ function textMatches(qq, a) {
   });
 }
 
+// A math answer against the accepted ones (mathexpr.js): by value, in the form the question asks for.
+const mathMatches = (qq, a) => typeof a === 'string' && a.trim() !== '' && M.matches(qq.answer, a, { tolerance: qq.tolerance, form: qq.form });
+// What a student drew on a graph question, kept only as far as it makes sense: the question's tools,
+// points as numbers inside the grid's window (rounded off), at most 20 shapes.
+function cleanShapes(qq, v) {
+  const [x0, x1, y0, y1] = qq.window;
+  const pad = qq.step;
+  const num = (x, lo, hi) => typeof x === 'number' && Number.isFinite(x) && x >= lo - pad && x <= hi + pad;
+  const round = (x) => Math.round(x * 1e6) / 1e6;
+  const out = [];
+  for (const d of v.slice(0, 20)) {
+    if (!d || typeof d !== 'object' || !qq.tools.includes(d.kind) || !Array.isArray(d.p) || d.p.length !== M.shapes.HANDLES[d.kind]) continue;
+    if (!d.p.every((pt) => Array.isArray(pt) && pt.length === 2 && num(pt[0], x0, x1) && num(pt[1], y0, y1))) continue;
+    const s = { kind: d.kind, p: d.p.map((pt) => [round(pt[0]), round(pt[1])]) };
+    if (d.kind === 'exp') { if (!num(d.k, y0, y1)) continue; s.k = round(d.k); }
+    if (d.kind !== 'point') {
+      if (d.side === 1 || d.side === -1) s.side = d.side;
+      if (d.dash === true) s.dash = true;
+    }
+    out.push(s);
+  }
+  return out;
+}
+
 // Answers arrive in the student's positional order; map them back to the quiz's original indexes.
 function cleanAnswers(quiz, layout, answers) {
   const out = {};
@@ -48,6 +73,8 @@ function cleanAnswers(quiz, layout, answers) {
     if (qq.type === 'single' && Number.isInteger(v) && v >= 0 && v < n) out[qq.id] = v;
     else if (qq.type === 'multi' && Array.isArray(v)) out[qq.id] = [...new Set(v.filter((x) => Number.isInteger(x) && x >= 0 && x < n))].sort((a, b) => a - b);
     else if (qq.type === 'text' && typeof v === 'string') out[qq.id] = v.slice(0, 500);
+    else if (qq.type === 'math' && typeof v === 'string') out[qq.id] = v.slice(0, 1000);
+    else if (qq.type === 'graph' && Array.isArray(v)) { const sh = cleanShapes(qq, v); if (sh.length) out[qq.id] = sh; }
     else if (qq.type === 'code' && v && typeof v === 'object' && qq.languages.includes(v.language) && typeof v.code === 'string') {
       out[qq.id] = { language: v.language, code: v.code.slice(0, 50000) };
     } else if ((qq.type === 'output' || qq.type === 'essay') && typeof v === 'string') {
@@ -77,6 +104,7 @@ function gradeAuto(quiz, layout, answers) {
       const got = new Set((Array.isArray(a) ? a : []).map(orig));
       ok = got.size === qq.answer.length && qq.answer.every((x) => got.has(x));
     } else if (qq.type === 'text') ok = textMatches(qq, a);
+    else if (qq.type === 'math') ok = mathMatches(qq, a);
     else if (qq.type === 'output') ok = typeof a === 'string' && normOutput(a) === qq.answer;
     // Partial credit: each trace cell and each blank counts the same.
     let share = ok ? 1 : 0;
@@ -98,6 +126,12 @@ function gradeAuto(quiz, layout, answers) {
     } else if (qq.type === 'fill') {
       const right = qq.answer.filter((acc, i) => Array.isArray(a) && normBlank(a[i]) !== '' && acc.some((x) => normBlank(x) === normBlank(a[i]))).length;
       share = right / qq.answer.length;
+    } else if (qq.type === 'graph') {
+      // every shape drawn right and nothing else; with partial credit, each right one counts, and each
+      // shape drawn beyond how many there should be takes one back
+      const g = M.shapes.gradeShapes(qq.shapes, a);
+      const n = qq.shapes.length;
+      share = qq.partialCredit ? Math.max(0, (g.right - Math.max(0, g.drawn - n)) / n) : g.right === n && g.extra === 0 ? 1 : 0;
     } else if (qq.type === 'essay') share = 0; // the teacher grades it
     const pts = Math.round(qq.points * share * 100) / 100;
     score += pts;
@@ -212,8 +246,11 @@ function answerReport(quiz, a) {
       const picked = ans == null ? [] : [].concat(ans).map((i) => (perm ? perm[i] : i));
       row.answer = picked.map((i) => qq.choices[i]).join(' | ') || null;
       row.correctAnswer = [].concat(qq.answer).map((i) => qq.choices[i]).join(' | ');
-    } else if (qq.type === 'text') {
+    } else if (qq.type === 'text' || qq.type === 'math') {
       row.answer = ans == null ? null : ans;
+      row.correctAnswer = qq.answer.join(' | ');
+    } else if (qq.type === 'graph') {
+      row.answer = Array.isArray(ans) && ans.length ? ans.map((d) => { const sh = M.shapes.fromHandles(d); return sh ? M.shapes.shapeText(sh) : '?'; }).join(' | ') : null;
       row.correctAnswer = qq.answer.join(' | ');
     } else if (qq.type !== 'code') {
       row.answer = ans == null ? null : ans;
@@ -301,6 +338,13 @@ function studentReport(fullQuiz, a, name, opts = {}) {
       } else if (qq.type === 'text') {
         row.answer = ans == null || String(ans).trim() === '' ? null : String(ans);
         row.accepted = opts.forStudent ? qq.answer.filter((x) => !isPattern(x)) : qq.answer; // patterns are the teacher's
+      } else if (qq.type === 'math') {
+        row.answer = typeof ans === 'string' && ans.trim() ? ans : null; // LaTeX, from the math box
+        row.accepted = qq.answer;
+        if (qq.form) row.form = qq.form;
+        if (qq.tolerance) row.tolerance = qq.tolerance;
+      } else if (qq.type === 'graph') {
+        Object.assign(row, { window: qq.window, step: qq.step, drawn: Array.isArray(ans) ? ans : [], accepted: qq.answer, shapes: qq.shapes });
       } else if (qq.type === 'output') {
         Object.assign(row, { code: qq.code, codeLang: qq.language, answer: typeof ans === 'string' && ans.trim() ? ans : null, correct: qq.answer });
       } else if (qq.type === 'trace') {
@@ -362,4 +406,4 @@ const reportQuiz = (fullQuiz, quizId, layout) => {
   };
 };
 
-module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, autoMarks, codeAnswered, answerReport, studentReport, reportQuiz, grading: running, isRun, textMatches };
+module.exports = { cleanAnswers, gradeAuto, gradeAttempt, totals, questionScore, autoMarks, codeAnswered, answerReport, studentReport, reportQuiz, grading: running, isRun, textMatches, mathMatches };

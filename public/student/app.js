@@ -13,7 +13,7 @@
   const LANG_NAMES = { java: 'Java', python: 'Python', javascript: 'JavaScript', typescript: 'TypeScript', c: 'C', cpp: 'C++', csharp: 'C#', go: 'Go', rust: 'Rust' };
   const THEME_KEY = 'bq-theme';
   const KIND = {
-    single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', method: 'Write a method', class: 'Write a class',
+    single: 'Multiple choice', multi: 'Select all that apply', text: 'Short answer', math: 'Math', graph: 'Graph', method: 'Write a method', class: 'Write a class',
     output: 'Predict the output', trace: 'Trace table', fill: 'Fill in the blanks', essay: 'Written answer',
   };
   // Default directions per part, AP style. A quiz can override any of them with quiz.directions[type].
@@ -21,6 +21,8 @@
     single: { title: 'Multiple choice', text: 'Pick the one best answer. Blank answers earn no credit.' },
     multi: { title: 'Select all that apply', text: 'Credit only if you select every correct answer and no wrong ones.' },
     text: { title: 'Short answer', text: "Spelling counts. Capital letters and extra spaces don't." },
+    math: { title: 'Math', text: 'Type / for a fraction and ^ for a power. Any equivalent answer counts, unless the question asks for a form.' },
+    graph: { title: 'Graphing', text: 'Add each graph, then drag its points into place. Points snap to the grid.' },
     code: { title: 'Free response', text: "Assume needed imports are there and inputs match the question. Partial credit is possible." },
     output: { title: 'Predict the output', text: 'Type exactly what the code prints, one line per line of output.' },
     trace: { title: 'Trace tables', text: 'Fill in each value as the code runs. Each correct cell earns credit.' },
@@ -925,7 +927,8 @@
     const a = S.answers[q.id];
     if (a == null) return false;
     if (q.type === 'multi') return Array.isArray(a) && a.length > 0;
-    if (q.type === 'text') return String(a).trim() !== '';
+    if (q.type === 'text' || q.type === 'math') return String(a).trim() !== '';
+    if (q.type === 'graph') return Array.isArray(a) && a.length > 0;
     if (q.type === 'code') return (a.code[a.language] || '').trim() !== ((q.starter && q.starter[a.language]) || '').trim();
     if (q.type === 'output' || q.type === 'essay') return String(a).trim() !== '';
     if (q.type === 'fill') return Array.isArray(a) && a.some((x) => String(x || '').trim());
@@ -1250,7 +1253,7 @@
     S.el.next.disabled = false;
     S.el.next.textContent = S.dirOpen ? 'Continue' : last ? 'Review' : 'Next';
     S.el.next.className = 'btn' + (last && !S.dirOpen ? ' primary' : '');
-    const views = { code: codeView, output: outputView, trace: traceView, fill: fillView, essay: essayView };
+    const views = { code: codeView, output: outputView, trace: traceView, fill: fillView, essay: essayView, math: mathView, graph: graphView };
     let view = S.dirOpen ? directionsView(partOf(S.idx)) : (views[q.type] || basicView)(q);
     // Corrections: a "What went wrong?" box under the answer (in a code question's left column)
     if (!S.dirOpen && S.quiz.corrections && S.quiz.corrections.why && S.quiz.corrections.fix[q.id]) (view.querySelector('.code-left') || view).append(whyBox(q));
@@ -2145,6 +2148,81 @@
     S.runReadyAt = Date.now() + 5000;
     if (results.isConnected) renderResults(q, results, q.codeLang);
     runCooldown(btn);
+  }
+
+  // ---------- math and graph answers ----------
+  // The math box is MathLive (the calculator's editor). It sends LaTeX, which the server reads and grades
+  // (mathexpr.js). Keys under it type what's awkward to find: a fraction, a root, powers, signs.
+  const MATH_KEYS = [
+    ['a/b', '\\frac{#@}{#0}', 'Fraction'], ['√', '\\sqrt{#0}', 'Square root'], ['x²', '#@^2', 'Squared'], ['xʸ', '#@^{#0}', 'Power'],
+    ['π', '\\pi', 'Pi'], ['|x|', '\\left|#0\\right|', 'Absolute value'], ['≤', '\\le', 'Less than or equal to'], ['≥', '\\ge', 'Greater than or equal to'], ['±', '\\pm', 'Plus or minus'],
+  ];
+  function loadMathLive() {
+    if (!window.BQCalculator || !window.BQCalculator.mathlive) return Promise.reject(new Error('no MathLive'));
+    return window.BQCalculator.mathlive(cfg.vendorBase || '/vendor/');
+  }
+  function mathView(q) {
+    const id = q.id + '-math';
+    const box = h('div', { class: 'math-box' });
+    const note = h('p', { class: 'math-note', id: id + '-note', hidden: true });
+    const keys = h('div', { class: 'math-keys', role: 'group', 'aria-label': 'Math keys' });
+    const field = h('div', { class: 'field' }, h('span', { class: 'field-label', id: id + '-label', text: 'Your answer' }), box, note);
+    const view = h('div', { class: 'qview' }, metaRow(q, KIND.math), prompt(q), field);
+    const saved = typeof S.answers[q.id] === 'string' ? S.answers[q.id] : '';
+    if (cfg.watch) { // the student's answer, typeset
+      box.classList.add('static');
+      box.append(saved ? BQ.md.render(`$$${saved.replace(/\$/g, '')}$$`) : h('span', { class: 'muted', text: 'No answer yet' }));
+      return view;
+    }
+    const explain = (v) => {
+      const why = window.BQMath ? window.BQMath.problem(v) : null;
+      note.hidden = !why;
+      note.textContent = why || '';
+    };
+    const plain = () => { // no MathLive: a plain box, read the same way
+      const input = h('input', { class: 'input text-answer', id, autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', maxlength: '500', 'aria-labelledby': id + '-label', 'aria-describedby': id + '-note' });
+      input.value = saved;
+      input.addEventListener('input', () => { setAnswer(q.id, input.value.trim() ? input.value : undefined); note.hidden = true; });
+      input.addEventListener('blur', () => explain(input.value));
+      box.replaceChildren(input);
+    };
+    loadMathLive().then((ML) => {
+      const mf = new ML.MathfieldElement({ smartFence: true });
+      mf.id = id;
+      mf.className = 'math-field';
+      mf.mathVirtualKeyboardPolicy = 'manual';
+      mf.setAttribute('aria-labelledby', id + '-label');
+      mf.setAttribute('aria-describedby', id + '-note');
+      box.replaceChildren(mf);
+      if (saved) mf.setValue(saved, { silenceNotifications: true });
+      let last = saved;
+      mf.addEventListener('input', () => {
+        const v = mf.getValue('latex');
+        if (v === last) return; // MathLive also fires input for Enter, which changes nothing
+        last = v;
+        setAnswer(q.id, v.trim() ? v : undefined);
+        note.hidden = true;
+      });
+      mf.addEventListener('blur', () => explain(mf.getValue('latex')));
+      const keep = (e) => e.preventDefault(); // keys don't take the focus from the box
+      keys.replaceChildren(...MATH_KEYS.map(([label, latex, name]) => h('button', {
+        type: 'button', class: 'math-key', 'aria-label': name, title: name, onmousedown: keep,
+        onclick: () => mf.executeCommand(['insert', latex, { focus: true }]),
+      }, label)));
+      box.after(keys);
+    }).catch(plain);
+    return view;
+  }
+  function graphView(q) {
+    const view = h('div', { class: 'qview' }, metaRow(q, KIND.graph), prompt(q));
+    if (!window.BQGraph) return view;
+    if (cfg.watch) {
+      view.append(window.BQGraph.view({ window: q.window, step: q.step, drawn: Array.isArray(S.answers[q.id]) ? S.answers[q.id] : [], label: 'Their graph' }));
+      return view;
+    }
+    const ed = window.BQGraph.editor({ window: q.window, step: q.step, tools: q.tools, shade: q.shade, value: S.answers[q.id], onChange: (v) => setAnswer(q.id, v) });
+    view.append(ed.el);
+    return view;
   }
 
   function essayView(q) {

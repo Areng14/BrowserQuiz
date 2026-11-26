@@ -5,13 +5,13 @@
 // misconception) counts for little; one only these two gave counts for a lot. It only points the
 // teacher at pairs to look at, like similar.js.
 const store = require('./store');
-const { textMatches } = require('./grade');
+const { textMatches, mathMatches } = require('./grade');
 const { normOutput } = require('./quizfile');
 
 const MIN_SHARED = 3; // same wrong answers a pair needs
 const MIN_BITS = 7; // and how unlikely, all together (each answer adds -log2 of the share who gave it)
 const MAX_PAIRS = 20;
-const TYPES = new Set(['single', 'multi', 'text', 'output']);
+const TYPES = new Set(['single', 'multi', 'text', 'math', 'output']);
 const normText = (s) => String(s).toLowerCase().replace(/\s+/g, ' ').trim();
 
 // A student's wrong answer to a question, as something comparable across shuffled choices (and across
@@ -32,6 +32,8 @@ function wrongAnswer(qq, a, perm, variant) {
   if (typeof a !== 'string' || !a.trim()) return null;
   if (qq.type === 'text') return textMatches(qq, a) ? null : { key: `${v}t${normText(a)}`, text: a.slice(0, 200) };
   if (qq.type === 'output') return normOutput(a) === qq.answer ? null : { key: `${v}o${normText(a)}`, text: a.slice(0, 200) };
+  // math: as typed (LaTeX), without the spacing and \left \right the math box adds
+  if (qq.type === 'math') return mathMatches(qq, a) ? null : { key: `${v}x${a.replace(/\\(left|right)\b|\s+/g, '')}`, text: a.slice(0, 200), math: true };
   return null;
 }
 
@@ -55,7 +57,7 @@ function sameWrong(quiz, attempts) {
       if (!w) continue;
       const k = `${qq.id}\n${w.key}`;
       if (!groups.has(k)) groups.set(k, { id: qq.id, list: [] });
-      groups.get(k).list.push({ who, shown: w.shown, text: w.text });
+      groups.get(k).list.push({ who, shown: w.shown, text: w.text, math: w.math });
     }
   }
   const pairs = new Map(); // "a b" -> pair
@@ -69,7 +71,7 @@ function sameWrong(quiz, attempts) {
         if (!pairs.has(k)) pairs.set(k, { a: x.who, b: y.who, bits: 0, same: [] });
         const p = pairs.get(k);
         p.bits += bits;
-        p.same.push({ id, n: number.get(id), choices: x.shown, text: x.text, of: list.length });
+        p.same.push({ id, n: number.get(id), choices: x.shown, text: x.text, math: x.math || undefined, of: list.length });
       }
     }
   }

@@ -318,6 +318,13 @@ function quizSource(quiz) {
     if (qq.shared) o.shared = qq.shared;
     if (qq.image) { o.image = qq.image; if (qq.imageAlt) o.imageAlt = qq.imageAlt; }
     if (qq.type === 'text') { o.answer = qq.answer; if (qq.caseSensitive) o.caseSensitive = true; }
+    if (qq.type === 'math') { o.answer = qq.answer; if (qq.form) o.form = qq.form; if (qq.tolerance) o.tolerance = qq.tolerance; }
+    if (qq.type === 'graph') {
+      Object.assign(o, { answer: qq.answer, window: qq.window, step: qq.step });
+      const need = new Set(qq.shapes.map((sh) => sh.kind));
+      if (qq.tools.some((k) => !need.has(k))) o.tools = qq.tools; // tools beyond what the answer needs
+      if (qq.partialCredit) o.partialCredit = true;
+    }
     if (qq.type === 'single' || qq.type === 'multi') { o.choices = qq.choices; o.answer = qq.answer; if (qq.shuffleChoices === false) o.shuffleChoices = false; if (qq.partialCredit) o.partialCredit = true; }
     if (qq.type === 'output') Object.assign(o, { code: qq.code, language: qq.language, answer: qq.answer });
     if (qq.type === 'trace') {

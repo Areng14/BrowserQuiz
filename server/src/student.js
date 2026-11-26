@@ -256,6 +256,8 @@ function publicQuiz(quiz, layout) {
         }
       }
       if (qq.type === 'essay') pub.codeLang = qq.language || null;
+      // a graph: the grid and the drawing tools, and whether shading is one of them (never the answer)
+      if (qq.type === 'graph') Object.assign(pub, { window: qq.window, step: qq.step, tools: qq.tools, shade: qq.shapes.some((sh) => sh.side) || undefined });
       if (qq.type === 'code') {
         pub.mode = qq.mode;
         pub.languages = qq.languages;
