@@ -496,7 +496,9 @@
       const pane = box && box !== document.body ? box : null;
       const top = v.getBoundingClientRect().top - (pane ? pane.getBoundingClientRect().top - pane.scrollTop : -window.scrollY);
       const room = (pane ? pane.clientHeight : window.innerHeight) - top - 16;
-      el.style.maxWidth = `${Math.round(Math.max(260, Math.min(460, room * aspect)))}px`; // the tools above it stay as wide as the grid
+      // beside the question (a wide screen) it can be bigger, up to its column
+      const most = el.closest('.gr-split') && window.matchMedia('(min-width: 1100px)').matches ? 560 : 460;
+      el.style.maxWidth = `${Math.round(Math.max(260, Math.min(most, room * aspect)))}px`; // the tools above it stay as wide as the grid
     };
     const ro = new ResizeObserver(() => { if (!el.isConnected) { ro.disconnect(); window.removeEventListener('resize', fit); return; } fit(); });
     requestAnimationFrame(() => { if (el.parentElement) ro.observe(el.parentElement); fit(); });

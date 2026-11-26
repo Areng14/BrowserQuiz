@@ -66,18 +66,19 @@ function mathView(q) {
   }).catch(plain);
   return view;
 }
-// A prompt that ends in a ```graph block: that graph goes beside the student's grid (above it on a phone),
-// so both are in view at once.
+// The question on the left and the student's grid on the right, on a wide screen; one above the other on a
+// narrower one. A prompt that ends in a ```graph block keeps that graph with the question, so the given
+// graph and the student's grid are both in view at once.
 const LAST_GRAPH = /\n*```[ \t]*graph[ \t]*\n([\s\S]*?)\n```[ \t]*$/i;
 function graphView(q) {
   const m = window.BQGraph ? LAST_GRAPH.exec(q.prompt) : null;
-  const view = h('div', { class: 'qview' }, metaRow(q, KIND.graph), prompt(m ? Object.assign({}, q, { prompt: q.prompt.slice(0, m.index) }) : q));
-  if (!window.BQGraph) return view;
+  const ask = h('div', { class: 'gr-ask' }, metaRow(q, KIND.graph), prompt(m ? Object.assign({}, q, { prompt: q.prompt.slice(0, m.index) }) : q));
+  if (!window.BQGraph) return h('div', { class: 'qview' }, ask);
+  if (m) ask.append(window.BQGraph.block(m[1]));
   const theirs = cfg.watch
     ? window.BQGraph.view({ window: q.window, step: q.step, drawn: Array.isArray(S.answers[q.id]) ? S.answers[q.id] : [], label: 'Their graph' })
     : window.BQGraph.editor({ window: q.window, step: q.step, tools: q.tools, shade: q.shade, value: S.answers[q.id], onChange: (v) => setAnswer(q.id, v) }).el;
-  view.append(m ? h('div', { class: 'gr-pair' }, window.BQGraph.block(m[1]), theirs) : theirs);
-  return view;
+  return h('div', { class: 'qview gr-split' }, ask, h('div', { class: 'gr-side' }, theirs));
 }
 
 export { graphView, mathView };

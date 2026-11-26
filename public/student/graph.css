@@ -57,8 +57,6 @@
 .gr-editor { max-width: min(460px, calc((100dvh - 240px) * var(--gr-aspect, 1))); }
 .gr-editor .gr-view { max-width: none; }
 /* a graph question whose prompt ends in a graph: that graph beside the grid on wide screens, above it on narrow */
-.gr-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px 32px; align-items: end; margin-top: 4px; }
-.gr-pair > .gr-block { margin: 0 auto; }
 /* math in a report's answer boxes sits on the left, like the rest of the answers */
 .r-math .katex-display { margin: 0; text-align: left; }
 .r-math .katex-display > .katex { text-align: left; }
@@ -83,3 +81,12 @@
 .math-key:hover { border-color: var(--field-line, var(--ink-2)); }
 .math-note { margin: 6px 0 0; font-size: 14px; color: var(--warn, var(--ink-2)); }
 @media (hover: none) { .math-key { min-height: 40px; } }
+
+/* ---------- a graph question: the question on the left, the grid on the right (app/mathq.js) ---------- */
+.gr-ask { display: grid; gap: 18px; align-content: start; min-width: 0; }
+.gr-ask > .gr-block { margin: 0; }
+.gr-side { min-width: 0; }
+@media (min-width: 1100px) {
+  .qview.gr-split { max-width: 1240px; grid-template-columns: minmax(0, 1fr) minmax(0, 560px); gap: 40px; align-items: start; }
+  .gr-split .gr-side { position: sticky; top: 0; }
+}
