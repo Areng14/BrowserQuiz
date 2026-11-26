@@ -104,11 +104,17 @@ it, so removing things comes before styling them.
   decision, a menu for extra actions.
 - **The next step is obvious.** The main action is the most visible thing. Disabled states say why
   through the UI, not a paragraph.
+- **Buttons stay put.** A button that's sometimes not usable ("Start quiz" with nobody waiting) is
+  shown disabled, not hidden, so the bar doesn't jump around and people learn where it lives. Hide one
+  only when it can never apply on that page (a closed quiz has no Start).
 - **Good defaults.** The common choice is already selected.
 - **Ask before anything that can't be undone**, and say what will happen in one sentence.
 - **Keyboard and screen readers work:** every control is reachable with Tab, visible focus rings,
   menus with arrow keys and Escape, labels on icon-only buttons, dialogs that trap focus and give
   it back.
+- **Password managers work.** A password field has the right `autocomplete`, and nothing blocks the
+  manager's list: a modal dialog makes everything outside it unclickable, the list included, so a
+  dialog that asks for a password covers the page with its own backdrop instead.
 - **Phones count.** At phone width the layout stacks, rows keep only what needs doing now, and
   touch targets are at least 40px.
 - **Dark mode counts.** Use the app's color tokens, never hard-coded colors, and check it.
@@ -123,6 +129,15 @@ it, so removing things comes before styling them.
   them, so groups read as groups. Don't pack things edge to edge.
 - **Even weight.** Don't put all the visual weight on one side; balance a heavy left with something
   on the right, or center it.
+- **Use the width.** On a wide screen, don't leave half the page empty beside one narrow column.
+  Put sections side by side in columns, each column about one thing and about as tall as the others,
+  and go back to one column when the screen narrows. Keep each field and line of text a readable width
+  inside its column; a form you fill top to bottom stays one column.
+- **Bars and banners reach the edges.** A page-wide banner (a paused quiz, a warning) runs the full
+  width of the page area, even past a page that's capped and centred, with its words lined up with
+  the page under it.
+- **Mixed fonts share a baseline.** A number in a monospace font next to words lines up on the words'
+  baseline, not the middle of its box, or it looks raised.
 - **Same width for things that stack.** A list under a form is the form's width, not its own.
 - **Line lengths stay readable** (about 60-80 characters for prose).
 

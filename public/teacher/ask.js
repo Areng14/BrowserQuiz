@@ -3,6 +3,9 @@
 //   BQAsk.notice({ title, text })                      -> Promise<void>
 //   BQAsk.ask({ title, text, label, value, ok, danger, copy, password }) -> Promise<string | null> (null: cancelled)
 // One at a time; Escape or Cancel says no. A destructive one starts on Cancel, so Enter can't delete.
+// One with a password field isn't a modal dialog (that makes the rest of the page inert, a password
+// manager's list included), so iCloud Passwords and the like still work: our own backdrop covers the
+// page instead, and Tab stays inside.
 (function () {
   'use strict';
   let seq = 0;
@@ -32,13 +35,33 @@
       okBtn.addEventListener('click', () => { answer = field ? field.value() : true; dlg.close(); });
       if (noBtn) noBtn.addEventListener('click', () => dlg.close());
       if (field && field.input) field.input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); okBtn.click(); } });
+      const loose = !!(field && field.password);
+      const shade = loose ? el('div', { class: 't-ask-back' }) : null;
+      const keys = (e) => {
+        if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); dlg.close(); return; }
+        if (e.key !== 'Tab') return;
+        const stops = [...dlg.querySelectorAll('button, input, [href], select, textarea, [tabindex]:not([tabindex="-1"])')].filter((x) => !x.disabled && x.offsetParent);
+        if (!stops.length) return;
+        const first = stops[0], last = stops[stops.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      };
       dlg.addEventListener('close', () => {
+        if (shade) { shade.remove(); dlg.removeEventListener('keydown', keys); }
         dlg.remove();
         if (back && back.isConnected && back.focus) back.focus({ preventScroll: true });
         resolve(answer);
       });
-      (document.querySelector('.t-app') || document.body).append(dlg);
-      dlg.showModal();
+      const host = document.querySelector('.t-app') || document.body;
+      if (loose) {
+        dlg.classList.add('t-loose');
+        dlg.setAttribute('aria-modal', 'true');
+        dlg.addEventListener('keydown', keys);
+        host.append(shade, dlg);
+        dlg.show();
+      } else {
+        host.append(dlg);
+        dlg.showModal();
+      }
       if (field && field.input) { field.input.focus(); field.input.select(); } else (danger && noBtn ? noBtn : okBtn).focus();
     });
   }
@@ -49,7 +72,7 @@
     input.value = value || '';
     const node = el('div', { class: 'field' }, label ? el('label', { class: 'field-label', for: fid, text: label }) : null, input);
     if (!label) input.setAttribute('aria-label', 'Text');
-    return { node, input, value: () => input.value };
+    return { node, input, password: !!password, value: () => input.value };
   }
 
   window.BQAsk = {

@@ -165,14 +165,12 @@ function settingsTab() {
     let s;
     try { s = await api('/api/t/settings'); } catch (e) { if (e.message !== 'login') body.replaceChildren(h('p', { class: 't-error', text: e.message })); return; }
     const devices = devicesCard(s);
-    body.replaceChildren(...[
-      youCard(s),
-      passwordCard(devices.signedOut),
-      s.recovery ? recoveryCard() : null,
-      PASSKEYS ? passkeysSection(true) : null,
-      devices.el,
-      defaultsCard(s),
-      await aiCard()].filter(Boolean));
+    // Two columns on a wide screen, each about one thing: you and your quizzes, and signing in. One
+    // after the other on a narrower one.
+    const col = (...cards) => h('div', { class: 't-set-col' }, cards.filter(Boolean));
+    body.replaceChildren(
+      col(youCard(s), defaultsCard(s), await aiCard()),
+      col(passwordCard(devices.signedOut), s.recovery ? recoveryCard() : null, PASSKEYS ? passkeysSection(true) : null, devices.el));
   })();
   return page;
 }

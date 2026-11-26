@@ -40,10 +40,10 @@ async function showRun(runId) {
     const ids = waitingIds.slice();
     beforeAdmit(runId, ids.length, null, async () => {
       await act(`/api/t/runs/${runId}/admit-all`, { ids });
-      // the button goes away once nobody's waiting: keep keyboard focus in the table, not lost on the page
+      // the button turns off once nobody's waiting: keep keyboard focus in the table, not lost on the page
       const lost = !document.activeElement || document.activeElement === document.body || document.activeElement === admitAll;
       const first = tbody.querySelector('.t-rowhead .t-link');
-      if (admitAll.hidden && lost && first) first.focus({ preventScroll: true });
+      if (admitAll.disabled && lost && first) first.focus({ preventScroll: true });
     }, waitingFlagged.slice(), waitingReading);
   } });
   // AI grading: everything waiting for the teacher in this run, sent to Claude (server: aigrade.js).
@@ -100,7 +100,7 @@ async function showRun(runId) {
   const resumeBtn = labeled(h('button', { class: 'btn primary', type: 'button', onclick: () => act(`/api/t/runs/${runId}/resume`) }), 'play', 'Resume quiz');
   // (not a live region: its clock ticks; the summary below says "3 paused")
   const pausedBar = h('div', { class: 't-paused', hidden: true },
-    h('span', { class: 't-paused-what' }, glyph('pause', 18), 'Quiz paused', pausedFor), resumeBtn);
+    h('span', { class: 't-paused-what' }, glyph('pause', 18), h('span', { class: 't-paused-line' }, 'Quiz paused', pausedFor)), resumeBtn);
   function alertBox(msg) { detail.prepend(h('p', { class: 't-error', text: msg })); }
   // How much more time (for one student, or everyone still working): 5 minutes unless they say otherwise.
   // "10 min" counts as 10; anything else asks again, with what was typed still there.
@@ -172,7 +172,9 @@ async function showRun(runId) {
     waitingIds = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting').map((x) => x.attempt.id);
     waitingFlagged = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting' && x.attempt.checks).map((x) => ({ name: x.name, checks: x.attempt.checks }));
     waitingReading = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting' && !x.attempt.ready).length;
-    admitAll.hidden = !waitingIds.length;
+    // stays in its place, off while nobody's waiting, so the bar doesn't shift; gone once the quiz is closed
+    admitAll.hidden = run.status !== 'open';
+    admitAll.disabled = !waitingIds.length;
     // before anyone's started it starts the quiz; after, it starts the students who came late, and each
     // late student's row has its own Start
     begun = count((a) => a.status === 'admitted' || a.status === 'active' || a.status === 'submitted') > 0;
