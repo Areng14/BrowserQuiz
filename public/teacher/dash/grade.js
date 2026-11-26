@@ -1,7 +1,7 @@
 // Grading by question: one question across every student.
 
 import { dash } from './state.js';
-import { ICONS, api, h, icon, mount, plural, post } from './core.js';
+import { ICONS, api, h, icon, mount, plural, post, tip } from './core.js';
 import { setHash, shell } from './home.js';
 
 // ---------- grading by question ----------
@@ -82,6 +82,8 @@ function gradePane(runId, q, s, name, quiz) {
   return h('section', { class: 't-gq-pane', 'aria-labelledby': 'gq-name' }, h('h2', { id: 'gq-name', tabindex: '-1', text: name }),
     h('div', { class: 't-answers r-view' }, card), gradeBox(runId, q, s)); // the report's styles, as in a student's panel
 }
+// With a rubric, the points box can stay empty (it says "auto")
+const POINTS_TIP = 'Left empty, it adds up the ticked items (and any automatic score). A number here is the grade instead.';
 // The rubric (with the AI's reasons, when it graded), the points, and feedback for the student. Save and
 // next: Enter in the points box, or Ctrl+Enter in the feedback.
 function gradeBox(runId, q, s) {
@@ -114,9 +116,9 @@ function gradeBox(runId, q, s) {
     // the AI's overall reason, when it graded without a rubric (with one, its reasons sit on each item)
     x.ai && !x.ai.items && x.ai.why ? h('p', { class: 't-ai' }, h('b', { text: 'AI: ' }), x.ai.why) : null,
     boxes.length ? h('div', { class: 't-rubric' }, h('p', { class: 't-small', text: 'Rubric' }), boxes.map((b) => b.el)) : null,
-    h('div', { class: 't-gq-points' }, h('label', { for: pts.id, text: 'Points' }), pts, h('span', { class: 't-muted', text: `of ${x.max}` })),
+    (() => { const row = h('div', { class: 't-gq-points' }, h('label', { for: pts.id, text: 'Points' }), pts, h('span', { class: 't-muted', text: `of ${x.max}` })); return boxes.length ? tip(row, pts, POINTS_TIP) : row; })(),
     h('div', { class: 't-gq-fb' }, h('label', { for: fb.id, text: 'Feedback' }), fb),
     h('div', { class: 't-row' }, save, msg));
 }
 
-export { showGrade };
+export { POINTS_TIP, showGrade };

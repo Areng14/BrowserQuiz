@@ -1,7 +1,7 @@
 // Signing in: passwords, passkeys, and teacher accounts (the admin's).
 
 import { dash } from './state.js';
-import { PASSKEYS, actionsHead, api, ask, date, ghLink, h, heads, mount, post, sortableTable } from './core.js';
+import { PASSKEYS, actionsHead, api, ask, date, ghLink, h, heads, mount, post, sortableTable, tip } from './core.js';
 import { copyText, route, showHome } from './home.js';
 import { moreMenu } from './cells.js';
 
@@ -18,7 +18,7 @@ function showLogin() {
     h('h1', { text: 'Teacher sign in' }),
     h('label', { class: 'field', for: 'user' }, h('span', { class: 'field-label', text: 'Username' }), user),
     h('label', { class: 'field', for: 'pw' }, h('span', { class: 'field-label', text: 'Password' }), pw),
-    btn, pk, msg);
+    btn, pk ? tip(h('div', { class: 't-tip-grid' }, pk), pk, 'Your fingerprint, face or phone instead of your password. Add one first: Password, in the menu under your name.') : null, msg);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     btn.disabled = true; msg.textContent = '';
@@ -198,7 +198,7 @@ function passkeysSection(top) {
   api('/api/t/passkeys').then((r) => paint(r.passkeys)).catch(() => {});
   return h('section', { class: top ? 't-pk t-pk-top' : 't-pk', 'aria-labelledby': 'pk-title' },
     top ? h('p', { class: 'eyebrow', text: 'BrowserQuiz' }) : null,
-    h(top ? 'h1' : 'h2', { id: 'pk-title', text: 'Passkeys' }), list, h('div', {}, add), msg);
+    h(top ? 'h1' : 'h2', { id: 'pk-title', text: 'Passkeys' }), list, tip(h('div', { class: 't-tip-host' }, add), add, 'Sign in with your fingerprint, face or phone instead of your password, on this computer or your phone.'), msg);
 }
 
 // Shown once, when a teacher's quiz key is made: the only way back to their quizzes without the password.

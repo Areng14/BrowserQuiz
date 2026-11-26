@@ -1,6 +1,6 @@
 // Choices, and images.
 
-import { ICONS, h, icon } from '../dash/core.js';
+import { ICONS, h, icon, tip } from '../dash/core.js';
 import { ed } from './state.js';
 import { IMAGE_MIME, extOf, insert, sortable } from './editing.js';
 import { area, check, field, imageMissing, input, touch, xBtn } from './core.js';
@@ -93,7 +93,10 @@ function choicesEditor(q) {
   return h('div', { class: 'qe-stack qe-tight' }, label,
     h('div', { class: 'qe-choices', role: 'group', 'aria-labelledby': label.id }, rows),
     h('div', { class: 'qe-line' }, add, check(q, q.shuffleChoices === false, 'Keep choices in this order', (v) => { if (v) q.shuffleChoices = false; else delete q.shuffleChoices; }),
-      q.type === 'multi' ? check(q, !!q.partialCredit, 'Partial credit', (v) => { if (v) q.partialCredit = true; else delete q.partialCredit; }) : null));
+      q.type === 'multi' ? (() => {
+        const pc = check(q, !!q.partialCredit, 'Partial credit', (v) => { if (v) q.partialCredit = true; else delete q.partialCredit; });
+        return tip(pc, pc.querySelector('input'), 'Each right pick earns its share of the points, and each wrong pick takes a share back.');
+      })() : null));
 }
 
 // ---------- images ----------
