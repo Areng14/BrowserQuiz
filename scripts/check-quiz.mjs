@@ -42,10 +42,12 @@ function load(path) {
 const warnings = [];
 const buf = load(target);
 // ---------- warnings: typo'd keys and the like (shown even when the quiz is invalid) ----------
-const TOP = ['format', 'title', 'timeLimitMin', 'shuffleQuestions', 'shuffleChoices', 'language', 'integrity', 'directions', 'shared', 'sections', 'questions'];
+const TOP = ['format', 'title', 'timeLimitMin', 'shuffleQuestions', 'shuffleChoices', 'language', 'integrity', 'directions', 'shared', 'sections', 'questions',
+  'calculator', 'lockParts', 'pools', 'turnInEarly'];
 const QKEYS = ['id', 'type', 'name', 'prompt', 'points', 'image', 'imageAlt', 'shared', 'explanation', 'answer', 'caseSensitive', 'choices', 'shuffleChoices', 'partialCredit', 'mode', 'languages',
   'language', 'code', 'columns', 'rows', 'given',
-  'signature', 'class', 'types', 'tests', 'reference', 'compare', 'noRun', 'limits', 'rubric', 'ban', 'starter', 'support'];
+  'signature', 'class', 'types', 'tests', 'reference', 'compare', 'noRun', 'limits', 'rubric', 'ban', 'starter', 'support',
+  'pool', 'vars', 'calculator', 'form', 'tolerance', 'window', 'step', 'tools'];
 function near(word, list) {
   const d = (a, b) => {
     const m = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);

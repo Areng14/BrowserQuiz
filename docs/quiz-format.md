@@ -105,7 +105,7 @@ picked at random, so a neighbor's screen doesn't help:
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `id` | `q1`, `q2`, … | Unique. Letters, digits, `-`, `_` |
-| `type` | `"single"` | `single`, `multi`, `text`, `code`, `output`, `trace`, `fill` or `essay` |
+| `type` | `"single"` | `single`, `multi`, `text`, `math`, `graph`, `code`, `output`, `trace`, `fill` or `essay` |
 | `prompt` | required | Markdown subset (below) |
 | `points` | `1` | Positive number |
 | `name` | none | Up to 80 characters, like `"BankAccount class"`. Students see each question's name, type and points before they start, so it shouldn't give the answer away |
@@ -115,7 +115,7 @@ picked at random, so a neighbor's screen doesn't help:
 | `explanation` | none | Why the answer is right (Markdown, up to 4000 characters). Students see it with the answer in a practice quiz's review, after turning it in; never during a quiz. It's in reports, and AI grading reads it as your notes |
 | `pool` | none | A question pool's name (letters, digits, `-`, `_`): each student gets some of the pool's questions (see Question pools) |
 | `calculator` | the section's, or the quiz's | `"none"`, `"scientific"` or `"graphing"`: this question's own calculator, over its section's and the quiz's |
-| `vars` | none | Random values: 2 to 30 rows of values, and each student gets one row (below). `single`, `multi`, `text`, `output` and `trace` only |
+| `vars` | none | Random values: 2 to 30 rows of values, and each student gets one row (below). `single`, `multi`, `text`, `math`, `graph`, `output` and `trace` only |
 
 **Random values** (`vars`) give different students different numbers in the same question, so
 copying a neighbor's answer or a classmate's from an earlier period doesn't work. Each row is one
@@ -150,6 +150,7 @@ questions can't have them.
 - images from `assets/`: `![a binary tree](assets/tree.png)`, as many as you like, in prompts,
   choices, shared material and directions. File names can't have spaces here
 - diagrams: an SVG written in the text, in a block labeled ```` ```svg ```` (below)
+- graphs: equations and points to draw, in a block labeled ```` ```graph ```` (see Graphing)
 
 Links show as their text only, so nothing on the page leads out of the quiz. No HTML.
 
@@ -225,6 +226,70 @@ block, a table or a list.
   It's a regex, checked against the trimmed answer, any case unless `caseSensitive`. It can't
   accept a blank answer. Students never see patterns, even in the practice review.
 - To make capitals count, set `"caseSensitive": true`.
+
+## Math answers (math)
+
+```json
+{ "id": "q4", "type": "math", "prompt": "Expand $(x + 3)^2$.", "answer": "x^2 + 6x + 9", "form": "expanded" }
+```
+
+Students type math in a math box (fractions, powers, roots), with buttons for the symbols.
+
+- `answer`: the math, or a list of accepted answers. Write it the way you would in a calculator:
+  `x^2 + 6x + 9`, `x = 4`, `sqrt(2)/2`, `3/4`, `pi r^2`, `x < 3`. An expression, an equation or an
+  inequality.
+- Answers match by value, not by spelling: `2x + 3` accepts `3 + 2x`, `x = 4` accepts `4 = x`, `1/2`
+  accepts `0.5`, `x < 3` accepts `3 > x`. For two solutions, list each as its own answer.
+- `form` asks for the answer written a certain way, when that's the skill: `"expanded"` (no brackets
+  left to multiply out), `"factored"`, `"exact"` (no decimals: `1/2`, `sqrt(2)`) or `"lowest"`
+  (fractions in lowest terms). The answer itself has to be in that form. Leave it out to accept any
+  equal form.
+- `tolerance` accepts rounding: `0.01` takes answers within 0.01 of the right one. Leave it out for
+  exact answers.
+- Works with random values (`vars`): write `{{a}}` in the prompt and the answer.
+
+## Graphing (graph)
+
+```json
+{ "id": "q5", "type": "graph", "prompt": "Graph $y = (x - 2)^2 - 3$.", "answer": "y = (x - 2)^2 - 3",
+  "window": [-10, 10, -10, 10] }
+```
+
+Students draw on a grid: they add a point, line, parabola, absolute value, exponential or circle and
+drag its handles, which snap to the grid. Inequalities are drawn with a shaded side.
+
+- `answer`: what to draw, or a list of things. Each is one of:
+  - a point: `(1, 2)`
+  - a line: `y = 2x - 1`, or a vertical one, `x = 3`
+  - a parabola: `y = (x - 2)^2 - 3`, `y = -x^2 + 4x`
+  - an absolute value: `y = |x - 1| - 2`
+  - an exponential: `y = 2^x`, `y = 3 * 2^(x - 1) + 1`
+  - a circle: `x^2 + y^2 = 16`, `(x - 1)^2 + (y + 2)^2 = 9`
+  - any of those as an inequality (`y >= |x - 1| - 2`, `y < 2x + 1`): students shade the side, and a
+    dashed edge means `<` or `>`
+  Other curves (`y = x^3`, `y = sin(x)`) can't be drawn: put them in the prompt as a graph to read.
+- `window`: `[xmin, xmax, ymin, ymax]`, `[-10, 10, -10, 10]` if left out. `step`: the grid, `1` if
+  left out. Pick them so the answer's points (vertex, intercepts) sit on the grid inside the window,
+  with 4 to 100 steps across and high.
+- With several things to draw (a system of equations and where they meet), `"partialCredit": true`
+  gives credit for each one drawn right. Otherwise it's all or nothing.
+- `tools` lists the shapes students can add: what the answer needs, unless you add more
+  (`["point", "line", "parabola"]`) so the kind of graph isn't given away. It has to include what the
+  answer needs. Kinds: `point`, `line`, `parabola`, `abs`, `exp`, `circle`.
+
+**A graph in a prompt.** Any prompt can show a graph to read, in a block labeled ```` ```graph ````:
+equations and points, one a line, with an optional `window:` and `step:`. Unlike an answer, it can
+draw any curve. A graph question whose prompt ends in a graph shows it beside the grid.
+
+````
+This is $f(x) = -(x + 1)^2 + 4$. Graph $f(x - 3)$.
+
+```graph
+y = -(x + 1)^2 + 4
+(-1, 4) vertex
+window: -6, 6, -6, 6
+```
+````
 
 ## Predict the output (output)
 

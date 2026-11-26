@@ -59,10 +59,14 @@ Use these for anything still blank, and list the ones you used in your answer.
   no code questions unless I ask for them. Concept, scenario and calculation questions fit better.
   A quiz about TCP handshakes doesn't need a method to write. Write math in LaTeX (`$x^2$`), as the
   format shows.
+- **Math quizzes:** when the answer is something students work out and write (simplify, expand,
+  solve), use a `math` question rather than short answer or multiple choice. When they graph
+  something, use a `graph` question. Set `"calculator"` only if I ask for one.
 - **Difficulty:** medium.
-- **Minutes:** 1 per multiple choice, 2 per select-all, 1–2 per short answer or output, 3–4 per
-  trace table, 2–4 per fill in the blanks, 5–15 per code question (by difficulty), 5 per written answer.
-- **Points:** 1 per multiple choice, 2 per select-all, 1 per short answer, 6–9 per code question.
+- **Minutes:** 1 per multiple choice, 2 per select-all, 1–2 per short answer or output, 2 per math
+  or graph question, 3–4 per trace table, 2–4 per fill in the blanks, 5–15 per code question (by difficulty), 5 per written answer.
+- **Points:** 1 per multiple choice, 2 per select-all, 1 per short answer, 1–2 per math or graph question,
+  6–9 per code question.
 - **Rubric points:** graded automatically.
 
 ## 3. Difficulty
@@ -104,7 +108,7 @@ that should go to thinking. Keep to these limits, even when the notes are wordy:
 ## 5. Questions
 
 **Order and types**
-- Order the questions by type: single, multi, text, output, trace, fill, code, essay (inside each
+- Order the questions by type: single, multi, text, math, graph, output, trace, fill, code, essay (inside each
   section, if there are sections).
 - For "what is printed" questions use `output`, and for tracing loops use `trace`.
 - Use select-all only when 2 or more choices are correct.

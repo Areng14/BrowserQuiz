@@ -1,6 +1,6 @@
 ---
 name: make-quiz
-description: Write BrowserQuiz quizzes (a quiz.json packed into a .quiz) with multiple choice, select-all, short answer, and code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust) with hidden tests and reference solutions. Use when asked to make, write, generate, convert, fix or check a quiz, test or exam for BrowserQuiz.
+description: Write BrowserQuiz quizzes (a quiz.json packed into a .quiz) with multiple choice, select-all, short answer, math, graphing, and code questions (Java, Python, JavaScript, TypeScript, C, C++, C#, Go, Rust) with hidden tests and reference solutions. Use when asked to make, write, generate, convert, fix or check a quiz, test or exam for BrowserQuiz.
 ---
 
 # Make a BrowserQuiz quiz
@@ -19,7 +19,7 @@ Fill gaps with these defaults and say which ones you used. Don't stop to ask.
 - Topics that aren't about code (networking, math, theory): `"language": "none"` and no code
   questions unless asked.
 - Minutes per question: 1 for multiple choice, 2 for select-all, 1–2 for short answer or output,
-  3–4 for a trace table, 2–4 for fill in the blanks, 5–15 for code (by difficulty), 5 for a
+  2 for math or graph, 3–4 for a trace table, 2–4 for fill in the blanks, 5–15 for code (by difficulty), 5 for a
   written answer
 - Points per question: 1 for multiple choice, 2 for select-all, 1 for short answer, 6–9 for code
 - "A few" questions means 3–5
@@ -55,9 +55,10 @@ Create `quizzes/<short-name>/quiz.json`. `quizzes/` is gitignored, because quiz 
 answer keys. Images go in `quizzes/<short-name>/assets/`.
 
 - **Question types:** single, multi, text, code, plus output (predict what code prints), trace (trace
-  table), fill (fill in the blanks) and essay (teacher-graded). Prefer output and trace for
-  "what is printed" and tracing questions.
-- **Order** questions single → multi → text → output → trace → fill → code → essay. Consecutive questions of one type form a part,
+  table), fill (fill in the blanks), essay (teacher-graded), math (a typed math answer, matched by
+  value) and graph (drawn on a grid). Prefer output and trace for "what is printed" and tracing
+  questions, and math and graph for work students write out or draw.
+- **Order** questions single → multi → text → math → graph → output → trace → fill → code → essay. Consecutive questions of one type form a part,
   with its own directions page, and shuffling stays inside parts.
 - **Sections:** only when asked for them ("Part A: Arrays, Part B: Strings"), add top-level `sections`,
   each starting at a question id with a title and optional directions.
