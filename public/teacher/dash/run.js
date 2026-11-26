@@ -21,7 +21,7 @@ async function showRun(runId) {
   const detail = h('div');
   const toggle = h('button', { class: 'btn', type: 'button' });
   // a fire drill, a question for the whole class: every clock stops and the questions are hidden, at once
-  const pauseBtn = iconButton(h('button', { class: 'btn outline-warning', type: 'button', hidden: true, onclick: () => act(`/api/t/runs/${runId}/pause`) }), 'pause', 'Pause quiz',
+  const pauseBtn = iconButton(h('button', { class: 'btn', type: 'button', hidden: true, onclick: () => act(`/api/t/runs/${runId}/pause`) }), 'pause', 'Pause quiz',
     "Every student's clock stops and the questions are hidden until you resume. Leaving the quiz while it's paused doesn't count.");
   const lockBtn = h('button', { class: 'btn', type: 'button' });
   const howTo = h('p', { class: 't-muted t-small' });

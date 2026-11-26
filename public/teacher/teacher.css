@@ -625,3 +625,5 @@ th.num .t-sort { flex-direction: row-reverse; }
 .t-check-head { display: inline-flex; align-items: center; gap: 6px; border-radius: 4px; cursor: help; }
 .t-check-head > svg { flex: none; }
 .t-check-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* A student row's buttons (Start, Watch, End quiz, Un-invalidate): one width, the widest one's, so they line up down the column */
+.t-run td.t-actions > .btn:not(.t-menu-btn):not(.t-icon-only) { min-width: 118px; justify-content: center; text-align: center; }
