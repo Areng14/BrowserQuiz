@@ -333,7 +333,7 @@
     }
     function handle(d, i, j, X, Y, picked) {
       const asym = j === 'k';
-      const g = svg('g', { class: 'gr-handle' + (picked ? ' picked' : '') + (asym ? ' asym' : ''), tabindex: '0', role: 'button', 'data-h': `${i}:${j}`, 'aria-roledescription': 'draggable point', 'aria-label': handleName(d, i, j) + '. Arrow keys move it, Delete removes the ' + S.KIND_NAMES[d.kind].toLowerCase() + '.' });
+      const g = svg('g', { class: 'gr-handle' + (picked ? ' picked' : '') + (asym ? ' asym' : '') + (d.fresh ? ' fresh' : ''), tabindex: '0', role: 'button', 'data-h': `${i}:${j}`, 'aria-roledescription': 'draggable point', 'aria-label': handleName(d, i, j) + '. Arrow keys move it, Delete removes the ' + S.KIND_NAMES[d.kind].toLowerCase() + '.' });
       g.append(svg('circle', { class: 'gr-hit', cx: X, cy: Y, r: 16 }));
       if (asym) g.append(svg('rect', { class: 'gr-knob', x: X - 6, y: Y - 6, width: 12, height: 12, rx: 3 }));
       else g.append(svg('circle', { class: 'gr-knob', cx: X, cy: Y, r: d.kind === 'point' ? 6.5 : 6 }));
