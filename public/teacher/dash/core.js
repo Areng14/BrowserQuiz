@@ -129,7 +129,8 @@ const heads = (names, nums = []) => names.map((x) => h('th', { class: nums.inclu
 // it has keyboard focus, and read with the control. Escape hides it until the pointer or focus moves on.
 let tips = 0;
 function tip(host, control, text) {
-  const t = h('span', { class: 't-tip', role: 'tooltip', id: `t-tip-${++tips}`, text });
+  // aria-hidden: not part of the name of the label or header it sits in; read as the control's description
+  const t = h('span', { class: 't-tip', role: 'tooltip', id: `t-tip-${++tips}`, 'aria-hidden': 'true', text });
   host.classList.add('t-tipped');
   host.append(t);
   control.setAttribute('aria-describedby', t.id);
