@@ -133,6 +133,10 @@ function tip(host, control, text) {
   host.classList.add('t-tipped');
   host.append(t);
   control.setAttribute('aria-describedby', t.id);
+  return dismissible(host);
+}
+// Escape hides a host's tip until the pointer or focus moves on
+function dismissible(host) {
   host.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !host.classList.contains('t-tip-off')) { host.classList.add('t-tip-off'); e.stopPropagation(); } });
   const on = () => host.classList.remove('t-tip-off');
   host.addEventListener('mouseleave', on);
@@ -241,6 +245,14 @@ function labeled(btn, name, text) {
   btn.replaceChildren(icon(ICONS[name], 16), text);
   return btn;
 }
+// A button that's only its icon, for the ones anyone can tell (pause, edit, preview): its name shows on
+// hover or keyboard focus, like a tip, and is what a screen reader says (aria-label, unless it has one).
+function iconButton(btn, name, text) {
+  btn.classList.add('t-ib', 't-icon-only', 't-tipped');
+  if (!btn.hasAttribute('aria-label')) btn.setAttribute('aria-label', text);
+  btn.replaceChildren(icon(ICONS[name], 18), h('span', { class: 't-tip t-tip-name', 'aria-hidden': 'true', text }));
+  return dismissible(btn);
+}
 // Filled pause and play marks (the paused quiz's banner)
 function glyph(kind, size = 16) {
   const ns = 'http://www.w3.org/2000/svg';
@@ -251,4 +263,4 @@ function glyph(kind, size = 16) {
   return s;
 }
 
-export { ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, ghLink, glyph, h, heads, icon, mmss, mount, plural, post, root, scoreText, labeled, sortHeads, sortRows, sortableTable, themeButton, tip };
+export { ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, ghLink, glyph, h, heads, icon, mmss, mount, plural, post, root, scoreText, iconButton, labeled, sortHeads, sortRows, sortableTable, themeButton, tip };

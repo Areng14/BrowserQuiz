@@ -1,7 +1,7 @@
 // One running quiz: its live table, and everything a teacher does from it.
 
 import { dash } from './state.js';
-import { ICONS, LABEL, actionsHead, api, ask, clock, glyph, h, icon, labeled, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows } from './core.js';
+import { ICONS, LABEL, actionsHead, api, ask, clock, glyph, h, icon, iconButton, labeled, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows } from './core.js';
 import { noteRuns, sebButtons, setHash, shell } from './home.js';
 import { LIVE_SORT, beforeAdmit, browserName, correctionsDialog, drawTrail, gone, grading, integrityCell, moreMenu, phone, progressCell, projector, statusCell, strikesCell, tick, ticks, watchLink } from './cells.js';
 import { aiDialog, checkWhy } from './ai.js';
@@ -21,7 +21,7 @@ async function showRun(runId) {
   const detail = h('div');
   const toggle = h('button', { class: 'btn', type: 'button' });
   // a fire drill, a question for the whole class: every clock stops and the questions are hidden, at once
-  const pauseBtn = labeled(h('button', { class: 'btn', type: 'button', hidden: true, onclick: () => act(`/api/t/runs/${runId}/pause`) }), 'pause', 'Pause');
+  const pauseBtn = iconButton(h('button', { class: 'btn', type: 'button', hidden: true, onclick: () => act(`/api/t/runs/${runId}/pause`) }), 'pause', 'Pause quiz');
   const lockBtn = h('button', { class: 'btn', type: 'button' });
   const howTo = h('p', { class: 't-muted t-small' });
   // A stuck student can only leave Safe Exam Browser with this; it's also what locks an iPad.

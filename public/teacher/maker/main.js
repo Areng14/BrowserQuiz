@@ -2,7 +2,7 @@
 // its place. It saves the same quiz.json format as an upload. Each part is a module in this folder; this one
 // opens it.
 
-import { ICONS, api, bar, h, icon, labeled, mount } from '../dash/core.js';
+import { ICONS, api, bar, h, icon, iconButton, labeled, mount } from '../dash/core.js';
 import { guard } from '../dash/home.js';
 import { ed } from './state.js';
 import { TYPES } from './formats.js';
@@ -54,14 +54,14 @@ async function showQuizEditor(id, preset) {
   ed.undoRow = h('span', { class: 't-small qe-undo' });
   ed.pane = h('main', { class: 'qe-list' });
   ed.wantSettings = false; // Settings asked for, on a quiz with no questions yet
-  ed.settingsBtn = labeled(h('button', { class: 'btn', type: 'button', 'aria-expanded': 'false', onclick: () => {
+  ed.settingsBtn = iconButton(h('button', { class: 'btn', type: 'button', 'aria-expanded': 'false', onclick: () => {
     if (settingsOpen()) { closeOpen(); return; }
     ed.wantSettings = true;
     select(-1);
   } }), 'sliders', 'Settings');
   ed.queued = false;
   ed.saveBtn = labeled(h('button', { class: 'btn primary', type: 'button', title: `${MOD}S`, onclick: () => save() }), 'check', 'Save');
-  ed.previewBtn = labeled(h('button', { class: 'btn', type: 'button' }), 'eye', 'Preview');
+  ed.previewBtn = iconButton(h('button', { class: 'btn', type: 'button' }), 'eye', 'Preview');
   ed.previewBtn.addEventListener('click', async () => {
     const w = window.open('about:blank', '_blank'); // open now: after the save, a popup blocker would stop it
     const saved = ed.dirty || !ed.currentId ? await save() : ed.currentId;

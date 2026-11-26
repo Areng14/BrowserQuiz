@@ -59,11 +59,19 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 /* A button with an icon before its words (core.js labeled) */
 .btn.t-ib { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .btn.t-ib > svg { flex: none; margin-left: -2px; }
+.btn.t-icon-only { width: 40px; min-width: 40px; padding: 0; }
+.btn.t-icon-only > svg { margin: 0; }
+.btn.small.t-icon-only { width: 34px; min-width: 34px; }
 /* A term's few words (core.js tip): under it, on hover or keyboard focus */
 .t-tipped { position: relative; }
 .t-tip { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: max-content; max-width: min(300px, 80vw); padding: 8px 12px; font-size: 13px; font-weight: 400; line-height: 1.45; text-align: left; text-transform: none; letter-spacing: normal; white-space: normal; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.12s, visibility 0.12s; }
 .t-tipped:is(:hover, :has(:focus-visible)):not(.t-tip-off) > .t-tip { opacity: 1; visibility: visible; transition-delay: 0.35s; }
 th.num.t-tipped > .t-tip { left: auto; right: 0; }
+.t-tipped:focus-visible:not(.t-tip-off) > .t-tip-name { opacity: 1; visibility: visible; }
+.t-tip.t-tip-name { left: 50%; transform: translateX(-50%); width: max-content; white-space: nowrap; padding: 4px 8px; font-size: 13px; }
+td .t-tip.t-tip-name { top: 50%; left: auto; right: calc(100% + 6px); transform: translateY(-50%); } /* in a table row, beside it: a scroll box would cut it off below */
+@media (max-width: 1100px), (pointer: coarse) and (max-height: 480px) { td .t-tip.t-tip-name { right: auto; left: calc(100% + 6px); } } /* stacked rows: the buttons start at the left */
+.t-tipped:hover:not(.t-tip-off) > .t-tip-name { transition-delay: 0.2s; }
 .t-mode-sec { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
 .t-meter { display: inline-flex; align-items: flex-end; gap: 2px; }
 .t-meter > span { width: 5px; border-radius: 1px; background: color-mix(in srgb, var(--ink-2) 30%, transparent); }

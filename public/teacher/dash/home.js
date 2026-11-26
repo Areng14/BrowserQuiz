@@ -2,7 +2,7 @@
 
 import { showQuizEditor } from '../maker/main.js';
 import { dash } from './state.js';
-import { ICONS, accountMenu, actionsHead, api, ask, date, ghLink, h, heads, icon, mount, plural, post, labeled, sortableTable, themeButton, tip } from './core.js';
+import { ICONS, accountMenu, actionsHead, api, ask, date, ghLink, h, heads, icon, iconButton, mount, plural, post, labeled, sortableTable, themeButton, tip } from './core.js';
 import { teachersSection } from './account.js';
 import { showRoster } from './roster.js';
 import { moreMenu } from './cells.js';
@@ -238,7 +238,7 @@ function quizzesTab(data) {
         h('td', { class: 't-muted', text: x.timeLimitMin ? `${x.timeLimitMin} min` : 'No time limit' }),
         h('td', { class: 't-muted', text: date(x.createdAt) }),
         h('td', { class: 't-actions' },
-          labeled(h('button', { class: 'btn small', type: 'button', 'aria-label': `Edit ${x.title}`, onclick: () => openQuiz(x.id) }), 'pencil', 'Edit'),
+          iconButton(h('button', { class: 'btn small', type: 'button', 'aria-label': `Edit ${x.title}`, onclick: () => openQuiz(x.id) }), 'pencil', 'Edit'),
           moreMenu(`More for ${x.title}`, `quiz:${x.id}`, [
             { text: 'Give', onclick: () => { dash.giveQuiz = x.id; showHome('give'); } },
             linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true),
@@ -276,7 +276,7 @@ function classesTab(data) {
         h('td', { role: 'rowheader', class: 't-rowhead', text: x.name }),
         h('td', { class: 't-muted', text: plural(x.students, 'student') }),
         h('td', { class: 't-actions' },
-          labeled(h('button', { class: 'btn small', type: 'button', 'aria-label': `Edit ${x.name}`, onclick: () => showRoster(x.id) }), 'pencil', 'Edit'),
+          iconButton(h('button', { class: 'btn small', type: 'button', 'aria-label': `Edit ${x.name}`, onclick: () => showRoster(x.id) }), 'pencil', 'Edit'),
           moreMenu(`More for ${x.name}`, `class:${x.id}`, [
             { text: 'Delete', danger: true, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}?`, 'Past results stay.') }]))))))) : null,
     h('div', { class: 't-row t-add' },
