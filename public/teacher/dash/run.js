@@ -36,7 +36,7 @@ async function showRun(runId) {
   let waitingReading = 0; // and how many of them haven't agreed to the rules yet
   let begun = false; // anyone started yet (rows get their own Start only after)
   // only the students waiting when the checklist opens: anyone who joins while it's up waits for the next round
-  const admitAll = h('button', { class: 'btn success', type: 'button', text: 'Start quiz', onclick: () => {
+  const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Start quiz', onclick: () => {
     const ids = waitingIds.slice();
     beforeAdmit(runId, ids.length, null, async () => {
       await act(`/api/t/runs/${runId}/admit-all`, { ids });
@@ -93,7 +93,7 @@ async function showRun(runId) {
   drawLiveHead();
   // Paused (the run's ⋯ menu): a bar across the top, how long it's been, and the way back
   const pausedFor = h('span', { class: 't-paused-for' });
-  const resumeBtn = labeled(h('button', { class: 'btn success', type: 'button', onclick: () => act(`/api/t/runs/${runId}/resume`) }), 'play', 'Resume quiz');
+  const resumeBtn = labeled(h('button', { class: 'btn primary', type: 'button', onclick: () => act(`/api/t/runs/${runId}/resume`) }), 'play', 'Resume quiz');
   // (not a live region: its clock ticks; the summary below says "3 paused")
   const pausedBar = h('div', { class: 't-paused', hidden: true },
     h('span', { class: 't-paused-what' }, glyph('pause', 18), 'Quiz paused', pausedFor), resumeBtn);
@@ -234,7 +234,7 @@ async function showRun(runId) {
       // In the row: what needs deciding now. The rest is under ⋯.
       const more = [];
       const bad = a && a.integrity === 'invalidated';
-      if (a && a.status === 'waiting' && begun) actions.append(btn('Start', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`), a.checks ? [{ name: s.name, checks: a.checks }] : [], a.ready ? 0 : 1), { class: 'btn small success' }));
+      if (a && a.status === 'waiting' && begun) actions.append(btn('Start', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`), a.checks ? [{ name: s.name, checks: a.checks }] : [], a.ready ? 0 : 1), { class: 'btn small primary' }));
       if (bad) actions.append(btn('Un-invalidate', 'restore', () => unInvalidate(a.id, s.name)));
       // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
       // popup doesn't end anyone's quiz without the teacher looking).

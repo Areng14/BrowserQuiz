@@ -39,8 +39,9 @@ it, so removing things comes before styling them.
 
 ## 3. Buttons: color, icon and words say what kind of action
 
-- **Color by role, the same everywhere.** Primary (accent): the main action. Success (green): start,
-  go on, finish ("Start quiz", "Resume", "Submit"). Warning (amber): hold ("Pause"). Danger (red):
+- **Color by role, the same everywhere.** Primary (accent): the main action, and starting or going
+  on ("Start quiz", "Resume", "Save"). Success (green): finishing ("Submit", "Turn in"). Warning
+  (amber): hold ("Pause"). Danger (red):
   ends, removes or invalidates ("Close quiz", "End quiz", "Remove", "Exit"). Everything else is
   plain. Use the app's role classes, never a one-off color.
 - **Solid for the one main action, outlined beside others.** A bar or dialog has one solid button. A
@@ -134,7 +135,7 @@ The rules above come from these. When a case isn't covered, reason from them.
   menu or a collapsed section.
 - **Make hierarchy with scale, weight, contrast and space, not decoration.** No borders, shadows,
   colors or icons that don't carry meaning. Keep the palette small: color means something (red bad or
-  destructive, green done or go, amber hold, accent for the main action).
+  destructive, green done, amber hold, accent for the main action).
 - **Whitespace is part of the design.** Negative space groups things and points the eye; it isn't
   wasted room.
 - **Minimal isn't hidden.** Flat design can strip the cues that say "you can click this". Buttons

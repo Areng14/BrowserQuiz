@@ -62,7 +62,7 @@
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
 /* Button roles, so the color says what kind of action it is (the rest are plain):
-   primary: the main action. success: start, go on, finish. warning: hold (pause).
+   primary: the main action, and starting or going on. success: finishing (submit, turn in). warning: hold (pause).
    danger: ends, removes, invalidates. Solid for the one main action of a bar or dialog; outline beside others. */
 .btn.success { background: var(--good); border-color: var(--good); color: var(--accent-ink); }
 .btn.danger { background: var(--bad); border-color: var(--bad); color: var(--accent-ink); }

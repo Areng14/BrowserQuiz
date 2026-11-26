@@ -102,7 +102,7 @@ function openExit() {
   const close = () => { backdrop.remove(); release(); };
   const keep = h('button', { class: 'btn', type: 'button', text: 'Keep working', onclick: close });
   // Turn in shows the usual check first: unanswered questions, and that answers can't change after.
-  const turnIn = h('button', { class: 'btn', type: 'button', text: 'Turn in', onclick: () => { backdrop.remove(); release(false); openSubmit(); } });
+  const turnIn = h('button', { class: 'btn outline-success', type: 'button', text: 'Turn in', onclick: () => { backdrop.remove(); release(false); openSubmit(); } });
   const exit = h('button', { class: 'btn danger', type: 'button', text: 'Exit', onclick: () => { backdrop.remove(); release(false); exitQuiz(); } });
   backdrop = h('div', { class: 'modal-backdrop' },
     h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'exit-title' },
