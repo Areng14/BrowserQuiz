@@ -28,6 +28,9 @@ it, so removing things comes before styling them.
 - **Hard terms get a hover tip, not an explainer line.** A setting, status or flag a newcomer may
   not know shows one or two plain sentences on hover and keyboard focus, read by screen readers as
   its description. Say what it does or what the student gets. Obvious labels get no tip.
+- **Tips inform, they don't sell.** Write complete, plain sentences that state facts: what it is, what
+  it does, what happens. No fragments ("Full screen, in any browser."), no colon labels ("Timed: ...",
+  "Off: ..."), no taglines or opinions ("as if the answer was already known").
 
 ## 2. Status: plain text, never pills
 

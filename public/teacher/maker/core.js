@@ -99,11 +99,11 @@ const M = window.BQMath;
 const FORMS = [['', 'Any equivalent form'], ['expanded', 'Expanded'], ['factored', 'Factored'], ['exact', 'Exact, no decimals'], ['lowest', 'Lowest terms']];
 // What each form asks of a student's answer, besides being equal to an accepted one (shown on hover)
 const FORM_TIP = {
-  '': 'Anything equal to an accepted answer counts, even the problem typed back in. Pick a form to stop that.',
-  expanded: 'Multiplied out, with no brackets left to multiply: x^2 + 5x + 6, not (x + 2)(x + 3).',
-  factored: 'Written as a product: (x + 2)(x + 3), not x^2 + 5x + 6.',
-  exact: 'No decimals: 3/4 or sqrt(2)/2, not 0.75 or 0.707.',
-  lowest: 'A fraction in lowest terms, without decimals: 3/4, not 6/8 or 0.75.',
+  '': "Any answer equal in value to an accepted answer is marked right, including the expression from the question copied back. Choose a form to require a specific way of writing it.",
+  expanded: "The answer must be multiplied out with no brackets left, for example x^2 + 5x + 6 rather than (x + 2)(x + 3).",
+  factored: "The answer must be written as a product, for example (x + 2)(x + 3) rather than x^2 + 5x + 6.",
+  exact: "The answer can't use decimals, for example 3/4 or sqrt(2)/2 rather than 0.75 or 0.707.",
+  lowest: "A fraction must be fully reduced and can't use decimals, for example 3/4 rather than 6/8 or 0.75.",
 };
 const FORM_WORDS = { expanded: 'expanded', factored: 'factored', exact: 'exact (no decimals)', lowest: 'in lowest terms' };
 const answersOf = (q) => {
@@ -157,7 +157,7 @@ const varsEditor = (q) => { const box = area(q, varsText(q.vars), (v) => {
     q.vars = lines.slice(1).map((l) => { const vals = cells(l); return Object.fromEntries(names.map((n, k) => [n, vals[k] ?? ''])); });
   }, { rows: 3, placeholder: 'x, y, out\n7, 2, 1\n9, 4, 1' });
   return tip(field('Random values: names, then one row per line. Each student gets a row; write {{name}} where it goes', box), box,
-    'Say the first line is a, b and the next two are 3, 4 and 5, 12. Each student gets one of those rows, and {{a}} in the question shows as 3 or 5.');
+    "Each line after the first is one set of values, and each student gets one set. For example, with the lines a, b then 3, 4 then 5, 12, {{a}} in the question shows as 3 or 5.");
 };
 const area = (q, value, on, attrs) => {
   const el = h('textarea', Object.assign({ class: 'input qe-area', spellcheck: 'false', rows: 2 }, attrs || {}));

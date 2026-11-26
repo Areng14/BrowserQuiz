@@ -200,7 +200,7 @@ function codeEditor(q) {
   const cppOnly = (l) => l === 'cpp' || (!l && banLangs.length === 1 && banLangs[0] === 'cpp');
   const banField = (label, list, set, hint, l) => {
     const box = input(q, list.map((b) => (cppOnly(l) ? b.replace('.', '::') : b)).join(', '), (v) => set(parse(v)), { class: 'input qe-mono', placeholder: hint, spellcheck: 'false' });
-    return tip(field(label, box), box, 'An answer that uses any of these scores 0.');
+    return tip(field(label, box), box, "An answer that uses any of these scores 0.");
   };
   let bans = null;
   if (!fill) {
@@ -250,10 +250,10 @@ function codeEditor(q) {
     shapeNote];
   const testFields = [
     testsField('Sample tests (students can run these)', tests('sample', 2, isClass ? 'new BankAccount("Ava", 100.0)\ndeposit(50.0)\ngetBalance() -> 150.0' : '("hello") -> 2'), notes.sample,
-      "Students run these while they work and see what their code returns. They don't count toward the grade."),
+      "Students can run these while they work to see what their code returns. They don't affect the grade."),
     // the line under them has the rest of how to write one; speed (method mode only) is said nowhere else
     testsField('Hidden tests (used for grading)', tests('hidden', 4, isClass ? 'a = new BankAccount("Jo", 20.0)\na.withdraw(50.0) -> false\na.getBalance() -> ?\n*2' : '("AEIOU") -> 5\n("rhythm") -> 0\n("Programming is fun") *2'), notes.hidden,
-      isClass ? null : 'End a line with speed (speed x1000 for 1,000 calls) to time it: code more than 10 times slower than your reference fails.'),
+      isClass ? null : "Ending a line with speed (or speed x1000 for 1,000 calls) makes it a timed test. Code more than 10 times slower than your reference solution fails it."),
     h('p', { class: 't-muted t-small', text: isClass
       ? `A blank line starts the next test. -> ? takes the value from ${from}. A line with *2 makes the test count double.`
       : `One test per line. Leave out -> to take the value from ${from}. *2 at the end counts double.` })];

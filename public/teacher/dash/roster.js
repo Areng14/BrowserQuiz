@@ -53,7 +53,7 @@ async function showRoster(id) {
     id ? h('h2', { text: plural(roster.students.length, 'student') }) : null,
     list,
     tip(h('label', { class: 'field', for: 'class-add' }, h('span', { class: 'field-label', text: id ? 'Add students: name, student ID (one per line)' : 'Students: name, student ID (one per line)' }), add), add,
-      "Students pick their name and type their ID to sign in. IDs can't be shown again after you save, so keep your own list."),
+      "Students pick their name and type their ID to sign in. IDs can't be shown again after saving, so keep your own copy."),
     h('div', { class: 't-row' }, save, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: async () => { if (await leaveOk()) showHome('classes'); } })),
     msg);
   mount(shell('classes', page));

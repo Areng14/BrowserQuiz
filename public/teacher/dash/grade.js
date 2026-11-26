@@ -83,7 +83,7 @@ function gradePane(runId, q, s, name, quiz) {
     h('div', { class: 't-answers r-view' }, card), gradeBox(runId, q, s)); // the report's styles, as in a student's panel
 }
 // With a rubric, the points box can stay empty (it says "auto")
-const POINTS_TIP = 'Left empty, it adds up the ticked items (and any automatic score). A number here is the grade instead.';
+const POINTS_TIP = "If this is empty, the score is the total of the ticked items plus any automatic score. A number entered here replaces it.";
 // The rubric (with the AI's reasons, when it graded), the points, and feedback for the student. Save and
 // next: Enter in the points box, or Ctrl+Enter in the feedback.
 function gradeBox(runId, q, s) {

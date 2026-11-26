@@ -119,18 +119,18 @@ function giveTab(data, me) {
   // what: what students get, for a teacher who hasn't used it (shown on hover)
   const MODES = [
     { id: 'exam', title: 'Exam', level: 2, security: 'Medium security',
-      what: "Full screen, in any browser. Leaving the quiz for another tab, window or app invalidates it, and the student isn't told." },
+      what: "The quiz runs in full screen in any browser. If a student leaves it for another tab, window or app, their quiz is invalidated and they aren't told." },
     { id: 'seb', title: 'Safe Exam Browser', level: 3, security: 'High security',
-      what: 'Students take it in Safe Exam Browser, a free app that locks the computer until they turn in. It has to be installed on their computers.' },
+      what: "Students take the quiz in Safe Exam Browser, an app that locks the computer until they turn in. It must be installed on each student's computer." },
     { id: 'practice', title: 'Practice', level: 0, security: 'No security',
-      what: 'No full screen and nothing is flagged. Students see the right answers after they turn in.' },
+      what: "The quiz doesn't use full screen and nothing is flagged. Students see the right answers after they turn in." },
   ];
   let mode = 'exam';
   // Safe Exam Browser: BrowserQuiz makes the settings, unless the teacher has their own .seb file
   // (then its Config Key, from SEB Config Tool's Exam tab).
   const sebKey = h('input', { class: 'input t-mono', id: 'seb-key', autocomplete: 'off', spellcheck: 'false', maxlength: '64', placeholder: '64 letters and digits' });
   const sebSummary = h('summary', { text: 'Use my own .seb file' });
-  tip(sebSummary, sebSummary, "For settings you made in SEB Config Tool. You hand out your .seb file, and only Safe Exam Browser with those settings can join.");
+  tip(sebSummary, sebSummary, "Use this if you made your own settings in SEB Config Tool. You give students your .seb file, and only Safe Exam Browser with those settings can join.");
   const sebOwn = h('details', { class: 't-seb' }, sebSummary,
     h('label', { class: 'field', for: 'seb-key' }, h('span', { class: 'field-label', text: 'Config Key (SEB Config Tool, Exam tab)' }), sebKey));
   sebOwn.hidden = true;
@@ -148,7 +148,7 @@ function giveTab(data, me) {
   // SEB only: mute the computer's sound (other apps and tabs included) while the quiz is open
   const sebMute = h('input', { type: 'checkbox', id: 'seb-mute', class: 't-switch', role: 'switch', checked: true });
   const muteRow = tip(h('label', { class: 't-check t-switch-row', for: 'seb-mute' }, sebMute, h('span', { text: "Mute the computer's sound" })), sebMute,
-    'Music or a video left playing in another app goes quiet when Safe Exam Browser starts. Turn it off for a student who uses a screen reader.');
+    "Safe Exam Browser mutes the computer when it starts, so music or video playing in another app stops. Turn this off if a student uses a screen reader.");
   muteRow.hidden = true;
   const startMsg = h('p', { class: 't-error', role: 'alert' });
   const ready = data.quizzes.length && data.rosters.length;
@@ -177,7 +177,7 @@ function giveTab(data, me) {
         muteRow,
         sebOwn,
         tip(h('label', { class: 't-check t-switch-row', for: 'ip-lock' }, ipLock, h('span', { text: 'Only students on my current network' })),
-          ipLock, 'Students on another network, like at home, can\'t join.'),
+          ipLock, "Students on a different network, such as at home, can't join."),
         h('div', { class: 't-row t-start-row' }, startBtn, startMsg), runner)),
   ];
 }
@@ -252,10 +252,10 @@ function quizzesTab(data) {
             linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
             { text: 'Delete', danger: true, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}?`, 'Past results stay.') }]))))))) : null,
     h('div', { class: 't-row t-add' }, tip(h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizFile,
-      "A quiz saved as a file: a .quiz from Download in a quiz's ⋯ menu, or a quiz.json an AI wrote from Copy AI prompt."), quizBtn),
+      "Upload a quiz file: a .quiz downloaded from a quiz's ⋯ menu, or a quiz.json an AI wrote from Copy AI prompt."), quizBtn),
     h('details', { class: 't-paste' }, (() => {
       const s = h('summary', { text: 'Paste a quiz.json' });
-      return tip(s, s, 'The quiz.json an AI wrote from Copy AI prompt. Paste it from its first { to its last }.');
+      return tip(s, s, "Paste the quiz.json an AI wrote from Copy AI prompt, from its first { to its last }.");
     })(),
       h('label', { class: 'field', for: 'paste-quiz' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteJson), h('div', {}, pasteBtn)),
     quizMsg);
@@ -289,7 +289,7 @@ function classesTab(data) {
     h('div', { class: 't-row t-add' },
       h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
       tip(h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile), rosterFile,
-        'A spreadsheet saved as CSV: a first row with name and student_id, then a student on each row. Students type their ID to sign in.'),
+        "A spreadsheet saved as CSV, with name and student_id in the first row and one student on each row after it. Students type their ID to sign in."),
       rosterBtn),
     rosterMsg);
 }

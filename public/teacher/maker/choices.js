@@ -95,7 +95,7 @@ function choicesEditor(q) {
     h('div', { class: 'qe-line' }, add, check(q, q.shuffleChoices === false, 'Keep choices in this order', (v) => { if (v) q.shuffleChoices = false; else delete q.shuffleChoices; }),
       q.type === 'multi' ? (() => {
         const pc = check(q, !!q.partialCredit, 'Partial credit', (v) => { if (v) q.partialCredit = true; else delete q.partialCredit; });
-        return tip(pc, pc.querySelector('input'), 'Each right pick earns its share of the points, and each wrong pick takes a share back.');
+        return tip(pc, pc.querySelector('input'), "Each correct choice a student picks earns its share of the points, and each wrong choice takes a share away.");
       })() : null));
 }
 

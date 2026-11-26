@@ -111,7 +111,7 @@ function correctionsDialog(runId, run) {
       h('label', { class: 'field', for: 't-corr-earn' }, h('span', { class: 'field-label', text: 'A fixed answer earns back' }),
         h('span', { class: 't-corr-pct' }, earn, h('span', { text: '% of what it lost' }))),
       tip(h('label', { class: 't-check', for: 't-corr-why' }, why, h('span', { text: 'Ask what went wrong' })), why,
-        'Each question they fix also asks them to write what went wrong. You see it in their report.'),
+        "Students also write what went wrong on each question they fix. You can read it in their report."),
       run && run.waiting ? h('p', { class: 't-small', text: `${plural(run.waiting, 'answer')} still ${run.waiting === 1 ? 'needs' : 'need'} grading, so ${run.waiting === 1 ? "it isn't" : "they aren't"} in corrections.` }) : null,
       msg),
     h('footer', { class: 't-dialog-foot' }, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => dlg.close() }), ok));

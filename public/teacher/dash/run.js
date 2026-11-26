@@ -22,7 +22,7 @@ async function showRun(runId) {
   const toggle = h('button', { class: 'btn', type: 'button' });
   // a fire drill, a question for the whole class: every clock stops and the questions are hidden, at once
   const pauseBtn = iconButton(h('button', { class: 'btn outline-warning', type: 'button', hidden: true, onclick: () => act(`/api/t/runs/${runId}/pause`) }), 'pause', 'Pause quiz',
-    "Every clock stops and the questions are hidden until you resume. Leaving the quiz meanwhile isn't counted.");
+    "Every student's clock stops and the questions are hidden until you resume. Leaving the quiz while it's paused doesn't count.");
   const lockBtn = h('button', { class: 'btn', type: 'button' });
   const howTo = h('p', { class: 't-muted t-small' });
   // A stuck student can only leave Safe Exam Browser with this; it's also what locks an iPad.
@@ -67,8 +67,8 @@ async function showRun(runId) {
   }
 
   // What the less obvious actions do (shown on hover, beside the menu)
-  const LET_IN = 'For 10 minutes they can sign in again on any computer and carry on: same answers, same clock.';
-  const INVALIDATE = "Their score counts as 0. They can keep working and aren't told. Un-invalidate gives it back.";
+  const LET_IN = "For 10 minutes, the student can sign in again on any computer and continue with the same answers and clock.";
+  const INVALIDATE = "Their score counts as 0. They can keep working and aren't told. Un-invalidate restores the score.";
   async function act(path, body) {
     try { await post(path, body); } catch (e) { alertBox(e.message); }
     return refresh();
@@ -78,10 +78,10 @@ async function showRun(runId) {
   const LIVE_NUMS = ['Strikes', 'Progress', 'Time left', 'Score'];
   const liveHead = h('tr', {});
   const LIVE_TIPS = {
-    Status: 'Ready: agreed to the rules and waiting for you to start them. No signal: their computer stopped checking in.',
-    Integrity: "Clean, or Invalidated: they left the quiz, or you invalidated it. Restored: you un-invalidated it. Students aren't told.",
-    Strikes: 'How many times they left the quiz for another tab, window or app, and how long they were away in all.',
-    Progress: 'Answered out of all. Green: answered in the last 30 seconds. Blue: reading. Gray: idle for 2 minutes.',
+    Status: "Ready means the student agreed to the rules and is waiting for you to start them. No signal means their computer stopped checking in.",
+    Integrity: "Invalidated means the student left the quiz or you invalidated it, and Restored means you un-invalidated it. Otherwise it's Clean. Students aren't told.",
+    Strikes: "The number of times the student left the quiz for another tab, window or app, and their total time away.",
+    Progress: "Questions answered out of the total. The bar is green if they answered in the last 30 seconds, blue while they're reading, and gray after 2 minutes idle.",
   };
   const drawLiveHead = () => liveHead.replaceChildren(...sortHeads(LIVE_COLS, LIVE_NUMS, dash.liveSort, (next) => {
     dash.liveSort = next;
@@ -217,8 +217,8 @@ async function showRun(runId) {
       act(`/api/t/runs/${runId}/${run.status === 'open' ? 'close' : 'open'}`);
     };
     lockBtn.textContent = run.ipLock ? 'Network lock: on' : 'Network lock: off';
-    lockBtn.dataset.tip = run.ipLock ? 'Only your network and the ones your students are already on can join.'
-      : 'Any network can join. On: only your network and the ones your students are already on.';
+    lockBtn.dataset.tip = run.ipLock ? "Only students on your network, or on a network a student has already used in this quiz, can join."
+      : "Students can join from any network. Turning the lock on limits joining to your network and the networks students have already used in this quiz.";
     lockBtn.onclick = () => act(`/api/t/runs/${runId}/${run.ipLock ? 'unlock' : 'lock'}`);
     const failed = data.students.filter((x) => x.attempt && x.attempt.failed).length;
     failedBox.replaceChildren(failed ? h('p', { class: 't-error' }, `Code grading failed for ${plural(failed, 'student')}. `,
@@ -360,7 +360,7 @@ async function showRun(runId) {
           d.status === 'active' && d.deadline ? { text: 'Add time', onclick: async () => { const mins = await askMinutes(`Add time for ${d.name}`); if (mins) { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: mins }); } } } : null,
           d.status !== 'submitted' ? { text: 'Message', onclick: () => messageStudent(id, d.name) } : null,
           d.integrity !== 'invalidated' && !(lastRun && lastRun.practice) ? { text: 'Invalidate', tip: INVALIDATE, onclick: () => invalidate(id, d.name) } : null,
-          d.status === 'submitted' && !d.sealed ? { text: 'Regrade', tip: 'Grades their answers again with the quiz as it is now. Points you set and rubric items you ticked stay.', onclick: () => act(`/api/t/attempts/${id}/regrade`) } : null,
+          d.status === 'submitted' && !d.sealed ? { text: 'Regrade', tip: "Grades their answers again against the current version of the quiz. Points you set by hand and rubric items you ticked are kept.", onclick: () => act(`/api/t/attempts/${id}/regrade`) } : null,
           (d.status === 'active' || d.status === 'admitted') && !(lastRun && lastRun.practice) ? { text: 'Let back in', tip: LET_IN, onclick: () => act(`/api/t/attempts/${id}/let-in`) } : null,
           { text: 'Reset', danger: true, onclick: () => resetAttempt(id, d.name, closeDetail) },
         ], () => refresh())),
@@ -427,7 +427,7 @@ async function showRun(runId) {
   }
 
   const corrBtn = labeled(h('button', { class: 'btn', type: 'button', hidden: true, onclick: () => correctionsDialog(runId, lastRun) }), 'pencil', 'Corrections');
-  const corrHost = tip(h('span', { class: 't-tip-host' }, corrBtn), corrBtn, 'Each student redoes the questions they lost points on, without the lockdown. A fixed answer earns back part of what it lost.');
+  const corrHost = tip(h('span', { class: 't-tip-host' }, corrBtn), corrBtn, "Students redo the questions they lost points on, without lockdown. Each fixed answer earns back part of the points it lost.");
 
   // Notifications: a strike, an invalidation, or a sign-in to look at, as it happens. On this page always
   // (a toast; clicking it opens the student). As the computer's own notification too, and a buzz on a

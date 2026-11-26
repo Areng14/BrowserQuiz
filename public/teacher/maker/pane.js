@@ -52,7 +52,7 @@ function questionPane(q, i) {
   const pool = field('Question pool', input(q, q.pool || '', (v) => { const t = v.trim(); if (t) q.pool = t; else delete q.pool; renderOutline(); },
     { class: 'input qe-pool', maxlength: '40', placeholder: 'Optional', list: 'qe-pool-names', autocomplete: 'off', spellcheck: 'false' }),
   h('datalist', { id: 'qe-pool-names' }, poolNames.map((p) => h('option', { value: p }))));
-  tip(pool, pool.querySelector('input'), 'Questions with the same pool name share a spot: each student gets some of them, picked at random. How many is in Settings.');
+  tip(pool, pool.querySelector('input'), "Questions with the same pool name share one spot in the quiz, and each student gets some of them at random. Set how many in Settings.");
   // What's to be answered, by type (a code question's parts come under the columns)
   const answer = [];
   const add = (nodes) => answer.push(...nodes.filter(Boolean));
@@ -77,7 +77,7 @@ function questionPane(q, i) {
       h('div', { class: 'qe-line qe-fields' }, tip(field('Answer form', form), form, FORM_TIP[q.form || '']),
         (() => {
           const tol = input(q, q.tolerance || '', (v) => { if (Number(v) > 0) q.tolerance = Number(v); else delete q.tolerance; }, { type: 'number', min: '0', step: 'any', class: 'input t-points', placeholder: '0' });
-          return tip(field('Tolerance', tol), tol, 'How far off a number can be and still count: 0.01 takes 3.14 for 3.1416. Empty means exact.');
+          return tip(field('Tolerance', tol), tol, "How far a number can be from the correct value and still count. With 0.01, 3.14 is accepted for 3.1416. Leave it empty to require an exact value.");
         })()));
   }
   if (q.type === 'graph') {
@@ -97,11 +97,11 @@ function questionPane(q, i) {
           field('x from', num(0, 'x from')), field('x to', num(1, 'x to')), field('y from', num(2, 'y from')), field('y to', num(3, 'y to')),
           (() => {
             const st = input(q, q.step, (v) => { const n = Number(v); if (n > 0) q.step = n; }, { type: 'number', min: '0', step: 'any', class: 'input t-points' });
-            return tip(field('Grid step', st), st, 'How far apart the grid lines are. The points students drag sit on them, so every point of the answer has to too.');
+            return tip(field('Grid step', st), st, "The distance between grid lines. Points that students drag snap to the grid, so every point in the answer must be on it.");
           })()),
         (() => {
           const pc = check(q, q.partialCredit, 'Partial credit when there\'s more than one', (v) => { if (v) q.partialCredit = true; else delete q.partialCredit; });
-          return tip(pc, pc.querySelector('input'), 'Each one drawn right earns its share of the points, and each extra one takes a share back.');
+          return tip(pc, pc.querySelector('input'), "Each shape drawn correctly earns its share of the points, and each extra shape takes a share away.");
         })()),
       pic));
   }
@@ -188,7 +188,7 @@ function sharedEditor(q, i) {
         const pick = picker(k);
         const line = h('div', { class: 'qe-line' }, h('label', { class: 'field-label', for: `qe-shared-${k}`, text: k ? 'Also uses' : 'Shared material' }), pick,
           others.length ? h('span', { class: 't-small t-muted', text: `Also on question${others.length > 1 ? 's' : ''} ${others.join(', ')}` }) : null);
-        return k ? line : tip(line, pick, 'A passage, case or code shown with this question and every other one that picks it. Shuffling keeps them together.');
+        return k ? line : tip(line, pick, "A passage, case or code block shown with this question and any other question that uses it. Shuffling keeps those questions together.");
       })(),
       m ? [
         input(q, m.title, (v) => { m.title = v; }, { type: 'text', placeholder: 'Title, like Case A', 'aria-label': 'Shared material title', maxlength: '120' }),
@@ -242,7 +242,7 @@ function settingsPane() {
   // timed sections set the quiz's time (their total) and lock each part
   const timedSum = (ed.quiz.sections || []).reduce((t, d) => t + (d.timeLimitMin || 0), 0);
   const lockParts = tipped(check(q, ed.quiz.lockParts === true || timedSum > 0, timedSum ? 'Lock each part once it\'s done (timed sections do)' : 'Lock each part once it\'s done', (v) => { if (v) ed.quiz.lockParts = true; else delete ed.quiz.lockParts; }),
-    "Once a student moves on from a part, they can't go back to change its answers. A part is a section, or a run of one type of question.");
+    "After a student moves on from a part, they can't go back to change its answers. A part is a section, or a run of questions of one type.");
   if (timedSum) lockParts.querySelector('input').disabled = true;
   return [h('div', { class: 'qe-head' }, h('h2', { class: 'qe-n', text: 'Settings' }), h('span', { class: 'qe-grow' }), doneBtn()),
     h('div', { class: 'qe-settings-cards' },
@@ -250,14 +250,14 @@ function settingsPane() {
         h('div', { class: 'qe-settings-grid' },
           timedSum ? field('Time limit (minutes, the sections added up)', input(q, timedSum, () => {}, { type: 'number', disabled: true }))
             : field('Time limit (minutes, 0 = none)', input(q, ed.quiz.timeLimitMin, (v) => { ed.quiz.timeLimitMin = Number(v) || 0; }, { type: 'number', min: '0', max: '600' })),
-          tipped(field('Code highlighting', langSel), 'How code in your questions is colored. None, for a quiz without code.'),
-          tipped(field('Calculator', calcSel), 'A calculator students can open during the quiz. Graphing adds a screen for graphs. A section or a question can have its own.')),
+          tipped(field('Code highlighting', langSel), "Sets how code in your questions is colored. Choose None for a quiz without code."),
+          tipped(field('Calculator', calcSel), "Students can open this calculator during the quiz. Graphing adds a screen for drawing graphs. A section or a question can use a different one.")),
         h('div', { class: 'qe-line' },
-          tipped(check(q, ed.quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { ed.quiz.shuffleQuestions = v; }), 'Each student gets their own order, mixed within each part.'),
+          tipped(check(q, ed.quiz.shuffleQuestions !== false, 'Shuffle question order', (v) => { ed.quiz.shuffleQuestions = v; }), "Each student gets the questions in a different order, shuffled within each part."),
           check(q, ed.quiz.shuffleChoices !== false, 'Shuffle choices', (v) => { ed.quiz.shuffleChoices = v; }),
           lockParts,
           tipped(check(q, ed.quiz.turnInEarly === true, 'Students can turn in before time is up', (v) => { if (v) ed.quiz.turnInEarly = true; else delete ed.quiz.turnInEarly; }),
-            "Off: students who finish early wait, and can't turn in until time is nearly up."))),
+            "When this is off, students who finish early have to wait until time is nearly up to turn in."))),
       pools ? card('Question pools', pools) : null,
       card('Directions',
         field('For the whole quiz', area(q, dirs.quiz, (v) => setDir('quiz', v), Object.assign({ rows: 3, placeholder: 'Optional' }, prose))),

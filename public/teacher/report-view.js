@@ -174,7 +174,7 @@
     if (!window.BQTip) return s;
     s.classList.add('t-term');
     s.tabIndex = 0;
-    return window.BQTip(s, s, "Timed: it fails if it takes more than 10 times as long as your reference solution, even when it's right.");
+    return window.BQTip(s, s, "A timed test. It fails if the code takes more than 10 times as long as your reference solution, even when the result is right.");
   }
   function testTable(q) {
     if (!q.tests || !q.tests.length) return null;
@@ -560,7 +560,7 @@
       });
     }));
     return pairSection('r-sim-code-section', 'Similar code', rows,
-      "Pairs whose code is much alike even with names and spacing changed. Code everyone had, like the starter code, doesn't count.");
+      "Pairs of students whose code is very similar, even after renaming variables or changing spacing. Code everyone was given, such as starter code, is ignored.");
   }
 
   // ---------- the same wrong answers (server: samewrong.js) ----------
@@ -575,7 +575,7 @@
           h('td', { class: 'num', text: x.of > 2 ? `${x.of} students` : 'Only these two' }))))),
     ]));
     return pairSection('r-same-wrong', 'Same wrong answers', rows,
-      'Pairs who gave the very same wrong answers on choice, short answer and output questions. Answers few others gave put a pair higher.');
+      "Pairs of students who gave identical wrong answers on choice, short answer and output questions. Wrong answers that few others gave rank a pair higher.");
   }
 
   // ---------- right answers given much faster than the class (server: fast.js) ----------
@@ -586,7 +586,7 @@
         h('span', { class: 'r-pair-names' }, h('a', { href: `#s${x.who}`, text: students[x.who].name })),
         h('span', { class: 'r-sim-note', text: `Question ${x.n}: right in ${clock(x.ms)}, the class took ${clock(x.median)}` }))));
     return pairSection('r-fast', 'Fast right answers', items,
-      'Right in under a quarter of the time the class typically took on that question, as if the answer was already known.');
+      "Correct answers given in under a quarter of the class's typical time on that question.");
   }
 
   window.BQReport = { question, student, classOverview, similarCode, sameWrong, fastRight, highlight, h, loadMonaco, tokenClass };

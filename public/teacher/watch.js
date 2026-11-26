@@ -41,8 +41,8 @@
   let invalidated = false;
   const integrityBtn = $('w-integrity');
   // what each does (tip.js): the same words as the live page's
-  const DOES = { invalidate: "Their score counts as 0. They can keep working and aren't told. Un-invalidate gives it back.",
-    restore: "Their score counts again. If they leave the quiz after this, it shows, but it doesn't invalidate it." };
+  const DOES = { invalidate: "Their score counts as 0. They can keep working and aren't told. Un-invalidate restores the score.",
+    restore: "Their score counts again. If they leave the quiz after this, it's recorded but doesn't invalidate it." };
   window.BQTip($('w-integrity-host'), integrityBtn, DOES.invalidate);
   integrityBtn.addEventListener('click', async () => {
     let body = {};
