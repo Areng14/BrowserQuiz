@@ -142,6 +142,10 @@ CREATE INDEX IF NOT EXISTS runs_owner ON runs(owner_id);`);
 // Every student request finds its attempt by the cookie's hash (store.attemptByToken): without this, each
 // heartbeat reads the whole attempts table, which grows with every quiz ever given.
 db.exec('CREATE INDEX IF NOT EXISTS attempts_token ON attempts(token_hash)');
+// A student's past attempts, by their student ID's hash: sign-in and start look for a new network there
+// (student.js noteNewNetwork), and the class page asks which students have results.
+db.exec(`CREATE INDEX IF NOT EXISTS attempts_student ON attempts(student_id);
+CREATE INDEX IF NOT EXISTS roster_students_sid ON roster_students(sid_hash);`);
 
 const cache = new Map();
 function q(sql) {
