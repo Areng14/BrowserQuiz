@@ -13,7 +13,7 @@
 
   // name: [light, dark] (the app's own colors)
   const PALETTE = {
-    ink: ['#16191d', '#e6e8eb'],
+    ink: ['#16191d', '#b4bac2'], // dark: softer than the page's text, so lines don't glare
     muted: ['#5b6470', '#9aa3ad'],
     line: ['#d9dde2', '#2e333b'],
     paper: ['#ffffff', '#16181d'],

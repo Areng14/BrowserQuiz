@@ -175,7 +175,7 @@ Links show as their text only, so nothing on the page leads out of the quiz. No 
 
   | Color | Use it for | Light | Dark |
   | --- | --- | --- | --- |
-  | ink | lines, text | `#16191d` | `#e6e8eb` |
+  | ink | lines, text | `#16191d` | `#b4bac2` |
   | muted | labels, notes | `#5b6470` | `#9aa3ad` |
   | line | grid, faint lines | `#d9dde2` | `#2e333b` |
   | paper | box fills | `#ffffff` | `#16181d` |
