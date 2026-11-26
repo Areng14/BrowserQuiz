@@ -160,6 +160,7 @@ function startTimer() {
     S.lockedIn = locked;
   };
   tick();
+  S.tickTimer = tick; // pausing or going on redraws it at once (setPaused)
   S.timer = setInterval(tick, 250);
 }
 

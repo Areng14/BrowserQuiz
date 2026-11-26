@@ -65,7 +65,7 @@ function freshState() {
   return {
     run: null, me: null, quiz: null, idx: 0, answers: {}, deadline: 0, skew: 0,
     monitor: null, models: {}, editor: null, editorSubs: [], parts: [], partsSeen: new Set(), locked: 0, dirOpen: false,
-    timer: 0, poll: 0, done: false, runBusy: false, results: {}, el: null, warned: {}, saveState: 'saved',
+    timer: 0, tickTimer: null, poll: 0, done: false, runBusy: false, results: {}, el: null, warned: {}, saveState: 'saved',
     marks: null, kept: new Map(),
   };
 }

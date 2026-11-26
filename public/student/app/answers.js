@@ -188,6 +188,7 @@ function setPaused(at) {
     if (!S.el.scratch.hidden) toggleScratch(false);
   }
   renderQuestion();
+  if (S.tickTimer) S.tickTimer(); // the clock says Paused, or runs, now rather than at its next tick
   S.el.main.scrollTop = 0;
   if (!cfg.watch) {
     const head = document.getElementById('q-heading');
