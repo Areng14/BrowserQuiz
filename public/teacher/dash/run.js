@@ -83,7 +83,11 @@ async function showRun(runId) {
     Strikes: "The number of times the student left the quiz for another tab, window or app, and their total time away.",
     Progress: "Questions answered out of the total. The bar is green if they answered in the last 30 seconds, blue while they're reading, and gray after 2 minutes idle.",
   };
-  const drawLiveHead = () => liveHead.replaceChildren(...sortHeads(LIVE_COLS, LIVE_NUMS, dash.liveSort, (next) => {
+  // Score only when there can be one: an open exam keeps scores from the teacher's screen (teacher/common.js
+  // sealed), so not until it's closed; practice once someone has turned in
+  let showScore = false;
+  const liveCols = () => (showScore ? LIVE_COLS : LIVE_COLS.filter((c) => c !== 'Score'));
+  const drawLiveHead = () => liveHead.replaceChildren(...sortHeads(liveCols(), LIVE_NUMS, dash.liveSort, (next) => {
     dash.liveSort = next;
     drawLiveHead();
     const b = liveHead.querySelector(`th:nth-child(${LIVE_COLS.indexOf((next || { by: '' }).by) + 1}) .t-sort`);
@@ -142,6 +146,8 @@ async function showRun(runId) {
     try { data = await api(`/api/t/runs/${runId}/live`); } catch (e) { return; }
     const run = data.run;
     lastRun = run;
+    const scores = run.status !== 'open' || (run.practice && data.students.some((x) => x.attempt && x.attempt.status === 'submitted'));
+    if (scores !== showScore) { showScore = scores; drawLiveHead(); }
     // paused: the bar, and every row still working says so
     const paused = run.status === 'open' && run.pausedMs != null;
     if (pausedBar.hidden === paused) {
@@ -273,7 +279,7 @@ async function showRun(runId) {
         h('td', { class: 'num', 'data-label': 'Time left', title: s.timeX && !(a && a.status === 'submitted') ? `${s.timeX}× time` : null },
           h('span', Object.assign({ text: a && a.timeLeft != null ? mmss(a.timeLeft) : '' }, a && a.timeLeft != null && a.status === 'active' && !a.paused ? ticks('left', a.timeLeft) : {})),
           s.timeX && !(a && a.status === 'submitted') ? h('span', { class: 't-muted t-xtime', text: ` ${s.timeX}×`, 'aria-label': `, ${s.timeX} times the time` }) : null),
-        h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), 'data-label': 'Score', text: score }),
+        showScore ? h('td', { class: 'num' + (a && (a.failed || a.review) ? ' st-waiting' : ''), 'data-label': 'Score', text: score }) : null,
         actions);
     }));
     // Keep keyboard focus on the same button after the redraw, without scrolling the page back to it. If
