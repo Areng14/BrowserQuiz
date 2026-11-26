@@ -271,9 +271,7 @@
     const el = h('div', { class: 'gr-editor', style: `--gr-aspect: ${(F.W / F.H).toFixed(3)}` }, bar, o.shade ? style : null, h('div', { class: 'gr-view' }, root), list, said);
     root.setAttribute('aria-describedby', id + '-list');
 
-    function plusIcon() {
-      return svg('svg', { viewBox: '0 0 16 16', width: 14, height: 14, 'aria-hidden': 'true', class: 'gr-plus' }, svg('path', { d: 'M8 3v10M3 8h10', stroke: 'currentColor', 'stroke-width': 1.8, 'stroke-linecap': 'round' }));
-    }
+    function plusIcon() { return window.BQIcons.svg('plus', 14, { class: 'gr-plus' }); } // /icons.js
     const describe = (d, i) => {
       const n = `${S.KIND_NAMES[d.kind]} ${i + 1}`;
       if (d.kind === 'point') return `${n} at ${pt(d.p[0])}`;

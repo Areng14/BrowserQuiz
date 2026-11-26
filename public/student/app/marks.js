@@ -4,6 +4,7 @@ import { BQ, S, api } from './state.js';
 import { h, plural } from './dom.js';
 import { openDirections } from './quiz.js';
 import { renderSheet } from './nav.js';
+import { icon } from './theme.js';
 
 // ---------- mark for review, crossed-out choices ----------
 // Study aids only: they never change an answer, so they stay in this browser (per run and student)
@@ -31,17 +32,7 @@ function setCrossed(q, i, on) {
   if (list.length) S.marks.out[q.id] = list; else delete S.marks.out[q.id];
   saveMarks();
 }
-function bookmarkIcon() {
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.setAttribute('class', 'mark-icon');
-  const p = document.createElementNS(ns, 'path');
-  p.setAttribute('d', 'M4 1.75h8v12.5l-4-3.25-4 3.25z');
-  svg.append(p);
-  return svg;
-}
+const bookmarkIcon = () => icon('bookmark', 14, { class: 'mark-icon' });
 function markButton(q) {
   const b = h('button', { class: 'mark-btn', type: 'button', 'aria-pressed': String(isMarked(q)) }, bookmarkIcon(), h('span', { text: 'Mark for review' }));
   b.addEventListener('click', () => {

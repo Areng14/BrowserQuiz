@@ -2,7 +2,7 @@
 
 import { BQ, S, cfg } from './state.js';
 import { h } from './dom.js';
-import { isDark, svgEl } from './theme.js';
+import { icon, isDark } from './theme.js';
 import { overview, quizDirections, summaryLine } from './entry.js';
 import { lockIcon, rangeOf } from './answers.js';
 import { closeDirections } from './quiz.js';
@@ -78,19 +78,9 @@ function toggleScratch(force) {
   if (S.editor) S.editor.layout();
   if (open) { const first = S.el.scratch.querySelector('.scratch-tool'); if (first) first.focus(); } else S.el.scratchBtn.focus();
 }
-const PAD_ICONS = {
-  pen: ['M21.17 6.81a1 1 0 0 0-3.98-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z', 'm15 5 4 4'],
-  text: ['M4 7V4h16v3', 'M9 20h6', 'M12 4v16'],
-  eraser: ['m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21', 'M22 21H7', 'm5 11 9 9'],
-  undo: ['M9 14 4 9l5-5', 'M4 9h10.5a5.5 5.5 0 0 1 0 11H11'],
-  clear: ['M3 6h18', 'M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6', 'M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'],
-  close: ['M18 6 6 18', 'm6 6 12 12'],
-};
-function padIcon(name) {
-  const s = svgEl('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
-  for (const d of PAD_ICONS[name]) s.append(svgEl('path', { d }));
-  return s;
-}
+// The pad's buttons, by what they do: the icon each one shows
+const PAD_ICONS = { pen: 'pencil', text: 'text', eraser: 'eraser', undo: 'undo', clear: 'trash', close: 'x' };
+const padIcon = (name) => icon(PAD_ICONS[name], 18);
 function renderScratch() {
   const el = S.el && S.el.scratch;
   if (!el || el.hidden || !S.quiz || !S.scratch) return;
