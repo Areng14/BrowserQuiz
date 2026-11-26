@@ -129,10 +129,10 @@ it, so removing things comes before styling them.
   them, so groups read as groups. Don't pack things edge to edge.
 - **Even weight.** Don't put all the visual weight on one side; balance a heavy left with something
   on the right, or center it.
-- **Use the width.** On a wide screen, don't leave half the page empty beside one narrow column.
-  Put sections side by side in columns, each column about one thing and about as tall as the others,
-  and go back to one column when the screen narrows. Keep each field and line of text a readable width
-  inside its column; a form you fill top to bottom stays one column.
+- **A narrow page sits in the middle.** A page that's one column of cards or a form (settings,
+  sign-in) keeps a readable width (about 760px) and is centered on a wide screen, heading included,
+  instead of stuck to the left with half the screen empty. Don't split it into side-by-side panels:
+  one column reads top to bottom.
 - **Bars and banners reach the edges.** A page-wide banner (a paused quiz, a warning) runs the full
   width of the page area, even past a page that's capped and centred, with its words lined up with
   the page under it.
