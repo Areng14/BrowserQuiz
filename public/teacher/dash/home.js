@@ -290,8 +290,7 @@ function linkBtn(text, href, newTab) {
 
 // A dropdown whose rows have a name on the left and details lined up on the right, which a native
 // select can't do. items: [{ value, label, meta: [column, ...] }]; start: the value picked first (else the
-// first). Keyboard: arrows, Home/End,
-// Enter or Space to pick, Escape to close.
+// first). Keyboard: arrows, Home/End, typing a name's start, Enter or Space to pick, Escape to close.
 function picker(id, labelText, items, start) {
   let value = items.some((x) => x.value === start) ? start : items.length ? items[0].value : '';
   let active = 0;
@@ -324,6 +323,18 @@ function picker(id, labelText, items, start) {
     if (!fromMouse) opts[active].scrollIntoView({ block: 'nearest' });
   }
   function choose(i) { value = items[i].value; paint(); }
+  // Type to jump, as in a native select: the next name starting with what's typed in quick succession
+  let typed = '';
+  let typedAt = 0;
+  function jump(ch) {
+    const now = Date.now();
+    typed = (now - typedAt < 800 ? typed : '') + ch.toLowerCase();
+    typedAt = now;
+    const from = typed.length === 1 ? active + 1 : active;
+    const k = items.map((_, n) => (from + n) % items.length).find((i) => items[i].label.toLowerCase().startsWith(typed));
+    if (k != null) setActive(k);
+  }
+  const letter = (e) => e.key.length === 1 && e.key !== ' ' && !e.ctrlKey && !e.metaKey && !e.altKey;
   function open() {
     list.hidden = false;
     btn.setAttribute('aria-expanded', 'true');
@@ -337,13 +348,14 @@ function picker(id, labelText, items, start) {
   }
   btn.addEventListener('click', () => (list.hidden ? open() : close()));
   btn.addEventListener('keydown', (e) => {
-    if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); open(); }
+    if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); open(); } else if (letter(e)) { e.preventDefault(); open(); jump(e.key); }
   });
   list.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowDown') setActive(active + 1);
     else if (e.key === 'ArrowUp') setActive(active - 1);
     else if (e.key === 'Home') setActive(0);
     else if (e.key === 'End') setActive(items.length - 1);
+    else if (letter(e) || (e.key === ' ' && Date.now() - typedAt < 800 && items.some((x) => x.label.toLowerCase().startsWith(typed + ' ')))) jump(e.key); // "Period 3"
     else if (e.key === 'Enter' || e.key === ' ') { choose(active); close(); }
     else if (e.key === 'Escape') close();
     else if (e.key === 'Tab') { close(true); return; }
