@@ -129,7 +129,9 @@ function giveTab(data, me) {
   // Safe Exam Browser: BrowserQuiz makes the settings, unless the teacher has their own .seb file
   // (then its Config Key, from SEB Config Tool's Exam tab).
   const sebKey = h('input', { class: 'input t-mono', id: 'seb-key', autocomplete: 'off', spellcheck: 'false', maxlength: '64', placeholder: '64 letters and digits' });
-  const sebOwn = h('details', { class: 't-seb' }, h('summary', { text: 'Use my own .seb file' }),
+  const sebSummary = h('summary', { text: 'Use my own .seb file' });
+  tip(sebSummary, sebSummary, "For settings you made in SEB Config Tool. You hand out your .seb file, and only Safe Exam Browser with those settings can join.");
+  const sebOwn = h('details', { class: 't-seb' }, sebSummary,
     h('label', { class: 'field', for: 'seb-key' }, h('span', { class: 'field-label', text: 'Config Key (SEB Config Tool, Exam tab)' }), sebKey));
   sebOwn.hidden = true;
   sebOwn.addEventListener('toggle', () => { if (sebOwn.open) sebKey.focus(); muteRow.hidden = mode !== 'seb' || sebOwn.open; }); // their own file has its own sound setting
@@ -145,7 +147,8 @@ function giveTab(data, me) {
   const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', class: 't-switch', role: 'switch', checked: false });
   // SEB only: mute the computer's sound (other apps and tabs included) while the quiz is open
   const sebMute = h('input', { type: 'checkbox', id: 'seb-mute', class: 't-switch', role: 'switch', checked: true });
-  const muteRow = h('label', { class: 't-check t-switch-row', for: 'seb-mute' }, sebMute, h('span', { text: "Mute the computer's sound" }));
+  const muteRow = tip(h('label', { class: 't-check t-switch-row', for: 'seb-mute' }, sebMute, h('span', { text: "Mute the computer's sound" })), sebMute,
+    'Music or a video left playing in another app goes quiet when Safe Exam Browser starts. Turn it off for a student who uses a screen reader.');
   muteRow.hidden = true;
   const startMsg = h('p', { class: 't-error', role: 'alert' });
   const ready = data.quizzes.length && data.rosters.length;
