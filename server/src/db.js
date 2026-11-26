@@ -139,6 +139,9 @@ addColumn('sessions', 'passkey', 'INTEGER NOT NULL DEFAULT 0');
 db.exec(`CREATE INDEX IF NOT EXISTS quizzes_owner ON quizzes(owner_id);
 CREATE INDEX IF NOT EXISTS rosters_owner ON rosters(owner_id);
 CREATE INDEX IF NOT EXISTS runs_owner ON runs(owner_id);`);
+// Every student request finds its attempt by the cookie's hash (store.attemptByToken): without this, each
+// heartbeat reads the whole attempts table, which grows with every quiz ever given.
+db.exec('CREATE INDEX IF NOT EXISTS attempts_token ON attempts(token_hash)');
 
 const cache = new Map();
 function q(sql) {
