@@ -1,17 +1,19 @@
 # BrowserQuiz
 
-A quiz and exam app for CS classes that teachers can host themselves. Students write real code in the
-Monaco editor, and each question type has its own options.
+A quiz and exam app for CS and math classes that teachers can host themselves. Students write real code
+in the Monaco editor, type math and draw graphs, and each question type has its own options.
 
 ## Features
 
 - **Real code questions.** Instead of having students write on paper, students write in a code editor
   that has code hints and snippets turned off.
-- **8 question types.** Multiple choice, select-all, short answer, predict the output, trace tables, fill
-  in the blanks, written answers and code. You can find the details in the
+- **10 question types.** Multiple choice, select-all, short answer, math, graphing, predict the output,
+  trace tables, fill in the blanks, written answers and code. You can find the details in the
   [Question types](#question-types) section.
-- **Quiz maker.** Live preview, Markdown, LaTeX math, images. Or paste the built-in prompt into an AI
-  chat and upload the response.
+- **Quiz maker.** The whole quiz on one page, every question next to its answer, so a wrong key stands
+  out. Markdown, LaTeX math, images, diagrams and graphs. Or paste the built-in prompt into an AI chat
+  for a whole quiz, or have it write one question at a time.
+- **Random values.** The numbers in a question change from student to student, each with its own answer.
 - **Live dashboard.** Start everyone at once, pause for a fire drill, give extra time, see who left and
   for how long, end a quiz.
   Monitor any student's quiz page live, mouse and all.
@@ -19,7 +21,7 @@ Monaco editor, and each question type has its own options.
   in your own API key and it grades in the background. Every grade comes with its reasons, and you can
   change any of them.
 - **Auto grading and reports.** Every answer next to the right one, with a diff view for code. Export to
-  CSV.
+  CSV. Got a key wrong? Fix it and everyone's graded again.
 - **Copied code detection.** The class report flags students whose code is near-identical, even with the
   variables renamed and the formatting changed, and shows both side by side.
 - **Question pools.** Each student gets a random few questions from a pool, so a neighbor's screen
@@ -42,6 +44,10 @@ Monaco editor, and each question type has its own options.
 - **Select-all.** All or nothing, or partial credit if you choose.
 - **Short answer.** Accept as many phrasings as you like, or a pattern like `/^(binary|bin) search$/`.
   Numbers match by value, so 3.5, 3.50 and 7/2 all count and formatting isn't an issue.
+- **Math.** Students type the answer in a math box with fractions, powers and roots. Answers match as
+  math, so 3 + 2x counts for 2x + 3, and you can ask for a form, like expanded or factored.
+- **Graphing.** Students draw on a grid: points, lines, parabolas, absolute values, exponentials and
+  circles, shaded for inequalities. Partial credit for systems, if you like.
 - **Predict the output.** Show some code, students predict its output.
 - **Trace tables.** Students fill in what the loop does to each variable, step by step, in a table.
 - **Fill in the blanks.** Blanks right inside the code. Fill it out and check your work.
@@ -51,7 +57,7 @@ Monaco editor, and each question type has its own options.
   custom classes as parameters, banned methods, and a no-running mode for paper-style questions.
 
 Any question can share material, a code block or an image with others, and every question gets its own
-points.
+points. Prompts can show diagrams and graphs, in the student's light or dark colors.
 
 ## Security and privacy
 
