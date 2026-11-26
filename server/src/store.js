@@ -120,8 +120,25 @@ function attemptByToken(token) {
   const row = q('SELECT id FROM attempts WHERE token_hash = ? AND archived = 0').get(hash);
   return row ? getAttempt(row.id) : null;
 }
+// What save last sealed for each field, by a keyed digest of the key and the text (never the text itself).
+// An unchanged field keeps its exact bytes, so the row stays the same size and SQLite rewrites only the pages
+// that changed: a heartbeat no longer rewrites every page a long answer fills.
+const DIGEST_KEY = crypto.randomBytes(32);
+const lastSealed = new WeakMap(); // attempt -> { field: { digest, sealed } }
+function sealedField(a, f, text) {
+  if (text == null) return null;
+  const key = V.keyFor(P.ownerOfRun(a.runId));
+  if (!key) return P.sealField(a.runId, a.id, f, text); // locked: kept as it is, for the next sign-in to seal
+  const digest = crypto.createHmac('sha256', DIGEST_KEY).update(key).update(text).digest('base64');
+  let seen = lastSealed.get(a);
+  if (!seen) lastSealed.set(a, seen = {});
+  if (seen[f] && seen[f].digest === digest) return seen[f].sealed;
+  const sealed = P.sealField(a.runId, a.id, f, text);
+  seen[f] = { digest, sealed };
+  return sealed;
+}
 function save(a) {
-  const sealed = (f, text) => P.sealField(a.runId, a.id, f, text);
+  const sealed = (f, text) => sealedField(a, f, text);
   const result = a.result ? JSON.stringify(storedResult(a.result)) : null;
   // where grading is, in the clear (the result itself is sealed), so a restart knows what to finish
   const grading = !result ? null : result.includes('"pending"') ? 'pending' : result.includes('"error"') ? 'error' : 'done';
