@@ -51,6 +51,8 @@
     const t = document.createElement('span');
     t.className = 't-tip';
     t.setAttribute('role', 'tooltip');
+    // not part of a label's or a header's name: it's read as the control's description (aria-describedby)
+    t.setAttribute('aria-hidden', 'true');
     t.id = `t-tip-${++seq}`;
     t.textContent = text;
     host.classList.add('t-tipped');
