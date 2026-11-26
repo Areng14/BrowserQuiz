@@ -18,7 +18,7 @@ async function showGrade(runId, qid, opts) {
   const seq = ++dash.navSeq;
   let data;
   try { data = await api(`/api/t/runs/${encodeURIComponent(runId)}/grade${qid ? `?q=${encodeURIComponent(qid)}` : ''}`); } catch (e) {
-    if (e.message !== 'login') mount(shell('results', h('section', { class: 't-section' }, h('p', { class: 't-error', text: e.message }))));
+    if (e.message !== 'login') mount(shell('grades', h('section', { class: 't-section' }, h('p', { class: 't-error', text: e.message }))));
     return;
   }
   if (seq !== dash.navSeq) return;
@@ -29,7 +29,7 @@ async function showGrade(runId, qid, opts) {
   document.title = `Grade - ${data.run.title} - BrowserQuiz`;
   const back = h('a', { class: 't-link t-back', href: '#run/' + encodeURIComponent(runId) }, icon(ICONS.back, 16), data.run.title);
   if (!q) {
-    mount(shell('results', h('section', { class: 't-section' }, back, h('h1', { text: 'Grade' }), h('p', { class: 't-muted', text: 'Nothing here is graded by hand.' }))));
+    mount(shell('grades', h('section', { class: 't-section' }, back, h('h1', { text: 'Grade' }), h('p', { class: 't-muted', text: 'Nothing here is graded by hand.' }))));
     return;
   }
   // Save and next on this question's last answer to grade: on to the next question that has some
@@ -65,7 +65,7 @@ async function showGrade(runId, qid, opts) {
       onclick: () => showGrade(runId, q.id, { pick: s.attemptId }) }, h('span', { class: 't-gq-name', text: nameOf(s) }), h('span', { class: 't-gq-st' + (graded(s) ? ' ok' : ''), text: st })));
   }));
   const pane = cur ? gradePane(runId, q, cur, nameOf(cur), data.quiz) : h('p', { class: 't-muted', text: 'Nobody got this question.' });
-  mount(shell('results', h('section', { class: 't-section t-gq-page' },
+  mount(shell('grades', h('section', { class: 't-section t-gq-page' },
     back,
     h('div', { class: 't-gq-bar' },
       h('h1', { text: 'Grade' }),

@@ -10,4 +10,5 @@ module.exports = function teacherRoutes(r) {
   require('./teacher/runs')(r);
   require('./teacher/live')(r);
   require('./teacher/attempts')(r);
+  require('./teacher/grades')(r);
 };

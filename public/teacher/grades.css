@@ -1,0 +1,87 @@
+/* Grades (dash/grades.js): the class picker, and a table of every quiz the class took that scrolls
+   sideways under the pinned Student and Average columns, with a scrollbar of its own so it's plain it does. */
+.gb-head .pick-wrap { flex: 0 1 300px; min-width: 0; }
+.gb-head > .btn { flex: none; }
+
+.gb {
+  --name-w: 200px; --avg-w: 110px; --q-w: 132px; --bar: 20px;
+  --gb-rail: color-mix(in srgb, var(--ink-2) 16%, var(--soft));
+  --gb-thumb: color-mix(in srgb, var(--ink-2) 50%, var(--soft));
+  --gb-fade: color-mix(in srgb, var(--ink) 7%, transparent);
+  position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--bg);
+}
+/* The box scrolls both ways. Its own sideways scrollbar is the bar under it; the up-and-down one stays. */
+.gb-scroll { overflow: auto; overscroll-behavior-x: contain; scrollbar-width: auto; scrollbar-color: auto; }
+.gb-scroll::-webkit-scrollbar { width: 10px; height: 0; }
+.gb-scroll::-webkit-scrollbar-track { background: var(--soft); }
+.gb-scroll::-webkit-scrollbar-thumb { background: var(--gb-thumb); border: 2px solid var(--soft); border-radius: 5px; }
+@supports not selector(::-webkit-scrollbar) { .gb-scroll { scrollbar-width: none; } }
+.gb-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.gb-table {
+  width: max(100%, calc(var(--name-w) + var(--avg-w) + var(--n) * var(--q-w)));
+  table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 14px; font-variant-numeric: tabular-nums;
+}
+.gb-table th, .gb-table td {
+  padding: 10px 12px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--bg); border-bottom: 1px solid var(--line);
+}
+.gb-table tbody tr:last-child > * { border-bottom: 0; }
+.gb-table tbody tr:hover > * { background: color-mix(in srgb, var(--soft) 65%, var(--bg)); }
+/* the quiz names stay on top, the class average at the bottom */
+.gb-table thead th { position: sticky; top: 0; z-index: 2; vertical-align: middle; font-size: 13px; font-weight: 600; color: var(--ink-2); background: var(--soft); }
+.gb-table tfoot > tr > * { position: sticky; bottom: 0; z-index: 2; font-weight: 600; background: var(--soft); border-top: 1px solid var(--line); border-bottom: 0; }
+.gb-q { width: var(--q-w); }
+.gb-qname { display: block; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 600; text-decoration: none; }
+.gb-qdate { display: block; margin-top: 1px; font-size: 12px; font-weight: 400; }
+.gb-table .gb-name { position: sticky; left: 0; z-index: 1; width: var(--name-w); text-align: left; font-weight: 500; color: var(--ink); border-right: 1px solid var(--line); }
+.gb-table .gb-name { padding-left: 14px; }
+.gb-table .gb-avg { padding-right: 14px; }
+.gb-table thead .gb-name { padding: 8px 8px 8px 14px; color: var(--ink-2); }
+.gb-name-head { display: flex; align-items: center; gap: 4px; }
+.gb-name-head > span { flex: 1; min-width: 0; }
+.gb-table .gb-avg { position: sticky; right: 0; z-index: 1; width: var(--avg-w); font-weight: 700; color: var(--ink); border-left: 1px solid var(--line); }
+.gb-table .gb-avg.gb-start { display: none; }
+.gb-table :is(thead, tfoot) :is(.gb-name, .gb-avg) { z-index: 3; }
+.gb-table tfoot .gb-name { font-weight: 600; }
+.gb-term { text-decoration: underline dotted; text-underline-offset: 3px; }
+/* scores read as numbers: a link shows itself on hover */
+.gb-table a { color: inherit; text-decoration: none; text-underline-offset: 3px; }
+.gb-table a:hover { color: var(--accent); text-decoration: underline; }
+.gb-table .t-link { min-height: 0; }
+.gb-table .gb-qname.t-link { color: var(--accent); }
+.gb-table a.gb-term { text-decoration: underline dotted; }
+.gb-table a.gb-bad, .gb-table a.gb-bad:hover { color: var(--bad); font-weight: 600; }
+.gb-table a.gb-needs, .gb-table a.gb-needs:hover { color: var(--warn); font-weight: 600; text-decoration: underline; }
+
+/* the scrollbar: a rail under the quiz columns and a thumb to drag (grades.js places them) */
+.gb-bar { position: relative; height: var(--bar); background: var(--soft); border-top: 1px solid var(--line); }
+.gb-rail { position: absolute; top: 5px; bottom: 5px; border-radius: 5px; background: var(--gb-rail); cursor: pointer; }
+.gb-thumb { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 5px; background: var(--gb-thumb); cursor: grab; touch-action: none; }
+.gb-thumb:hover, .gb-thumb.drag { background: var(--ink-2); }
+.gb-thumb.drag { cursor: grabbing; }
+/* a soft shadow where quizzes go on under a pinned column */
+.gb-fade { position: absolute; z-index: 4; top: 0; bottom: calc(var(--bar) + 1px); width: 16px; pointer-events: none; opacity: 0; transition: opacity 0.15s; }
+.gb-fade-l { background: linear-gradient(to right, var(--gb-fade), transparent); }
+.gb-fade-r { background: linear-gradient(to left, var(--gb-fade), transparent); }
+.gb[data-more-left] .gb-fade-l, .gb[data-more-right] .gb-fade-r { opacity: 1; }
+/* nothing to scroll: no bar, no arrows */
+.gb:not([data-scrolls]) .gb-bar, .gb:not([data-scrolls]) .btn.gb-arrow { display: none; }
+.gb:not([data-scrolls]) { --bar: -1px; }
+@media (pointer: coarse) { .gb { --bar: 24px; } .gb-rail { top: 7px; bottom: 7px; } }
+
+/* Phones: narrower columns, Average beside the names, no arrows (a swipe scrolls), and Download as its icon */
+@media (max-width: 600px) {
+  .gb-head { flex-wrap: wrap; row-gap: 12px; }
+  .gb-head > h1 { flex-basis: 100%; }
+  .gb-head .pick-wrap { flex: 1 1 auto; }
+  .gb-head .gb-dl { width: 44px; min-width: 44px; height: 44px; padding: 0; }
+  .gb-head .gb-dl > svg { margin: 0; }
+  .gb-dl-text { display: none; }
+  .gb { --name-w: 124px; --avg-w: 86px; --q-w: 112px; }
+  .gb-table th, .gb-table td { padding: 10px; }
+  .gb-table thead .gb-name { padding: 10px; }
+  .gb .btn.gb-arrow { display: none; }
+  .gb-table .gb-avg.gb-end { display: none; }
+  .gb-table .gb-avg.gb-start { display: table-cell; left: var(--name-w); right: auto; border-left: 0; border-right: 1px solid var(--line); }
+}

@@ -28,7 +28,7 @@ module.exports = function quizRoutes(r) {
     const runs = q(`SELECT runs.*, quizzes.title AS quiz_title, rosters.name AS roster_name,
         (SELECT COUNT(*) FROM attempts WHERE attempts.run_id = runs.id AND archived = 0) AS joined
       FROM runs JOIN quizzes ON quizzes.id = runs.quiz_id JOIN rosters ON rosters.id = runs.roster_id WHERE runs.owner_id = ? ORDER BY runs.created_at DESC LIMIT 50`).all(me.id)
-      .map((x) => ({ id: x.id, code: x.code, status: x.status, quiz: x.quiz_title, roster: x.roster_name, joined: x.joined, ipLock: !!x.ip_lock, practice: x.mode === 'practice', corrections: !!x.corrects, seb: !!x.seb_key, createdAt: x.created_at }));
+      .map((x) => ({ id: x.id, code: x.code, status: x.status, quiz: x.quiz_title, roster: x.roster_name, rosterId: x.roster_id, joined: x.joined, ipLock: !!x.ip_lock, practice: x.mode === 'practice', corrections: !!x.corrects, seb: !!x.seb_key, createdAt: x.created_at }));
     json(res, 200, { quizzes, rosters, runs });
   });
 
