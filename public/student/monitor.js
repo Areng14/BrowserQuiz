@@ -31,13 +31,15 @@
     return bad;
   }
   // Helper extensions (AI sidebars, writing assistants) put their own elements on the page. The quiz
-  // itself uses no frames and no custom elements, and only the app and the code editor add to <body>.
+  // itself uses no frames and one custom element, the math answer box (MathLive's <math-field>), and only
+  // the app, the code editor and the math box (its keyboard and popovers) add to <body>.
   const PLAIN = new Set(['script', 'style', 'link', 'meta', 'title', 'base', 'noscript', 'template']); // nothing to see: themes add these
   const fromExtension = (el) => /^(chrome|moz|safari-web|ms-browser)-extension:/.test(el.getAttribute('src') || el.getAttribute('href') || '');
-  const ourBodyChild = (el) => el.id === 'bq-app' || /(^|\s)(monaco-|context-view)/.test(el.getAttribute('class') || '');
+  const ourBodyChild = (el) => el.id === 'bq-app' || /^mathlive-/.test(el.id) || /(^|\s)(monaco-|context-view|ML__)/.test(el.getAttribute('class') || '');
   function foreignName(el) {
     if (!el || el.nodeType !== 1) return null;
     const tag = el.localName || '';
+    if (tag === 'math-field') return null;
     const top = el.parentNode === document.documentElement && el !== document.head && el !== document.body;
     const inBody = el.parentNode === document.body && !ourBodyChild(el);
     const odd = tag.includes('-') || tag === 'iframe' || tag === 'embed' || tag === 'object' || fromExtension(el);
