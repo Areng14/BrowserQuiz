@@ -16,11 +16,11 @@ function statusCell(s) {
   // Waiting for the start: reading the rules, or agreed and in full screen (Ready)
   // their screen stopped checking in (closed the browser, quit Safe Exam Browser): not ready any more
   if (gone(a)) return h('td', { class: 't-late', text: `No signal for ${mmss(a.seenAgo)}` });
-  // a sign-in that looks off (another student's browser, a new network): says so, and why, before Start
+  // a sign-in that looks off (another student's browser, a new network): says so, and why on hover, before Start
   if (a.status === 'waiting' && a.checks && a.checks.length) {
-    return h('td', { class: 't-check-first' },
-      h('span', { class: 'st-waiting t-check-head' }, icon(ICONS.warn, 15), a.ready ? 'Check first' : 'Reading the rules'),
-      h('span', { class: 't-small t-muted', text: a.checks.map(checkWhy).join('; ') }));
+    const what = h('span', { class: 'st-waiting t-check-head', tabindex: '0' }, icon(ICONS.warn, 15), a.ready ? 'Check first' : 'Reading the rules');
+    return h('td', { class: 't-check-first' }, tip(h('span', { class: 't-tip-host' }, what), what,
+      `${a.checks.map(checkWhy).join('. ')}. Check it's really them, at their own computer, before you start them.`));
   }
   if (a.status === 'waiting') return a.ready ? h('td', { class: 'st-good', text: 'Ready' }) : h('td', { class: 'st-waiting', text: 'Reading the rules' });
   if (a.status === 'admitted') return h('td', { text: 'Starting' });

@@ -227,7 +227,9 @@ async function showRun(runId) {
     // the teacher's sort (a column header), else flagged first, then waiting, then everyone else
     const rows = sortRows(data.students.slice().sort((x, y) => order(x) - order(y) || x.name.localeCompare(y.name)), dash.liveSort, LIVE_SORT, (s) => s.name);
     const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
-    if (!dash.menuOpen) tbody.replaceChildren(...rows.map((s) => {
+    // not while a menu is open, or a row's tip is being read (a redraw would take it away)
+    const reading = !!tbody.querySelector('.t-tip-host:hover, .t-tip-host:focus-within');
+    if (!dash.menuOpen && !reading) tbody.replaceChildren(...rows.map((s) => {
       const a = s.attempt;
       const actions = h('td', { class: 't-actions' });
       const btn = (text, key, onclick, extra) => h('button', Object.assign({ class: 'btn small', type: 'button', text, onclick, 'data-key': `${a.id}:${key}`, 'aria-label': `${text} ${s.name}` }, extra || {}));
