@@ -147,7 +147,7 @@ async function showRun(runId) {
     if (paused) { pausedFor.dataset.tick = 'since'; pausedFor.dataset.at = String(Date.now() - run.pausedMs); pausedFor.textContent = mmss(run.pausedMs); } else delete pausedFor.dataset.tick;
     for (const x of data.students) if (x.attempt && x.attempt.status === 'active') x.attempt.paused = paused;
     notice(data.students);
-    // on the row: Message students while it's open; Corrections once an exam is closed (just once)
+    // on the row: Announce while it's open; Corrections once an exam is closed (just once)
     corrBtn.hidden = run.practice || !!run.corrections || run.status === 'open';
     msgBtn.hidden = run.status !== 'open';
     code.textContent = run.code;
@@ -476,11 +476,11 @@ async function showRun(runId) {
     }
     firstLook = false;
   }
-  // Start, Message students, Pause, Corrections and Close quiz stay out; the rest is under ⋯.
+  // Start, Announce, Pause, Corrections and Close quiz stay out; the rest is under ⋯.
   // A message to everyone taking the quiz: it pops up on their screens at the next heartbeat.
-  const msgBtn = labeled(h('button', { class: 'btn', type: 'button' }), 'message', 'Message students');
+  const msgBtn = labeled(h('button', { class: 'btn', type: 'button' }), 'megaphone', 'Announce');
   msgBtn.addEventListener('click', async () => {
-    const text = await ask.ask({ title: 'Message students', label: 'Message', ok: 'Send' });
+    const text = await ask.ask({ title: 'Announce', label: 'Announcement', ok: 'Send' });
     if (text == null || !text.trim()) return;
     try { await post(`/api/t/runs/${runId}/message`, { text }); } catch (e) { alertBox(e.message); }
   });

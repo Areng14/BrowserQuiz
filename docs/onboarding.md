@@ -58,7 +58,7 @@ One row per student, updated every couple of seconds. You can find the live page
 
 - **The table.** Status, integrity, strikes, progress, time left and score. The progress bar's color shows if they're working, reading or idle. You can also click on a title to sort by name, progress, etc.
 - **Watch.** Monitor any student's screen. You see their quiz page, not their whole screen.
-- **Message students.** Pops up on everyone's screen, or just one student's from their row.
+- **Announce.** Pops up on everyone's screen. To message one student, use their row's ⋯.
 - **Add time.** For one student from their row, or everyone from the quiz's ⋯ menu.
 - **Pause quiz.** You may pause a quiz which stops the questions from showing and freezes the timer for breaks or emergencies.
 - **Close quiz.** Closes the quiz and turns in everyone's quiz.
