@@ -194,7 +194,7 @@ function codeEditor(q) {
   const rubric = fill ? null : rubricEditor(q, 'Uses private instance variables', refLangs);
   // Methods students may not use: comma separated, one list for every language or one per language (a
   // Class.method entry names one language's class). Using one scores 0 (server/src/bans.js).
-  const banLangs = q.languages.filter(BT.hasBans);
+  const banLangs = fill ? [] : q.languages.filter(BT.hasBans); // a fill question has no languages of its own, nor bans
   const parse = (v) => v.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
   const cppOnly = (l) => l === 'cpp' || (!l && banLangs.length === 1 && banLangs[0] === 'cpp');
   const banField = (label, list, set, hint, l) => field(label, input(q, list.map((b) => (cppOnly(l) ? b.replace('.', '::') : b)).join(', '), (v) => set(parse(v)),

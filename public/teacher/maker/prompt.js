@@ -1,21 +1,40 @@
-// The prompt, what students see (redrawn as you type), and rubrics.
+// The prompt (shown as students read it until you click in to edit it), and rubrics.
 
 import { h } from '../dash/core.js';
 import { ed } from './state.js';
-import { BLANK, BT, LANGS } from './formats.js';
-import { readCode, readTrace, starterCode } from './model.js';
-import { MOD, insert, wrap } from './editing.js';
-import { M, area, graphShapes, input, touch, xBtn } from './core.js';
-import { addImage, addInlineImage, assetSrc, imageEditor, imageSrc } from './choices.js';
+import { LANGS } from './formats.js';
+import { MOD, grow, insert, wrap } from './editing.js';
+import { area, input, touch, xBtn } from './core.js';
+import { addImage, addInlineImage, assetSrc, imageEditor } from './choices.js';
 import { renderPane } from './pane.js';
 
 // ---------- prompt ----------
+// Whether a mouse button or finger is down: leaving the prompt that way waits for the click to finish
+// before the prompt changes size, or what was clicked would move out from under it.
+let pressing = false;
+addEventListener('pointerdown', () => { pressing = true; }, true);
+addEventListener('pointerup', () => { pressing = false; }, true);
+addEventListener('pointercancel', () => { pressing = false; }, true);
 function promptEditor(q) {
   const ta = area(q, q.prompt, (v) => { q.prompt = v; }, { id: 'qe-prompt', rows: 4, spellcheck: 'true' });
   const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml' });
   file.addEventListener('change', () => addImage(q, file.files[0]));
   const fence = () => { const s = ta.value.slice(0, ta.selectionStart); wrap(ta, `${s && !s.endsWith('\n') ? '\n' : ''}\`\`\`${ed.quiz.language === 'none' ? '' : ed.quiz.language}\n`, '\n```\n'); };
-  const tool = (text, title, fn, cls) => h('button', { class: `qe-tool ${cls || ''}`, type: 'button', text, title, onclick: fn });
+  // a mousedown that keeps the focus in the prompt, so it doesn't flip to the read view and back
+  const tool = (text, title, fn, cls) => h('button', { class: `qe-tool ${cls || ''}`, type: 'button', text, title, onclick: fn, onmousedown: (e) => { if (document.activeElement === ta) e.preventDefault(); } });
+  const view = h('div', { class: 'qe-pview prompt', 'aria-hidden': 'true' });
+  const box = h('div', { class: 'qe-pbox' }, view, ta);
+  const paint = () => {
+    const editing = document.activeElement === ta || !ta.value.trim();
+    box.classList.toggle('editing', editing);
+    if (editing) { grow(ta); return; }
+    const md = window.BQ && window.BQ.md;
+    view.replaceChildren(md ? md.render(ta.value, { lang: ed.quiz.language, assetUrl: assetSrc }) : ta.value);
+  };
+  ta.addEventListener('focus', paint);
+  ta.addEventListener('blur', () => { if (pressing) addEventListener('pointerup', () => setTimeout(paint), { once: true, capture: true }); else paint(); });
+  view.addEventListener('mousedown', (e) => { e.preventDefault(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); });
+  paint();
   ta.addEventListener('keydown', (e) => {
     const mod = e.ctrlKey || e.metaKey;
     const k = e.key.toLowerCase();
@@ -49,91 +68,12 @@ function promptEditor(q) {
         insert(ta, `${s && !s.endsWith('\n') ? '\n\n' : s && !s.endsWith('\n\n') ? '\n' : ''}| Column | Column |\n| --- | --- |\n|  |  |\n`);
       }),
       tool('Image', q.image ? 'Add another image where the cursor is. You can also paste or drop one' : 'Add an image. You can also paste or drop one into the prompt', () => (q.image ? moreFile : file).click())),
-    ta, file, moreFile), imageEditor(q, file)];
+    box, file, moreFile), imageEditor(q, file)];
 }
 
-// What the student gets, redrawn as you type.
-// With random values, the preview shows the first row's.
+// With random values, the first row's values in place of {{name}}
 const firstRow = (v, row) => (typeof v === 'string' ? v.replace(/\{\{\s*([A-Za-z_]\w*)\s*\}\}/g, (m, n) => (Object.hasOwn(row, n) ? String(row[n]) : m))
   : Array.isArray(v) ? v.map((x) => firstRow(x, row)) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'vars' && k !== '_ui').map(([k, x]) => [k, firstRow(x, row)])) : v);
-function studentView(q0) {
-  const q = Array.isArray(q0.vars) && q0.vars[0] ? Object.assign(firstRow(q0, q0.vars[0]), { _ui: q0._ui }) : q0;
-  const md = window.BQ && window.BQ.md;
-  const out = [];
-  const opts = { lang: ed.quiz.language, assetUrl: assetSrc };
-  for (const sid of [].concat(q.shared || [])) {
-    const sm = (ed.quiz.shared || []).find((x) => x.id === sid);
-    if (!sm || !((sm.text || '').trim() || sm.title || sm.image)) continue;
-    const body = h('div', { class: 'prompt' });
-    if (md) body.append(md.render(sm.text || '', opts)); else body.textContent = sm.text || '';
-    out.push(h('section', { class: 'shared' }, sm.title ? h('p', { class: 'shared-title', text: sm.title }) : null, body,
-      sm.image && imageSrc(sm) ? h('img', { class: 'qimg', src: imageSrc(sm), alt: sm.imageAlt || '' }) : null));
-  }
-  // a graph question whose prompt ends in a graph: that graph goes beside the grid (student app/mathq.js)
-  const lastGraph = q.type === 'graph' && window.BQGraph ? /\n*```[ \t]*graph[ \t]*\n([\s\S]*?)\n```[ \t]*$/i.exec(q.prompt) : null;
-  const promptText = lastGraph ? q.prompt.slice(0, lastGraph.index) : q.prompt;
-  const prompt = h('div', { class: 'prompt' });
-  if (md) prompt.append(md.render(promptText, opts)); else prompt.textContent = promptText;
-  out.push(prompt);
-  if (q.image && imageSrc(q)) out.push(h('img', { class: 'qimg', src: imageSrc(q), alt: q.imageAlt || '' }));
-  if (q.type === 'single' || q.type === 'multi') {
-    out.push(h('div', { class: 'choices' }, q.choices.filter((c) => c.trim()).map((c) => {
-      const rich = /\n/.test(c);
-      const text = h(rich ? 'div' : 'span', { class: 'choice-text' + (rich ? ' choice-rich' : '') });
-      if (md) text.append(rich ? md.render(c, opts) : md.renderInline(c, opts)); else text.textContent = c;
-      return h('div', { class: 'choice' }, h('input', { type: q.type === 'multi' ? 'checkbox' : 'radio', tabindex: '-1' }), text);
-    })));
-  }
-  if (q.type === 'text') out.push(h('input', { class: 'input text-answer', tabindex: '-1', 'aria-hidden': 'true' }));
-  if (q.type === 'math') {
-    out.push(h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'Your answer' }), h('div', { class: 'math-box' }, h('div', { class: 'math-field' })),
-      h('div', { class: 'math-keys' }, ['a/b', '√', 'x²', 'xʸ', 'π', '|x|', '≤', '≥', '±'].map((k) => h('span', { class: 'math-key', text: k })))));
-  }
-  if (q.type === 'graph' && window.BQGraph && M) {
-    const g = graphShapes(q0);
-    const kinds = [...new Set((g.shapes || []).map((s) => s.kind))];
-    const tools = Array.isArray(q.tools) && q.tools.length ? q.tools : kinds.length ? kinds : ['point'];
-    if (!g.problem || g.shapes) {
-      try {
-        const grid = window.BQGraph.editor({ window: q.window, step: q.step, tools: M.shapes.KINDS.filter((k) => tools.includes(k)), shade: (g.shapes || []).some((s) => s.side), value: [], onChange: () => {} }).el;
-        out.push(lastGraph ? h('div', { class: 'gr-pair' }, window.BQGraph.block(lastGraph[1]), grid) : grid);
-      } catch (e) { /* a window that can't be drawn yet: the problem says so */ }
-    }
-  }
-  const codeBlock = () => ((q.code || '').trim() ? h('pre', { class: 'md-code' }, h('code', { text: q.code.trimEnd() })) : null);
-  const box = (label, rows, mono) => h('div', { class: 'field' }, h('span', { class: 'field-label', text: label }),
-    h('textarea', { class: `input long-answer${mono ? ' mono' : ''}`, rows, tabindex: '-1', 'aria-hidden': 'true' }));
-  if (q.type === 'output') out.push(codeBlock(), box('Output', 4, true));
-  if (q.type === 'trace') {
-    const t = readTrace(q);
-    const given = new Set(t.given.map((g) => g.join(',')));
-    out.push(codeBlock(), h('div', { class: 'trace-wrap' }, h('table', { class: 'trace' },
-      h('thead', {}, h('tr', {}, t.columns.map((c) => h('th', { text: c || ' ' })))),
-      h('tbody', {}, t.rows.map((row, r) => h('tr', {}, row.map((v, c) => (given.has(`${r},${c}`)
-        ? h('td', { class: 'given', text: v }) : h('td', {}, h('input', { class: 'trace-cell', tabindex: '-1', 'aria-hidden': 'true' }))))))))));
-  }
-  if (q.type === 'fill') {
-    const pre = h('pre', { class: 'md-code fill-code' });
-    const pieces = (q.code || '').trimEnd().split(BLANK);
-    pieces.forEach((seg, i) => {
-      if (seg) pre.append(h('code', { text: seg }));
-      if (i < pieces.length - 1) pre.append(h('input', { class: 'blank', tabindex: '-1', 'aria-hidden': 'true', style: 'width: 6ch' }));
-    });
-    if ((q.code || '').trim()) out.push(pre);
-    if (q._ui.run) out.push(h('div', {}, h('button', { class: 'btn small primary', type: 'button', tabindex: '-1', text: 'Run examples' })));
-  }
-  if (q.type === 'essay') out.push(box('Your answer', 6, !!q.language));
-  if (q.type === 'code') {
-    const lang = q.languages[0];
-    const custom = q.starter && typeof q.starter === 'object' ? q.starter[lang] : null;
-    const rc = readCode(q);
-    const shape = rc.shape;
-    if (rc.types) out.push(h('p', { class: 'sub', text: 'Classes you can use' }), h('pre', { class: 'md-code' }, h('code', { text: BT.classSource(rc.types, lang, true).trimEnd() })));
-    const code = custom || (shape ? starterCode(shape, lang, q.starter === 'empty') : '');
-    if (code) out.push(h('pre', { class: 'md-code' }, h('code', { text: code.trimEnd() })));
-  }
-  return out.filter(Boolean);
-}
 
 // ---------- rubric, for code and written answers ----------
 // On code questions (langs given) an item can grade itself: a regex the code must have, or must not
@@ -182,4 +122,4 @@ function rubricEditor(q, placeholder, langs) {
     h('div', { class: 'qe-line' }, h('button', { class: 'btn small', type: 'button', text: 'Add rubric item', onclick: add }), worth)) };
 }
 
-export { BAN_HINT, firstRow, promptEditor, rubricEditor, studentView };
+export { BAN_HINT, firstRow, promptEditor, rubricEditor };

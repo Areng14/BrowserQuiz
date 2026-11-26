@@ -1,0 +1,262 @@
+/* Quiz maker: a bar on top, then the whole quiz as one list. A row for each question says what it asks and
+   what the answer is; the one being edited opens in its place, and Add question comes last. */
+.qe { max-width: 1080px; margin: 0 auto; padding: 0 var(--gut-r) 64px var(--gut-l); }
+.qe-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px 12px; min-height: 64px; padding: 12px 0; background: var(--bg); border-bottom: 1px solid var(--line); }
+.qe-title { flex: 0 1 420px; min-width: 140px; font-weight: 600; } /* it gives way first, so the bar stays one line */
+.qe-grow { flex: 1; }
+.qe-total, .qe-status, .qe-undo { color: var(--ink-2); white-space: nowrap; }
+.qe-status.t-error { color: var(--bad); }
+.qe-total:empty, .qe-undo:empty { display: none; }
+.qe-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; min-width: 0; padding-top: 24px; }
+
+/* The list: each part's heading (its kind and points), sections, and a row per question */
+.qe-outline { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.qe-part { display: flex; align-items: baseline; gap: 12px; margin-top: 16px; padding: 0 4px; }
+.qe-outline > :first-child { margin-top: 0; }
+.t-app h2.qe-part-name { margin: 0; font-size: 17px; font-weight: 600; }
+.qe-part-pts { font-size: 14px; color: var(--ink-2); }
+.qe-divider { margin-top: 24px; }
+.qe-div-btn { display: flex; align-items: baseline; gap: 12px; width: 100%; min-height: 48px; padding: 12px 16px; font: 600 17px/1.35 var(--font); color: var(--ink); text-align: left; background: var(--soft); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.qe-div-meta { font-size: 14px; font-weight: 400; color: var(--ink-2); }
+.qe-row-btn { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 16px; font: 15px/1.45 var(--font); color: var(--ink); text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.qe-row-btn:hover, .qe-div-btn:hover { border-color: color-mix(in srgb, var(--ink-2) 45%, var(--line)); }
+.qe-row.sel .qe-row-btn { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.qe-row-btn:focus-visible, .qe-div-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.qe-row-n { flex: none; width: 1.6em; text-align: right; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.qe-row-main { flex: 1; display: grid; gap: 2px; min-width: 0; }
+.qe-row-text, .qe-row-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qe-row-sub { font-size: 14px; }
+.qe-row-sub.t-error { color: var(--bad); }
+.qe-row-sub.qe-todo { color: var(--ink-2); }
+.qe-row-k { color: var(--ink-2); }
+.qe-row-sub code, .qe-row-text code { font: 13px var(--mono); }
+.qe-row-end { flex: none; display: flex; align-items: center; gap: 12px; }
+.qe-row-pool { max-width: 8em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--ink-2); }
+.qe-row-pts { min-width: 3.4em; text-align: right; font-size: 14px; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.qe-row .qe-grip, .qe-head > .qe-grip { cursor: grab; }
+.qe-dragging { opacity: 0.4; }
+.qe-drop-before { box-shadow: 0 -2px 0 var(--accent); }
+.qe-drop-after { box-shadow: 0 2px 0 var(--accent); }
+/* a graph question's answer, small, in its row */
+.qe-gthumb { flex: none; display: block; width: 44px; height: 44px; overflow: hidden; background: var(--editor, var(--bg)); border: 1px solid var(--line); border-radius: 4px; }
+.qe-gthumb .gr-view { width: 42px; max-width: none; }
+.qe-gthumb .gr-svg { display: block; width: 42px; height: 42px; }
+.qe-gthumb .gr-ticks, .qe-gthumb .gr-label, .qe-gthumb .gr-grid line:not(.axis) { display: none; }
+.qe-gthumb .gr-grid line.axis, .qe-gthumb .gr-curve { vector-effect: non-scaling-stroke; }
+.qe-gthumb .gr-grid line.axis { stroke: var(--line); stroke-width: 1px; }
+.qe-gthumb .gr-curve { stroke-width: 2px; }
+.qe-gthumb .gr-dot { r: 24px; stroke: none; }
+
+/* What's open (a question, a section or Settings) sits in its place, its parts split by lines, not boxes */
+.qe-open { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; padding: 16px 20px 20px; border: 1px solid var(--accent); border-radius: 10px; box-shadow: 0 0 0 1px var(--accent); scroll-margin-top: 96px; }
+.qe-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.t-app h2.qe-n { margin: 0 4px 0 0; font-size: 18px; font-weight: 700; }
+.qe-open .qe-card { padding: 0; border: 0; border-radius: 0; }
+.qe-open details.qe-card:not([open]) { padding-bottom: 0; }
+.qe-open > .qe-stack > :is(.qe-card, .qe-codegrid, .qe-more) + :is(.qe-card, .qe-codegrid, .qe-more), .qe-settings-cards > * + * { padding-top: 16px; border-top: 1px solid var(--line); }
+/* a section's short fields stay short */
+.qe-open-div .field > input[type="number"] { max-width: 160px; }
+.qe-open-div .field > select { max-width: 360px; }
+.qe-open .qe-more[open] > .qe-stack { margin-top: 12px; padding: 0; border: 0; }
+.qe-settings-cards { display: grid; gap: 16px; }
+/* a graph question: its fields, and the answer drawn beside them */
+.qe-graph-ans { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 24px; }
+.qe-graph-ans > .qe-stack { flex: 1 1 340px; }
+.qe-graph-answer { flex: 0 1 220px; display: grid; gap: 6px; min-width: 0; }
+.qe-graph-answer:empty { display: none; }
+.qe-graph-answer .gr-view { max-width: 220px; }
+
+/* The prompt: Markdown while you're in it, the way it reads when you're not */
+.qe-pbox { position: relative; }
+.qe-pbox:not(.editing) > textarea { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.qe-pbox.editing > .qe-pview { display: none; }
+.qe-pview { min-height: 64px; padding: 8px 10px; font-size: 16px; background: var(--bg); border: 1px solid var(--field-line); border-radius: 6px; cursor: text; overflow-wrap: anywhere; }
+.qe-pview:hover { border-color: var(--ink-2); }
+.qe-pview > :first-child { margin-top: 0; }
+.qe-pview > :last-child { margin-bottom: 0; }
+.qe-pview .gr-block { max-width: 360px; margin: 12px 0; }
+
+/* Add question: one button at the end of the list, the kinds in two columns under it */
+.qe-add { display: grid; gap: 6px; }
+.qe-add-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 40px; font: 600 15px var(--font); color: var(--ink); background: none; border: 1px dashed color-mix(in srgb, var(--ink-2) 55%, var(--line)); border-radius: 10px; cursor: pointer; }
+.qe-add-btn:hover { color: var(--accent); border-color: var(--accent); }
+.qe-add-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.qe-add-btn svg:last-child { transition: transform 0.15s; }
+.qe-add-btn[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
+.qe-add-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08); }
+.qe-add-menu[hidden] { display: none; }
+.qe-add-sep { grid-column: 1 / -1; width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
+.qe-keys { padding: 0 4px; color: var(--ink-2); }
+.qe-title { max-width: 440px; font-weight: 600; }
+.qe-grow { flex: 1; }
+.qe-status { color: var(--ink-2); white-space: nowrap; }
+.qe-status.t-error { color: var(--bad); }
+
+/* The open question's parts, each in a box of its own; the rarely used ones folded away */
+.qe-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; padding: 16px 18px 18px; border: 1px solid var(--line); border-radius: 10px; }
+.t-app .qe-card-title { font-size: 15px; font-weight: 600; line-height: 1.35; }
+details.qe-card > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; cursor: pointer; list-style: none; }
+details.qe-card > summary::-webkit-details-marker { display: none; }
+details.qe-card > summary::before, .qe-more > summary::before, .qe-paste > summary::before, .qe-keys > summary::before { content: ''; flex: none; width: 7px; height: 7px; margin: 0 2px 2px 2px; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(-45deg); transition: transform 0.15s; }
+details.qe-card[open] > summary::before, .qe-more[open] > summary::before, .qe-paste[open] > summary::before, .qe-keys[open] > summary::before { transform: rotate(45deg); margin-bottom: 4px; }
+details.qe-card:not([open]) { padding-bottom: 16px; }
+.qe-rules[open] .qe-rules-said { display: none; }
+.qe-more > summary { display: flex; align-items: center; gap: 8px; width: max-content; padding: 4px 0; font-weight: 500; color: var(--accent); cursor: pointer; list-style: none; }
+.qe-more > summary::-webkit-details-marker { display: none; }
+.qe-more > summary::before { border-color: var(--accent); }
+.qe-more[open] > .qe-stack { margin-top: 10px; padding: 16px 18px 18px; border: 1px solid var(--line); border-radius: 10px; }
+.qe-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.qe-add-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; font: 500 14px var(--font); color: var(--ink); text-align: left; background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.qe-add-item svg { flex: none; color: var(--ink-2); }
+.qe-add-item:hover:not(:disabled), .qe-add-item:focus-visible { background: var(--soft); outline: none; }
+.qe-add-item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.qe-add-item:disabled { color: var(--ink-2); cursor: default; }
+.qe-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.qe-tile { display: grid; justify-items: start; align-content: start; gap: 3px; padding: 16px 16px 15px; font: inherit; color: var(--ink); text-align: left; background: none; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.qe-tile svg { margin-bottom: 8px; color: var(--accent); }
+.qe-tile:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.qe-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.qe-tile-name { font-weight: 600; }
+.qe-tile-hint { font-size: 13px; color: var(--ink-2); }
+
+/* The open question's head: its number, kind and points, then moving, copying and deleting it */
+.qe-type { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-2); }
+.btn.qe-act { display: inline-flex; align-items: center; gap: 6px; }
+.btn.qe-act svg { color: var(--ink-2); }
+
+/* Choices: the right one says so */
+.qe-choice-row { position: relative; }
+.qe-mark { display: inline-flex; align-items: center; flex: none; min-width: 22px; min-height: 40px; cursor: pointer; }
+/* "Correct" sits inside the right one's box, at its end, so the boxes stay lined up */
+.qe-mark-text { display: none; position: absolute; top: 10px; right: 58px; font-size: 13px; font-weight: 600; line-height: 20px; color: var(--good); pointer-events: none; }
+.qe-choice.right .qe-mark-text { display: block; }
+.qe-choice.right .qe-choice-text { padding-right: 76px; border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+
+/* A code question: its languages as toggles, its reference solutions in tabs */
+.qe-langs { display: flex; flex-wrap: wrap; gap: 6px; }
+.t-check.qe-lang { min-height: 34px; padding: 0 11px 0 10px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.t-check.qe-lang:has(input:checked) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.t-check.qe-lang:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.t-tabs.qe-reftabs { flex-wrap: wrap; margin: 0; }
+.qe-reftabs .t-tab { flex: 0 1 auto; min-width: 72px; }
+
+.qe-name-row > .field { flex: 1 1 200px; min-width: 0; }
+.qe-dragging { opacity: 0.4; }
+.qe-drop-before { box-shadow: 0 -2px 0 var(--accent); }
+.qe-drop-after { box-shadow: 0 2px 0 var(--accent); }
+.qe-keys summary, .qe-paste summary { cursor: pointer; width: max-content; }
+.qe-keys dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0 0; }
+.qe-keys dt { color: var(--ink); white-space: nowrap; }
+.qe-keys dd { margin: 0; }
+
+.qe-narrow { width: auto; }
+.qe-pts { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink-2); }
+.qe-problems { margin: 0; padding: 10px 12px 10px 30px; border: 1px solid var(--bad); border-radius: 6px; }
+.qe-codegrid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+.qe-codegrid { gap: 16px 28px; }
+.qe-stack { display: grid; gap: 14px; min-width: 0; }
+.qe-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+/* fields side by side: their boxes on one line, as tall as each other */
+.qe-fields { align-items: end; }
+.qe-fields .input.t-points { height: 40px; min-height: 40px; }
+/* a math answer as it will be read, after its label */
+.qe-math-reads { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.qe-math-reads:empty { display: none; }
+.qe-name { max-width: 460px; }
+.qe-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); gap: 12px; }
+.qe-settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; align-items: end; max-width: 900px; }
+.qe-area { display: block; padding: 8px 10px; line-height: 1.5; resize: none; overflow: hidden; }
+.qe-mono { font-family: var(--mono); font-size: 14px; }
+.qe-code { tab-size: 4; white-space: pre; overflow-x: auto; }
+.qe-note { color: var(--ink-2); white-space: pre-wrap; font-weight: 400; }
+.qe-note:empty { display: none; }
+.qe-ref { display: grid; gap: 6px; }
+
+.qe-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.qe-tool { display: inline-flex; align-items: center; justify-content: center; min-height: 26px; padding: 0 8px; font: 13px var(--font); color: var(--ink-2); background: none; border: 0; border-radius: 4px; cursor: pointer; }
+.qe-tool:hover { color: var(--ink); background: var(--soft); }
+.qe-tool.b { font-weight: 700; }
+.qe-tool.i { font-style: italic; font-family: Georgia, serif; }
+.qe-choices { display: grid; gap: 6px; }
+.qe-choice { display: flex; align-items: center; gap: 8px; }
+.qe-shared { display: grid; gap: 8px; }
+.qe-shared.on { padding: 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; }
+.qe-shared .qe-line { gap: 8px 12px; }
+.qe-rubric-item { display: grid; gap: 6px; }
+.qe-rubric-item + .qe-rubric-item { margin-top: 6px; }
+.qe-rubric-auto { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.qe-pattern-group { display: grid; gap: 4px; }
+.qe-pattern-label { font-weight: 600; }
+.qe-pattern { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.qe-pattern > .t-small { width: 52px; flex: none; }
+.qe-pattern .input { flex: 1; }
+.qe-pattern .input { min-width: 0; }
+.qe-choice input[type="radio"], .qe-choice input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
+/* A choice can grow to several lines (Shift+Enter): the marks stay level with its first line. */
+.qe-choice-row { align-items: flex-start; }
+.qe-choice-row > input[type="radio"], .qe-choice-row > input[type="checkbox"] { margin-top: 11px; }
+.qe-choice-row > .qe-grip { margin-top: 0; min-height: 40px; } /* as tall as its row, centered on it */
+.qe-choice-text { flex: 1; min-width: 0; min-height: 40px; }
+.qe-grip { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; min-height: 24px; padding: 0; color: var(--ink-2); background: none; border: 0; border-radius: 4px; cursor: grab; user-select: none; }
+.qe-grip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Square icon buttons: remove buttons match the 40px fields beside them, move buttons the small buttons beside them */
+.btn.qe-x, .btn.qe-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; color: var(--ink-2); }
+.btn.qe-x { width: 40px; min-height: 40px; }
+.btn.qe-icon { width: 34px; }
+.qe-image { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.qe-thumb { max-width: 200px; max-height: 140px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.qe-image-side { flex: 1 1 240px; display: grid; gap: 8px; }
+.qe-paste[open] { display: grid; gap: 8px; }
+.qe-paste summary { color: var(--accent); }
+.qe-paste > summary { display: flex; align-items: center; gap: 8px; list-style: none; }
+.qe-paste > summary::-webkit-details-marker { display: none; }
+.qe-paste > summary::before { border-color: var(--accent); }
+.qe-keys > summary { display: flex; align-items: center; gap: 8px; list-style: none; }
+.qe-keys > summary::-webkit-details-marker { display: none; }
+
+
+/* Trace table, blanks */
+.qe-tools .qe-narrow { min-height: 28px; margin-left: 6px; padding: 0 6px; font-size: 13px; }
+.qe-grid-wrap { overflow-x: auto; padding: 1px; }
+.qe-grid { border-collapse: collapse; font: 14px var(--mono); }
+.qe-grid th, .qe-grid td { padding: 0; border: 1px solid var(--line); }
+.qe-grid th, .qe-grid td.given { background: var(--soft); }
+.qe-grid td.qe-grid-side { padding: 0 0 0 8px; border: 0; background: none; white-space: nowrap; }
+.qe-cell { display: flex; align-items: center; gap: 2px; padding-right: 6px; }
+.qe-gridcell { width: 100%; min-width: 64px; padding: 7px 8px; font: inherit; text-align: center; color: var(--ink); background: transparent; border: 0; }
+th .qe-gridcell { font: 600 13px var(--font); }
+.qe-gridcell:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qe-cell .qe-tool { padding: 0 4px; }
+.qe-blanks { display: grid; gap: 10px; }
+.qe-blank { display: grid; grid-template-columns: 1.5em minmax(0, 1fr); gap: 8px; align-items: start; }
+.qe-blank .qe-row-n { padding-top: 1px; font-size: 14px; }
+.qe-blank-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qe-tight { gap: 4px; }
+
+@media (max-width: 1000px) {
+  .qe-codegrid { grid-template-columns: minmax(0, 1fr); }
+  .btn.qe-act { padding-inline: 10px; }
+}
+@media (max-width: 760px) { .qe-bar { flex-wrap: wrap; } }
+@media (max-width: 560px) {
+  .qe-bar { position: static; } /* a phone's screen is too short to keep it stuck on top */
+  .qe-title, .qe-total { flex-basis: 100%; }
+  .qe-head > .qe-grip { display: none; }
+  .qe-row-btn { gap: 8px; padding: 10px 12px; }
+  .qe-row .qe-grip, .qe-row-pool { display: none; } /* phones don't drag; Alt+Shift+arrows or the menu move */
+  .qe-open { padding: 12px 12px 16px; }
+  .qe-add-menu { grid-template-columns: minmax(0, 1fr); }
+  .btn.qe-act { width: 34px; padding: 0; justify-content: center; font-size: 0; } /* icons only; aria still has their names */
+  .btn.qe-act svg { width: 16px; height: 16px; }
+  .qe-card { padding: 14px 14px 16px; }
+}
+
+/* the same heights for controls side by side (arenguidesign) */
+.qe-head .input { height: 34px; min-height: 34px; padding-block: 0; } /* the question's head: all small, like its buttons */
+.qe-tools .input.qe-narrow { height: 34px; min-height: 34px; padding-block: 0; }
+.qe-tools .qe-tool { min-height: 34px; } /* the same height as the language picker beside them */
+.qe-choice > .input.t-points { height: 40px; min-height: 40px; } /* a rubric item's points, as tall as its text */
+.qe-cell .qe-tool { min-height: 30px; } /* a trace column's remove button, as tall as its name */
+@media (pointer: coarse) { .qe-tool { min-height: 40px; min-width: 40px; } .qe-grip { min-width: 40px; } }
+

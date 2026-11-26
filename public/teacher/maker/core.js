@@ -182,4 +182,4 @@ const poolSettings = (q) => {
 };
 const xBtn = (label, onclick, disabled) => h('button', { class: 'btn small qe-x', type: 'button', 'aria-label': label, title: label, disabled, onclick }, icon(ICONS.x, 16));
 
-export { FORMS, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, imageMissing, input, markdownImages, nextId, poolSettings, problemsOf, refreshSoon, setStatus, touch, typeset, varsEditor, xBtn };
+export { FORMS, FORM_WORDS, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, imageMissing, input, markdownImages, nextId, poolSettings, problemsOf, refreshSoon, setStatus, touch, typeset, varsEditor, xBtn };

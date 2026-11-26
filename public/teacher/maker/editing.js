@@ -61,12 +61,13 @@ function sortable(rows, onMove, handleOf) {
     const handle = handleOf && handleOf(row);
     if (handle) handle.addEventListener('mousedown', () => { row.draggable = true; }); else row.draggable = true;
     row.addEventListener('dragstart', (e) => {
+      if (e.target !== row) return; // a list inside this row being dragged
       from = i;
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', String(i + 1));
       row.classList.add('qe-dragging');
     });
-    row.addEventListener('dragend', () => { from = -1; clear(); if (handle) row.draggable = false; });
+    row.addEventListener('dragend', (e) => { if (e.target !== row) return; from = -1; clear(); if (handle) row.draggable = false; });
     row.addEventListener('dragover', (e) => {
       if (from < 0) return;
       e.preventDefault();
