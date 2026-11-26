@@ -212,9 +212,12 @@ details.qe-card:not([open]) { padding-bottom: 16px; }
 .qe-image-side { flex: 1 1 240px; display: grid; gap: 8px; }
 .qe-paste[open] { display: grid; gap: 8px; }
 .qe-paste summary { color: var(--accent); }
-.qe-paste > summary { display: flex; align-items: center; gap: 8px; list-style: none; }
+.qe-paste > summary { display: flex; align-items: center; gap: 8px; font-weight: 500; list-style: none; } /* like More options */
 .qe-paste > summary::-webkit-details-marker { display: none; }
 .qe-paste > summary::before { border-color: var(--accent); }
+/* Settings' "Paste a quiz.json" is a card beside Quiz and Directions: its title looks like theirs (and like Rules and grading) */
+.qe-card.qe-paste > summary { color: var(--ink); }
+.qe-card.qe-paste > summary::before { border-color: var(--ink-2); }
 .qe-keys > summary { display: flex; align-items: center; gap: 8px; list-style: none; }
 .qe-keys > summary::-webkit-details-marker { display: none; }
 
