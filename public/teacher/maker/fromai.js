@@ -28,6 +28,13 @@ function aiCard(close) {
   paste.addEventListener('input', () => grow(paste));
   const msg = h('p', { class: 't-error qe-ai-msg', role: 'alert' });
   const addBtn = h('button', { class: 'btn small', type: 'button', text: 'Add question' });
+  // Ctrl+Enter adds what was pasted, not the maker's blank new question (which would throw the paste away)
+  paste.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    addBtn.click();
+  });
   addBtn.addEventListener('click', async () => {
     msg.textContent = '';
     let list;
