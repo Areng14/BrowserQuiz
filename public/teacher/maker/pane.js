@@ -371,9 +371,11 @@ function renderPane() {
   sortable(rows, moveQuestion, (row) => row.querySelector('.qe-grip'));
   ed.outline.replaceChildren(...kids);
   const ai = ed.aiOpen ? h('section', { class: 'qe-open qe-open-ai', 'aria-label': 'Question from an AI' }, aiCard(closeOpen)) : null;
-  const top = settingsOpen() ? h('section', { class: 'qe-open qe-open-settings', 'aria-label': 'Settings' }, settingsPane())
-    : !qs.length && !ai ? h('section', { class: 'qe-start' }, startPane()) : null;
-  ed.pane.replaceChildren(...[top, ed.outline, ai, qs.length && !ai ? ed.addWrap : null, ed.keysEl].filter(Boolean));
+  // Settings at the top when open; a quiz with no questions yet shows the kinds to start with (under
+  // Settings too, so the first question is never more than a click away)
+  const settings = settingsOpen() ? h('section', { class: 'qe-open qe-open-settings', 'aria-label': 'Settings' }, settingsPane()) : null;
+  const start = !qs.length && !ai ? h('section', { class: 'qe-start' }, startPane()) : null;
+  ed.pane.replaceChildren(...[settings, start, ed.outline, ai, qs.length && !ai ? ed.addWrap : null, ed.keysEl].filter(Boolean));
   ed.pane.querySelectorAll('textarea.qe-area').forEach(grow);
   if (ed.paneTick) ed.paneTick();
   renderOutline();
