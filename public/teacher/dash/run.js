@@ -234,7 +234,8 @@ async function showRun(runId) {
       // In the row: what needs deciding now. The rest is under ⋯.
       const more = [];
       const bad = a && a.integrity === 'invalidated';
-      if (a && a.status === 'waiting' && begun) actions.append(btn('Start', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`), a.checks ? [{ name: s.name, checks: a.checks }] : [], a.ready ? 0 : 1), { class: 'btn small primary' }));
+      // late and flagged: they wait for the teacher (the rest go straight in once it's begun: student.js /api/ready)
+      if (a && a.status === 'waiting' && begun && a.checks) actions.append(btn('Start', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`), a.checks ? [{ name: s.name, checks: a.checks }] : [], a.ready ? 0 : 1), { class: 'btn small primary' }));
       if (bad) actions.append(btn('Un-invalidate', 'restore', () => unInvalidate(a.id, s.name)));
       // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
       // popup doesn't end anyone's quiz without the teacher looking).

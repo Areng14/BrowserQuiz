@@ -134,6 +134,10 @@ function sameArea(x, y) {
   const b = y.split('.');
   return a.length === 4 && b.length === 4 && a.slice(0, 3).join('.') === b.slice(0, 3).join('.');
 }
+// The teacher has started the quiz: someone in it has been let in, is taking it, or turned it in.
+const begun = (run) => !!q("SELECT 1 FROM attempts WHERE run_id = ? AND archived = 0 AND status IN ('admitted', 'active', 'submitted') LIMIT 1").get(run.id);
+// A sign-in the teacher looks at before starting them (teacher/live.js checks)
+const flagged = (a) => !!q("SELECT 1 FROM events WHERE attempt_id = ? AND type IN ('new-network', 'same-browser') LIMIT 1").get(a.id);
 // A network the student hasn't started a quiz from before (their earlier exams for this teacher, in any
 // class, matched by student ID). Evidence only: a new school address or a phone hotspot explains it too.
 // Checked when they sign in, so the teacher sees it before admitting them (teacher/common.js liveRow checks),
@@ -507,6 +511,13 @@ module.exports = function studentRoutes(r) {
       a.readyAt = now;
       a.lastBeat = now;
       a.beatLost = false;
+      // Late: the teacher already started the quiz, so they go straight in, unless their sign-in needs a
+      // look first (a new network, a browser another student used: the teacher's checklist asks about those)
+      if (a.status === 'waiting' && begun(run) && !flagged(a)) {
+        a.status = 'admitted';
+        a.admittedAt = now;
+        store.logEvent(a, 'admit', 'info', 'joined after the start');
+      }
       store.save(a);
     }
     json(res, 200, { admitted: a.status === 'admitted' });

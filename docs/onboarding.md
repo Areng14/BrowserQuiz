@@ -50,7 +50,7 @@ Pick the quiz, the class and a mode on **Give a quiz**, then click **Start quiz*
 2. Students go to the address on your screen, type the code, pick their name and type their ID.
 3. They read the rules and click **I agree**, which puts them in lockdown to wait.
 4. Once everyone is ready, go around the room and ensure that they are sitting at the right computer and signed in as themselves.
-5. Click **Start quiz**. Everyone starts together on one clock, and anyone late gets a **Start** button on their row.
+5. Click **Start quiz**. Everyone starts together on one clock. Anyone late starts as soon as they agree to the rules, unless their sign-in needs a look (a new network, or a browser another student used): then they get a **Start** button on their row.
 
 ## Proctoring the quiz
 
