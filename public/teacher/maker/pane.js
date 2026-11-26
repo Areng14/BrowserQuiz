@@ -68,7 +68,7 @@ function questionPane(q, i) {
     const form = h('select', { class: 'input qe-narrow' }, FORMS.map(([v, t]) => h('option', { value: v, text: t, selected: (q.form || '') === v })));
     form.addEventListener('change', () => { if (form.value) q.form = form.value; else delete q.form; touch(q); });
     answer.push(field('One per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'x = 4' })), reads,
-      h('div', { class: 'qe-line' }, field('Answer form', form),
+      h('div', { class: 'qe-line qe-fields' }, field('Answer form', form),
         field('Tolerance', input(q, q.tolerance || '', (v) => { if (Number(v) > 0) q.tolerance = Number(v); else delete q.tolerance; }, { type: 'number', min: '0', step: 'any', class: 'input t-points', placeholder: '0' }))));
   }
   if (q.type === 'graph') {

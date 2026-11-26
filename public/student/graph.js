@@ -431,12 +431,14 @@
       const cx = snapX((F.x0 + F.x1) / 2);
       const cy = snapY((F.y0 + F.y1) / 2);
       const u = Math.max(1, Math.min(2, Math.floor(Math.min(F.x1 - F.x0, F.y1 - F.y0) / step / 6))) * step;
+      // every other one of a kind turns the other way: a second line crosses the first, a second parabola opens down
+      const flip = shapes.filter((d) => d.kind === kind).length % 2 ? -1 : 1;
       const shapeAt = (x, y) => {
         if (kind === 'point') return { kind, p: [[x, y]] };
-        if (kind === 'line') return { kind, p: [[x - u, y - u], [x + u, y + u]] };
+        if (kind === 'line') return { kind, p: [[x - u, y - flip * u], [x + u, y + flip * u]] };
         if (kind === 'circle') return { kind, p: [[x, y], [x + u, y]] };
         if (kind === 'exp') return { kind, p: [[x, y], [x + u, y + u]], k: y - u };
-        return { kind, p: [[x, y], [x + u, y + u]] };
+        return { kind, p: [[x, y], [x + u, y + flip * u]] };
       };
       let d = null;
       for (let r = 0; r < 12 && !d; r++) {

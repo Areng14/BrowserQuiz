@@ -69,8 +69,11 @@ function studentView(q0) {
     out.push(h('section', { class: 'shared' }, sm.title ? h('p', { class: 'shared-title', text: sm.title }) : null, body,
       sm.image && imageSrc(sm) ? h('img', { class: 'qimg', src: imageSrc(sm), alt: sm.imageAlt || '' }) : null));
   }
+  // a graph question whose prompt ends in a graph: that graph goes beside the grid (student app/mathq.js)
+  const lastGraph = q.type === 'graph' && window.BQGraph ? /\n*```[ \t]*graph[ \t]*\n([\s\S]*?)\n```[ \t]*$/i.exec(q.prompt) : null;
+  const promptText = lastGraph ? q.prompt.slice(0, lastGraph.index) : q.prompt;
   const prompt = h('div', { class: 'prompt' });
-  if (md) prompt.append(md.render(q.prompt, opts)); else prompt.textContent = q.prompt;
+  if (md) prompt.append(md.render(promptText, opts)); else prompt.textContent = promptText;
   out.push(prompt);
   if (q.image && imageSrc(q)) out.push(h('img', { class: 'qimg', src: imageSrc(q), alt: q.imageAlt || '' }));
   if (q.type === 'single' || q.type === 'multi') {
@@ -92,7 +95,8 @@ function studentView(q0) {
     const tools = Array.isArray(q.tools) && q.tools.length ? q.tools : kinds.length ? kinds : ['point'];
     if (!g.problem || g.shapes) {
       try {
-        out.push(window.BQGraph.editor({ window: q.window, step: q.step, tools: M.shapes.KINDS.filter((k) => tools.includes(k)), shade: (g.shapes || []).some((s) => s.side), value: [], onChange: () => {} }).el);
+        const grid = window.BQGraph.editor({ window: q.window, step: q.step, tools: M.shapes.KINDS.filter((k) => tools.includes(k)), shade: (g.shapes || []).some((s) => s.side), value: [], onChange: () => {} }).el;
+        out.push(lastGraph ? h('div', { class: 'gr-pair' }, window.BQGraph.block(lastGraph[1]), grid) : grid);
       } catch (e) { /* a window that can't be drawn yet: the problem says so */ }
     }
   }
