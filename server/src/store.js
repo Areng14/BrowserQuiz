@@ -87,6 +87,27 @@ const WARN_PER_TYPE_PER_MIN = 20;
 
 const attempts = new Map(); // id -> live attempt
 
+// A layout is mostly the student's order, readable like counts. What corrections carry over from the exam
+// (their answers, as filled in, and how each question went) is theirs, so it's sealed like the answers.
+const { SEALED_LAYOUT } = P;
+function layoutOut(a) {
+  if (!a.layout) return null;
+  const out = {};
+  const priv = {};
+  for (const [k, v] of Object.entries(a.layout)) (SEALED_LAYOUT.includes(k) ? priv : out)[k] = v;
+  if (Object.keys(priv).length) out.sealed = P.sealField(a.runId, a.id, 'layout', JSON.stringify(priv));
+  return JSON.stringify(out);
+}
+function layoutIn(r) {
+  if (!r.layout) return null;
+  const l = JSON.parse(r.layout);
+  if (typeof l.sealed === 'string') {
+    for (const [k, v] of Object.entries(JSON.parse(P.openField(r.run_id, r.id, 'layout', l.sealed)))) if (SEALED_LAYOUT.includes(k)) l[k] = v;
+    delete l.sealed;
+  }
+  return l;
+}
+
 // The sealed fields (people.js) open with the run's teacher's key: "locked" until they've signed in.
 function fromRow(r) {
   const open = (f) => P.openField(r.run_id, r.id, f, r[f]);
@@ -96,7 +117,7 @@ function fromRow(r) {
     id: r.id, runId: r.run_id, studentId: r.student_id, tokenHash: r.token_hash, status: r.status,
     integrity: r.integrity, strikes: r.strikes, warnings: r.warnings, reason: r.reason, invalidatedAt: r.invalidated_at,
     startedAt: r.started_at, deadline: r.deadline, submittedAt: r.submitted_at, lastBeat: r.last_beat,
-    layout: r.layout ? JSON.parse(r.layout) : null, answers: answers ? JSON.parse(answers) : {},
+    layout: layoutIn(r), answers: answers ? JSON.parse(answers) : {},
     result: result ? JSON.parse(result) : null, ip: open('ip'), userAgent: open('user_agent'), edits: r.edits,
     archived: !!r.archived, createdAt: r.created_at,
     awayMs: r.away_ms || 0, awayMax: r.away_max || 0, restoreStrikes: r.restore_strikes, pinIp: open('pin_ip') || null,
@@ -129,7 +150,7 @@ function save(a) {
      deadline = ?, submitted_at = ?, last_beat = ?, layout = ?, answers = ?, result = ?, edits = ?, archived = ?,
      away_ms = ?, away_max = ?, restore_strikes = ?, pin_ip = ?, q_time = ?, ready_at = ?, grading = ? WHERE id = ?`).run(
     a.status, a.integrity, a.strikes, a.warnings, a.reason, a.invalidatedAt, a.startedAt, a.deadline, a.submittedAt,
-    a.lastBeat, a.layout ? JSON.stringify(a.layout) : null, sealed('answers', JSON.stringify(a.answers || {})), sealed('result', result),
+    a.lastBeat, layoutOut(a), sealed('answers', JSON.stringify(a.answers || {})), sealed('result', result),
     a.edits || 0, a.archived ? 1 : 0, a.awayMs || 0, a.awayMax || 0, a.restoreStrikes == null ? null : a.restoreStrikes, sealed('pin_ip', a.pinIp || null),
     a.qTime && Object.keys(a.qTime).length ? JSON.stringify(a.qTime) : null, a.readyAt || null, grading, a.id,
   );

@@ -61,6 +61,8 @@ const sealEdits = (runId, attemptId, text) => seal(ownerOfRun(runId), editAad(at
 const openEdits = (runId, attemptId, s) => tryOpen(ownerOfRun(runId), editAad(attemptId), s);
 
 const ATTEMPT_FIELDS = ['answers', 'result', 'ip', 'user_agent', 'pin_ip'];
+// What a corrections attempt's layout carries over from the exam: sealed inside it as "sealed" (store.js).
+const SEALED_LAYOUT = ['fix', 'startAnswers'];
 
 // Everything of a teacher's still in the clear gets sealed: data from before this, or saved while their
 // key was locked. Then the write-ahead log is flushed, so the plain copies leave the database files too.
@@ -89,6 +91,22 @@ function sealPeople(owner, from, to) {
       if (a.result != null && !isSealed(a.result)) set.push(['grading', a.result.includes('"pending"') ? 'pending' : a.result.includes('"error"') ? 'error' : 'done']);
       if (set.length) { q(`UPDATE attempts SET ${set.map(([f]) => f + ' = ?').join(', ')} WHERE id = ?`).run(...set.map(([, v]) => v), a.id); n++; }
     }
+    // corrections' layouts: their exam answers and points, from before this or saved while the key was locked
+    for (const a of q(`SELECT a.id, a.layout FROM attempts a JOIN runs r ON r.id = a.run_id WHERE r.owner_id = ? AND r.corrects IS NOT NULL
+      AND a.layout IS NOT NULL`).all(owner)) {
+      let l;
+      try { l = JSON.parse(a.layout); } catch (e) { continue; }
+      const loose = SEALED_LAYOUT.filter((k) => k in l);
+      let text = typeof l.sealed === 'string' ? l.sealed : null;
+      if (loose.length) {
+        if (text && isSealed(text)) continue; // not something this writes
+        const priv = text ? JSON.parse(text) : {};
+        for (const k of loose) { priv[k] = l[k]; delete l[k]; }
+        text = JSON.stringify(priv);
+      }
+      const v = text == null ? null : redo(text, attAad(a.id, 'layout'));
+      if (v) { l.sealed = v; q('UPDATE attempts SET layout = ? WHERE id = ?').run(JSON.stringify(l), a.id); n++; }
+    }
     for (const e of q(`SELECT e.id, e.attempt_id, e.detail FROM events e JOIN attempts a ON a.id = e.attempt_id JOIN runs r ON r.id = a.run_id
       WHERE r.owner_id = ? AND e.detail IS NOT NULL AND ${plain('e.detail')}`).all(owner)) {
       const v = redo(e.detail, eventAad(e.attempt_id));
@@ -105,5 +123,5 @@ function sealPeople(owner, from, to) {
 }
 
 module.exports = {
-  isSealed, ownerOfRun, ownerOfRoster, sealName, sealField, openField, tryField, sealEvent, openEvent, sealEdits, openEdits, sealPeople,
+  SEALED_LAYOUT, isSealed, ownerOfRun, ownerOfRoster, sealName, sealField, openField, tryField, sealEvent, openEvent, sealEdits, openEdits, sealPeople,
 };

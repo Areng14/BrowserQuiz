@@ -163,21 +163,29 @@
     }
     return sameExpr(e, g, tol);
   }
-  // Every expected item matched by a different one of the student's, in any order.
+  // Every expected item matched by a different one of the student's, in any order: a perfect matching,
+  // found with augmenting paths. Each pair is compared once at most, so a key that repeats a value
+  // (1, 1, 1, ...) costs n² comparisons, not the n! of trying every order.
   function sameItems(E, G, tol) {
     if (E.length !== G.length) return false;
-    const used = new Array(G.length).fill(false);
-    const go = (i) => {
-      if (i === E.length) return true;
-      for (let j = 0; j < G.length; j++) {
-        if (used[j] || !sameItem(E[i], G[j], tol)) continue;
-        used[j] = true;
-        if (go(i + 1)) return true;
-        used[j] = false;
+    const n = E.length;
+    const memo = new Map();
+    const pair = (i, j) => {
+      const k = i * n + j;
+      if (!memo.has(k)) memo.set(k, sameItem(E[i], G[j], tol));
+      return memo.get(k);
+    };
+    const owner = new Array(n).fill(-1); // G[j] is matched to E[owner[j]]
+    const place = (i, seen) => {
+      for (let j = 0; j < n; j++) {
+        if (seen[j] || !pair(i, j)) continue;
+        seen[j] = true;
+        if (owner[j] < 0 || place(owner[j], seen)) { owner[j] = i; return true; }
       }
       return false;
     };
-    return go(0);
+    for (let i = 0; i < n; i++) if (!place(i, new Array(n).fill(false))) return false;
+    return true;
   }
 
   // ---------- forms ----------
