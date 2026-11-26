@@ -409,7 +409,11 @@
       .map((e) => Object.assign(e, { avg: e.pts.length ? e.pts.reduce((a, x) => a + x, 0) / e.pts.length : null }));
     const snippet = (p) => {
       const t = String(p).replace(/```[\s\S]*?```/g, ' ').replace(/^\s*(?:[-*]|\d+[.)])\s+/gm, '').replace(/`|\*\*/g, '').replace(/\s+/g, ' ').trim();
-      return t.length > 90 ? t.slice(0, t.lastIndexOf(' ', 88) > 40 ? t.lastIndexOf(' ', 88) : 88) + '…' : t;
+      let cut = t.length > 90 ? (t.lastIndexOf(' ', 88) > 40 ? t.lastIndexOf(' ', 88) : 88) : t.length;
+      // math shows as math, as in the quiz: a cut never splits a $…$ in two
+      if ((t.slice(0, cut).match(/(?<!\\)\$/g) || []).length % 2) cut = t.lastIndexOf('$', cut - 1);
+      const s = t.slice(0, cut).trim() + (cut < t.length ? '…' : '');
+      return /(?<!\\)\$[^$]+\$/.test(s) && window.BQ && window.BQ.md ? window.BQ.md.renderInline(s) : s;
     };
     return h('section', { class: 'r-class' },
       h('p', { class: 'r-eyebrow', text: 'Class report' }),
