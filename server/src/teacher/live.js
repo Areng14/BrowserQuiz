@@ -89,17 +89,30 @@ module.exports = function liveRoutes(r) {
     json(res, 200, { run: { id: run.id, code: run.code, title: quiz.title }, questions, q: pick ? pick.id : null, quiz: pick ? reportQuiz(quiz, run.quiz_id) : null, students });
   });
 
+  // The grades for a gradebook: who, their score, out of what and the percent first, then how it went,
+  // then each question. Times in the teacher's own time zone (the page sends it).
   r.get('/api/t/runs/:id/export.csv', (req, res, p) => {
     const me = requireTeacher(req);
     const run = getRun(me, p.id);
     notWhileOpen(run);
     const quiz = store.getQuiz(run.quiz_id);
     const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    const iso = (t) => (t ? new Date(t).toISOString() : '');
-    const head = ['name', 'status', 'integrity', 'reason', 'strikes', 'warnings', 'away_seconds', 'raw_score', 'final_score', 'max',
-      'grading_pending', 'grading_failed', 'needs_review', 'started_at', 'submitted_at', ...quiz.questions.map((qq, i) => `q${i + 1}_${qq.id}`),
-      ...(run.corrects ? ['exam_score', 'earned_back', 'with_corrections'] : [])];
-    const lines = [head.join(',')];
+    let timeZone = new URL(req.url, 'http://x').searchParams.get('tz') || 'UTC';
+    try { new Intl.DateTimeFormat('en-US', { timeZone }); } catch (e) { timeZone = 'UTC'; }
+    // 2026-11-26 14:05: what spreadsheets read as a date and time
+    const when = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const at = (t) => {
+      if (!t) return '';
+      const d = Object.fromEntries(when.formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+      return `${d.year}-${d.month}-${d.day} ${d.hour}:${d.minute}`;
+    };
+    const mmss = (ms) => { const sec = Math.round(ms / 1000); return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`; };
+    const STATUS = { submitted: 'Turned in', active: 'Working', waiting: 'Waiting', admitted: 'Waiting' };
+    const STATE = { pending: 'Grading', failed: 'Grading failed' };
+    const head = ['Student', 'Score', 'Out of', 'Percent', 'Status', 'Integrity', 'Strikes', 'Time away', 'Needs grading', 'Started', 'Turned in',
+      ...quiz.questions.map((qq, i) => `Q${i + 1}${qq.name ? ' ' + qq.name : ''}`),
+      ...(run.corrects ? ['Exam score', 'Earned back', 'With corrections'] : [])];
+    const lines = [head.map(esc).join(',')];
     for (const s of rosterStudentsForRun(run)) {
       const row = q('SELECT id FROM attempts WHERE run_id = ? AND student_id = ? AND archived = 0').get(run.id, s.id);
       const a = row ? store.getAttempt(row.id) : null;
@@ -108,11 +121,13 @@ module.exports = function liveRoutes(r) {
       const perQ = quiz.questions.map((qq) => {
         if (!a || !a.result || (given && !given.has(qq.id))) return ''; // a pool left it out of their quiz
         const sc = questionScore(qq, a.result, a.answers);
-        return sc.state === 'done' ? sc.points : sc.state;
+        return sc.state !== 'done' ? STATE[sc.state] || sc.state : sc.review ? 'Needs grading' : sc.points;
       });
-      lines.push([s.name, a ? a.status : 'not started', a ? a.integrity : '', a ? a.reason : '', a ? a.strikes : '', a ? a.warnings : '', a ? Math.round((a.awayMs || 0) / 1000) : '',
-        t ? t.score : '', t ? (a.integrity === 'invalidated' ? 0 : t.score) : '', t ? t.max : '', t ? t.pending : '', t ? t.failed : '', t ? t.review : '',
-        a ? iso(a.startedAt) : '', a ? iso(a.submittedAt) : '', ...perQ,
+      const score = t ? (a.integrity === 'invalidated' ? 0 : t.score) : null;
+      lines.push([s.name, score, t ? t.max : '', t && t.max ? Math.round((score / t.max) * 1000) / 10 : '',
+        a ? STATUS[a.status] || a.status : 'Not started', a ? (a.integrity === 'invalidated' ? 'Invalidated' : 'Clean') : '',
+        a ? a.strikes : '', a && a.awayMs ? mmss(a.awayMs) : '', t ? t.pending + t.review + t.failed || '' : '',
+        a ? at(a.startedAt) : '', a ? at(a.submittedAt) : '', ...perQ,
         ...(run.corrects ? (() => { const c = a && a.status === 'submitted' ? C.standing(quiz, run, a) : null; return c ? [c.exam, c.bonus, c.final] : ['', '', '']; })() : [])].map(esc).join(','));
     }
     send(res, 200, lines.join('\n') + '\n', {

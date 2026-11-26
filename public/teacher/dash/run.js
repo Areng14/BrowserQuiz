@@ -53,7 +53,9 @@ async function showRun(runId) {
   aiBtn.addEventListener('click', () => aiDialog(runId, null, aiDone));
   // Read out when the counts change, not on every 2-second refresh.
   const summary = h('p', { class: 'sr-only', 'aria-live': 'polite' });
-  const exportLink = h('a', { class: 'btn', href: `/api/t/runs/${runId}/export.csv`, download: true, text: 'Export CSV' });
+  // a spreadsheet of the grades, its times in this computer's time zone
+  const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } })();
+  const exportLink = h('a', { class: 'btn', href: `/api/t/runs/${runId}/export.csv${tz ? '?tz=' + encodeURIComponent(tz) : ''}`, download: true, text: 'Download grades' });
   const classReport = h('a', { class: 'btn', href: `/teacher/report.html?run=${encodeURIComponent(runId)}`, target: '_blank', rel: 'noopener', text: 'Class report' });
   for (const a of [exportLink, classReport]) {
     a.style.display = 'inline-flex';
@@ -69,13 +71,17 @@ async function showRun(runId) {
   const LIVE_COLS = ['Student', 'Status', 'Integrity', 'Strikes', 'Progress', 'Time left', 'Score'];
   const LIVE_NUMS = ['Strikes', 'Progress', 'Time left', 'Score'];
   const liveHead = h('tr', {});
+  const LIVE_TIPS = {
+    Integrity: "Clean, or Invalidated: they left the quiz, or you invalidated it. Students aren't told.",
+    Strikes: 'How many times they left the quiz for another tab, window or app, and how long they were away in all.',
+  };
   const drawLiveHead = () => liveHead.replaceChildren(...sortHeads(LIVE_COLS, LIVE_NUMS, dash.liveSort, (next) => {
     dash.liveSort = next;
     drawLiveHead();
     const b = liveHead.querySelector(`th:nth-child(${LIVE_COLS.indexOf((next || { by: '' }).by) + 1}) .t-sort`);
     (b || liveHead.querySelector('.t-sort')).focus();
     refresh();
-  }), actionsHead());
+  }, LIVE_TIPS), actionsHead());
   drawLiveHead();
   // Paused (the run's ⋯ menu): a bar across the top, how long it's been, and the way back
   const pausedFor = h('span', { class: 't-paused-for' });

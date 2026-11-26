@@ -125,14 +125,30 @@ const ghLink = () => h('a', { class: 't-gh', href: 'https://github.com/Areng14/B
 const actionsHead = () => h('th', {}, h('span', { class: 'sr-only', text: 'Actions' }));
 // Column headers; the ones named in nums sit right, over their right-aligned numbers.
 const heads = (names, nums = []) => names.map((x) => h('th', { class: nums.includes(x) ? 'num' : null, text: x }));
+// A few words on a term a teacher may not know, shown while the pointer is over host or the control in
+// it has keyboard focus, and read with the control. Escape hides it until the pointer or focus moves on.
+let tips = 0;
+function tip(host, control, text) {
+  const t = h('span', { class: 't-tip', role: 'tooltip', id: `t-tip-${++tips}`, text });
+  host.classList.add('t-tipped');
+  host.append(t);
+  control.setAttribute('aria-describedby', t.id);
+  host.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !host.classList.contains('t-tip-off')) { host.classList.add('t-tip-off'); e.stopPropagation(); } });
+  const on = () => host.classList.remove('t-tip-off');
+  host.addEventListener('mouseleave', on);
+  host.addEventListener('focusout', on);
+  return host;
+}
 // Click to sort: up, then down, then back to the list's own order. sort: { by, dir } or null; onSort(next).
-function sortHeads(names, nums, sort, onSort) {
+// tipsFor: a few words on what a column means, by its name.
+function sortHeads(names, nums, sort, onSort, tipsFor = {}) {
   return names.map((x) => {
     const on = sort && sort.by === x;
     const arrow = icon([on && sort.dir < 0 ? 'M12 5v14M6 13l6 6 6-6' : 'M12 19V5M6 11l6-6 6 6'], 14);
     arrow.classList.add('t-sort-arrow');
-    return h('th', { class: (nums.includes(x) ? 'num ' : '') + (on ? 't-sorted' : ''), 'aria-sort': on ? (sort.dir > 0 ? 'ascending' : 'descending') : null },
-      h('button', { class: 't-sort', type: 'button', onclick: () => onSort(!on ? { by: x, dir: 1 } : sort.dir > 0 ? { by: x, dir: -1 } : null) }, x, arrow));
+    const btn = h('button', { class: 't-sort', type: 'button', onclick: () => onSort(!on ? { by: x, dir: 1 } : sort.dir > 0 ? { by: x, dir: -1 } : null) }, x, arrow);
+    const th = h('th', { class: (nums.includes(x) ? 'num ' : '') + (on ? 't-sorted' : ''), 'aria-sort': on ? (sort.dir > 0 ? 'ascending' : 'descending') : null }, btn);
+    return tipsFor[x] ? tip(th, btn, tipsFor[x]) : th;
   });
 }
 // Sorting rows by a key: numbers and text both, nothing (null) always last, ties by name.
@@ -217,4 +233,4 @@ function glyph(kind, size = 16) {
   return s;
 }
 
-export { ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, ghLink, glyph, h, heads, icon, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, sortableTable, themeButton };
+export { ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, ghLink, glyph, h, heads, icon, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, sortableTable, themeButton, tip };

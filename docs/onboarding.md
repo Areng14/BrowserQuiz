@@ -73,7 +73,7 @@ Most questions grade themselves the second a student turns in. Only written answ
 - **Grade with AI.** Grades all the written answers at once, with a reason for every grade. You can change any of them.
 - **Grade by question.** Or do it yourself: one question across the whole class, with feedback for each student.
 - **Corrections.** If you wish to offer corrections, click on the corrections button which will open a new "quiz" that students can enter to do corrections. It will not lock their computer down and they are free to search online or ask friends how to solve this.
-- **Reports.** A class report (averages, the hardest questions, copied code, same wrong answers), a printable report per student, and **Export CSV** for your gradebook.
+- **Reports.** A class report (averages, the hardest questions, copied code, same wrong answers), a printable report per student, and **Download grades**, a spreadsheet for your gradebook.
 
 ## Troubleshooting
 
