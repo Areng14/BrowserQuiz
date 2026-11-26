@@ -95,7 +95,10 @@ function questionPane(q, i) {
         field('Equations, inequalities or points, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'y = 2x - 1' })),
         h('div', { class: 'qe-line' },
           field('x from', num(0, 'x from')), field('x to', num(1, 'x to')), field('y from', num(2, 'y from')), field('y to', num(3, 'y to')),
-          field('Grid step', input(q, q.step, (v) => { const n = Number(v); if (n > 0) q.step = n; }, { type: 'number', min: '0', step: 'any', class: 'input t-points' }))),
+          (() => {
+            const st = input(q, q.step, (v) => { const n = Number(v); if (n > 0) q.step = n; }, { type: 'number', min: '0', step: 'any', class: 'input t-points' });
+            return tip(field('Grid step', st), st, 'How far apart the grid lines are. The points students drag sit on them, so every point of the answer has to too.');
+          })()),
         (() => {
           const pc = check(q, q.partialCredit, 'Partial credit when there\'s more than one', (v) => { if (v) q.partialCredit = true; else delete q.partialCredit; });
           return tip(pc, pc.querySelector('input'), 'Each one drawn right earns its share of the points, and each extra one takes a share back.');

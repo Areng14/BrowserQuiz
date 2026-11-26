@@ -153,6 +153,7 @@ function codeEditor(q) {
   const mono = { class: 'input qe-mono', spellcheck: 'false', autocomplete: 'off' };
   const shapeNote = h('p', { class: 't-small qe-note' });
   const notes = { sample: h('p', { class: 't-small qe-note' }), hidden: h('p', { class: 't-small qe-note' }) };
+  const testsField = (label, box, note, what) => (what ? tip(field(label, box, note), box, what) : field(label, box, note));
   const tests = (kind, rows, placeholder) => area(q, u[kind], (v) => { u[kind] = v; }, { rows, placeholder, class: 'input qe-area qe-mono qe-code', 'data-tests': kind });
   const starters = [];
   const refLangs = fill ? [] : refLangsOf(q);
@@ -248,8 +249,11 @@ function codeEditor(q) {
     fill ? null : field('Classes (optional, one per line)', area(q, u.types, (v) => { u.types = v; }, { rows: 1, class: 'input qe-area qe-mono', placeholder: 'Point(x: int, y: int)' })),
     shapeNote];
   const testFields = [
-    field('Sample tests (students can run these)', tests('sample', 2, isClass ? 'new BankAccount("Ava", 100.0)\ndeposit(50.0)\ngetBalance() -> 150.0' : '("hello") -> 2'), notes.sample),
-    field('Hidden tests (used for grading)', tests('hidden', 4, isClass ? 'a = new BankAccount("Jo", 20.0)\na.withdraw(50.0) -> false\na.getBalance() -> ?\n*2' : '("AEIOU") -> 5\n("rhythm") -> 0\n("Programming is fun") *2'), notes.hidden),
+    testsField('Sample tests (students can run these)', tests('sample', 2, isClass ? 'new BankAccount("Ava", 100.0)\ndeposit(50.0)\ngetBalance() -> 150.0' : '("hello") -> 2'), notes.sample,
+      "Students run these while they work and see what their code returns. They don't count toward the grade."),
+    // the line under them has the rest of how to write one; speed (method mode only) is said nowhere else
+    testsField('Hidden tests (used for grading)', tests('hidden', 4, isClass ? 'a = new BankAccount("Jo", 20.0)\na.withdraw(50.0) -> false\na.getBalance() -> ?\n*2' : '("AEIOU") -> 5\n("rhythm") -> 0\n("Programming is fun") *2'), notes.hidden,
+      isClass ? null : 'End a line with speed (speed x1000 for 1,000 calls) to time it: code more than 10 times slower than your reference fails.'),
     h('p', { class: 't-muted t-small', text: isClass
       ? `A blank line starts the next test. -> ? takes the value from ${from}. A line with *2 makes the test count double.`
       : `One test per line. Leave out -> to take the value from ${from}. *2 at the end counts double.` })];
