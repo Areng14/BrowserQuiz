@@ -14,7 +14,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-app .field { grid-template-columns: minmax(0, 1fr); }
 
 .t-bar { display: flex; align-items: center; gap: 12px; padding: 10px var(--gut-r) 10px var(--gut-l); border-bottom: 1px solid var(--line); }
-.t-bar .grow { flex: 1; min-width: 0; font-weight: 600; }
+.t-bar .grow { flex: 1; min-width: 0; display: flex; align-items: center; font-weight: 600; } /* centered with the buttons, not on its baseline */
 .t-main { max-width: clamp(1200px, 85vw, 1800px); margin: 0 auto; padding: 24px var(--gut-r) 64px var(--gut-l); display: grid; gap: 28px; }
 /* The frame: tabs down the left, the page on the right. */
 .t-shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: calc(100vh / var(--zoom, 1)); }
