@@ -79,12 +79,13 @@
     return t ? t === 'dark' : !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   };
   const paint = (img) => { const s = sources.get(img); if (s != null) img.src = dataUrl(themed(s, dark())); };
+  // A quiz's own svg (an assets/ file, or one the quiz maker just added), never the app's own icons
   const isSvgUrl = (src) => {
     if (!src || src.startsWith(OURS)) return false; // drawn here already
     if (/^data:image\/svg\+xml/i.test(src)) return true;
     let path = src;
-    try { const u = new URL(src, location.href); path = u.pathname + '?' + decodeURIComponent(u.search); } catch (e) { /* as is */ }
-    return /\.svg(?:$|[?&#])/i.test(path);
+    try { const u = new URL(src, location.href); path = decodeURIComponent(u.pathname) + '?' + decodeURIComponent(u.search); } catch (e) { /* as is */ }
+    return /(?:^|[/=])assets\/[^?#&]*\.svg(?:$|[?&#])/i.test(path);
   };
   function adopt(img) {
     if (sources.has(img) || img.dataset.bqSvg === 'loading') return;
