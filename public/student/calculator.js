@@ -27,12 +27,8 @@
     for (const kid of kids) if (kid != null) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
     return el;
   }
-  function icon(paths, size) {
-    const s = svg('svg', { width: size || 16, height: size || 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
-    for (const d of paths) s.append(svg('path', { d }));
-    return s;
-  }
-  const calcIcon = () => icon(['M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z', 'M8 7h8v3H8z', 'M8 14h.01M12 14h.01M16 14h.01M8 17.5h.01M12 17.5h.01M16 17.5h.01']);
+  // Line icons (Lucide, from /icons.js), 16px unless said
+  const icon = (name, size) => window.BQIcons.svg(name, size || 16);
 
   // ---------- loading ----------
   const loaded = {};
@@ -206,7 +202,7 @@
     const keep = (e) => e.preventDefault(); // keep the caret in the display
     const ans = h('button', { type: 'button', 'aria-label': 'Insert the last answer', disabled: true, onmousedown: keep, onclick: () => ans.rows && type(asLatex(ans.rows)) }, 'Ans');
     const special = {
-      '⌫': () => h('button', { type: 'button', 'aria-label': 'Backspace', onmousedown: keep, onclick: () => { field.executeCommand('deleteBackward'); field.focus(); } }, icon(['M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z', 'M18 9l-6 6M12 9l6 6'], 18)),
+      '⌫': () => h('button', { type: 'button', 'aria-label': 'Backspace', onmousedown: keep, onclick: () => { field.executeCommand('deleteBackward'); field.focus(); } }, icon('backspace', 18)),
       Ans: () => ans,
       '=': () => h('button', { type: 'button', class: 'eq', 'aria-label': 'Calculate', onmousedown: keep, onclick: submit }, '='),
     };
@@ -445,7 +441,7 @@
     // graphing: the Graph screen is built (some question allows it); kind: what the question on screen allows
     const state = { mode: place.mode, screen: graphing ? place.screen : 'calculate', position: place.position, disabled: false, kind: opts.kind };
     const screenNow = () => (state.kind === 'graphing' ? state.screen : 'calculate');
-    const button = h('button', { class: 'icon-btn calc-btn', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'calc-panel' }, calcIcon(), h('span', { class: 'icon-label', text: 'Calculator' }));
+    const button = h('button', { class: 'icon-btn calc-btn', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'calc-panel' }, icon('calculator'), h('span', { class: 'icon-label', text: 'Calculator' }));
     let panel = null, screens = null, built = null;
     const hostEl = () => (typeof opts.host === 'function' ? opts.host() : opts.host) || document.body;
     // greyed out (still focusable, so the tooltip says why) on a question without one
@@ -492,7 +488,7 @@
       const title = h('h2', { text: 'Calculator' });
       const head = h('div', { class: 'calc-head', tabindex: 0, role: 'group', 'aria-label': 'Calculator. Drag, or use the arrow keys, to move it.' },
         title, tabs, h('span', { class: 'calc-head-gap' }), modes,
-        h('button', { type: 'button', class: 'calc-close', 'aria-label': 'Close calculator', onpointerdown: (e) => e.stopPropagation(), onclick: () => close(true) }, icon(['M18 6 6 18', 'M6 6l12 12'])));
+        h('button', { type: 'button', class: 'calc-close', 'aria-label': 'Close calculator', onpointerdown: (e) => e.stopPropagation(), onclick: () => close(true) }, icon('x')));
       // A press only becomes a drag once it moves a little, so the buttons in the row still click; the
       // panel takes the pointer from then on, and the click a drag ends in goes nowhere.
       let drag = null, dragged = false;

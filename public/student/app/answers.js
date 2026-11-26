@@ -2,7 +2,7 @@
 
 import { ERRORS, PARTS, S, api, cfg } from './state.js';
 import { announce, h, toast } from './dom.js';
-import { svgEl } from './theme.js';
+import { icon } from './theme.js';
 import { screenJoin } from './entry.js';
 import { lockOn, renderQuestion } from './quiz.js';
 import { toggleScratch } from './scratch.js';
@@ -171,11 +171,7 @@ function nextPartRow(withMinutes) {
     h('span', { class: 'np-text' }, h('b', { text: next.title }), ` ${rangeOf(next)}${withMinutes ? ` · ${mins} min` : ''}`),
     h('span', { class: 'np-when' }, 'Opens in ', h('span', { class: 'np-left', 'data-part-left': '', text: mmss(partLeft(n)) })));
 }
-function lockIcon(size = 18) {
-  const s = svgEl('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
-  s.append(svgEl('rect', { x: 5, y: 11, width: 14, height: 10, rx: 2 }), svgEl('path', { d: 'M8 11V7a4 4 0 0 1 8 0v4' }));
-  return s;
-}
+const lockIcon = (size = 18) => icon('lock', size);
 // The teacher paused the quiz, or went on (at: when this student's clock stopped, on the server's
 // clock, or 0). Paused, every clock holds and the questions are hidden; nothing they do counts.
 function setPaused(at) {
@@ -201,11 +197,7 @@ function pausedView() {
     h('span', { class: 'paused-mark' }, pauseGlyph(20)),
     h('h1', { id: 'q-heading', tabindex: '-1', text: 'Your teacher paused the quiz' }));
 }
-function pauseGlyph(size) {
-  const s = svgEl('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'currentColor', 'aria-hidden': 'true' });
-  s.append(svgEl('rect', { x: 6, y: 5, width: 4, height: 14, rx: 1 }), svgEl('rect', { x: 14, y: 5, width: 4, height: 14, rx: 1 }));
-  return s;
-}
+const pauseGlyph = (size) => icon('pause', size, { fill: 'currentColor', stroke: 'none' });
 
 // A part's time is up: its last answers go in, it locks, and the next part's directions come up.
 async function partTimeUp(done) {

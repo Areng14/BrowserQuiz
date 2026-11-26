@@ -2,7 +2,7 @@
 
 import { BQ, S, cfg } from './state.js';
 import { h, plural, toast } from './dom.js';
-import { svgEl } from './theme.js';
+import { icon } from './theme.js';
 import { isAnswered, mmss, nextPartRow, partNow, partTimeUp, rangeOf, serverNow, timedNav, timedParts } from './answers.js';
 import { go, lockOn, lockedAt, openReview, reviewButtons } from './quiz.js';
 import { isMarked } from './marks.js';
@@ -50,13 +50,8 @@ function reviewView() {
     h('p', { class: 'muted', text: `${done} of ${plural(qs.length, 'question')} answered${marked ? `, ${marked} for review` : ''}.` }),
     ...questionGrid(go));
 }
-// Snake's icon: three linked nodes, the head filled
-function snakeGlyph() {
-  const glyph = svgEl('svg', { class: 'game-glyph', viewBox: '0 0 44 16', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'aria-hidden': 'true' });
-  [[1, false], [16, false], [31, true]].forEach(([x, head]) => glyph.append(svgEl('rect', { x, y: 2, width: 12, height: 12, rx: 3, fill: head ? 'currentColor' : 'none' })));
-  glyph.append(svgEl('path', { d: 'M13 8h3M28 8h3', 'stroke-linecap': 'round' }));
-  return glyph;
-}
+// Play snake's icon
+const gameIcon = () => icon('game', 18, { class: 'game-glyph' });
 // Done before time is up on a timed exam: snake (snake.js) in a dialog, while they wait. Still in the quiz.
 function openGame() {
   if (S.done || !S.el || cfg.watch || !BQ.snake || (S.el.gameBtn && S.el.gameBtn.disabled) || S.el.wrap.querySelector('.modal-backdrop')) return;
@@ -73,11 +68,7 @@ function openGame() {
   const play = backdrop.querySelector('.snake button');
   (play || x).focus();
 }
-function chevronUp() {
-  const s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
-  s.append(svgEl('path', { d: 'M6 15l6-6 6 6' }));
-  return s;
-}
+const chevronUp = () => icon('chevronUp', 16, { 'stroke-width': 2.5 });
 
 // Every question, numbered and grouped by part, to jump to any of them.
 function openNavigator() {
@@ -101,11 +92,7 @@ function openNavigator() {
   const cur = backdrop.querySelector('.sheet-dot.current:not(.mini)');
   (cur || x).focus();
 }
-function closeIcon() {
-  const s = svgEl('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'aria-hidden': 'true' });
-  s.append(svgEl('path', { d: 'M18 6L6 18M6 6l12 12' }));
-  return s;
-}
+const closeIcon = () => icon('x', 18);
 
 function startTimer() {
   clearInterval(S.timer);
@@ -169,4 +156,4 @@ function startTimer() {
 // Esc does onEscape (if any), and closing puts focus back where it was. Returns the close function.
 // A message the teacher sent to everyone taking the quiz.
 
-export { openGame, openNavigator, renderSheet, reviewView, snakeGlyph, startTimer };
+export { gameIcon, openGame, openNavigator, renderSheet, reviewView, startTimer };

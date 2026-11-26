@@ -318,7 +318,7 @@ mark.hl[data-c="u"] { background: none; box-shadow: none; text-decoration: under
 }
 .mark-btn:hover { color: var(--ink); background: var(--soft); }
 .mark-btn[aria-pressed="true"] { color: var(--q-review-ink); background: var(--q-review); border-color: var(--q-review-edge); } /* same yellow as its number */
-.mark-icon { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.mark-icon { flex: none; }
 .mark-btn[aria-pressed="true"] .mark-icon { fill: currentColor; }
 .choice-text code { background: none; padding: 0; font-size: 15px; }
 .text-answer { max-width: 480px; }
@@ -622,7 +622,7 @@ h1[tabindex="-1"]:focus { outline: none; }
    of the bottom bar, and the game in a dialog */
 .game-btn { display: inline-flex; align-items: center; gap: 10px; }
 .game-btn[hidden] { display: none; }
-.game-glyph { flex: none; width: 32px; height: 12px; color: var(--accent); }
+.game-glyph { flex: none; color: var(--accent); }
 .game-modal { width: min(100%, 480px); gap: 12px; }
 .game-modal .snake { margin: 0 auto; }
 

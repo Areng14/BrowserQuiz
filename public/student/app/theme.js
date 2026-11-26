@@ -34,32 +34,16 @@ function svgEl(tag, attrs) {
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
   return el;
 }
-function themeIcon(sun) {
-  const s = svgEl('svg', { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
-  if (sun) {
-    s.append(svgEl('circle', { cx: 12, cy: 12, r: 4 }), svgEl('path', { d: 'M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41' }));
-  } else {
-    s.append(svgEl('path', { d: 'M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' }));
-  }
-  return s;
-}
-function penIcon() {
-  const s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
-  s.append(svgEl('path', { d: 'M12 20h9' }), svgEl('path', { d: 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z' }));
-  return s;
-}
+// Line icons (Lucide, from /icons.js): icon('lock', 16). The names are in scripts/build-icons.mjs.
+function icon(name, size, attrs) { return window.BQIcons.svg(name, size, attrs); }
 // A pass/fail mark as a drawn icon, so phones don't swap in their own emoji.
-function markIcon(pass) {
-  const s = svgEl('svg', { width: 16, height: 16, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
-  s.append(svgEl('path', { d: pass ? 'M20 6L9 17l-5-5' : 'M18 6L6 18M6 6l12 12' }));
-  return s;
-}
+const markIcon = (pass) => icon(pass ? 'check' : 'x', 16, { 'stroke-width': 3 });
 function paintThemeButton(b) {
   const dark = isDark();
   const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
   b.setAttribute('aria-label', label);
   b.title = label;
-  b.replaceChildren(themeIcon(dark));
+  b.replaceChildren(icon(dark ? 'sun' : 'moon', 18));
 }
 function themeButton() {
   const b = h('button', { type: 'button', class: 'theme-btn' });
@@ -87,4 +71,4 @@ function onThemeChange() {
 darkQuery.addEventListener('change', onThemeChange);
 new MutationObserver(onThemeChange).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-export { isDark, markIcon, onThemeChange, pageParams, penIcon, svgEl, themeButton };
+export { icon, isDark, markIcon, onThemeChange, pageParams, svgEl, themeButton };

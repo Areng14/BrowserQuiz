@@ -2,7 +2,7 @@
 
 import { BQ, CODE_ALPHABET, ERRORS, PARTS, S, api, cfg, resetState } from './state.js';
 import { demoHint, enterFullscreen, errorText, exitFullscreen, h, keysHeld, mount, plural, toast } from './dom.js';
-import { isDark, svgEl, themeButton } from './theme.js';
+import { icon, isDark, svgEl, themeButton } from './theme.js';
 import { loadMonaco } from './monaco.js';
 import { onBeat, onBeatError, partsFor, restoreAnswers, serializeAnswers, takeUnsent } from './answers.js';
 import { screenQuiz } from './quiz.js';
@@ -198,9 +198,7 @@ function screenWho(err) {
 
 // Who's signed in, so a student who picked the wrong name sees it.
 function whoCard() {
-  const icon = svgEl('svg', { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' });
-  icon.append(svgEl('circle', { cx: 12, cy: 8, r: 4 }), svgEl('path', { d: 'M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1' }));
-  return h('div', { class: 'who-card' }, icon, h('div', {}, h('span', { class: 'who-label', text: 'Signed in as' }), h('b', { class: 'who-name', text: S.me.name })));
+  return h('div', { class: 'who-card' }, icon('person', 20), h('div', {}, h('span', { class: 'who-label', text: 'Signed in as' }), h('b', { class: 'who-name', text: S.me.name })));
 }
 
 // Agreed to the rules: full screen and monitored already, waiting for the teacher to start the quiz.

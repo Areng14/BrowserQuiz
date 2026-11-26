@@ -2,14 +2,14 @@
 
 import { BQ, S, cfg, root } from './state.js';
 import { h, mount, toast } from './dom.js';
-import { penIcon, themeButton } from './theme.js';
+import { icon, themeButton } from './theme.js';
 import { colorize } from './monaco.js';
 import { buildParts, isAnswered, lockIcon, mmss, partLeft, partNow, partOf, pausedView, timedNav } from './answers.js';
 import { directionsView, renderScratch, scratchGrip, toggleScratch } from './scratch.js';
 import { highlightBar, sharedBlock } from './marks.js';
 import { basicView, essayView, fillView, outputView, traceView, whyBox } from './views.js';
 import { codeView, confirmFinishParts } from './code.js';
-import { openGame, openNavigator, renderSheet, reviewView, snakeGlyph, startTimer } from './nav.js';
+import { gameIcon, openGame, openNavigator, renderSheet, reviewView, startTimer } from './nav.js';
 import { openExit, openSubmit, quizKeys, timedExam } from './overlays.js';
 import { graphView, mathView } from './mathq.js';
 
@@ -32,7 +32,7 @@ function screenQuiz() {
   // "Question 3 of 20" opens every question; the review page lists them all before turning in.
   const jump = h('button', { class: 'btn q-jump', type: 'button', 'aria-haspopup': 'dialog', onclick: () => openNavigator() });
   // On a timed exam's review page, where there's nothing to turn in yet: snake, while they wait
-  const gameBtn = h('button', { class: 'btn game-btn', type: 'button', hidden: true, onclick: () => openGame() }, snakeGlyph(), 'Play snake');
+  const gameBtn = h('button', { class: 'btn game-btn', type: 'button', hidden: true, onclick: () => openGame() }, gameIcon(), 'Play snake');
   const mid = h('div', { class: 'qnav-mid' }, jump, gameBtn);
   const prev = h('button', { class: 'btn', type: 'button', text: 'Back', onclick: () => go(S.reviewOpen ? (timedNav() ? S.parts[partNow() - 1].end : S.quiz.questions.length - 1) : S.idx - 1) });
   const next = h('button', { class: 'btn', type: 'button' });
@@ -46,7 +46,7 @@ function screenQuiz() {
   main.addEventListener('mouseup', () => setTimeout(hlBar.update, 0));
   main.addEventListener('keyup', (e) => { if (e.shiftKey || e.key === 'Shift') hlBar.update(); });
   main.addEventListener('scroll', hlBar.hide, { passive: true });
-  const scratchBtn = h('button', { class: 'icon-btn scratch-btn', type: 'button', title: 'Scratchpad', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() }, penIcon(), h('span', { class: 'icon-label', text: 'Scratchpad' }));
+  const scratchBtn = h('button', { class: 'icon-btn scratch-btn', type: 'button', title: 'Scratchpad', 'aria-pressed': 'false', 'aria-controls': 'scratch', onclick: () => toggleScratch() }, icon('pencil', 16), h('span', { class: 'icon-label', text: 'Scratchpad' }));
   const scratch = h('aside', { class: 'scratch', id: 'scratch', 'aria-label': 'Scratchpad' });
   scratch.hidden = true;
   // A calculator, on the questions that allow one (calculator.js; its maths loads the first time it's
@@ -157,7 +157,7 @@ function snakeLock() {
   btn.dataset.locked = String(left > 0);
   btn.disabled = left > 0;
   btn.title = left > 0 ? 'Answer every question to play' : '';
-  btn.replaceChildren(left > 0 ? lockIcon(16) : snakeGlyph(), 'Play snake');
+  btn.replaceChildren(left > 0 ? lockIcon(16) : gameIcon(), 'Play snake');
 }
 
 function renderQuestion() {

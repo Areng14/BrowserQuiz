@@ -16,6 +16,7 @@ if (!existsSync('public/vendor/monaco/monaco.js')) {
 const css = [read('public/student/app.css'), read('demo/demo.css')].join('\n');
 const scripts = [
   "window.BQ_CONFIG = { demo: true, monacoBase: 'vendor/monaco/' };",
+  read('public/student/icons.js'),
   read('public/student/svg.js'),
   read('public/student/mathread.js'),
   read('public/student/mathshapes.js'),

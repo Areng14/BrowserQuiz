@@ -190,7 +190,6 @@ function moreMenu(label, key, items, onClose, opts) {
   const btn = named
     ? h('button', { class: 'btn small t-menu-btn t-menu-named', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': label, 'data-key': key }, h('span', { class: 't-menu-name', text: opts.text }), icon(ICONS.chevron, 16))
     : h('button', { class: 'btn small t-menu-btn', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': label, title: 'More', 'data-key': key }, icon(ICONS.dots, 18));
-  if (!named) btn.firstChild.setAttribute('fill', 'currentColor');
   const menu = h('div', { class: 't-menu', popover: 'manual', role: 'menu', 'aria-label': label });
   const tipped = (el, text) => tip(h('div', { role: 'none', class: 't-menu-tip' }, el), el, text, true);
   const fill = (list) => menu.replaceChildren(...list.filter(Boolean).map((it) => {
