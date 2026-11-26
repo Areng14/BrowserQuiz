@@ -471,6 +471,8 @@ mark.hl[data-c="u"] { background: none; box-shadow: none; text-decoration: under
   .qbar-progress { display: none; }
   .qnav .btn { padding: 0 10px; }
   .qbar, .qbar-side { gap: 8px; }
+  /* the tools keep their width (they'd run over the clock otherwise); the name gives way */
+  .qbar { grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 1fr); }
   .qbar-name:has(.qbar-who) .qbar-title { display: none; } /* the name matters more than the title here */
   .qbar-who { flex-shrink: 1; max-width: none; padding-left: 0; border-left: 0; }
   .timer { font-size: 15px; }
