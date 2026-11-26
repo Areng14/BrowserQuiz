@@ -1,45 +1,44 @@
 # BrowserQuiz
 
-A quiz and exam app for CS and math classes that teachers can host themselves. Students write real code
-in the Monaco editor, type math and draw graphs, and each question type has its own options.
+A self-hosted quiz and exam app for CS and math classes.
 
 ## Features
 
-- **Real code questions.** A code editor with hints and snippets off.
-- **10 question types.** Multiple choice to math, graphing and code. [Details below](#question-types).
-- **Quiz maker.** The whole quiz on one page, every answer showing. Markdown, math, images, diagrams.
-- **Write it with AI.** Paste the prompt into any AI chat for a whole quiz, or just one question.
-- **Random values.** Numbers change per student, each with its own answer.
-- **Question pools.** Each student gets a random few, so a neighbor's screen won't help.
-- **Timed parts.** Each part gets its own clock, like the SAT.
-- **Live dashboard.** Start everyone together, pause, add time, see who left, watch any screen live.
-- **Exam lockdown.** Full screen, quiet flags for leaving, and Safe Exam Browser if you want it.
-- **Auto grading.** Every answer next to the key, diffs for code, CSV export. Fix a key and everyone's regraded.
-- **AI grading.** ChatGPT, Claude or Gemini, with reasons. You can change any grade.
-- **Copied code detection.** Catches near-identical code, even renamed and reformatted.
-- **Corrections.** Students redo what they missed and earn points back.
-- **Calculator.** Scientific or graphing, when you turn it on.
-- **Student tools.** Scratchpad, highlighter, mark for review, cross out, dark mode. Works with a keyboard
-  and screen readers.
-- **Multiple teachers.** Each sees only their own.
+- **Code questions.** A code editor with hints and snippets off.
+- **10 question types.** Multiple choice, select-all, short answer, math, graphing, predict the output,
+  trace tables, fill in the blanks, written answers and code.
+- **Quiz maker.** Every question on one page with its answer. Markdown, math, images and diagrams.
+- **AI prompts.** For a whole quiz, or for one question.
+- **Random values.** Numbers that change per student.
+- **Question pools.** A random set of questions per student.
+- **Timed parts.** A clock for each part.
+- **Live dashboard.** Start, pause, extra time, who left and for how long, and each student's screen live.
+- **Exam lockdown.** Full screen, flags for leaving the window, Safe Exam Browser.
+- **Auto grading.** Answers next to the key, code diffs, CSV export, regrading after a key fix.
+- **AI grading.** ChatGPT, Claude or Gemini, with a reason for each grade.
+- **Copied code detection.** Near-identical code, even renamed or reformatted.
+- **Corrections.** Students redo what they missed for points back.
+- **Calculator.** Scientific or graphing.
+- **Student tools.** Scratchpad, highlighter, mark for review, cross out, dark mode, keyboard and screen
+  reader support.
+- **Multiple teachers.** Each with their own quizzes and classes.
 
 ## Question types
 
-- **Multiple choice.** One answer from a list of choices.
-- **Select-all.** All or nothing, or partial credit if you choose.
-- **Short answer.** Accept as many phrasings as you like, or a pattern like `/^(binary|bin) search$/`.
-  Numbers match by value, so 3.5, 3.50 and 7/2 all count and formatting isn't an issue.
-- **Math.** Students type the answer in a math box with fractions, powers and roots. Answers match as
-  math, so 3 + 2x counts for 2x + 3, and you can ask for a form, like expanded or factored.
-- **Graphing.** Students draw on a grid: points, lines, parabolas, absolute values, exponentials and
-  circles, shaded for inequalities. Partial credit for systems, if you like.
-- **Predict the output.** Show some code, students predict its output.
-- **Trace tables.** Students fill in what the loop does to each variable, step by step, in a table.
-- **Fill in the blanks.** Blanks right inside the code. Fill it out and check your work.
-- **Written answers.** Free response with a rubric. Grade by hand or with AI.
-- **Code.** Implement a method or an entire class. Supports Java, Python, JavaScript, TypeScript, C, C++, C#, Go and Rust. Like LeetCode, students can
-  run some example test cases, and you can have hidden test cases to catch more. Plus speed tests,
-  custom classes as parameters, banned methods, and a no-running mode for paper-style questions.
+- **Multiple choice.** One correct choice.
+- **Select-all.** Several correct choices: all or nothing, or partial credit.
+- **Short answer.** A list of accepted answers, or a pattern like `/^(binary|bin) search$/`. Numbers match
+  by value (3.5, 3.50, 7/2).
+- **Math.** Typed in a math box and matched as math (3 + 2x for 2x + 3), optionally in a set form, like
+  expanded or factored.
+- **Graphing.** Drawn on a grid: points, lines, parabolas, absolute values, exponentials, circles and
+  inequalities.
+- **Predict the output.** What a piece of code prints.
+- **Trace tables.** Each variable's value, step by step.
+- **Fill in the blanks.** Blanks inside code.
+- **Written answers.** Free response with a rubric, graded by hand or with AI.
+- **Code.** A method or a class in Java, Python, JavaScript, TypeScript, C, C++, C#, Go or Rust, graded by
+  hidden tests. Sample tests, speed tests, custom classes, banned methods and a no-run mode.
 
 Any question can share material, a code block or an image with others, and every question gets its own
 points. Prompts can show diagrams and graphs, in the student's light or dark colors.
