@@ -5,38 +5,23 @@ in the Monaco editor, type math and draw graphs, and each question type has its 
 
 ## Features
 
-- **Real code questions.** Instead of having students write on paper, students write in a code editor
-  that has code hints and snippets turned off.
-- **10 question types.** Multiple choice, select-all, short answer, math, graphing, predict the output,
-  trace tables, fill in the blanks, written answers and code. You can find the details in the
-  [Question types](#question-types) section.
-- **Quiz maker.** The whole quiz on one page, every question next to its answer, so a wrong key stands
-  out. Markdown, LaTeX math, images, diagrams and graphs. Or paste the built-in prompt into an AI chat
-  for a whole quiz, or have it write one question at a time.
-- **Random values.** The numbers in a question change from student to student, each with its own answer.
-- **Live dashboard.** Start everyone at once, pause for a fire drill, give extra time, see who left and
-  for how long, end a quiz.
-  Monitor any student's quiz page live, mouse and all.
-- **Grade with AI.** Copy one prompt into ChatGPT, Claude or Gemini and paste the grades back, or drop
-  in your own API key and it grades in the background. Every grade comes with its reasons, and you can
-  change any of them.
-- **Auto grading and reports.** Every answer next to the right one, with a diff view for code. Export to
-  CSV. Got a key wrong? Fix it and everyone's graded again.
-- **Copied code detection.** The class report flags students whose code is near-identical, even with the
-  variables renamed and the formatting changed, and shows both side by side.
-- **Question pools.** Each student gets a random few questions from a pool, so a neighbor's screen
-  won't help.
-- **Timed parts.** Like the SAT: each part has its own clock, and the next one opens when time's up.
-  Extra time stretches every part.
-- **Corrections.** After an exam, students redo just what they missed, with their answers filled in,
-  and earn back points. No lockdown, so they can ask around. Explanations show once they turn it in.
-- **Exam lockdown.** Full screen, leaving the window gets flagged quietly, and if that isn't safe
-  enough, Safe Exam Browser is an option.
-- **Calculator.** A scientific or graphing calculator students can open during a quiz, if the teacher
-  turns it on.
-- **Student tools.** Scratchpad, highlighting, mark for review, cross out choices, dark mode. Bluebook
-  style. Works with a keyboard and screen readers.
-- **Multiple teachers.** Each one only sees their own stuff.
+- **Real code questions.** A code editor with hints and snippets off.
+- **10 question types.** Multiple choice to math, graphing and code. [Details below](#question-types).
+- **Quiz maker.** The whole quiz on one page, every answer showing. Markdown, math, images, diagrams.
+- **Write it with AI.** Paste the prompt into any AI chat for a whole quiz, or just one question.
+- **Random values.** Numbers change per student, each with its own answer.
+- **Question pools.** Each student gets a random few, so a neighbor's screen won't help.
+- **Timed parts.** Each part gets its own clock, like the SAT.
+- **Live dashboard.** Start everyone together, pause, add time, see who left, watch any screen live.
+- **Exam lockdown.** Full screen, quiet flags for leaving, and Safe Exam Browser if you want it.
+- **Auto grading.** Every answer next to the key, diffs for code, CSV export. Fix a key and everyone's regraded.
+- **AI grading.** ChatGPT, Claude or Gemini, with reasons. You can change any grade.
+- **Copied code detection.** Catches near-identical code, even renamed and reformatted.
+- **Corrections.** Students redo what they missed and earn points back.
+- **Calculator.** Scientific or graphing, when you turn it on.
+- **Student tools.** Scratchpad, highlighter, mark for review, cross out, dark mode. Works with a keyboard
+  and screen readers.
+- **Multiple teachers.** Each sees only their own.
 
 ## Question types
 
