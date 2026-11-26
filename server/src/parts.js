@@ -1,5 +1,5 @@
 'use strict';
-// A quiz's parts, as the student's page splits it (app.js partsFor): each section the teacher made, or else
+// A quiz's parts, as the student's page splits it (app/answers.js partsFor): each section the teacher made, or else
 // each run of questions of one type, in the student's own order.
 //
 // Locked parts (quiz.lockParts): once a student moves on from a part, its answers are final.

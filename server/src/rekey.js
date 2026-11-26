@@ -1,6 +1,6 @@
 'use strict';
 // Fixing a quiz's answers after it was given (the quiz maker's "Update past scores?"). Editing saves a
-// new version and every run keeps the version it was given with (teacher.js saveQuiz), so a fixed
+// new version and every run keeps the version it was given with (teacher/library.js saveQuiz), so a fixed
 // answer never reached the runs that had the wrong one. This carries over only what grades: the right
 // choices, accepted answers, expected output, trace values, blanks, and a code question's hidden tests
 // and reference. What students saw (prompts, choices, code, examples) stays as it was. Questions added,

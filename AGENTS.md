@@ -6,6 +6,14 @@ A self-hosted quiz and CS exam app.
 - Sandboxed Java/Python code runner in `runner/`
 - Everything runs with Docker Compose; see `docs/setup.md`
 
+## Code layout
+
+No build step: the browser loads the student app (`public/student/app/`), the dashboard
+(`public/teacher/dash/`) and the quiz maker (`public/teacher/maker/`) as ES modules, each started by its
+`main.js`. Shared state sits in each folder's `state.js`, which imports nothing. The teacher API's routes are
+in `server/src/teacher/`, and the code harness in `server/src/jobs/`. Keep files under about 800 lines: add a
+module instead of growing one.
+
 ## Making quizzes
 
 Follow `.claude/skills/make-quiz/SKILL.md`. The format spec is `docs/quiz-format.md`.

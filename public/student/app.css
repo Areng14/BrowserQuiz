@@ -180,7 +180,7 @@ mark.hl[data-c="u"] { background: none; box-shadow: none; text-decoration: under
 .qnav > :first-child { justify-self: start; }
 .qnav > :last-child { justify-self: end; white-space: nowrap; }
 .qnav > .qnav-mid { min-width: 0; display: flex; justify-content: center; max-width: max(160px, calc(100vw - 440px)); }
-/* "Question x of y": opens every question (openNavigator in app.js) */
+/* "Question x of y": opens every question (openNavigator in app/nav.js) */
 .q-jump { display: inline-flex; align-items: center; gap: 6px; }
 .q-jump[hidden] { display: none; }
 .q-jump svg { color: var(--ink-2); }
@@ -523,7 +523,7 @@ h1[tabindex="-1"]:focus { outline: none; }
 .seb-launch a.btn, .done-panel a.btn { display: inline-flex; align-items: center; text-decoration: none; }
 
 /* Big screens: scale the text up. Not the code editor itself: CSS zoom throws off where its cursor lands,
-   so its font size grows through its own setting instead (see editorFontSize in app.js). */
+   so its font size grows through its own setting instead (see editorFontSize in app/code.js). */
 @media (min-width: 1700px) {
   .qbar, .qnav, .qview:not(.wide), .code-left, .results, .editor-bar, .scratch-head, .screen > .panel, .shared-split > .shared, .shared-split > .shared-stack { zoom: 1.15; }
   :root { --quiz-chrome: 220px; }

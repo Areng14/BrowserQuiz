@@ -67,7 +67,7 @@ function rekeyOwned(ownerId, oldKey, newKey) {
       }
       n++;
     }
-    // their own Anthropic key for AI grading (teacher.js aiKeyOf)
+    // their own Anthropic key for AI grading (teacher/common.js aiKeyOf)
     const t = q('SELECT ai_key FROM teachers WHERE id = ?').get(ownerId);
     if (t && t.ai_key) {
       const aad = `aikey:${ownerId}`;
@@ -110,7 +110,7 @@ const setSetting = (k, v) => q('INSERT INTO settings (k, v) VALUES (?, ?) ON CON
 //   is unused, and once each time ADMIN_RESET is set to a new value (forgot the password).
 async function ensureAdmin() {
   const pw = process.env.ADMIN_PASSWORD || '';
-  // Admin is found by role: they pick their own username at the first sign-in (teacher.js me/password)
+  // Admin is found by role: they pick their own username at the first sign-in (teacher/auth.js me/password)
   let admin = q("SELECT * FROM teachers WHERE role = 'admin' ORDER BY created_at LIMIT 1").get() || byUsername('admin');
   let code = null;
   if (!admin) {

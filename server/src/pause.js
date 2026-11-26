@@ -1,5 +1,5 @@
 'use strict';
-// Pausing a quiz (teacher.js run actions pause and resume): every student's clock stops where it was.
+// Pausing a quiz (teacher/runs.js run actions pause and resume): every student's clock stops where it was.
 // While it's paused nothing runs out, answers aren't taken (after a short grace for ones already on their
 // way), and leaving doesn't count (store.record). On resume each clock moves on by how long it was stopped.
 // runs.paused_at holds when the teacher paused (null: running); a.pausedAt is a copy on the attempt in

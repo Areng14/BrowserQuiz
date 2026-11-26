@@ -229,7 +229,7 @@
           this.report('blocked-key', (e.metaKey ? 'Cmd+' : 'Ctrl+') + k.toUpperCase());
           return;
         }
-        // With the keys held in fullscreen (enterFullscreen in app.js), Alt+Tab, Ctrl+Tab and the Windows
+        // With the keys held in fullscreen (enterFullscreen in app/dom.js), Alt+Tab, Ctrl+Tab and the Windows
         // key arrive here instead of switching windows. Plain Tab is untouched.
         if (k === 'tab' && (e.altKey || e.ctrlKey)) {
           e.preventDefault();
@@ -426,7 +426,7 @@
         }
       }, { passive: true, capture: true });
       // Reading counts too when it's a finger or a scroll wheel (iPads, Chromebooks with touch, a mouse
-      // that stays put): for the live table's reading or idle (teacher.js activity).
+      // that stays put): for the live table's reading or idle (teacher/common.js activity).
       const active = () => { this.lastActivityAt = Date.now(); };
       for (const type of ['pointerdown', 'touchstart', 'wheel', 'scroll']) this.on(document, type, active, { passive: true, capture: true });
       this.on(document, 'mousemove', (e) => {

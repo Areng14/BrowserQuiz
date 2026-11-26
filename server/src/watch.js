@@ -34,7 +34,7 @@ function cleanMarks(m) {
   return { review, out };
 }
 
-// Highlights: [start, end) character offsets in each highlighted piece of text (app.js marksIn).
+// Highlights: [start, end) character offsets in each highlighted piece of text (app/marks.js marksIn).
 const HL_KEY = /^(prompt|shared):[A-Za-z0-9_-]{1,40}$|^choice:[A-Za-z0-9_-]{1,40}:\d{1,2}$/;
 const HL_STYLE = /^[gbpu]$/;
 function cleanHl(hl) {
@@ -87,7 +87,7 @@ function cleanEd(e) {
   return { top: num(e.top, 0, 1e7) || 0, left: num(e.left, 0, 1e7) || 0, sel };
 }
 
-// The modals a watch page can show as the student sees them (app.js watchView), by their title's id.
+// The modals a watch page can show as the student sees them (app/watch.js watchView), by their title's id.
 const MODALS = ['submit-title', 'turnin-title', 'exit-title', 'left-title'];
 
 function cleanView(v) {

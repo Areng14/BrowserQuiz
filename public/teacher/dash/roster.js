@@ -1,0 +1,56 @@
+// The roster maker: a class from a pasted list or a CSV.
+
+import { dash } from './state.js';
+import { api, h, mount, plural, post } from './core.js';
+import { setHash, shell, showHome } from './home.js';
+
+// ---------- roster maker ----------
+async function showRoster(id) {
+  setHash('#class/' + (id ? encodeURIComponent(id) : 'new'));
+  const seq = ++dash.navSeq;
+  let roster = { name: '', students: [] };
+  if (id) {
+    try { roster = await api(`/api/t/rosters/${encodeURIComponent(id)}`); } catch (e) { return; }
+  }
+  const removing = new Set();
+  const timeChanges = {}; // roster student id -> 1 | 1.25 | 1.5 | 2: extra time on every timed quiz
+  const name = h('input', { class: 'input', id: 'class-name', value: roster.name, placeholder: 'Period 3' });
+  const add = h('textarea', { class: 'input t-textarea', id: 'class-add', rows: 8, spellcheck: 'false', placeholder: 'Ava Martinez, 204511\nDiego Ramos, 204651' });
+  const msg = h('p', { class: 't-error', role: 'alert' });
+  const save = h('button', { class: 'btn primary', type: 'button', text: 'Save' });
+  const list = roster.students.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
+    h('tbody', {}, roster.students.map((st) => {
+      const row = h('tr', {});
+      const btn = h('button', { class: 'btn small', type: 'button', text: 'Remove', 'aria-label': `Remove ${st.name}` });
+      btn.addEventListener('click', () => {
+        if (removing.has(st.id)) { removing.delete(st.id); btn.textContent = 'Remove'; btn.setAttribute('aria-label', `Remove ${st.name}`); row.classList.remove('t-removed'); }
+        else { removing.add(st.id); btn.textContent = 'Undo'; btn.setAttribute('aria-label', `Undo removing ${st.name}`); row.classList.add('t-removed'); }
+      });
+      const time = h('select', { class: 'input t-time-x', 'aria-label': `Time for ${st.name}` },
+        [[1, 'Standard time'], [1.25, '1.25× time'], [1.5, '1.5× time'], [2, '2× time']].map(([v, t]) => h('option', { value: String(v), text: t, selected: Number(st.timeX || 1) === v })));
+      time.addEventListener('change', () => { timeChanges[st.id] = Number(time.value); });
+      row.append(h('td', { text: st.name }), h('td', { class: 't-actions' }, time, btn));
+      return row;
+    })))) : null;
+  save.addEventListener('click', async () => {
+    save.disabled = true;
+    msg.textContent = '';
+    try {
+      if (id) await post(`/api/t/rosters/${encodeURIComponent(id)}/edit`, { name: name.value, add: add.value, remove: [...removing], time: timeChanges });
+      else await post('/api/t/rosters', { name: name.value, text: add.value });
+      showHome('classes');
+    } catch (e) { msg.textContent = e.message; save.disabled = false; }
+  });
+  if (seq !== dash.navSeq) return;
+  mount(shell('classes', h('section', { class: 't-section' },
+      h('h1', { text: id ? 'Edit class' : 'New class' }),
+      h('label', { class: 'field', for: 'class-name' }, h('span', { class: 'field-label', text: 'Class name' }), name),
+      id ? h('h2', { text: plural(roster.students.length, 'student') }) : null,
+      list,
+      h('label', { class: 'field', for: 'class-add' }, h('span', { class: 'field-label', text: id ? 'Add students: name, student ID (one per line)' : 'Students: name, student ID (one per line)' }), add),
+      h('div', { class: 't-row' }, save, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => showHome('classes') })),
+      msg)));
+  if (!id) name.focus(); // a new class starts with its name; an open one stays at the top
+}
+
+export { showRoster };

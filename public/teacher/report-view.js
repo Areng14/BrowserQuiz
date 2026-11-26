@@ -423,7 +423,7 @@
       monacoP = new Promise((resolve, reject) => {
         window.MonacoEnvironment = window.MonacoEnvironment || { getWorkerUrl: () => '/vendor/monaco/editor.worker.js?v=2' };
         const s = document.createElement('script');
-        s.src = '/vendor/monaco/monaco.js?v=2'; // the same address as the quiz page's (app.js MONACO_V), so it's fetched once
+        s.src = '/vendor/monaco/monaco.js?v=2'; // the same address as the quiz page's (app/state.js MONACO_V), so it's fetched once
         s.onload = () => (window.monaco ? resolve(window.monaco) : reject(new Error('monaco missing')));
         s.onerror = () => reject(new Error('monaco failed to load'));
         document.head.append(s);

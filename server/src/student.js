@@ -136,7 +136,7 @@ function sameArea(x, y) {
 }
 // A network the student hasn't started a quiz from before (their earlier exams for this teacher, in any
 // class, matched by student ID). Evidence only: a new school address or a phone hotspot explains it too.
-// Checked when they sign in, so the teacher sees it before admitting them (teacher.js liveRow checks),
+// Checked when they sign in, so the teacher sees it before admitting them (teacher/common.js liveRow checks),
 // and again at the start in case the address changed in between. Logged once per attempt.
 function noteNewNetwork(a, run, quiz, ip) {
   if (!ip || run.mode === 'practice' || run.corrects) return;
@@ -180,7 +180,7 @@ function eventDetail(a, quiz, type, detail) {
   return `Question ${i + 1}${list[i].name ? ` (${String(list[i].name).slice(0, 40)})` : ''}, ${n}s after ${away2} away`;
 }
 
-// The typing replay (teacher.js replay): whole edits only, so a big paste can't cut the JSON short.
+// The typing replay (teacher/attempts.js replay): whole edits only, so a big paste can't cut the JSON short.
 function storeEdits(a, list, now) {
   if (!Array.isArray(list) || !list.length || a.edits >= 20000) return;
   const edits = list.slice(0, 300);
@@ -511,13 +511,13 @@ module.exports = function studentRoutes(r) {
 
   r.post('/api/admit-status', async (req, res) => {
     const { a } = current(req);
-    a.seenAt = Date.now(); // their rules or waiting screen is still open (teacher.js liveRow: No signal)
+    a.seenAt = Date.now(); // their rules or waiting screen is still open (teacher/common.js liveRow: No signal)
     json(res, 200, { admitted: a.status !== 'waiting' });
   });
 
   r.post('/api/start', async (req, res) => {
     const { a, run, quiz } = current(req);
-    const seenAt = a.answersAt || 0; // when their answers last reached the server: the page keeps newer ones (app.js takeUnsent)
+    const seenAt = a.answersAt || 0; // when their answers last reached the server: the page keeps newer ones (app/answers.js takeUnsent)
     if (a.status === 'waiting') throw new HttpError(403, 'not_admitted');
     if (a.status === 'submitted') throw new HttpError(403, 'run_closed');
     const now = Date.now();
@@ -527,7 +527,7 @@ module.exports = function studentRoutes(r) {
         if (!p) throw new HttpError(409, 'nothing_to_correct');
         a.layout = p.layout;
         a.answers = p.answers;
-        // what was filled in from the exam, so progress counts what they've changed (teacher.js liveRow)
+        // what was filled in from the exam, so progress counts what they've changed (teacher/common.js liveRow)
         a.layout.startAnswers = Object.fromEntries(Object.entries(p.answers || {}).map(([k, v]) => [k, JSON.stringify(v)]));
       } else a.layout = store.makeLayout(quiz);
       a.status = 'active';
@@ -616,7 +616,7 @@ module.exports = function studentRoutes(r) {
         if (n % 50 === 0) q('DELETE FROM mouse WHERE attempt_id = ? AND rowid NOT IN (SELECT rowid FROM mouse WHERE attempt_id = ? ORDER BY rowid DESC LIMIT ?)').run(a.id, a.id, MOUSE_ROWS);
       }
       live = W.beat(a, body, pts, now); // for a teacher watching live (watch.js)
-      // What they're doing, for the live table (teacher.js activity): an answer changed or code was typed,
+      // What they're doing, for the live table (teacher/common.js activity): an answer changed or code was typed,
       // or just any mouse or key at all. In memory only.
       if (body.answers || (Array.isArray(body.edits) && body.edits.length)) a.workedAt = now;
       const idle = Number(body.idleMs);

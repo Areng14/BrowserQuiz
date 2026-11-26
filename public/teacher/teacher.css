@@ -789,7 +789,7 @@ th .qe-gridcell { font: 600 13px var(--font); }
 .qe-cell .qe-tool { min-height: 30px; } /* a trace column's remove button, as tall as its name */
 @media (pointer: coarse) { .qe-tool { min-height: 40px; min-width: 40px; } .qe-grip { min-width: 40px; } }
 
-/* Notifications on the live page (teacher.js notice): bottom right, a few at most, gone after a while.
+/* Notifications on the live page (dash/run.js notice): bottom right, a few at most, gone after a while.
    The edge says how bad (red: a strike, amber: a sign-in to check); the words say what. */
 .t-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 50; display: grid; gap: 8px; width: min(380px, calc(100vw / var(--zoom, 1) - 32px)); }
 .t-toasts:empty { display: none; }

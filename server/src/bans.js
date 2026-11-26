@@ -176,7 +176,7 @@ function runnerFacts(text, ctx) {
 // So aliases, use-declarations, generics, closures, macros and trait methods are already dealt with. The
 // student's functions are the bodies from their file: an impl's methods say where the impl is
 // (<impl at solution.rs:3:1: 5:2>); a free function has its name only, so the harness's carry the run's marker
-// (harness.js rsMain) and bq.rs's are known. In those bodies, a path that isn't one of their own names (nor
+// (jobs/mains.js rsMain) and bq.rs's are known. In those bodies, a path that isn't one of their own names (nor
 // the given classes') is the library's: its last name is what's called, the rest what it belongs to.
 let RS_HARNESS = null;
 function rsHarnessNames() {

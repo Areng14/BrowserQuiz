@@ -3,6 +3,7 @@
 //   demo/dist/local.html  same page as a full HTML document, for local testing
 //   demo/dist/vendor/monaco/*  the bundled editor, served next to the page
 import { readFileSync, writeFileSync, mkdirSync, cpSync, existsSync } from 'node:fs';
+import { buildSync } from 'esbuild';
 
 const read = (p) => readFileSync(p, 'utf8');
 const safeScript = (js) => js.replace(/<\/script/gi, '<\\/script');
@@ -18,7 +19,8 @@ const scripts = [
   read('public/student/md.js'),
   read('public/student/monitor.js'),
   read('demo/mock-server.js'),
-  read('public/student/app.js'),
+  // the student app's modules (public/student/app), as one script
+  buildSync({ entryPoints: ['public/student/app/main.js'], bundle: true, format: 'iife', write: false }).outputFiles[0].text,
   read('demo/teacher-panel.js'),
   "BQ.app.start(document.getElementById('bq-app'), BQ.api);\nBQ.teacherPanel.mount(document.getElementById('bq-teacher'));",
 ];
