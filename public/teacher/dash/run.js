@@ -210,6 +210,7 @@ async function showRun(runId) {
     if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp t-reveal', tabindex: '0', title: 'Hover to show', text: run.sebQuit }));
     if (run.sebFile && !sebParts) sebParts = sebButtons(run.code, run.joinUrl);
     labeled(toggle, run.status === 'open' ? 'stop' : 'reopen', run.status === 'open' ? 'Close quiz' : 'Reopen quiz');
+    toggle.classList.toggle('t-danger-line', run.status === 'open'); // closing turns everyone in: red, like its confirm
     pauseBtn.hidden = run.status !== 'open' || run.pausedMs != null;
     toggle.onclick = async () => {
       if (run.status === 'open' && !(await ask.confirm({ title: 'Close the quiz?', text: 'Anyone still working gets turned in.', ok: 'Close quiz', danger: true }))) return;
