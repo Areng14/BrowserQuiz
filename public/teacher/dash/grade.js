@@ -30,6 +30,9 @@ async function showGrade(runId, qid, opts) {
     mount(shell('results', h('section', { class: 't-section' }, back, h('h1', { text: 'Grade' }), h('p', { class: 't-muted', text: 'Nothing here is graded by hand.' }))));
     return;
   }
+  // Save and next on this question's last answer to grade: on to the next question that has some
+  const onTo = o.after && !q.toGrade && [...qs.slice(at + 1), ...qs.slice(0, at)].find((x) => x.toGrade);
+  if (onTo) { showGrade(runId, onTo.id, { moved: true }); return; }
   const students = data.students;
   const graded = (s) => s.x.state === 'done' && !s.x.review;
   // who's on the right: the one asked for, the next one still to grade after the one just saved, or the first not graded
@@ -65,7 +68,7 @@ async function showGrade(runId, qid, opts) {
       h('label', { class: 't-check t-gq-hide', for: 'gq-hide' }, hide, h('span', { text: 'Hide names' }))),
     h('div', { class: 't-gq' }, list, pane))));
   if (cur && window.BQReport) window.BQReport.highlight(pane);
-  if (o.after || o.pick) { const first = pane.querySelector('.t-gq-grade input, .t-gq-grade textarea'); if (first) first.focus({ preventScroll: true }); }
+  if (o.after || o.pick || o.moved) { const first = pane.querySelector('.t-gq-grade input, .t-gq-grade textarea'); if (first) first.focus({ preventScroll: true }); }
 }
 // One student's answer to the question, with the rubric, points and feedback
 function gradePane(runId, q, s, name, quiz) {
