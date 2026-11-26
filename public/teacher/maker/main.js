@@ -37,6 +37,7 @@ async function showQuizEditor(id, preset) {
   ed.sel = -1; // the selected question; -1 is Settings
   ed.selDiv = null; // the section divider that's open, if any
   ed.closed = true; // nothing open: the quiz opens as its list of rows
+  ed.aiOpen = false; // the "From an AI" card belongs to the quiz it was opened in
   ed.dirty = !!ed.preset;
   ed.edits = 0;
   ed.saving = false;
