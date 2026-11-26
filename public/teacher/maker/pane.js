@@ -92,7 +92,7 @@ function questionPane(q, i) {
     // the fields, and the answer drawn beside them
     answer.push(h('div', { class: 'qe-graph-ans' },
       h('div', { class: 'qe-stack' },
-        field('Equations, inequalities or points, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'y = 2x - 1' })),
+        field('Equations, inequalities or points, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'e.g. y = 3x + 2' })),
         h('div', { class: 'qe-line' },
           field('x from', num(0, 'x from')), field('x to', num(1, 'x to')), field('y from', num(2, 'y from')), field('y to', num(3, 'y to')),
           (() => {

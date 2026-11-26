@@ -273,7 +273,7 @@
 
     function plusIcon() { return window.BQIcons.svg('plus', 14, { class: 'gr-plus' }); } // /icons.js
     const describe = (d, i) => {
-      const n = `${S.KIND_NAMES[d.kind]} ${i + 1}`;
+      const n = `${S.KIND_NAMES[d.kind]} ${i + 1}${d.fresh ? ' (not placed yet)' : ''}`;
       if (d.kind === 'point') return `${n} at ${pt(d.p[0])}`;
       const s = S.fromHandles(d);
       const eq = s ? `: ${S.shapeText(s).replace(/-/g, '−')}` : '';
@@ -287,8 +287,11 @@
       const role = d.kind === 'point' ? '' : (d.kind === 'parabola' || d.kind === 'abs') ? (j ? ' point' : ' vertex') : d.kind === 'circle' ? (j ? ' edge' : ' center') : ` point ${j + 1}`;
       return `${S.KIND_NAMES[d.kind]} ${i + 1}${role}, ${pt(d.p[j])}`;
     };
+    // A shape just added (fresh) sits where the tool put it, dashed: it isn't part of the answer until the
+    // student moves it, so an untouched starter line can't be turned in by accident.
     function changed() {
-      o.onChange(shapes.length ? shapes.map((d) => JSON.parse(JSON.stringify(d))) : undefined);
+      const placed = shapes.filter((d) => !d.fresh).map((d) => JSON.parse(JSON.stringify(d)));
+      o.onChange(placed.length ? placed : undefined);
     }
     function paint(focus) {
       layer.replaceChildren();
@@ -298,6 +301,7 @@
         const picked = i === sel;
         if (s) {
           const g = shapeEl(F, s, picked ? 'picked' : null);
+          if (d.fresh) g.classList.add('fresh');
           g.addEventListener('pointerdown', (e) => { if (e.button === 0) { sel = i; paint(); e.stopPropagation(); } });
           layer.append(g);
         }
@@ -378,6 +382,7 @@
       if (j === 'k') next.k = snapY(y);
       else next.p[j] = [snapX(x), snapY(y)];
       if (d.kind !== 'point' && !S.fromHandles(next)) return false;
+      if ((j === 'k' ? next.k !== d.k : next.p[j].join() !== d.p[j].join())) delete next.fresh; // moved: now it counts
       shapes[i] = next;
       changed();
       return true;
@@ -448,11 +453,12 @@
       }
       if (!d) d = shapeAt(cx, cy);
       if (kind !== 'point' && !S.fromHandles(d)) return;
+      d.fresh = true;
       shapes.push(d);
       sel = shapes.length - 1;
       changed();
       paint(`${sel}:0`);
-      said.textContent = `Added ${describe(d, sel)}`;
+      said.textContent = `Added ${describe(d, sel)}. Move one of its points to place it.`;
     }
     function removeSel() {
       if (sel < 0 || !shapes[sel]) return;
@@ -467,13 +473,34 @@
     function setSel(patch) {
       const d = shapes[sel];
       if (!d) return;
+      delete d.fresh; // styling it means they meant it
       if ('dash' in patch) { if (patch.dash) d.dash = true; else delete d.dash; }
       if ('side' in patch) { if (patch.side) d.side = patch.side; else delete d.side; }
       changed();
       paint();
     }
     paint();
+    fitOnScreen(el, F.W / F.H);
     return { el };
+  }
+
+  // The grid as big as fits between its top and the bottom of what scrolls (the quiz's page, or the
+  // window), so its bottom row isn't cut off on a short laptop screen: at most 460px wide, and at least
+  // 260 (then the page scrolls). Again when the window or the question around it changes size.
+  function fitOnScreen(el, aspect) {
+    const fit = () => {
+      const v = el.querySelector('.gr-view');
+      if (!v || !el.isConnected) return;
+      let box = el.parentElement;
+      while (box && box !== document.body && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+      const pane = box && box !== document.body ? box : null;
+      const top = v.getBoundingClientRect().top - (pane ? pane.getBoundingClientRect().top - pane.scrollTop : -window.scrollY);
+      const room = (pane ? pane.clientHeight : window.innerHeight) - top - 16;
+      el.style.maxWidth = `${Math.round(Math.max(260, Math.min(460, room * aspect)))}px`; // the tools above it stay as wide as the grid
+    };
+    const ro = new ResizeObserver(() => { if (!el.isConnected) { ro.disconnect(); window.removeEventListener('resize', fit); return; } fit(); });
+    requestAnimationFrame(() => { if (el.parentElement) ro.observe(el.parentElement); fit(); });
+    window.addEventListener('resize', fit);
   }
 
   window.BQGraph = { editor, view, block };

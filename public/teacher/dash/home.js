@@ -104,7 +104,8 @@ const runsTable = (runs) => h('div', { class: 't-table-wrap' }, sortableTable(h(
   h('thead', {}, h('tr', {}, heads(['Code', 'Quiz', 'Class', 'Status', 'Joined', 'Started'], ['Joined']), actionsHead())),
   h('tbody', {}, runs.map((r) => h('tr', {},
     h('td', {}, h('button', { class: 't-link t-mono', type: 'button', text: r.code, onclick: () => showRun(r.id) })),
-    h('td', { text: r.quiz }), h('td', { text: r.roster }),
+    // the quiz's name opens its results too, as the code does (where a teacher looks for it)
+    h('td', {}, h('button', { class: 't-link', type: 'button', text: r.quiz, onclick: () => showRun(r.id) })), h('td', { text: r.roster }),
     h('td', { class: r.status === 'open' ? 'st-good' : 't-muted', text: `${r.status === 'open' ? 'Open' : 'Closed'}${r.corrections ? ' (corrections)' : r.practice ? ' (practice)' : r.seb ? ' (SEB)' : ''}` }),
     h('td', { class: 'num', 'data-label': 'Joined', text: String(r.joined) }), h('td', { 'data-label': 'Started', 'data-sort': String(r.createdAt), text: date(r.createdAt) }),
     // like every list: the rest, and Delete in red, under ⋯
@@ -205,7 +206,7 @@ function quizzesTab(data) {
     data.quizzes.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
       h('thead', { class: 'sr-only' }, h('tr', {}, ['Quiz', 'Questions', 'Time limit', 'Added'].map((x) => h('th', { text: x })), actionsHead())),
       h('tbody', {}, data.quizzes.map((x) => h('tr', { 'data-title': x.title.toLowerCase() },
-        h('td', { role: 'rowheader', class: 't-rowhead', text: x.title }),
+        h('td', { role: 'rowheader', class: 't-rowhead' }, h('button', { class: 't-link', type: 'button', text: x.title, onclick: () => openQuiz(x.id) })),
         h('td', { class: 't-muted', text: plural(x.questions, 'question') }),
         h('td', { class: 't-muted', text: x.timeLimitMin ? `${x.timeLimitMin} min` : 'No time limit' }),
         h('td', { class: 't-muted', text: date(x.createdAt) }),
@@ -249,7 +250,7 @@ function classesTab(data) {
     data.rosters.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
       h('thead', { class: 'sr-only' }, h('tr', {}, ['Class', 'Students'].map((x) => h('th', { text: x })), actionsHead())),
       h('tbody', {}, data.rosters.map((x) => h('tr', {},
-        h('td', { role: 'rowheader', class: 't-rowhead', text: x.name }),
+        h('td', { role: 'rowheader', class: 't-rowhead' }, h('button', { class: 't-link', type: 'button', text: x.name, onclick: () => showRoster(x.id) })),
         h('td', { class: 't-muted', text: plural(x.students, 'student') }),
         h('td', { class: 't-actions' },
           iconButton(h('button', { class: 'btn small', type: 'button', 'aria-label': `Edit ${x.name}`, onclick: () => showRoster(x.id) }), 'pencil', 'Edit'),

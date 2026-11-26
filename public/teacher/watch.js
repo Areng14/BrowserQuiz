@@ -47,7 +47,7 @@
   integrityBtn.addEventListener('click', async () => {
     let body = {};
     if (invalidated) { if (!(await window.BQAsk.confirm({ title: `Un-invalidate ${name}?`, ok: 'Un-invalidate' }))) return; } else {
-      const note = await window.BQAsk.ask({ title: `Invalidate ${name}?`, label: 'Reason (optional)', ok: 'Invalidate', danger: true });
+      const note = await window.BQAsk.ask({ title: `Invalidate ${name}?`, text: DOES.invalidate, label: 'Reason (optional)', ok: 'Invalidate', danger: true });
       if (note === null) return;
       body = { note };
     }

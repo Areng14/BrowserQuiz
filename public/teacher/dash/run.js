@@ -121,7 +121,7 @@ async function showRun(runId) {
     if (await ask.confirm({ title: `Un-invalidate ${name}?`, ok: 'Un-invalidate' })) act(`/api/t/attempts/${id}/restore`);
   }
   async function invalidate(id, name) {
-    const note = await ask.ask({ title: `Invalidate ${name}?`, label: 'Reason (optional)', ok: 'Invalidate', danger: true });
+    const note = await ask.ask({ title: `Invalidate ${name}?`, text: INVALIDATE, label: 'Reason (optional)', ok: 'Invalidate', danger: true });
     if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note });
   }
   // A message to one student: it pops up on their screen at their next heartbeat.
