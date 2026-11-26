@@ -9,7 +9,7 @@ import { TYPES } from './formats.js';
 import { withUi } from './model.js';
 import { ALT, MOD } from './editing.js';
 import { touch } from './core.js';
-import { addDivider, renderPane } from './pane.js';
+import { addDivider, openAi, renderPane } from './pane.js';
 import { addQuestion, closeOpen, select, settingsOpen } from './outline.js';
 import { closeAdd, items, leave, leaveOk, onKey, onUnload, save } from './save.js';
 
@@ -76,6 +76,7 @@ async function showQuizEditor(id, preset) {
   ed.addMenu = h('div', { class: 'qe-add-menu', role: 'menu', 'aria-label': 'Add question', hidden: true },
     Object.keys(TYPES).map((t) => h('button', { class: 'qe-add-item', type: 'button', role: 'menuitem', 'data-add': t, onclick: () => { closeAdd(); addQuestion(t); } }, icon(ICONS[t], 16), h('span', { text: TYPES[t] }))),
     h('hr', { class: 'qe-add-sep', role: 'separator' }),
+    h('button', { class: 'qe-add-item', type: 'button', role: 'menuitem', 'data-add': 'ai', onclick: () => { closeAdd(); openAi(); } }, icon(ICONS.spark, 16), h('span', { text: 'From an AI' })),
     h('button', { class: 'qe-add-item qe-add-section', type: 'button', role: 'menuitem', 'data-add': 'section', title: 'Starts a section at the open question', disabled: !ed.quiz.questions.length,
       onclick: () => { closeAdd(); addDivider(); } }, icon(ICONS.section, 16), h('span', { text: 'Section divider' })),
     h('button', { class: 'qe-add-item', type: 'button', role: 'menuitem', 'data-add': 'paste', onclick: () => {

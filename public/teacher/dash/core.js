@@ -198,6 +198,7 @@ const ICONS = {
   code: ['M16 18l6-6-6-6', 'M8 6l-6 6 6 6'],
   essay: ['M4 6h16', 'M4 10h16', 'M4 14h16', 'M4 18h10'],
   section: ['M3 12h18', 'M8 6h8', 'M8 18h8'],
+  spark: ['M12 3l1.9 6.1L20 11l-6.1 1.9L12 19l-1.9-6.1L4 11l6.1-1.9z', 'M19 3v4M17 5h4'], // something an AI writes
 };
 function icon(paths, size = 18) {
   const ns = 'http://www.w3.org/2000/svg';

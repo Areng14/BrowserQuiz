@@ -86,7 +86,10 @@
 .qe-add-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08); }
 .qe-add-menu[hidden] { display: none; }
 .qe-add-sep { grid-column: 1 / -1; width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
+.qe-start { display: grid; gap: 16px; }
 .qe-keys { padding: 0 4px; color: var(--ink-2); }
+.qe-ai-msg { margin: 0; white-space: pre-wrap; }
+.qe-ai-msg:empty { display: none; }
 .qe-title { max-width: 440px; font-weight: 600; }
 .qe-grow { flex: 1; }
 .qe-status { color: var(--ink-2); white-space: nowrap; }

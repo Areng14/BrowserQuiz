@@ -143,17 +143,29 @@ function quizSource(quiz) {
 }
 
 // The prompt teachers paste into an AI chat to get a quiz: the template, the format spec and an example.
+const promptRoot = path.join(__dirname, '..', '..', '..');
+const readRel = (rel) => fs.readFileSync(path.join(promptRoot, rel), 'utf8');
+const promptFormat = () => readRel('docs/quiz-format.md')
+  .replace(/<!-- not-in-prompt -->[\s\S]*?<!-- \/not-in-prompt -->\n?/g, '')
+  .replace(/^# .*\n+/, '')
+  .replace(/^### /gm, '#### ')
+  .replace(/^## /gm, '### ')
+  .trim();
 function quizPrompt() {
-  const root = path.join(__dirname, '..', '..', '..');
-  const read = (rel) => fs.readFileSync(path.join(root, rel), 'utf8');
-  const format = read('docs/quiz-format.md')
-    .replace(/<!-- not-in-prompt -->[\s\S]*?<!-- \/not-in-prompt -->\n?/g, '')
-    .replace(/^# .*\n+/, '')
-    .replace(/^### /gm, '#### ')
-    .replace(/^## /gm, '### ')
-    .trim();
-  const example = read('examples/ap-csa-unit4/quiz.json').trim();
-  return read('server/prompt/quiz-prompt.md').replace('{{FORMAT}}', () => format).replace('{{EXAMPLE}}', () => example);
+  const example = readRel('examples/ap-csa-unit4/quiz.json').trim();
+  return readRel('server/prompt/quiz-prompt.md').replace('{{FORMAT}}', promptFormat).replace('{{EXAMPLE}}', () => example);
+}
+// The prompt for one question, to add to the quiz being made: the quiz prompt's rules for writing
+// questions (difficulty, length, fairness, checking), so both write questions the same way.
+function questionPrompt() {
+  const quiz = readRel('server/prompt/quiz-prompt.md');
+  const part = (from, to) => quiz.slice(quiz.indexOf(from), quiz.indexOf(to)).trim();
+  let n = 1;
+  const rules = [part('## 3. Difficulty', '## 7. Images'), part('## 8. Check your work', '## 9. Your answer')].join('\n\n')
+    .replace(/^## \d+\. /gm, () => `## ${++n}. `);
+  const sample = JSON.parse(readRel('examples/ap-csa-unit4/quiz.json')).questions.find((x) => x.type === 'single');
+  return readRel('server/prompt/question-prompt.md').replace('{{RULES}}', () => rules).replace('{{FORMAT}}', promptFormat)
+    .replace('{{EXAMPLE}}', () => JSON.stringify(sample, null, 2));
 }
 // A pasted or uploaded quiz.json (no zip). Images it names must come from somewhere else.
 function parseQuizJson(buf) {
@@ -261,4 +273,4 @@ function previewLayout(quiz) {
   return { order: quiz.questions.map((qq) => qq.id), perms: Object.fromEntries(quiz.questions.filter((qq) => qq.choices).map((qq) => [qq.id, qq.choices.map((_, i) => i)])), vars: {} };
 }
 
-module.exports = { TDEV, acctFails, checkQuiz, devMisses, devSig, getQuizRow, handGraded, imagePaths, knownDevice, loginBucket, parseQuizJson, parseRosterText, parseTimeX, previewLayout, quizError, quizPrompt, quizSource, retireQuiz, retireRoster, rosterStudentsForRun, saveQuiz, staleRuns, startSession };
+module.exports = { TDEV, acctFails, checkQuiz, devMisses, devSig, getQuizRow, handGraded, imagePaths, knownDevice, loginBucket, parseQuizJson, parseRosterText, parseTimeX, previewLayout, questionPrompt, quizError, quizPrompt, quizSource, retireQuiz, retireRoster, rosterStudentsForRun, saveQuiz, staleRuns, startSession };

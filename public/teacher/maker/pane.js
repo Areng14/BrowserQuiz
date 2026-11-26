@@ -13,6 +13,7 @@ const doneBtn = () => h('button', { class: 'btn small qe-done', type: 'button', 
 import { addImage, addInlineImage, choicesEditor, imageEditor } from './choices.js';
 import { promptEditor, rubricEditor } from './prompt.js';
 import { codeEditor, fillEditor, outputEditor, traceEditor } from './code.js';
+import { aiCard } from './fromai.js';
 import { addQuestion, closeOpen, duplicate, moveQuestion, remove, renderOutline, reveal, rowOf, select, settingsOpen } from './outline.js';
 import { showQuizEditor } from './main.js';
 
@@ -253,6 +254,7 @@ function settingsPane() {
 function selectDivider(k) {
   ed.selDiv = k;
   ed.closed = false;
+  ed.aiOpen = false;
   renderPane();
   reveal();
   const t = ed.pane.querySelector('#qe-div-title');
@@ -305,13 +307,15 @@ function dividerPane(k) {
 }
 
 // A quiz with no questions yet opens on the kinds of question to start with
-const HINTS = { single: 'One right answer', multi: 'Several right answers', text: 'A word or a number', output: 'What code prints',
+const HINTS = { single: 'One right answer', multi: 'Several right answers', text: 'A word or a number', math: 'An expression or equation', graph: 'Drawn on a grid', output: 'What code prints',
   trace: 'Track variables by hand', fill: 'Complete the code', code: 'Write code that\'s tested', essay: 'Graded by you' };
 function startPane() {
   ed.paneTick = null;
   return [h('div', { class: 'qe-head' }, h('h2', { class: 'qe-n', text: 'Add a question' })),
     h('div', { class: 'qe-tiles' }, Object.keys(TYPES).map((t) => h('button', { class: 'qe-tile', type: 'button', 'data-add': t, onclick: () => addQuestion(t) },
-      icon(ICONS[t], 22), h('span', { class: 'qe-tile-name', text: TYPES[t] }), h('span', { class: 'qe-tile-hint', text: HINTS[t] })))),
+      icon(ICONS[t], 22), h('span', { class: 'qe-tile-name', text: TYPES[t] }), h('span', { class: 'qe-tile-hint', text: HINTS[t] }))),
+      h('button', { class: 'qe-tile', type: 'button', 'data-add': 'ai', onclick: () => openAi() },
+        icon(ICONS.spark, 22), h('span', { class: 'qe-tile-name', text: 'From an AI' }), h('span', { class: 'qe-tile-hint', text: 'Written from a prompt' }))),
     h('p', { class: 't-muted' }, 'Or ', h('button', { class: 't-link', type: 'button', text: 'paste a quiz.json', onclick: () => {
       ed.wantSettings = true;
       select(-1);
@@ -331,6 +335,17 @@ function dividerRow(k) {
 
 // The whole list: Settings when open, the sections, each part's heading, a row per question with the
 // open one in its place, then Add question. Typing doesn't come here (renderOutline redraws the rows).
+// One question from an AI: its card opens at the end of the list, on the button that copies the prompt
+function openAi() {
+  ed.aiOpen = true;
+  ed.closed = true;
+  ed.selDiv = null;
+  renderPane();
+  reveal();
+  const b = ed.pane.querySelector('.qe-open-ai .t-split button');
+  if (b) b.focus({ preventScroll: true });
+}
+
 function renderPane() {
   const qs = ed.quiz.questions;
   ed.problems = qs.map(problemsOf);
@@ -355,12 +370,13 @@ function renderPane() {
   });
   sortable(rows, moveQuestion, (row) => row.querySelector('.qe-grip'));
   ed.outline.replaceChildren(...kids);
+  const ai = ed.aiOpen ? h('section', { class: 'qe-open qe-open-ai', 'aria-label': 'Question from an AI' }, aiCard(closeOpen)) : null;
   const top = settingsOpen() ? h('section', { class: 'qe-open qe-open-settings', 'aria-label': 'Settings' }, settingsPane())
-    : !qs.length ? h('section', { class: 'qe-start' }, startPane()) : null;
-  ed.pane.replaceChildren(...[top, ed.outline, qs.length ? ed.addWrap : null, ed.keysEl].filter(Boolean));
+    : !qs.length && !ai ? h('section', { class: 'qe-start' }, startPane()) : null;
+  ed.pane.replaceChildren(...[top, ed.outline, ai, qs.length && !ai ? ed.addWrap : null, ed.keysEl].filter(Boolean));
   ed.pane.querySelectorAll('textarea.qe-area').forEach(grow);
   if (ed.paneTick) ed.paneTick();
   renderOutline();
 }
 
-export { addDivider, renderPane, sectionTimeProblem, selectDivider };
+export { addDivider, openAi, renderPane, sectionTimeProblem, selectDivider };

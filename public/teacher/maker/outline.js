@@ -151,6 +151,7 @@ function reveal() {
 }
 function select(i, focus) {
   ed.selDiv = null;
+  ed.aiOpen = false;
   ed.closed = false;
   ed.sel = Math.max(-1, Math.min(ed.quiz.questions.length - 1, i));
   renderPane();
@@ -159,32 +160,55 @@ function select(i, focus) {
 }
 // Done: the open thing goes back to a row, which keeps the focus
 function closeOpen() {
+  const ai = ed.aiOpen;
   ed.closed = true;
+  ed.aiOpen = false;
   const div = ed.selDiv;
   renderPane();
-  const back = div != null ? ed.pane.querySelector(`li.qe-divider[data-k="${div}"] button`) : ed.sel >= 0 ? ed.pane.querySelector(`li.qe-row[data-q="${ed.sel}"] button`) : ed.settingsBtn;
+  const back = ai ? ed.pane.querySelector('.qe-add-btn, .qe-tile[data-add="ai"]') : div != null ? ed.pane.querySelector(`li.qe-divider[data-k="${div}"] button`) : ed.sel >= 0 ? ed.pane.querySelector(`li.qe-row[data-q="${ed.sel}"] button`) : ed.settingsBtn;
   if (back) back.focus({ preventScroll: true });
   const row = back && back.closest('li');
   if (row) row.scrollIntoView({ block: 'nearest' });
 }
 
 // ---------- adding, copying, removing, moving ----------
-// New questions go next to their own kind, so each type stays one part of the quiz.
+// New questions go next to their own kind, so each type stays one part of the quiz: after the selected
+// question if it's the same kind, else after the last of its kind, or where its part belongs (multiple
+// choice first, written answers last).
+function placeFor(type) {
+  const cur = ed.quiz.questions[ed.sel];
+  if (cur && cur.type === type) return ed.sel + 1;
+  const order = Object.keys(TYPES);
+  let at = 0;
+  ed.quiz.questions.forEach((q, i) => { if (order.indexOf(q.type) <= order.indexOf(type)) at = i + 1; });
+  return at;
+}
+function insertAt(q, at) {
+  for (const d of ed.quiz.sections) if (d.at >= at) d.at++; // a new question joins the section of the one before it
+  ed.quiz.questions.splice(at, 0, q);
+}
 function addQuestion(type) {
   const cur = ed.quiz.questions[ed.sel];
   const like = cur && cur.type === type ? cur : null;
-  // After the last of its kind, or else where its part belongs: multiple choice first, written answers last.
-  const order = Object.keys(TYPES);
-  const rank = order.indexOf(type);
-  let at = ed.sel + 1;
-  if (!like) { at = 0; ed.quiz.questions.forEach((q, i) => { if (order.indexOf(q.type) <= rank) at = i + 1; }); }
+  const at = placeFor(type);
   const q = blank(type, like ? { id: nextId(), points: like.points, mode: type === 'code' ? like.mode : null, languages: like.languagesAny ? 'any' : like.languages && like.languages.slice(), language: like.language } : { id: nextId() });
   if (like && like.shuffleChoices === false) q.shuffleChoices = false;
-  for (const d of ed.quiz.sections) if (d.at >= at) d.at++; // a new question joins the section of the one before it
-  ed.quiz.questions.splice(at, 0, q);
+  insertAt(q, at);
   ed.removed = null;
   touch();
   select(at, true);
+}
+// Questions written somewhere else (an AI chat), each put where its kind goes; the first one opens
+function insertQuestions(list) {
+  for (const q of list) {
+    q.id = nextId();
+    const at = placeFor(q.type);
+    insertAt(q, at);
+    ed.sel = at;
+  }
+  ed.removed = null;
+  touch();
+  select(ed.quiz.questions.indexOf(list[0]));
 }
 function duplicate(i) {
   const q = JSON.parse(JSON.stringify(ed.quiz.questions[i]));
@@ -231,4 +255,4 @@ function moveQuestion(from, to) {
   }
 }
 
-export { addQuestion, closeOpen, duplicate, moveQuestion, remove, renderOutline, reveal, rowOf, select, settingsOpen };
+export { addQuestion, closeOpen, duplicate, insertQuestions, moveQuestion, remove, renderOutline, reveal, rowOf, select, settingsOpen };

@@ -372,8 +372,9 @@ function sebButtons(code, joinUrl) {
 // The AI prompt goes on the clipboard, ready to paste into a chatbot. It's fetched ahead of time so
 // the copy happens right in the click. If copying is blocked, it downloads instead. It's long, and some
 // chats cap what you can paste (Copilot), so it also comes as a file to attach, from the button beside it.
-function copyPromptBtn() {
-  const url = `/api/t/quiz-prompt`;
+// kind: 'quiz' (the Quizzes tab), or 'question' (one question, from the quiz maker)
+function copyPromptBtn(kind = 'quiz') {
+  const url = `/api/t/${kind}-prompt`;
   const btn = h('button', { class: 'btn small', type: 'button', text: 'Copy AI prompt' });
   let text = null;
   const ready = fetch(url, { credentials: 'same-origin' }).then((r) => (r.ok ? r.text() : null)).then((t) => { text = t; }).catch(() => {});
@@ -388,7 +389,7 @@ function copyPromptBtn() {
       location.href = url;
     }
   });
-  const file = h('a', { class: 'btn small t-split-icon', href: url, download: 'BrowserQuiz quiz prompt.txt', 'aria-label': 'Download the AI prompt as a file', title: 'Download as a file' }, icon(ICONS.download, 16));
+  const file = h('a', { class: 'btn small t-split-icon', href: url, download: `BrowserQuiz ${kind} prompt.txt`, 'aria-label': 'Download the AI prompt as a file', title: 'Download as a file' }, icon(ICONS.download, 16));
   return h('span', { class: 't-split' }, btn, file);
 }
 async function copyText(text) {
@@ -415,4 +416,4 @@ async function remove(path, title, text) {
 // A page with unsaved work (the quiz maker) asks before anyone leaves it.
 function guard(fn) { dash.leaveGuard = fn; }
 
-export { copyText, guard, noteRuns, route, sebButtons, setHash, shell, showHome };
+export { copyPromptBtn, copyText, guard, noteRuns, route, sebButtons, setHash, shell, showHome };

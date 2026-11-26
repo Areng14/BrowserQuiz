@@ -11,7 +11,7 @@ const { writeZip } = require('../zip');
 const { publicQuiz } = require('../student');
 const { runSamples, gradeCode } = require('../coderun');
 const { audit, requireTeacher } = require('./common');
-const { checkQuiz, getQuizRow, imagePaths, parseQuizJson, previewLayout, quizError, quizPrompt, quizSource, retireQuiz, saveQuiz, staleRuns } = require('./library');
+const { checkQuiz, getQuizRow, imagePaths, parseQuizJson, previewLayout, questionPrompt, quizError, quizPrompt, quizSource, retireQuiz, saveQuiz, staleRuns } = require('./library');
 
 module.exports = function quizRoutes(r) {
   r.get('/api/t/overview', (req, res) => {
@@ -127,6 +127,14 @@ module.exports = function quizRoutes(r) {
     send(res, 200, quizPrompt(), {
       'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store',
       'Content-Disposition': 'attachment; filename="BrowserQuiz quiz prompt.txt"',
+    });
+  });
+  // the same for one question, added to the quiz being made (the quiz maker's "From an AI")
+  r.get('/api/t/question-prompt', (req, res) => {
+    requireTeacher(req);
+    send(res, 200, questionPrompt(), {
+      'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store',
+      'Content-Disposition': 'attachment; filename="BrowserQuiz question prompt.txt"',
     });
   });
 
