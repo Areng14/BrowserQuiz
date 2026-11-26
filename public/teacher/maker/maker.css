@@ -11,6 +11,7 @@
 
 /* The list: each part's heading (its kind and points), sections, and a row per question */
 .qe-outline { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.qe-outline:empty { display: none; } /* a new quiz: no list yet, and no second gap above the card that's open */
 .qe-part { display: flex; align-items: baseline; gap: 12px; margin-top: 16px; padding: 0 4px; }
 .qe-outline > :first-child { margin-top: 0; }
 .t-app h2.qe-part-name { margin: 0; font-size: 17px; font-weight: 600; }
