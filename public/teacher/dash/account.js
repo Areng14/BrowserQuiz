@@ -178,7 +178,7 @@ function passkeysSection(top) {
         h('span', { class: 't-small t-muted t-pk-meta' },
           h('span', { text: `Added ${new Date(k.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}` }), ' · ',
           h('span', { text: k.lastUsedAt ? `Last used ${date(k.lastUsedAt)}` : 'Not used yet' }))),
-      h('button', { class: 'btn small', type: 'button', text: 'Remove', 'aria-label': `Remove ${k.name}`, onclick: async () => {
+      h('button', { class: 'btn small outline-danger', type: 'button', text: 'Remove', 'aria-label': `Remove ${k.name}`, onclick: async () => {
         if (!(await ask.confirm({ title: `Remove ${k.name}?`, text: "You can't sign in with it after this.", ok: 'Remove', danger: true }))) return;
         msg.textContent = '';
         try { paint((await post(`/api/t/passkeys/${encodeURIComponent(k.id)}/delete`)).passkeys); } catch (e) { if (e.message !== 'login') msg.textContent = e.message; }

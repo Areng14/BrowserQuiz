@@ -66,7 +66,7 @@ function screenQuiz() {
       timer,
       h('div', { class: 'qbar-side qbar-end' }, calc ? calc.button : null, scratchBtn, themeButton(),
         // no Exit in Safe Exam Browser with our settings: there's nowhere to go until they turn in
-        (cfg.preview && !cfg.watch) || (S.run && S.run.sebQuit) ? null : h('button', { class: 'btn small ghost', type: 'button', text: 'Exit', onclick: () => openExit() }))),
+        (cfg.preview && !cfg.watch) || (S.run && S.run.sebQuit) ? null : h('button', { class: 'btn small outline-danger', type: 'button', text: 'Exit', onclick: () => openExit() }))),
     conn,
     main,
     scratch,
@@ -143,7 +143,7 @@ function reviewButtons() {
   }
   const locked = timedExam();
   S.el.next.textContent = locked ? 'Turns in when time is up' : 'Submit';
-  S.el.next.className = locked ? 'btn' : 'btn primary';
+  S.el.next.className = locked ? 'btn' : 'btn success'; // finishing: green
   S.el.next.disabled = locked;
   S.el.gameBtn.hidden = !(locked && !cfg.watch && BQ.snake);
   snakeLock();

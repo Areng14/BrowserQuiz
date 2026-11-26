@@ -149,7 +149,7 @@ function giveTab(data, me) {
   muteRow.hidden = true;
   const startMsg = h('p', { class: 't-error', role: 'alert' });
   const ready = data.quizzes.length && data.rosters.length;
-  const startBtn = labeled(h('button', { class: 'btn primary t-start', type: 'button', disabled: !ready }), 'play', 'Start quiz');
+  const startBtn = labeled(h('button', { class: 'btn success t-start', type: 'button', disabled: !ready }), 'play', 'Start quiz');
   startBtn.addEventListener('click', async () => {
     const pick = data.quizzes.find((x) => x.id === quizSel.value);
     if (mode !== 'practice' && pick && pick.practiced

@@ -61,6 +61,20 @@
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+/* Button roles, so the color says what kind of action it is (the rest are plain):
+   primary: the main action. success: start, go on, finish. warning: hold (pause).
+   danger: ends, removes, invalidates. Solid for the one main action of a bar or dialog; outline beside others. */
+.btn.success { background: var(--good); border-color: var(--good); color: var(--accent-ink); }
+.btn.danger { background: var(--bad); border-color: var(--bad); color: var(--accent-ink); }
+.btn:is(.success, .danger):hover:not(:disabled) { filter: brightness(1.08); }
+.btn.success:hover:not(:disabled) { background: var(--good); }
+.btn.danger:hover:not(:disabled) { background: var(--bad); }
+.btn.outline-success { color: var(--good); border-color: color-mix(in srgb, var(--good) 55%, var(--line)); }
+.btn.outline-warning { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); }
+.btn.outline-danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); }
+.btn.outline-success:hover:not(:disabled) { background: color-mix(in srgb, var(--good) 8%, var(--bg)); border-color: var(--good); }
+.btn.outline-warning:hover:not(:disabled) { background: color-mix(in srgb, var(--warn) 8%, var(--bg)); border-color: var(--warn); }
+.btn.outline-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 8%, var(--bg)); border-color: var(--bad); }
 .btn.ghost { background: transparent; border-color: transparent; }
 .btn.small { min-height: 34px; padding: 0 12px; font-size: 14px; }
 .theme-btn, .icon-btn {

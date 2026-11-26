@@ -21,7 +21,7 @@ async function showRun(runId) {
   const detail = h('div');
   const toggle = h('button', { class: 'btn', type: 'button' });
   // a fire drill, a question for the whole class: every clock stops and the questions are hidden, at once
-  const pauseBtn = iconButton(h('button', { class: 'btn', type: 'button', hidden: true, onclick: () => act(`/api/t/runs/${runId}/pause`) }), 'pause', 'Pause quiz',
+  const pauseBtn = iconButton(h('button', { class: 'btn outline-warning', type: 'button', hidden: true, onclick: () => act(`/api/t/runs/${runId}/pause`) }), 'pause', 'Pause quiz',
     "Every clock stops and the questions are hidden until you resume. Leaving the quiz meanwhile isn't counted.");
   const lockBtn = h('button', { class: 'btn', type: 'button' });
   const howTo = h('p', { class: 't-muted t-small' });
@@ -36,7 +36,7 @@ async function showRun(runId) {
   let waitingReading = 0; // and how many of them haven't agreed to the rules yet
   let begun = false; // anyone started yet (rows get their own Start only after)
   // only the students waiting when the checklist opens: anyone who joins while it's up waits for the next round
-  const admitAll = h('button', { class: 'btn primary', type: 'button', text: 'Start quiz', onclick: () => {
+  const admitAll = h('button', { class: 'btn success', type: 'button', text: 'Start quiz', onclick: () => {
     const ids = waitingIds.slice();
     beforeAdmit(runId, ids.length, null, async () => {
       await act(`/api/t/runs/${runId}/admit-all`, { ids });
@@ -93,7 +93,7 @@ async function showRun(runId) {
   drawLiveHead();
   // Paused (the run's ⋯ menu): a bar across the top, how long it's been, and the way back
   const pausedFor = h('span', { class: 't-paused-for' });
-  const resumeBtn = labeled(h('button', { class: 'btn primary', type: 'button', onclick: () => act(`/api/t/runs/${runId}/resume`) }), 'play', 'Resume quiz');
+  const resumeBtn = labeled(h('button', { class: 'btn success', type: 'button', onclick: () => act(`/api/t/runs/${runId}/resume`) }), 'play', 'Resume quiz');
   // (not a live region: its clock ticks; the summary below says "3 paused")
   const pausedBar = h('div', { class: 't-paused', hidden: true },
     h('span', { class: 't-paused-what' }, glyph('pause', 18), 'Quiz paused', pausedFor), resumeBtn);
@@ -210,7 +210,7 @@ async function showRun(runId) {
     if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp t-reveal', tabindex: '0', title: 'Hover to show', text: run.sebQuit }));
     if (run.sebFile && !sebParts) sebParts = sebButtons(run.code, run.joinUrl);
     labeled(toggle, run.status === 'open' ? 'stop' : 'reopen', run.status === 'open' ? 'Close quiz' : 'Reopen quiz');
-    toggle.classList.toggle('t-danger-line', run.status === 'open'); // closing turns everyone in: red, like its confirm
+    toggle.classList.toggle('outline-danger', run.status === 'open'); // closing turns everyone in: red, like its confirm
     pauseBtn.hidden = run.status !== 'open' || run.pausedMs != null;
     toggle.onclick = async () => {
       if (run.status === 'open' && !(await ask.confirm({ title: 'Close the quiz?', text: 'Anyone still working gets turned in.', ok: 'Close quiz', danger: true }))) return;
@@ -234,11 +234,11 @@ async function showRun(runId) {
       // In the row: what needs deciding now. The rest is under ⋯.
       const more = [];
       const bad = a && a.integrity === 'invalidated';
-      if (a && a.status === 'waiting' && begun) actions.append(btn('Start', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`), a.checks ? [{ name: s.name, checks: a.checks }] : [], a.ready ? 0 : 1), { class: 'btn small primary' }));
+      if (a && a.status === 'waiting' && begun) actions.append(btn('Start', 'admit', () => beforeAdmit(runId, 1, s.name, () => act(`/api/t/attempts/${a.id}/admit`), a.checks ? [{ name: s.name, checks: a.checks }] : [], a.ready ? 0 : 1), { class: 'btn small success' }));
       if (bad) actions.append(btn('Un-invalidate', 'restore', () => unInvalidate(a.id, s.name)));
       // Flagged and still working: ending their quiz is one click away (never automatic, so a stray
       // popup doesn't end anyone's quiz without the teacher looking).
-      if (bad && a.status === 'active') actions.append(btn('End quiz', 'end', () => endQuiz(a.id, s.name)));
+      if (bad && a.status === 'active') actions.append(btn('End quiz', 'end', () => endQuiz(a.id, s.name), { class: 'btn small outline-danger' }));
       // Practice and corrections aren't monitored: no watching, network pins or invalidating there.
       const sec = !(lastRun && lastRun.practice);
       // Their screen, live, in a new tab (watch.html).
@@ -349,7 +349,7 @@ async function showRun(runId) {
       h('div', { class: 't-row t-detail-acts' },
         d.status === 'active' && !(lastRun && lastRun.practice) ? watchLink(id, d.name) : null,
         d.integrity === 'invalidated' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Un-invalidate', onclick: () => unInvalidate(id, d.name) }, dk('restore'))) : null,
-        d.status === 'active' ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }, dk('end'))) : null,
+        d.status === 'active' ? h('button', Object.assign({ class: 'btn small outline-danger', type: 'button', text: 'End quiz', onclick: () => endQuiz(id, d.name) }, dk('end'))) : null,
         d.status === 'active' && d.deadline ? h('span', Object.assign({ class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }, d.paused ? {} : ticks('left-label', d.timeLeft || 0))) : null,
         d.timeX ? h('span', { class: 't-muted t-small', text: `${d.timeX}× time` }) : null,
         d.status === 'submitted' && !d.sealed ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,

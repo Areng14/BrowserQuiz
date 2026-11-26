@@ -21,10 +21,11 @@ async function showRoster(id) {
   const list = roster.students.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
     h('tbody', {}, roster.students.map((st) => {
       const row = h('tr', {});
-      const btn = h('button', { class: 'btn small', type: 'button', text: 'Remove', 'aria-label': `Remove ${st.name}` });
+      const btn = h('button', { class: 'btn small outline-danger', type: 'button', text: 'Remove', 'aria-label': `Remove ${st.name}` });
       btn.addEventListener('click', () => {
         if (removing.has(st.id)) { removing.delete(st.id); btn.textContent = 'Remove'; btn.setAttribute('aria-label', `Remove ${st.name}`); row.classList.remove('t-removed'); }
         else { removing.add(st.id); btn.textContent = 'Undo'; btn.setAttribute('aria-label', `Undo removing ${st.name}`); row.classList.add('t-removed'); }
+        btn.classList.toggle('outline-danger', !removing.has(st.id)); // Undo is plain
       });
       const time = h('select', { class: 'input t-time-x', 'aria-label': `Time for ${st.name}` },
         [[1, 'Standard time'], [1.25, '1.25× time'], [1.5, '1.5× time'], [2, '2× time']].map(([v, t]) => h('option', { value: String(v), text: t, selected: Number(st.timeX || 1) === v })));

@@ -61,7 +61,7 @@ function showFsOverlay() {
       h('h2', { id: 'fs-title', text: 'You left fullscreen' }),
       // waiting for the teacher's Start (no quiz yet): leaving doesn't count until it starts (store.record)
       h('p', { text: !S.quiz ? 'Once the quiz starts, this counts as cheating.' : S.pausedAt ? 'Once the quiz goes on, this counts as cheating.' : 'Leaving fullscreen counts as cheating, and your teacher can see that you left. Go back to keep working.' }),
-      h('div', { class: 'row-actions' }, btn, S.quiz && !(S.run && S.run.sebQuit) ? h('button', { class: 'btn', type: 'button', text: 'Exit', onclick: () => openExit() }) : null)));
+      h('div', { class: 'row-actions' }, btn, S.quiz && !(S.run && S.run.sebQuit) ? h('button', { class: 'btn outline-danger', type: 'button', text: 'Exit', onclick: () => openExit() }) : null)));
   S.el.fsOverlay = ov;
   S.el.wrap.append(ov);
   S.el.fsRelease = holdFocus(ov);
@@ -103,7 +103,7 @@ function openExit() {
   const keep = h('button', { class: 'btn', type: 'button', text: 'Keep working', onclick: close });
   // Turn in shows the usual check first: unanswered questions, and that answers can't change after.
   const turnIn = h('button', { class: 'btn', type: 'button', text: 'Turn in', onclick: () => { backdrop.remove(); release(false); openSubmit(); } });
-  const exit = h('button', { class: 'btn primary', type: 'button', text: 'Exit', onclick: () => { backdrop.remove(); release(false); exitQuiz(); } });
+  const exit = h('button', { class: 'btn danger', type: 'button', text: 'Exit', onclick: () => { backdrop.remove(); release(false); exitQuiz(); } });
   backdrop = h('div', { class: 'modal-backdrop' },
     h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'exit-title' },
       h('h2', { id: 'exit-title', text: 'Exit the quiz?' }),
@@ -179,7 +179,7 @@ function openSubmit() {
   let release = null;
   const close = () => { backdrop.remove(); release(false); S.el.next.focus(); };
   const keep = h('button', { class: 'btn', type: 'button', text: 'Keep working', onclick: close });
-  const submit = h('button', { class: 'btn primary', type: 'button', text: 'Submit', onclick: () => { backdrop.remove(); release(false); submitNow(); } });
+  const submit = h('button', { class: 'btn success', type: 'button', text: 'Submit', onclick: () => { backdrop.remove(); release(false); submitNow(); } });
   backdrop = h('div', { class: 'modal-backdrop' },
     h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'submit-title' },
       h('h2', { id: 'submit-title', text: 'Submit your quiz?' }),

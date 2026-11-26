@@ -64,6 +64,7 @@
     invalidated = bad;
     $('w-state').hidden = !bad;
     integrityBtn.textContent = bad ? 'Un-invalidate' : 'Invalidate';
+    integrityBtn.classList.toggle('outline-danger', !bad); // invalidating is the destructive one
     integrityBtn.setAttribute('aria-label', `${bad ? 'Un-invalidate' : 'Invalidate'} ${name}`);
     window.BQTip.text(integrityBtn, bad ? DOES.restore : DOES.invalidate);
     $('w-integrity-host').hidden = false;
