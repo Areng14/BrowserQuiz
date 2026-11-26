@@ -146,6 +146,9 @@ db.exec('CREATE INDEX IF NOT EXISTS attempts_token ON attempts(token_hash)');
 // (student.js noteNewNetwork), and the class page asks which students have results.
 db.exec(`CREATE INDEX IF NOT EXISTS attempts_student ON attempts(student_id);
 CREATE INDEX IF NOT EXISTS roster_students_sid ON roster_students(sid_hash);`);
+// An attempt's typing replay (teacher/attempts.js replay). Deleting a run deletes its attempts' replays too
+// (ON DELETE CASCADE), which without this read the whole table once for every attempt.
+db.exec('CREATE INDEX IF NOT EXISTS code_edits_attempt ON code_edits(attempt_id)');
 
 const cache = new Map();
 function q(sql) {
