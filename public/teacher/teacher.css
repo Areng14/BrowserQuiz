@@ -14,7 +14,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-app .field { grid-template-columns: minmax(0, 1fr); }
 
 .t-bar { display: flex; align-items: center; gap: 12px; padding: 10px var(--gut-r) 10px var(--gut-l); border-bottom: 1px solid var(--line); }
-.t-bar .grow { flex: 1; min-width: 0; font-weight: 600; }
+.t-bar .grow { flex: 1; min-width: 0; display: flex; align-items: center; font-weight: 600; } /* centered with the buttons, not on its baseline */
 .t-main { max-width: clamp(1200px, 85vw, 1800px); margin: 0 auto; padding: 24px var(--gut-r) 64px var(--gut-l); display: grid; gap: 28px; }
 /* The frame: tabs down the left, the page on the right. */
 .t-shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); min-height: calc(100vh / var(--zoom, 1)); }
@@ -197,9 +197,10 @@ input[type="file"].input { padding: 6px 10px; }
 .t-actions { white-space: nowrap; }
 .t-actions .btn + .btn { margin-left: 6px; }
 .t-actions > * + * { margin-left: 6px; }
+/* one center line for a row's buttons: the ⋯ is inline-flex, the others inline-block */
+.t-actions > :is(.btn, .input) { vertical-align: middle; }
 /* a class's students: extra time beside Remove, the same small height */
-.input.t-time-x { width: auto; height: 34px; min-height: 34px; padding-block: 0; vertical-align: middle; }
-.t-actions > .input.t-time-x + .btn { vertical-align: middle; }
+.input.t-time-x { width: auto; height: 34px; min-height: 34px; padding-block: 0; }
 .t-xtime { font-size: 13px; }
 /* long names: cut short, the whole name on hover and in the student's panel */
 .t-run .t-name > * { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
@@ -264,7 +265,7 @@ input[type="file"].input { padding: 6px 10px; }
 .btn.t-split-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; }
 @media (pointer: coarse) { .btn.t-split-icon { width: 40px; } }
 /* a heading with more buttons than fit beside it on a phone: the buttons go under it */
-@media (max-width: 420px) { .t-head.t-head-wrap { flex-wrap: wrap; row-gap: 12px; } .t-head.t-head-wrap > h1 { flex-basis: 100%; } }
+@media (max-width: 420px) { .t-head.t-head-wrap { flex-wrap: wrap; row-gap: 12px; } .t-head.t-head-wrap > h1 { flex-basis: 100%; } .t-section > .t-head.t-head-wrap > :not(h1) { margin-block: 0; } }
 .t-dialog-x svg { flex: none; width: 18px; height: 18px; }
 .t-dialog-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); background: var(--soft); }
 .t-dialog-foot .t-ai-count { margin-right: auto; }
@@ -406,13 +407,15 @@ input[type="file"].input { padding: 6px 10px; }
   /* line 2: the bar, where they are and the time left; anything else after */
   .t-run td { order: 2; }
   .t-run td:nth-child(-n+3) { order: 0; }
-  .t-run td.t-progress, .t-run td[data-tick="left"] { order: 1; }
+  .t-run td.t-progress, .t-run td:has(> [data-tick="left"]) { order: 1; }
   .t-run td.t-actions { order: 3; }
   .t-run td.t-progress { flex: 0 1 auto; padding-top: 4px; text-align: left; }
   .t-run td.t-progress::before { content: none; }
-  .t-run td[data-tick="left"] { padding-top: 4px; }
-  .t-run td[data-tick="left"]::before { content: none; }
-  .t-run td[data-tick="left"]::after { content: " left"; }
+  /* the clock is on the span inside the cell; no clock (waiting, turned in): no "Time left:" with nothing after it */
+  .t-run td:has(> [data-tick="left"]) { padding-top: 4px; }
+  .t-run td:has(> [data-tick="left"])::before { content: none; }
+  .t-run td:has(> [data-tick="left"])::after { content: " left"; }
+  .t-run td:has(> span:only-child:empty) { display: none; }
   .t-run .t-prog { width: 64px; }
   .t-run .t-prog.t-prog-parts { width: 88px; }
   .t-run .t-on { display: inline; font-size: inherit; }
@@ -450,7 +453,7 @@ button.t-joincode:hover { background: var(--soft); }
 .t-events .violation b { color: var(--bad); }
 .t-events .warning b { color: var(--warn); }
 .t-events time { font-family: var(--mono); color: var(--ink-2); font-size: 12px; }
-.t-trail { width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--line); border-radius: 4px; display: block; }
+.t-trail { width: 100%; aspect-ratio: 16 / 9; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; display: block; }
 .t-answers { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .t-answer { display: grid; gap: 4px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 14px; }
 .t-answer:first-child { border-top: 0; padding-top: 0; }
@@ -471,13 +474,16 @@ button.t-joincode:hover { background: var(--soft); }
 .t-adjust summary { cursor: pointer; color: var(--accent); width: max-content; }
 .t-adjust .t-row { margin-top: 8px; align-items: center; gap: 8px; }
 .t-head { display: flex; align-items: center; gap: 12px; }
+/* a page's heading sits where every page's does: the taller buttons beside it don't push it down */
+.t-section > .t-head > :not(h1) { margin-block: -3px; }
 /* Grading by question: a bar to move between questions, students down the left, their answer and the
    grading on the right. On a phone the list sits above. */
 .t-gq-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; }
 .t-gq-bar h1 { margin: 0; }
 .t-gq-qnav { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.t-gq-pick { position: relative; display: inline-flex; min-width: 0; }
-.input.t-gq-select { width: auto; max-width: min(460px, 100%); min-width: 0; padding: 0 44px 0 12px; appearance: none; -webkit-appearance: none; cursor: pointer; text-overflow: ellipsis; }
+/* the cap is on the box the arrow is placed in, so a long question's select can't end short of its arrow */
+.t-gq-pick { position: relative; display: inline-flex; min-width: 0; max-width: 460px; }
+.input.t-gq-select { width: auto; min-width: 0; padding: 0 44px 0 12px; appearance: none; -webkit-appearance: none; cursor: pointer; text-overflow: ellipsis; }
 .t-gq-pick > svg { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-2); pointer-events: none; }
 .t-gq-hide { margin-left: auto; }
 .t-gq { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 24px; align-items: start; }
