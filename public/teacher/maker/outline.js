@@ -98,9 +98,19 @@ function rowBody(i) {
       h('span', { class: 'qe-row-pts', text: plural(Number(q.points) || 0, 'pt') })),
   ];
 }
+// Everything a row's insides are drawn from, so a row is only drawn again when one of them changed: each
+// row's math and graph take long enough that redrawing all of them on every keystroke made typing lag.
+const drawn = new WeakMap(); // row -> what it was drawn from
+function rowKey(i) {
+  const q = ed.quiz.questions[i];
+  const probs = ed.problems[i] || [];
+  return JSON.stringify([i, ed.quiz.language, !!(probs.length && (ed.tried || ed.fromServer.has(q))), probs, q]);
+}
 function rowOf(i) {
   const btn = h('button', { class: 'qe-row-btn', type: 'button', onclick: () => select(i, true) }, ...rowBody(i));
-  return h('li', { class: `qe-row${i === ed.sel && ed.selDiv == null ? ' sel' : ''}`, 'data-q': String(i) }, btn);
+  const li = h('li', { class: `qe-row${i === ed.sel && ed.selDiv == null ? ' sel' : ''}`, 'data-q': String(i) }, btn);
+  drawn.set(li, rowKey(i));
+  return li;
 }
 
 // ---------- after each edit: rows, totals, Undo ----------
@@ -110,6 +120,9 @@ function renderOutline() {
   for (const li of ed.outline.querySelectorAll('li.qe-row')) {
     const i = Number(li.dataset.q);
     if (!ed.quiz.questions[i] || li.contains(document.activeElement)) continue;
+    const key = rowKey(i);
+    if (drawn.get(li) === key) continue;
+    drawn.set(li, key);
     li.firstChild.replaceChildren(...rowBody(i).filter(Boolean));
   }
   for (const p of ed.parts || []) p.pts.textContent = plural(Math.round(ed.quiz.questions.slice(p.from, p.to).reduce((s, x) => s + (Number(x.points) || 0), 0) * 100) / 100, 'point');
