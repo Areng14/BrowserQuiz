@@ -1,8 +1,8 @@
 // The roster maker: a class from a pasted list or a CSV.
 
 import { dash } from './state.js';
-import { api, h, mount, plural, post } from './core.js';
-import { setHash, shell, showHome } from './home.js';
+import { api, ask, h, mount, plural, post } from './core.js';
+import { guard, setHash, shell, showHome } from './home.js';
 
 // ---------- roster maker ----------
 async function showRoster(id) {
@@ -41,15 +41,26 @@ async function showRoster(id) {
       showHome('classes');
     } catch (e) { msg.textContent = e.message; save.disabled = false; }
   });
+  // Pasted students, a new name or extra time aren't dropped without asking: Cancel, the sidebar, Back, reload
+  const changed = () => name.value !== roster.name || !!add.value.trim() || removing.size > 0
+    || roster.students.some((st) => st.id in timeChanges && timeChanges[st.id] !== Number(st.timeX || 1));
+  const leaveOk = () => !changed() || ask.confirm({ title: 'Leave without saving?', text: "Changes you haven't saved are lost.", ok: 'Leave', danger: true });
   if (seq !== dash.navSeq) return;
-  mount(shell('classes', h('section', { class: 't-section' },
-      h('h1', { text: id ? 'Edit class' : 'New class' }),
-      h('label', { class: 'field', for: 'class-name' }, h('span', { class: 'field-label', text: 'Class name' }), name),
-      id ? h('h2', { text: plural(roster.students.length, 'student') }) : null,
-      list,
-      h('label', { class: 'field', for: 'class-add' }, h('span', { class: 'field-label', text: id ? 'Add students: name, student ID (one per line)' : 'Students: name, student ID (one per line)' }), add),
-      h('div', { class: 't-row' }, save, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => showHome('classes') })),
-      msg)));
+  const page = h('section', { class: 't-section' },
+    h('h1', { text: id ? 'Edit class' : 'New class' }),
+    h('label', { class: 'field', for: 'class-name' }, h('span', { class: 'field-label', text: 'Class name' }), name),
+    id ? h('h2', { text: plural(roster.students.length, 'student') }) : null,
+    list,
+    h('label', { class: 'field', for: 'class-add' }, h('span', { class: 'field-label', text: id ? 'Add students: name, student ID (one per line)' : 'Students: name, student ID (one per line)' }), add),
+    h('div', { class: 't-row' }, save, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: async () => { if (await leaveOk()) showHome('classes'); } })),
+    msg);
+  mount(shell('classes', page));
+  guard(leaveOk);
+  const onUnload = (e) => {
+    if (!page.isConnected) { window.removeEventListener('beforeunload', onUnload); return; }
+    if (changed()) { e.preventDefault(); e.returnValue = ''; }
+  };
+  window.addEventListener('beforeunload', onUnload);
   if (!id) name.focus(); // a new class starts with its name; an open one stays at the top
 }
 
