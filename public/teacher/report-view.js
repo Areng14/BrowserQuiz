@@ -168,6 +168,14 @@
 
   // The hidden tests, for the teacher (the server only sends them to teachers): each call, what it
   // should return and what it did. Open when any failed.
+  // A speed test's mark, and what it checked (hover or keyboard focus)
+  function speedMark() {
+    const s = h('span', { class: 'r-speed', text: 'speed' });
+    if (!window.BQTip) return s;
+    s.classList.add('t-term');
+    s.tabIndex = 0;
+    return window.BQTip(s, s, "Timed: it fails if it takes more than 10 times as long as your reference solution, even when it's right.");
+  }
   function testTable(q) {
     if (!q.tests || !q.tests.length) return null;
     const passed = q.tests.filter((t) => t.pass).length;
@@ -177,7 +185,7 @@
         h('thead', {}, h('tr', {}, h('th', { 'aria-label': 'Result' }), h('th', { text: 'Call' }), h('th', { text: 'Expected' }), h('th', { text: 'Got' }))),
         h('tbody', {}, q.tests.map((t) => h('tr', { class: t.pass ? 'ok' : 'no' },
           h('td', { class: 'r-mark-cell' }, t.pass ? markSpan('yes', 'Passed') : markSpan('no', 'Failed')),
-          h('td', {}, h('code', { text: t.call }), t.speed ? h('span', { class: 'r-speed', text: 'speed' }) : null),
+          h('td', {}, h('code', { text: t.call }), t.speed ? speedMark() : null),
           h('td', {}, t.expected ? h('code', { text: t.expected }) : null),
           h('td', {}, t.got == null ? null : h('code', { text: t.got }))))))));
     if (passed < q.tests.length) d.open = true;
@@ -528,7 +536,15 @@
       h('div', { class: 'r-sim-row r-pair-row' }, h('span', { class: 'r-pair-names' }, name(a), ' and ', name(b)), h('span', { class: 'r-sim-note', text: note }), btn),
       box);
   }
-  const pairSection = (cls, title, rows) => h('section', { class: `r-similar ${cls}` }, h('h2', { text: title }),
+  // A heading that says how its pairs were found, on hover or keyboard focus (tip.js, where the page has it)
+  const termHead = (title, what) => {
+    const head = h('h2', {}, h('span', { class: 't-term', text: title }));
+    if (!window.BQTip) return head;
+    head.firstChild.tabIndex = 0;
+    window.BQTip(head.firstChild, head.firstChild, what);
+    return head;
+  };
+  const pairSection = (cls, title, rows, what) => h('section', { class: `r-similar ${cls}` }, what ? termHead(title, what) : h('h2', { text: title }),
     rows.length ? h('ul', { class: 'r-pairs' }, rows) : h('p', { class: 'r-sim-none', text: 'None found.' }));
 
   function similarCode(students, similar) {
@@ -543,7 +559,8 @@
         return [h('div', { class: 'r-sim-views' }, col(p.a, left), col(p.b, right))];
       });
     }));
-    return pairSection('r-sim-code-section', 'Similar code', rows);
+    return pairSection('r-sim-code-section', 'Similar code', rows,
+      "Pairs whose code is much alike even with names and spacing changed. Code everyone had, like the starter code, doesn't count.");
   }
 
   // ---------- the same wrong answers (server: samewrong.js) ----------
@@ -557,7 +574,8 @@
           h('td', {}, x.choices ? x.choices.map((c, i) => [i ? ', ' : '', inline(c, quiz.language)]) : x.math ? mathEl(x.text, true) : h('code', { text: x.text })),
           h('td', { class: 'num', text: x.of > 2 ? `${x.of} students` : 'Only these two' }))))),
     ]));
-    return pairSection('r-same-wrong', 'Same wrong answers', rows);
+    return pairSection('r-same-wrong', 'Same wrong answers', rows,
+      'Pairs who gave the very same wrong answers on choice, short answer and output questions. Answers few others gave put a pair higher.');
   }
 
   // ---------- right answers given much faster than the class (server: fast.js) ----------
@@ -567,7 +585,8 @@
       h('div', { class: 'r-sim-row r-pair-row' },
         h('span', { class: 'r-pair-names' }, h('a', { href: `#s${x.who}`, text: students[x.who].name })),
         h('span', { class: 'r-sim-note', text: `Question ${x.n}: right in ${clock(x.ms)}, the class took ${clock(x.median)}` }))));
-    return pairSection('r-fast', 'Fast right answers', items);
+    return pairSection('r-fast', 'Fast right answers', items,
+      'Right in under a quarter of the time the class typically took on that question, as if the answer was already known.');
   }
 
   window.BQReport = { question, student, classOverview, similarCode, sameWrong, fastRight, highlight, h, loadMonaco, tokenClass };

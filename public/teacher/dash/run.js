@@ -300,8 +300,8 @@ async function showRun(runId) {
     // an entry's name, and what it means when the name doesn't say: the newest of each kind is a tab stop
     const tabbed = new Set();
     const eventName = (e) => {
-      const b = h('b', { text: LABEL[e.type] || e.type });
-      if (!EVENT_TIP[e.type]) return b;
+      if (!EVENT_TIP[e.type]) return h('b', { text: LABEL[e.type] || e.type });
+      const b = h('b', { class: 't-term', text: LABEL[e.type] || e.type });
       if (!tabbed.has(e.type)) { tabbed.add(e.type); b.tabIndex = 0; }
       return tip(h('span', { class: 't-event-name' }, b), b, EVENT_TIP[e.type]);
     };

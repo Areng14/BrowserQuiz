@@ -1,4 +1,4 @@
-// A few words on a term a teacher may not know, for every teacher page (CSS: .t-tip in teacher.css).
+// A few words on a term a teacher may not know, for every teacher page and the report (CSS: tip.css).
 //   BQTip(host, control, text, side) -> host
 // Shown while the pointer is over host, or the control in it has keyboard focus, and read with the control.
 // Escape hides it until the pointer or focus moves on. It sits under host (above, if there's no room below),

@@ -129,7 +129,9 @@ function giveTab(data, me) {
   // Safe Exam Browser: BrowserQuiz makes the settings, unless the teacher has their own .seb file
   // (then its Config Key, from SEB Config Tool's Exam tab).
   const sebKey = h('input', { class: 'input t-mono', id: 'seb-key', autocomplete: 'off', spellcheck: 'false', maxlength: '64', placeholder: '64 letters and digits' });
-  const sebOwn = h('details', { class: 't-seb' }, h('summary', { text: 'Use my own .seb file' }),
+  const sebSummary = h('summary', { text: 'Use my own .seb file' });
+  tip(sebSummary, sebSummary, "For settings you made in SEB Config Tool. You hand out your .seb file, and only Safe Exam Browser with those settings can join.");
+  const sebOwn = h('details', { class: 't-seb' }, sebSummary,
     h('label', { class: 'field', for: 'seb-key' }, h('span', { class: 'field-label', text: 'Config Key (SEB Config Tool, Exam tab)' }), sebKey));
   sebOwn.hidden = true;
   sebOwn.addEventListener('toggle', () => { if (sebOwn.open) sebKey.focus(); muteRow.hidden = mode !== 'seb' || sebOwn.open; }); // their own file has its own sound setting
@@ -145,7 +147,8 @@ function giveTab(data, me) {
   const ipLock = h('input', { type: 'checkbox', id: 'ip-lock', class: 't-switch', role: 'switch', checked: false });
   // SEB only: mute the computer's sound (other apps and tabs included) while the quiz is open
   const sebMute = h('input', { type: 'checkbox', id: 'seb-mute', class: 't-switch', role: 'switch', checked: true });
-  const muteRow = h('label', { class: 't-check t-switch-row', for: 'seb-mute' }, sebMute, h('span', { text: "Mute the computer's sound" }));
+  const muteRow = tip(h('label', { class: 't-check t-switch-row', for: 'seb-mute' }, sebMute, h('span', { text: "Mute the computer's sound" })), sebMute,
+    'Music or a video left playing in another app goes quiet when Safe Exam Browser starts. Turn it off for a student who uses a screen reader.');
   muteRow.hidden = true;
   const startMsg = h('p', { class: 't-error', role: 'alert' });
   const ready = data.quizzes.length && data.rosters.length;
@@ -248,8 +251,12 @@ function quizzesTab(data) {
             } },
             linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
             { text: 'Delete', danger: true, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}?`, 'Past results stay.') }]))))))) : null,
-    h('div', { class: 't-row t-add' }, h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizBtn),
-    h('details', { class: 't-paste' }, h('summary', { text: 'Paste a quiz.json' }),
+    h('div', { class: 't-row t-add' }, tip(h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizFile,
+      "A quiz saved as a file: a .quiz from Download in a quiz's ⋯ menu, or a quiz.json an AI wrote from Copy AI prompt."), quizBtn),
+    h('details', { class: 't-paste' }, (() => {
+      const s = h('summary', { text: 'Paste a quiz.json' });
+      return tip(s, s, 'The quiz.json an AI wrote from Copy AI prompt. Paste it from its first { to its last }.');
+    })(),
       h('label', { class: 'field', for: 'paste-quiz' }, h('span', { class: 'field-label', text: 'quiz.json' }), pasteJson), h('div', {}, pasteBtn)),
     quizMsg);
   if (search) filter();
@@ -281,7 +288,8 @@ function classesTab(data) {
             { text: 'Delete', danger: true, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}?`, 'Past results stay.') }]))))))) : null,
     h('div', { class: 't-row t-add' },
       h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
-      h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile),
+      tip(h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile), rosterFile,
+        'A spreadsheet saved as CSV: a first row with name and student_id, then a student on each row. Students type their ID to sign in.'),
       rosterBtn),
     rosterMsg);
 }
