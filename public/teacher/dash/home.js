@@ -2,7 +2,7 @@
 
 import { showQuizEditor } from '../maker/main.js';
 import { dash } from './state.js';
-import { ICONS, accountMenu, actionsHead, api, ask, date, ghLink, h, heads, icon, mount, plural, post, sortableTable, themeButton, tip } from './core.js';
+import { ICONS, accountMenu, actionsHead, api, ask, date, ghLink, h, heads, icon, mount, plural, post, labeled, sortableTable, themeButton, tip } from './core.js';
 import { teachersSection } from './account.js';
 import { showRoster } from './roster.js';
 import { moreMenu } from './cells.js';
@@ -149,7 +149,7 @@ function giveTab(data, me) {
   muteRow.hidden = true;
   const startMsg = h('p', { class: 't-error', role: 'alert' });
   const ready = data.quizzes.length && data.rosters.length;
-  const startBtn = h('button', { class: 'btn primary t-start', type: 'button', text: 'Start quiz', disabled: !ready });
+  const startBtn = labeled(h('button', { class: 'btn primary t-start', type: 'button', disabled: !ready }), 'play', 'Start quiz');
   startBtn.addEventListener('click', async () => {
     const pick = data.quizzes.find((x) => x.id === quizSel.value);
     if (mode !== 'practice' && pick && pick.practiced
@@ -228,7 +228,7 @@ function quizzesTab(data) {
   const section = h('section', { class: 't-section' },
     h('div', { class: 't-head t-head-wrap' }, h('h1', { text: 'Quizzes' }),
       copyPromptBtn(),
-      h('button', { class: 'btn small primary', type: 'button', text: 'New quiz', onclick: () => openQuiz(null) })),
+      labeled(h('button', { class: 'btn small primary', type: 'button', onclick: () => openQuiz(null) }), 'plus', 'New quiz')),
     search,
     data.quizzes.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
       h('thead', { class: 'sr-only' }, h('tr', {}, ['Quiz', 'Questions', 'Time limit', 'Added'].map((x) => h('th', { text: x })), actionsHead())),
@@ -238,7 +238,7 @@ function quizzesTab(data) {
         h('td', { class: 't-muted', text: x.timeLimitMin ? `${x.timeLimitMin} min` : 'No time limit' }),
         h('td', { class: 't-muted', text: date(x.createdAt) }),
         h('td', { class: 't-actions' },
-          h('button', { class: 'btn small', type: 'button', text: 'Edit', 'aria-label': `Edit ${x.title}`, onclick: () => openQuiz(x.id) }),
+          labeled(h('button', { class: 'btn small', type: 'button', 'aria-label': `Edit ${x.title}`, onclick: () => openQuiz(x.id) }), 'pencil', 'Edit'),
           moreMenu(`More for ${x.title}`, `quiz:${x.id}`, [
             { text: 'Give', onclick: () => { dash.giveQuiz = x.id; showHome('give'); } },
             linkBtn('Preview', `/teacher/preview.html?quiz=${encodeURIComponent(x.id)}`, true),
@@ -269,14 +269,14 @@ function classesTab(data) {
   });
   return h('section', { class: 't-section' },
     h('div', { class: 't-head' }, h('h1', { text: 'Classes' }),
-      h('button', { class: 'btn small primary', type: 'button', text: 'New class', onclick: () => showRoster(null) })),
+      labeled(h('button', { class: 'btn small primary', type: 'button', onclick: () => showRoster(null) }), 'plus', 'New class')),
     data.rosters.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
       h('thead', { class: 'sr-only' }, h('tr', {}, ['Class', 'Students'].map((x) => h('th', { text: x })), actionsHead())),
       h('tbody', {}, data.rosters.map((x) => h('tr', {},
         h('td', { role: 'rowheader', class: 't-rowhead', text: x.name }),
         h('td', { class: 't-muted', text: plural(x.students, 'student') }),
         h('td', { class: 't-actions' },
-          h('button', { class: 'btn small', type: 'button', text: 'Edit', 'aria-label': `Edit ${x.name}`, onclick: () => showRoster(x.id) }),
+          labeled(h('button', { class: 'btn small', type: 'button', 'aria-label': `Edit ${x.name}`, onclick: () => showRoster(x.id) }), 'pencil', 'Edit'),
           moreMenu(`More for ${x.name}`, `class:${x.id}`, [
             { text: 'Delete', danger: true, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}?`, 'Past results stay.') }]))))))) : null,
     h('div', { class: 't-row t-add' },
@@ -398,16 +398,16 @@ function sebButtons(code, joinUrl) {
 // kind: 'quiz' (the Quizzes tab), or 'question' (one question, from the quiz maker)
 function copyPromptBtn(kind = 'quiz') {
   const url = `/api/t/${kind}-prompt`;
-  const btn = h('button', { class: 'btn small', type: 'button', text: 'Copy AI prompt' });
+  const btn = labeled(h('button', { class: 'btn small', type: 'button' }), 'copy', 'Copy AI prompt');
   let text = null;
   const ready = fetch(url, { credentials: 'same-origin' }).then((r) => (r.ok ? r.text() : null)).then((t) => { text = t; }).catch(() => {});
   let reset = 0;
   btn.addEventListener('click', async () => {
     if (text == null) await ready;
     if (text != null && await copyText(text)) {
-      btn.textContent = 'Copied';
+      labeled(btn, 'check', 'Copied');
       clearTimeout(reset);
-      reset = setTimeout(() => { btn.textContent = 'Copy AI prompt'; }, 2000);
+      reset = setTimeout(() => { labeled(btn, 'copy', 'Copy AI prompt'); }, 2000);
     } else {
       location.href = url;
     }

@@ -197,6 +197,15 @@ const ICONS = {
   back: ['M19 12H5', 'M12 19l-7-7 7-7'],
   grip: ['M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01'],
   plus: ['M12 5v14', 'M5 12h14'],
+  // on buttons, before their words (labeled)
+  play: ['M7 5l12 7-12 7z'],
+  pause: ['M8 5v14', 'M16 5v14'],
+  stop: ['M6 6h12v12H6z'],
+  reopen: ['M3 12a9 9 0 1 0 3-6.7', 'M3 4v5h5'],
+  message: ['M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
+  pencil: ['M12 20h9', 'M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z'],
+  eye: ['M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z', 'M12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6z'],
+  sliders: ['M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3', 'M1 14h6M9 8h6M17 16h6'],
   copy: ['M9 9h11v11H9z', 'M5 15H4V4h11v1'],
   download: ['M12 4v11', 'M7 10l5 5 5-5', 'M5 20h14'],
   trash: ['M3 6h18', 'M8 6V4h8v2', 'M19 6l-1 14H6L5 6', 'M10 11v6', 'M14 11v6'],
@@ -223,6 +232,15 @@ function icon(paths, size = 18) {
   for (const d of paths) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); s.append(p); }
   return s;
 }
+// A button's icon and words (ICONS[name], 16px). Called again with new words, it changes only if they did.
+function labeled(btn, name, text) {
+  if (btn.dataset.label === text && btn.dataset.icon === name) return btn;
+  btn.dataset.label = text;
+  btn.dataset.icon = name;
+  btn.classList.add('t-ib');
+  btn.replaceChildren(icon(ICONS[name], 16), text);
+  return btn;
+}
 // Filled pause and play marks (the paused quiz's banner)
 function glyph(kind, size = 16) {
   const ns = 'http://www.w3.org/2000/svg';
@@ -233,4 +251,4 @@ function glyph(kind, size = 16) {
   return s;
 }
 
-export { ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, ghLink, glyph, h, heads, icon, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, sortableTable, themeButton, tip };
+export { ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, ghLink, glyph, h, heads, icon, mmss, mount, plural, post, root, scoreText, labeled, sortHeads, sortRows, sortableTable, themeButton, tip };

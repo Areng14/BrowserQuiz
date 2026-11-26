@@ -1,7 +1,7 @@
 // One running quiz: its live table, and everything a teacher does from it.
 
 import { dash } from './state.js';
-import { ICONS, LABEL, actionsHead, api, ask, clock, glyph, h, icon, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows } from './core.js';
+import { ICONS, LABEL, actionsHead, api, ask, clock, glyph, h, icon, labeled, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows } from './core.js';
 import { noteRuns, sebButtons, setHash, shell } from './home.js';
 import { LIVE_SORT, beforeAdmit, browserName, correctionsDialog, drawTrail, gone, grading, integrityCell, moreMenu, phone, progressCell, projector, statusCell, strikesCell, tick, ticks, watchLink } from './cells.js';
 import { aiDialog, checkWhy } from './ai.js';
@@ -20,6 +20,8 @@ async function showRun(runId) {
   const tbody = h('tbody');
   const detail = h('div');
   const toggle = h('button', { class: 'btn', type: 'button' });
+  // a fire drill, a question for the whole class: every clock stops and the questions are hidden, at once
+  const pauseBtn = labeled(h('button', { class: 'btn', type: 'button', hidden: true, onclick: () => act(`/api/t/runs/${runId}/pause`) }), 'pause', 'Pause');
   const lockBtn = h('button', { class: 'btn', type: 'button' });
   const howTo = h('p', { class: 't-muted t-small' });
   // A stuck student can only leave Safe Exam Browser with this; it's also what locks an iPad.
@@ -85,7 +87,7 @@ async function showRun(runId) {
   drawLiveHead();
   // Paused (the run's ⋯ menu): a bar across the top, how long it's been, and the way back
   const pausedFor = h('span', { class: 't-paused-for' });
-  const resumeBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => act(`/api/t/runs/${runId}/resume`) }, glyph('play'), 'Resume quiz');
+  const resumeBtn = labeled(h('button', { class: 'btn primary', type: 'button', onclick: () => act(`/api/t/runs/${runId}/resume`) }), 'play', 'Resume quiz');
   // (not a live region: its clock ticks; the summary below says "3 paused")
   const pausedBar = h('div', { class: 't-paused', hidden: true },
     h('span', { class: 't-paused-what' }, glyph('pause', 18), 'Quiz paused', pausedFor), resumeBtn);
@@ -138,7 +140,9 @@ async function showRun(runId) {
     const paused = run.status === 'open' && run.pausedMs != null;
     if (pausedBar.hidden === paused) {
       pausedBar.hidden = !paused;
-      if (!paused && document.activeElement === resumeBtn) runMenu[0].focus({ preventScroll: true }); // the ⋯ it came from
+      // focus follows: from Pause to Resume, and back
+      if (paused && document.activeElement === pauseBtn) requestAnimationFrame(() => resumeBtn.focus({ preventScroll: true }));
+      if (!paused && document.activeElement === resumeBtn) requestAnimationFrame(() => pauseBtn.focus({ preventScroll: true }));
     }
     if (paused) { pausedFor.dataset.tick = 'since'; pausedFor.dataset.at = String(Date.now() - run.pausedMs); pausedFor.textContent = mmss(run.pausedMs); } else delete pausedFor.dataset.tick;
     for (const x of data.students) if (x.attempt && x.attempt.status === 'active') x.attempt.paused = paused;
@@ -160,18 +164,18 @@ async function showRun(runId) {
     // before anyone's started it starts the quiz; after, it starts the students who came late, and each
     // late student's row has its own Start
     begun = count((a) => a.status === 'admitted' || a.status === 'active' || a.status === 'submitted') > 0;
-    admitAll.textContent = begun ? 'Start everyone waiting' : 'Start quiz';
+    labeled(admitAll, 'play', begun ? 'Start everyone waiting' : 'Start quiz');
     // Grade with AI: shown while there's something waiting for the teacher, or while it runs.
     aiWaiting = data.students.reduce((n, x) => n + (x.attempt && x.attempt.status === 'submitted' ? x.attempt.review || 0 : 0), 0);
     gradeBtn.hidden = !aiWaiting;
-    gradeBtn.textContent = `Grade ${plural(aiWaiting, 'answer')}`;
+    labeled(gradeBtn, 'check', `Grade ${plural(aiWaiting, 'answer')}`);
     const job = data.ai && data.ai.job;
     if (job && job.running) {
       aiBtn.hidden = false; aiBtn.disabled = true;
-      aiBtn.textContent = `Grading with AI… ${job.graded + job.failed} of ${job.total}`;
+      labeled(aiBtn, 'spark', `Grading with AI… ${job.graded + job.failed} of ${job.total}`);
     } else {
       aiBtn.hidden = !aiWaiting; aiBtn.disabled = false;
-      aiBtn.textContent = 'Grade with AI';
+      labeled(aiBtn, 'spark', 'Grade with AI');
     }
     if (job && !job.running) {
       aiMsg.hidden = false;
@@ -199,7 +203,8 @@ async function showRun(runId) {
     quitPw.hidden = !run.sebQuit || run.status !== 'open';
     if (run.sebQuit && !quitPw.childNodes.length) quitPw.append('SEB quit password: ', h('code', { class: 't-temp t-reveal', tabindex: '0', title: 'Hover to show', text: run.sebQuit }));
     if (run.sebFile && !sebParts) sebParts = sebButtons(run.code, run.joinUrl);
-    toggle.textContent = run.status === 'open' ? 'Close quiz' : 'Reopen quiz';
+    labeled(toggle, run.status === 'open' ? 'stop' : 'reopen', run.status === 'open' ? 'Close quiz' : 'Reopen quiz');
+    pauseBtn.hidden = run.status !== 'open' || run.pausedMs != null;
     toggle.onclick = async () => {
       if (run.status === 'open' && !(await ask.confirm({ title: 'Close the quiz?', text: 'Anyone still working gets turned in.', ok: 'Close quiz', danger: true }))) return;
       act(`/api/t/runs/${runId}/${run.status === 'open' ? 'close' : 'open'}`);
@@ -403,7 +408,7 @@ async function showRun(runId) {
       pointsRow);
   }
 
-  const corrBtn = h('button', { class: 'btn', type: 'button', text: 'Corrections', hidden: true, onclick: () => correctionsDialog(runId, lastRun) });
+  const corrBtn = labeled(h('button', { class: 'btn', type: 'button', hidden: true, onclick: () => correctionsDialog(runId, lastRun) }), 'pencil', 'Corrections');
 
   // Notifications: a strike, an invalidation, or a sign-in to look at, as it happens. On this page always
   // (a toast; clicking it opens the student). As the computer's own notification too, and a buzz on a
@@ -471,17 +476,15 @@ async function showRun(runId) {
     }
     firstLook = false;
   }
-  // Start, Message students, Corrections and Close quiz stay out; the rest is under ⋯.
+  // Start, Message students, Pause, Corrections and Close quiz stay out; the rest is under ⋯.
   // A message to everyone taking the quiz: it pops up on their screens at the next heartbeat.
-  const msgBtn = h('button', { class: 'btn', type: 'button', text: 'Message students' });
+  const msgBtn = labeled(h('button', { class: 'btn', type: 'button' }), 'message', 'Message students');
   msgBtn.addEventListener('click', async () => {
     const text = await ask.ask({ title: 'Message students', label: 'Message', ok: 'Send' });
     if (text == null || !text.trim()) return;
     try { await post(`/api/t/runs/${runId}/message`, { text }); } catch (e) { alertBox(e.message); }
   });
   const runMenu = moreMenu('More for this quiz', 'run:more', () => [
-    // a fire drill, a question for the whole class: every clock stops and the questions are hidden
-    lastRun && lastRun.status === 'open' && lastRun.pausedMs == null ? { text: 'Pause quiz', onclick: () => act(`/api/t/runs/${lastRun.id}/pause`) } : null,
     // a fire drill, the wifi down, a late start: everyone still working gets the same
     lastRun && lastRun.status === 'open' && lastRun.timeLimitMin ? { text: 'Add time for everyone', onclick: async () => {
       const mins = await askMinutes('Add time for everyone');
@@ -501,7 +504,7 @@ async function showRun(runId) {
       h('section', { class: 't-section' },
         h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
         howTo, quitPw,
-        h('div', { class: 't-row t-run-acts' }, admitAll, gradeBtn, aiBtn, msgBtn, corrBtn, toggle, runMenu), aiMsg,
+        h('div', { class: 't-row t-run-acts' }, admitAll, gradeBtn, aiBtn, msgBtn, pauseBtn, corrBtn, toggle, runMenu), aiMsg,
         failedBox, summary, toasts),
       h('div', { class: 't-livegrid' }, h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },
         h('thead', {}, liveHead),
