@@ -1,11 +1,11 @@
 // One running quiz: its live table, and everything a teacher does from it.
 
 import { dash } from './state.js';
-import { ICONS, LABEL, actionsHead, api, ask, clock, glyph, h, icon, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows } from './core.js';
+import { EVENT_TIP, ICONS, LABEL, actionsHead, api, ask, clock, glyph, h, icon, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, tip } from './core.js';
 import { noteRuns, sebButtons, setHash, shell } from './home.js';
 import { LIVE_SORT, beforeAdmit, browserName, correctionsDialog, drawTrail, gone, grading, integrityCell, moreMenu, phone, progressCell, projector, statusCell, strikesCell, tick, ticks, watchLink } from './cells.js';
 import { aiDialog, checkWhy } from './ai.js';
-import { showGrade } from './grade.js';
+import { POINTS_TIP, showGrade } from './grade.js';
 
 async function showRun(runId) {
   setHash('#run/' + encodeURIComponent(runId));
@@ -63,6 +63,9 @@ async function showRun(runId) {
     a.style.textDecoration = 'none';
   }
 
+  // What the less obvious actions do (shown on hover, beside the menu)
+  const LET_IN = 'For 10 minutes they can sign in again on any computer and carry on: same answers, same clock.';
+  const INVALIDATE = "Their score counts as 0. They can keep working and aren't told. Un-invalidate gives it back.";
   async function act(path, body) {
     try { await post(path, body); } catch (e) { alertBox(e.message); }
     return refresh();
@@ -72,8 +75,10 @@ async function showRun(runId) {
   const LIVE_NUMS = ['Strikes', 'Progress', 'Time left', 'Score'];
   const liveHead = h('tr', {});
   const LIVE_TIPS = {
-    Integrity: "Clean, or Invalidated: they left the quiz, or you invalidated it. Students aren't told.",
+    Status: 'Ready: agreed to the rules and waiting for you to start them. No signal: their computer stopped checking in.',
+    Integrity: "Clean, or Invalidated: they left the quiz, or you invalidated it. Restored: you un-invalidated it. Students aren't told.",
     Strikes: 'How many times they left the quiz for another tab, window or app, and how long they were away in all.',
+    Progress: 'Answered out of all. Green: answered in the last 30 seconds. Blue: reading. Gray: idle for 2 minutes.',
   };
   const drawLiveHead = () => liveHead.replaceChildren(...sortHeads(LIVE_COLS, LIVE_NUMS, dash.liveSort, (next) => {
     dash.liveSort = next;
@@ -144,7 +149,7 @@ async function showRun(runId) {
     for (const x of data.students) if (x.attempt && x.attempt.status === 'active') x.attempt.paused = paused;
     notice(data.students);
     // on the row: Message students while it's open; Corrections once an exam is closed (just once)
-    corrBtn.hidden = run.practice || !!run.corrections || run.status === 'open';
+    corrHost.hidden = corrBtn.hidden = run.practice || !!run.corrections || run.status === 'open';
     msgBtn.hidden = run.status !== 'open';
     code.textContent = run.code;
     document.title = `${run.code} - ${run.title} - BrowserQuiz`;
@@ -205,7 +210,8 @@ async function showRun(runId) {
       act(`/api/t/runs/${runId}/${run.status === 'open' ? 'close' : 'open'}`);
     };
     lockBtn.textContent = run.ipLock ? 'Network lock: on' : 'Network lock: off';
-    lockBtn.title = run.ipLock ? 'Only your network can join' : 'Any network can join';
+    lockBtn.dataset.tip = run.ipLock ? 'Only your network and the ones your students are already on can join.'
+      : 'Any network can join. On: only your network and the ones your students are already on.';
     lockBtn.onclick = () => act(`/api/t/runs/${runId}/${run.ipLock ? 'unlock' : 'lock'}`);
     const failed = data.students.filter((x) => x.attempt && x.attempt.failed).length;
     failedBox.replaceChildren(failed ? h('p', { class: 't-error' }, `Code grading failed for ${plural(failed, 'student')}. `,
@@ -232,7 +238,7 @@ async function showRun(runId) {
       if (sec && a && a.status === 'active') (bad ? more.push(watchLink(a.id, s.name)) : actions.append(watchLink(a.id, s.name)));
       if (a && a.status === 'active' && a.deadline) more.push({ text: 'Add time', onclick: async () => { const mins = await askMinutes(`Add time for ${s.name}`); if (mins) act(`/api/t/attempts/${a.id}/extend`, { minutes: mins }); } });
       if (a && a.status !== 'submitted') more.push({ text: 'Message', onclick: () => messageStudent(a.id, s.name) });
-      if (sec && a && (a.status === 'active' || a.status === 'admitted') && !a.letIn) more.push({ text: 'Let back in', onclick: () => act(`/api/t/attempts/${a.id}/let-in`) });
+      if (sec && a && (a.status === 'active' || a.status === 'admitted') && !a.letIn) more.push({ text: 'Let back in', tip: LET_IN, onclick: () => act(`/api/t/attempts/${a.id}/let-in`) });
       if (a && (a.status === 'active' || a.status === 'admitted') && a.letIn) actions.append(h('span', { class: 't-muted t-small', text: 'Can sign in again' }));
       if (a) more.push({ text: 'Reset', danger: true, onclick: () => resetAttempt(a.id, s.name) });
       if (more.length) actions.append(...moreMenu(`More for ${s.name}`, `${a.id}:more`, more, () => refresh()));
@@ -283,6 +289,14 @@ async function showRun(runId) {
     lastDetail = snapshot;
     const keep = detail.contains(document.activeElement) && document.activeElement.dataset ? document.activeElement.dataset.key : null;
     const dk = (key) => ({ 'data-key': `detail:${key}` });
+    // an entry's name, and what it means when the name doesn't say: the newest of each kind is a tab stop
+    const tabbed = new Set();
+    const eventName = (e) => {
+      const b = h('b', { text: LABEL[e.type] || e.type });
+      if (!EVENT_TIP[e.type]) return b;
+      if (!tabbed.has(e.type)) { tabbed.add(e.type); b.tabIndex = 0; }
+      return tip(h('span', { class: 't-event-name' }, b), b, EVENT_TIP[e.type]);
+    };
     const canvas = h('canvas', { class: 't-trail', width: 640, height: 360, 'aria-label': 'Mouse trail' });
     // Each question as it looked in the quiz, with this student's answer and the correct one,
     // plus what only the teacher sees: grading state, hidden test results, and the grading controls.
@@ -337,16 +351,16 @@ async function showRun(runId) {
         moreMenu(`More for ${d.name}`, 'detail:more', [
           d.status === 'active' && d.deadline ? { text: 'Add time', onclick: async () => { const mins = await askMinutes(`Add time for ${d.name}`); if (mins) { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: mins }); } } } : null,
           d.status !== 'submitted' ? { text: 'Message', onclick: () => messageStudent(id, d.name) } : null,
-          d.integrity !== 'invalidated' && !(lastRun && lastRun.practice) ? { text: 'Invalidate', onclick: () => invalidate(id, d.name) } : null,
-          d.status === 'submitted' && !d.sealed ? { text: 'Regrade', onclick: () => act(`/api/t/attempts/${id}/regrade`) } : null,
-          (d.status === 'active' || d.status === 'admitted') && !(lastRun && lastRun.practice) ? { text: 'Let back in', onclick: () => act(`/api/t/attempts/${id}/let-in`) } : null,
+          d.integrity !== 'invalidated' && !(lastRun && lastRun.practice) ? { text: 'Invalidate', tip: INVALIDATE, onclick: () => invalidate(id, d.name) } : null,
+          d.status === 'submitted' && !d.sealed ? { text: 'Regrade', tip: 'Grades their answers again with the quiz as it is now. Points you set and rubric items you ticked stay.', onclick: () => act(`/api/t/attempts/${id}/regrade`) } : null,
+          (d.status === 'active' || d.status === 'admitted') && !(lastRun && lastRun.practice) ? { text: 'Let back in', tip: LET_IN, onclick: () => act(`/api/t/attempts/${id}/let-in`) } : null,
           { text: 'Reset', danger: true, onclick: () => resetAttempt(id, d.name, closeDetail) },
         ], () => refresh())),
       d.integrity === 'invalidated' ? h('p', { class: 'st-bad', text: `Invalidated at ${clock(d.invalidatedAt)}: ${(LABEL[d.reason] || d.reason || '').toLowerCase()}` }) : null,
       d.strikes ? h('p', { class: 't-small t-away', text: `Left ${d.strikes === 1 ? 'once' : d.strikes + ' times'}. Away ${mmss(d.awayMs)} in all${d.strikes > 1 ? `, ${mmss(d.awayMax)} at the longest` : ''}.` }) : null,
       h('div', { class: 't-detail-grid' },
         h('div', { class: 't-section' }, h('h3', { text: 'Activity' }),
-          h('ul', { class: 't-events' }, d.events.map((e) => h('li', { class: e.severity }, h('time', { text: clock(e.t) }), h('span', {}, h('b', { text: LABEL[e.type] || e.type }), e.detail ? h('span', { class: 't-muted', text: ` ${e.detail}` }) : null))))),
+          h('ul', { class: 't-events' }, d.events.map((e) => h('li', { class: e.severity }, h('time', { text: clock(e.t) }), h('span', {}, eventName(e), e.detail ? h('span', { class: 't-muted', text: ` ${e.detail}` }) : null))))),
         h('div', { class: 't-section' }, h('h3', { text: 'Mouse trail' }), canvas,
           d.userAgent ? h('p', { class: 't-muted t-small', title: d.userAgent, text: browserName(d.userAgent) }) : null)),
       h('div', { class: 't-section' }, h('h3', { text: d.sealed ? 'Answers' : d.totals ? `Answers (${scoreText(d.totals.score, d.totals.max)}${d.totals.pending ? ', code still grading' : d.totals.failed ? ', grading failed' : d.totals.review ? ', needs review' : ''})` : 'Answers so far' }), answers)));
@@ -394,6 +408,7 @@ async function showRun(runId) {
     });
     const pointsRow = h('div', { class: 't-row' },
       h('label', { class: 't-small', for: over.id, text: `Points (0–${x.max})` }), over, save, msg);
+    if (boxes.length) tip(pointsRow, over, POINTS_TIP);
     if (!boxes.length) {
       // Most answers never need this: keep it folded away unless it's in use.
       return h('details', { class: 't-adjust', open: x.overridePoints != null }, h('summary', { class: 't-small', text: 'Adjust points' }), pointsRow);
@@ -404,6 +419,7 @@ async function showRun(runId) {
   }
 
   const corrBtn = h('button', { class: 'btn', type: 'button', text: 'Corrections', hidden: true, onclick: () => correctionsDialog(runId, lastRun) });
+  const corrHost = tip(h('span', { class: 't-tip-host' }, corrBtn), corrBtn, 'Each student redoes the questions they lost points on, without the lockdown. A fixed answer earns back part of what it lost.');
 
   // Notifications: a strike, an invalidation, or a sign-in to look at, as it happens. On this page always
   // (a toast; clicking it opens the student). As the computer's own notification too, and a buzz on a
@@ -481,7 +497,7 @@ async function showRun(runId) {
   });
   const runMenu = moreMenu('More for this quiz', 'run:more', () => [
     // a fire drill, a question for the whole class: every clock stops and the questions are hidden
-    lastRun && lastRun.status === 'open' && lastRun.pausedMs == null ? { text: 'Pause quiz', onclick: () => act(`/api/t/runs/${lastRun.id}/pause`) } : null,
+    lastRun && lastRun.status === 'open' && lastRun.pausedMs == null ? { text: 'Pause quiz', tip: "Every clock stops and the questions are hidden until you resume. Leaving the quiz meanwhile isn't counted.", onclick: () => act(`/api/t/runs/${lastRun.id}/pause`) } : null,
     // a fire drill, the wifi down, a late start: everyone still working gets the same
     lastRun && lastRun.status === 'open' && lastRun.timeLimitMin ? { text: 'Add time for everyone', onclick: async () => {
       const mins = await askMinutes('Add time for everyone');
@@ -501,7 +517,7 @@ async function showRun(runId) {
       h('section', { class: 't-section' },
         h('div', { class: 't-code' }, code, h('div', {}, title, meta)),
         howTo, quitPw,
-        h('div', { class: 't-row t-run-acts' }, admitAll, gradeBtn, aiBtn, msgBtn, corrBtn, toggle, runMenu), aiMsg,
+        h('div', { class: 't-row t-run-acts' }, admitAll, gradeBtn, aiBtn, msgBtn, corrHost, toggle, runMenu), aiMsg,
         failedBox, summary, toasts),
       h('div', { class: 't-livegrid' }, h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-run' },
         h('thead', {}, liveHead),

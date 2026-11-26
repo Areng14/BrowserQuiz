@@ -56,11 +56,12 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-mode:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .t-mode:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .t-mode-title { font-weight: 600; }
-/* A term's few words (core.js tip): under it, on hover or keyboard focus */
-.t-tipped { position: relative; }
-.t-tip { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: max-content; max-width: min(300px, 80vw); padding: 8px 12px; font-size: 13px; font-weight: 400; line-height: 1.45; text-align: left; text-transform: none; letter-spacing: normal; white-space: normal; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.12s, visibility 0.12s; }
+/* A term's few words (tip.js): under it, or beside it, on hover or keyboard focus; placed by tip.js */
+.t-tip { position: fixed; top: 0; left: 0; z-index: 60; width: max-content; max-width: min(300px, calc(100vw / var(--zoom, 1) - 16px)); padding: 8px 12px; font-size: 13px; font-weight: 400; line-height: 1.45; text-align: left; text-transform: none; letter-spacing: normal; white-space: normal; overflow-wrap: break-word; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.12s, visibility 0.12s; }
 .t-tipped:is(:hover, :has(:focus-visible)):not(.t-tip-off) > .t-tip { opacity: 1; visibility: visible; transition-delay: 0.35s; }
-th.num.t-tipped > .t-tip { left: auto; right: 0; }
+@media print { .t-tip { display: none; } }
+.t-tip-host { display: inline-flex; }
+.t-tip-host[hidden] { display: none; }
 .t-mode-sec { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
 .t-meter { display: inline-flex; align-items: flex-end; gap: 2px; }
 .t-meter > span { width: 5px; border-radius: 1px; background: color-mix(in srgb, var(--ink-2) 30%, transparent); }
@@ -457,6 +458,9 @@ button.t-joincode:hover { background: var(--soft); }
 .t-events li:first-child { border-top: 0; }
 .t-events .violation b { color: var(--bad); }
 .t-events .warning b { color: var(--warn); }
+/* an entry with a tip: dotted, like an abbreviation */
+.t-event-name > b { text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-thickness: 1px; cursor: help; }
+.t-event-name > b:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
 .t-events time { font-family: var(--mono); color: var(--ink-2); font-size: 12px; }
 .t-trail { width: 100%; aspect-ratio: 16 / 9; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; display: block; }
 .t-answers { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }

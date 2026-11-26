@@ -2,7 +2,7 @@
 // corrections, and the clocks that tick between polls.
 
 import { dash } from './state.js';
-import { ICONS, LABEL, h, icon, mmss, plural, post, root } from './core.js';
+import { ICONS, LABEL, h, icon, mmss, plural, post, root, tip } from './core.js';
 import { admitChecked, checkWhy } from './ai.js';
 import { showRun } from './run.js';
 
@@ -110,7 +110,8 @@ function correctionsDialog(runId, run) {
     h('div', { class: 't-admit-list' },
       h('label', { class: 'field', for: 't-corr-earn' }, h('span', { class: 'field-label', text: 'A fixed answer earns back' }),
         h('span', { class: 't-corr-pct' }, earn, h('span', { text: '% of what it lost' }))),
-      h('label', { class: 't-check', for: 't-corr-why' }, why, h('span', { text: 'Ask what went wrong' })),
+      tip(h('label', { class: 't-check', for: 't-corr-why' }, why, h('span', { text: 'Ask what went wrong' })), why,
+        'Each question they fix also asks them to write what went wrong. You see it in their report.'),
       run && run.waiting ? h('p', { class: 't-small', text: `${plural(run.waiting, 'answer')} still ${run.waiting === 1 ? 'needs' : 'need'} grading, so ${run.waiting === 1 ? "it isn't" : "they aren't"} in corrections.` }) : null,
       msg),
     h('footer', { class: 't-dialog-foot' }, h('button', { class: 'btn', type: 'button', text: 'Cancel', onclick: () => dlg.close() }), ok));
@@ -165,8 +166,9 @@ function progressCell(a) {
     h('span', { class: 't-prog-n', style: `min-width:${2 * String(a.total).length + 1}ch`, text: `${a.answered}/${a.total}` }),
     where ? h('span', { class: 'sr-only', text: `, ${where}` }) : null);
 }
-// Less-used actions behind a ⋯ button: a row's, a quiz's, the live quiz's. items: { text, onclick, danger }
-// or an element (a link, say), or a function that gives them, asked each time it opens. The live table
+// Less-used actions behind a ⋯ button: a row's, a quiz's, the live quiz's. items: { text, onclick, danger, tip }
+// or an element (a link, say; its tip in data-tip), or a function that gives them, asked each time it opens.
+// A tip shows beside its item, so it doesn't cover the next one. The live table
 // doesn't redraw while one is open (menuOpen), so it stays put; onClose catches it up.
 dash.menuOpen = false;
 dash.quizFind = ''; // the Quizzes tab's search, kept while it redraws
@@ -190,6 +192,7 @@ function moreMenu(label, key, items, onClose, opts) {
     : h('button', { class: 'btn small t-menu-btn', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': label, title: 'More', 'data-key': key }, icon(ICONS.dots, 18));
   if (!named) btn.firstChild.setAttribute('fill', 'currentColor');
   const menu = h('div', { class: 't-menu', popover: 'manual', role: 'menu', 'aria-label': label });
+  const tipped = (el, text) => tip(h('div', { role: 'none', class: 't-menu-tip' }, el), el, text, true);
   const fill = (list) => menu.replaceChildren(...list.filter(Boolean).map((it) => {
     if (it.nodeType) {
       it.classList.remove('btn', 'small', 'primary');
@@ -197,9 +200,11 @@ function moreMenu(label, key, items, onClose, opts) {
       it.removeAttribute('style');
       it.setAttribute('role', 'menuitem');
       if (!it.dataset.inMenu) { it.dataset.inMenu = '1'; it.addEventListener('click', () => close(false)); }
-      return it;
+      if (it.dataset.tip) { if (it.tipHost) tip.text(it, it.dataset.tip); else it.tipHost = tipped(it, it.dataset.tip); } // made once: the element stays
+      return it.tipHost || it;
     }
-    return h('button', { class: 't-menu-item' + (it.danger ? ' danger' : ''), type: 'button', role: 'menuitem', text: it.text, onclick: () => { close(true); it.onclick(); } });
+    const b = h('button', { class: 't-menu-item' + (it.danger ? ' danger' : ''), type: 'button', role: 'menuitem', text: it.text, onclick: () => { close(true); it.onclick(); } });
+    return it.tip ? tipped(b, it.tip) : b;
   }));
   if (typeof items !== 'function') fill(items);
   const entries = () => [...menu.querySelectorAll('[role=menuitem]:not([hidden])')];

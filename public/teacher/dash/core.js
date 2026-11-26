@@ -21,6 +21,33 @@ const LABEL = {
   'answer-after-return': 'Changed an answer right after coming back', 'same-browser': 'Same browser as',
   'new-network': 'Network not used on earlier quizzes',
 };
+// What an activity log entry means, for the ones whose name doesn't say (shown on hover). Orange ones are
+// worth a look but never a strike (server: store.js CLIENT_EVENTS, SERVER_EVENTS).
+const EVENT_TIP = {
+  'unfocused-beat': "Their computer said the quiz wasn't the window in front, so they had left it.",
+  reload: 'They reloaded the quiz, or closed it and opened it again.',
+  'extended-display': 'Another screen was connected to their computer during the quiz.',
+  paste: 'They tried to paste something copied from outside the quiz. Nothing was pasted. Not a strike.',
+  'blocked-key': 'They pressed a shortcut the quiz blocks, like Alt+Tab or F12. Not a strike.',
+  resize: 'The browser window changed size, as when it\'s made smaller to put something next to it. Not a strike.',
+  'bulk-insert': '80 or more characters arrived in the code box at once, as a paste would. Not a strike.',
+  'inhuman-typing': 'More than 150 characters typed in 10 seconds. Not a strike.',
+  'other-network': 'With the network lock on, their quiz was reached from another network. It was refused. Not a strike.',
+  'left-network': "They tried to carry on from another network than the one they started on, like a phone's hotspot. It was refused until you let them back in. Not a strike.",
+  'other-device': 'Their quiz was reached from a different browser than the one they started in. Not a strike.',
+  extension: 'A browser add-on put something on the quiz page: a spelling helper, say, or an AI helper. Not a strike.',
+  'spoofed-checks': 'Something in their browser fakes the checks that see them leave, so leaving may not show up. Not a strike.',
+  'no-frames': "The quiz wasn't drawn for a few seconds, as when something covers it, but no leave was reported. Not a strike.",
+  'scripted-input': "Typing in an answer that didn't come from the keyboard, like an auto-typer's. Not a strike.",
+  viewport: "In full screen, something sat beside the quiz, like a browser's side panel or developer tools. Not a strike.",
+  setup: 'Their screen and window, and which checks worked on this computer.',
+  automation: 'The browser says a program is controlling it, not a person. Not a strike.',
+  'virtual-machine': "The quiz ran in a virtual computer or a remote desktop, so it may not be the screen in front of them. Not a strike.",
+  'software-graphics': 'The browser draws without a graphics card. Some school computers do; it can also mean a virtual computer or remote desktop.',
+  'answer-after-return': 'Changed within 30 seconds of coming back from 3 or more seconds away. Not a strike.',
+  'same-browser': 'Another student signed in to this quiz from the same browser. Not a strike.',
+  'new-network': "They joined from a network they haven't used on your earlier quizzes, like home or a phone's hotspot. Not a strike.",
+};
 // Browsers only offer passkeys on HTTPS (and localhost), so plain-http installs don't show them.
 const PASSKEYS = !!(window.PublicKeyCredential && window.isSecureContext && navigator.credentials);
 dash.pollTimer = 0;
@@ -125,20 +152,8 @@ const ghLink = () => h('a', { class: 't-gh', href: 'https://github.com/Areng14/B
 const actionsHead = () => h('th', {}, h('span', { class: 'sr-only', text: 'Actions' }));
 // Column headers; the ones named in nums sit right, over their right-aligned numbers.
 const heads = (names, nums = []) => names.map((x) => h('th', { class: nums.includes(x) ? 'num' : null, text: x }));
-// A few words on a term a teacher may not know, shown while the pointer is over host or the control in
-// it has keyboard focus, and read with the control. Escape hides it until the pointer or focus moves on.
-let tips = 0;
-function tip(host, control, text) {
-  const t = h('span', { class: 't-tip', role: 'tooltip', id: `t-tip-${++tips}`, text });
-  host.classList.add('t-tipped');
-  host.append(t);
-  control.setAttribute('aria-describedby', t.id);
-  host.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !host.classList.contains('t-tip-off')) { host.classList.add('t-tip-off'); e.stopPropagation(); } });
-  const on = () => host.classList.remove('t-tip-off');
-  host.addEventListener('mouseleave', on);
-  host.addEventListener('focusout', on);
-  return host;
-}
+// A few words on a term a teacher may not know: tip(host, control, text, side) (tip.js, shared with Watch).
+const tip = window.BQTip;
 // Click to sort: up, then down, then back to the list's own order. sort: { by, dir } or null; onSort(next).
 // tipsFor: a few words on what a column means, by its name.
 function sortHeads(names, nums, sort, onSort, tipsFor = {}) {
@@ -233,4 +248,4 @@ function glyph(kind, size = 16) {
   return s;
 }
 
-export { ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, ghLink, glyph, h, heads, icon, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, sortableTable, themeButton, tip };
+export { EVENT_TIP, ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, ghLink, glyph, h, heads, icon, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, sortableTable, themeButton, tip };

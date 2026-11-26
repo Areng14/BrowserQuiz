@@ -40,6 +40,10 @@
   let name = '';
   let invalidated = false;
   const integrityBtn = $('w-integrity');
+  // what each does (tip.js): the same words as the live page's
+  const DOES = { invalidate: "Their score counts as 0. They can keep working and aren't told. Un-invalidate gives it back.",
+    restore: "Their score counts again. If they leave the quiz after this, it shows, but it doesn't invalidate it." };
+  window.BQTip($('w-integrity-host'), integrityBtn, DOES.invalidate);
   integrityBtn.addEventListener('click', async () => {
     let body = {};
     if (invalidated) { if (!(await window.BQAsk.confirm({ title: `Un-invalidate ${name}?`, ok: 'Un-invalidate' }))) return; } else {
@@ -61,7 +65,8 @@
     $('w-state').hidden = !bad;
     integrityBtn.textContent = bad ? 'Un-invalidate' : 'Invalidate';
     integrityBtn.setAttribute('aria-label', `${bad ? 'Un-invalidate' : 'Invalidate'} ${name}`);
-    integrityBtn.hidden = false;
+    window.BQTip.text(integrityBtn, bad ? DOES.restore : DOES.invalidate);
+    $('w-integrity-host').hidden = false;
   }
   frame.src = `/teacher/watch-frame.html?attempt=${encodeURIComponent(id)}`;
 
