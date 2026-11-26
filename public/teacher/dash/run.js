@@ -85,13 +85,18 @@ async function showRun(runId) {
     h('span', { class: 't-paused-what' }, glyph('pause', 18), 'Quiz paused', pausedFor), resumeBtn);
   function alertBox(msg) { detail.prepend(h('p', { class: 't-error', text: msg })); }
   // How much more time (for one student, or everyone still working): 5 minutes unless they say otherwise.
+  // "10 min" counts as 10; anything else asks again, with what was typed still there.
   async function askMinutes(title) {
-    const v = await ask.ask({ title, label: 'Minutes', value: '5', ok: 'Add time' });
-    if (v == null) return null;
-    const mins = Math.round(Number(v));
-    if (mins >= 1 && mins <= 120) return mins;
-    await ask.notice({ title: 'Add 1 to 120 minutes' });
-    return null;
+    let value = '5';
+    let text = null;
+    for (;;) {
+      const v = await ask.ask({ title, text, label: 'Minutes', value, ok: 'Add time' });
+      if (v == null) return null;
+      const mins = Math.round(parseFloat(v));
+      if (mins >= 1 && mins <= 120) return mins;
+      value = v;
+      text = 'Add 1 to 120 minutes.';
+    }
   }
   // Ends one student's quiz: their answers are turned in and they see "Your teacher ended your quiz".
   async function unInvalidate(id, name) {
