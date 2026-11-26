@@ -83,6 +83,9 @@ it, so removing things comes before styling them.
 - **Never a sideways scroll** on the page, at any width down to a phone (360px). Long names are
   cut short with "…" and the whole thing on hover; long code scrolls inside its own box.
 - **Don't nest scrollbars** when one will do.
+- **A box that scrolls sideways shows it.** Macs and phones hide scrollbars until you scroll, so
+  draw one that stays (a rail and a thumb you can drag), pin the columns that say what a row is,
+  and put a soft shadow on the side where there's more. Open it where people look first (the newest).
 
 ## 6. No clutter: few buttons, the rest one tap away
 
