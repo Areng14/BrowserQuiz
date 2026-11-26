@@ -197,9 +197,10 @@ input[type="file"].input { padding: 6px 10px; }
 .t-actions { white-space: nowrap; }
 .t-actions .btn + .btn { margin-left: 6px; }
 .t-actions > * + * { margin-left: 6px; }
+/* one center line for a row's buttons: the ⋯ is inline-flex, the others inline-block */
+.t-actions > :is(.btn, .input) { vertical-align: middle; }
 /* a class's students: extra time beside Remove, the same small height */
-.input.t-time-x { width: auto; height: 34px; min-height: 34px; padding-block: 0; vertical-align: middle; }
-.t-actions > .input.t-time-x + .btn { vertical-align: middle; }
+.input.t-time-x { width: auto; height: 34px; min-height: 34px; padding-block: 0; }
 .t-xtime { font-size: 13px; }
 /* long names: cut short, the whole name on hover and in the student's panel */
 .t-run .t-name > * { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
