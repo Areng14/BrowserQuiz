@@ -90,3 +90,12 @@
   .qview.gr-split { max-width: 1240px; grid-template-columns: minmax(0, 1fr) minmax(0, 560px); gap: 40px; align-items: start; }
   .gr-split .gr-side { position: sticky; top: 0; }
 }
+/* With shared material beside it (app.css .shared-split): the question over the grid in the right-hand
+   column, until there's room for three columns (material, question, grid) */
+@media (min-width: 1100px) {
+  .shared-split > .qview.gr-split { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+}
+@media (min-width: 1700px) {
+  .shared-split:has(> .gr-split) { max-width: 2200px; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  .shared-split > .qview.gr-split { grid-template-columns: minmax(0, 1fr) minmax(0, 560px); gap: 32px; }
+}
