@@ -479,8 +479,9 @@ button.t-joincode:hover { background: var(--soft); }
 .t-gq-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 16px; }
 .t-gq-bar h1 { margin: 0; }
 .t-gq-qnav { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.t-gq-pick { position: relative; display: inline-flex; min-width: 0; }
-.input.t-gq-select { width: auto; max-width: min(460px, 100%); min-width: 0; padding: 0 44px 0 12px; appearance: none; -webkit-appearance: none; cursor: pointer; text-overflow: ellipsis; }
+/* the cap is on the box the arrow is placed in, so a long question's select can't end short of its arrow */
+.t-gq-pick { position: relative; display: inline-flex; min-width: 0; max-width: 460px; }
+.input.t-gq-select { width: auto; min-width: 0; padding: 0 44px 0 12px; appearance: none; -webkit-appearance: none; cursor: pointer; text-overflow: ellipsis; }
 .t-gq-pick > svg { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-2); pointer-events: none; }
 .t-gq-hide { margin-left: auto; }
 .t-gq { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 24px; align-items: start; }
