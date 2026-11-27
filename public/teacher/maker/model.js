@@ -108,7 +108,7 @@ function readCode(q) {
       try { ctor = parseSig(u.ctor.trim() ? u.ctor : '()').params; } catch (e) { throw new Error(`Constructor: ${e.message.replace('countVowels(s: string): int', '(owner: string, balance: double)')}`); }
       // Two methods can share a name (overloads) only in Java and C++.
       const seen = new Set();
-      const noOverloads = q.languagesAny ? [] : q.languages.filter((l) => ['python', 'go', 'rust'].includes(l) || BT.isJs(l));
+      const noOverloads = q.languagesAny ? [] : (q.languages || [q.language || 'java']).filter((l) => ['python', 'go', 'rust'].includes(l) || BT.isJs(l));
       const methods = u.methods.split('\n').filter((l) => l.trim()).map((l, i) => {
         let m;
         try { m = fullSig(l, true); } catch (e) { throw new Error(`Methods, line ${i + 1}: ${e.message}`); }

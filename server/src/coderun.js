@@ -9,17 +9,19 @@ const B = require('./bans');
 const MAX_CONCURRENT = Math.max(1, Number(process.env.RUNNER_CONCURRENCY) || 4);
 let active = 0;
 const waiting = [];
+const later = [];
 
 // Urgent: a student's Run, which they sit waiting for, goes ahead of grading (that can wait), so a flood of
-// submissions never keeps a classmate's Run waiting for more than one job.
+// submissions never keeps a classmate's Run waiting for more than one job. 'low': the quiz maker's search
+// for tests that miss a mistake, after everything else.
 async function withSlot(fn, urgent) {
-  if (active >= MAX_CONCURRENT) await new Promise((resolve) => (urgent ? waiting.unshift(resolve) : waiting.push(resolve)));
+  if (active >= MAX_CONCURRENT) await new Promise((resolve) => (urgent === 'low' ? later.push(resolve) : urgent ? waiting.unshift(resolve) : waiting.push(resolve)));
   active++;
   try {
     return await fn();
   } finally {
     active--;
-    const next = waiting.shift();
+    const next = waiting.shift() || later.shift();
     if (next) next();
   }
 }
@@ -37,10 +39,12 @@ async function runnerHealthy() {
   }
 }
 
-async function callRunner(job, timeMs, memoryMb, urgent) {
+// stale(): true when the job isn't wanted any more by the time it gets a slot (it's skipped: null)
+async function callRunner(job, timeMs, memoryMb, urgent, stale) {
   const url = (process.env.RUNNER_URL || '').replace(/\/$/, '');
   if (!url) { const e = new Error('The code runner is not set up.'); e.code = 'runner_offline'; throw e; }
   return withSlot(async () => {
+    if (stale && stale()) return null;
     let res;
     try {
       res = await fetch(url + '/run', {
@@ -228,6 +232,14 @@ async function checkSolutions(q) {
   return out;
 }
 
+// One job of the maker's search for tests that miss a mistake (mutants.js): every test at once, within
+// timeMs, after everything else; null when it went stale while it waited
+async function runJob(q, lang, code, tests, timeMs, stale) {
+  const { marker, job } = H.buildJob(q, lang, code, tests, { scan: false });
+  const res = await callRunner(job, timeMs, q.limits.memoryMb, 'low', stale);
+  return res && H.readResults(q, lang, tests, res, marker);
+}
+
 // "Predict the output": run each snippet. A missing answer is filled in from what it prints; an answer the
 // teacher typed has to match it.
 async function checkOutputs(quiz) {
@@ -254,4 +266,4 @@ async function checkOutputs(quiz) {
   if (problems.length) throw new QuizError('The output check failed:\n- ' + problems.slice(0, 20).join('\n- '));
 }
 
-module.exports = { runSamples, gradeCode, checkReferences, checkSolutions, checkOutputs, runnerConfigured, runnerHealthy };
+module.exports = { runSamples, gradeCode, checkReferences, checkSolutions, checkOutputs, runJob, runnerConfigured, runnerHealthy };

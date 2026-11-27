@@ -65,14 +65,15 @@ const nameInput = (value, label, on) => {
   return el;
 };
 
-// changed(): after any edit (the shape is the teacher's from then on); fromSolution(): back to reading it
-function shapeForm(q, changed, fromSolution) {
+// changed(): after any edit (the shape is the teacher's from then on); fromSolution(): back to reading it.
+// words: { label (what the mode is called), from (the button that reads it again) }
+function shapeForm(q, changed, fromSolution, words) {
   const u = q._ui;
   const done = () => { u.byHand = true; touch(q); changed(); };
   const isClass = q.mode === 'class';
   const mode = h('select', { class: 'input' }, h('option', { value: 'method', text: 'A method', selected: !isClass }), h('option', { value: 'class', text: 'A class', selected: isClass }));
   mode.addEventListener('change', () => { q.mode = mode.value; u.sample = ''; u.hidden = ''; u.byHand = true; touch(q); changed(true); });
-  const parts = [field('Students write', mode)];
+  const parts = [field(words.label, mode)];
   if (!isClass) {
     const s = looseSig(u.sig);
     const save = () => { u.sig = sigText(s.name, s.params, s.returns || '?'); done(); };
@@ -112,7 +113,7 @@ function shapeForm(q, changed, fromSolution) {
   }
   parts.push(field('Classes (optional, one per line)', area(q, u.types, (v) => { u.types = v; changed(); }, { rows: 1, class: 'input qe-area qe-mono', placeholder: 'Point(x: int, y: int)' })));
   return h('div', { class: 'qe-sigform' }, h('div', { class: 'qe-sigform-grid' }, ...parts),
-    u.byHand ? h('div', {}, h('button', { class: 'btn small', type: 'button', text: 'Read it from the solution', onclick: fromSolution })) : null);
+    u.byHand ? h('div', {}, h('button', { class: 'btn small', type: 'button', text: words.from, onclick: fromSolution })) : null);
 }
 
 export { looseSig, shapeForm };

@@ -9,7 +9,8 @@ const Rekey = require('../rekey');
 const { gradeAttempt, isRun, cleanAnswers, gradeAuto } = require('../grade');
 const { writeZip } = require('../zip');
 const { publicQuiz } = require('../student');
-const { runSamples, gradeCode, checkSolutions, runnerConfigured } = require('../coderun');
+const { runSamples, gradeCode, checkSolutions, runJob, runnerConfigured } = require('../coderun');
+const { findGaps } = require('../mutants');
 const { audit, requireTeacher } = require('./common');
 const { checkQuiz, getQuizRow, imagePaths, parseQuizJson, previewLayout, questionPrompt, quizError, quizPrompt, quizSource, retireQuiz, saveQuiz, staleRuns } = require('./library');
 
@@ -122,14 +123,15 @@ module.exports = function quizRoutes(r) {
     } catch (e) { return quizError(res, e); }
   });
 
-  // A code question as it's being written, its solutions run against its tests: nothing is saved. One check
-  // at a time per teacher (the maker sends the next when this one answers).
-  const checking = new Set();
-  r.post('/api/t/check-code', async (req, res) => {
+  // A code question as it's being written (or a fill question graded by running), checked: nothing is saved.
+  // check-code runs its solutions against its tests; check-tests, once they all pass, looks for a wrong
+  // solution the tests would pass (mutants.js), which takes longer. One of each at a time per teacher (the
+  // maker sends the next when this one answers).
+  const checkRoute = (path, busy, work, onBusy) => r.post(path, async (req, res) => {
     const me = requireTeacher(req);
     const body = await readJson(req, 512 * 1024);
     if (!runnerConfigured()) return json(res, 200, { status: 'offline' });
-    if (checking.has(me.id)) return json(res, 200, { status: 'busy' });
+    if (busy.has(me.id)) { if (onBusy) onBusy(me); return json(res, 200, { status: 'busy' }); }
     let quiz;
     try {
       quiz = normalizeQuiz({ title: 'Check', questions: [body.question] }, new Set());
@@ -138,14 +140,22 @@ module.exports = function quizRoutes(r) {
       throw e;
     }
     const qq = quiz.questions[0];
-    if (qq.type !== 'code') throw new HttpError(400, 'bad_request');
-    checking.add(me.id);
+    if (!(qq.type === 'code' || (qq.type === 'fill' && qq.run))) throw new HttpError(400, 'bad_request');
+    busy.add(me.id);
     try {
-      json(res, 200, { status: 'ok', results: await checkSolutions(qq) });
+      json(res, 200, Object.assign({ status: 'ok' }, await work(qq, me)));
     } catch (e) {
       json(res, 200, { status: 'offline' });
-    } finally { checking.delete(me.id); }
+    } finally { busy.delete(me.id); }
   });
+  checkRoute('/api/t/check-code', new Set(), async (qq) => ({ results: await checkSolutions(qq) }));
+  // A search the teacher has moved on from (they've asked again) skips the jobs it hasn't started.
+  const asked = new Map();
+  checkRoute('/api/t/check-tests', new Set(), async (qq, me) => {
+    const at = {};
+    asked.set(me.id, at);
+    try { return { gaps: await findGaps(qq, runJob, () => asked.get(me.id) !== at) }; } finally { if (asked.get(me.id) === at) asked.delete(me.id); }
+  }, (me) => asked.set(me.id, {}));
 
   r.get('/api/t/quiz-prompt', (req, res) => {
     requireTeacher(req);

@@ -16,8 +16,8 @@ import { assetSrc } from './choices.js';
 const doneBtn = () => h('button', { class: 'btn small qe-done', type: 'button', text: 'Done', onclick: () => closeOpen() });
 import { choicesEditor } from './choices.js';
 import { promptEditor, rubricEditor } from './prompt.js';
-import { codeEditor, fillEditor, outputEditor, traceEditor } from './code.js';
-import { solutionEditor } from './codeq.js';
+import { fillEditor, outputEditor, traceEditor } from './code.js';
+import { fillTestsEditor, solutionEditor } from './codeq.js';
 import { aiCard } from './fromai.js';
 import { addQuestion, closeOpen, duplicate, moveQuestion, remove, renderOutline, reveal, rowOf, select, settingsOpen } from './outline.js';
 import { showQuizEditor } from './main.js';
@@ -105,7 +105,8 @@ function questionPane(q, i) {
   let fillParts = null;
   if (q.type === 'output') add(outputEditor(q));
   if (q.type === 'trace') add(traceEditor(q));
-  if (q.type === 'fill') { fillParts = fillEditor(q); add(fillParts.nodes); fillParts.after(); }
+  const fillHooks = {};
+  if (q.type === 'fill') { fillParts = fillEditor(q, fillHooks); add(fillParts.nodes); fillParts.after(); }
   if (q.type === 'essay') {
     const kind = h('select', { class: 'input qe-narrow' }, [['', 'Text'], ...Object.entries(LANGS).map(([l, n]) => [l, `${n} code`])].map(([v, t]) => h('option', { value: v, text: t, selected: (q.language || '') === v })));
     kind.addEventListener('change', () => { if (kind.value) q.language = kind.value; else delete q.language; touch(q); });
@@ -132,7 +133,8 @@ function questionPane(q, i) {
   const calcField = field('Calculator', calcOverrideSelect(q, `Same as the ${secAbove && secAbove.calculator ? 'section' : 'quiz'} (${CALC_NAMES[inherited]})`));
   const more = h('details', { class: 'qe-more', open: !!(q.explanation || q.vars || q.calculator) }, h('summary', { text: 'More options' }),
     h('div', { class: 'qe-stack' }, explanation, name, calcField, VAR_TYPES.has(q.type) ? valuesEditor(q, touch, (t) => window.BQ.md.render(t, { lang: ed.quiz.language, assetUrl: assetSrc })) : null));
-  const code = q.type === 'code' ? solutionEditor(q) : q.type === 'fill' && q._ui.run ? codeEditor(q) : null;
+  const code = q.type === 'code' ? solutionEditor(q) : q.type === 'fill' && q._ui.run ? fillTestsEditor(q, fillParts.compile) : null;
+  if (code && code.sync) fillHooks.changed = code.sync;
   const main = h('div', { class: 'qe-stack' },
     card(null, promptEditor(q)),
     answer.length ? card(answerTitle, ...answer) : null,

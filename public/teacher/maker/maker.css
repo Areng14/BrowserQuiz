@@ -441,3 +441,13 @@ div.qe-group-material { padding: 12px; }
   .qe-sigform-grid { grid-template-columns: minmax(0, 1fr); }
   .qe-param { grid-template-columns: minmax(0, 1fr) 120px 40px; }
 }
+/* a wrong solution the tests would pass (checks.js) */
+.qe-tstatus-more { margin-left: 8px; font-weight: 400; color: var(--ink-2); }
+.qe-gap { display: grid; gap: 8px; padding: 12px; font-size: 14px; border: 1px solid var(--line); border-left: 3px solid var(--warn); border-radius: 8px; }
+.qe-gap[hidden] { display: none; }
+.qe-gap p { margin: 0; overflow-wrap: anywhere; }
+.qe-gap p code { padding: 1px 6px; font-size: 14px; white-space: pre-wrap; background: var(--soft); border-radius: 4px; }
+.qe-gap mark { color: inherit; background: color-mix(in srgb, var(--warn) 28%, transparent); border-radius: 2px; }
+.qe-gap-fix { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.qe-gap-fix .btn { display: inline-flex; align-items: center; gap: 6px; }
+.qe-gap-fix pre { flex: 1 1 220px; min-width: 0; margin: 0; padding: 7px 10px; overflow-x: auto; font-size: 13px; background: var(--soft); border-radius: 6px; }
