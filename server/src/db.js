@@ -160,6 +160,9 @@ CREATE INDEX IF NOT EXISTS roster_students_sid ON roster_students(sid_hash);`);
 // An attempt's typing replay (teacher/attempts.js replay). Deleting a run deletes its attempts' replays too
 // (ON DELETE CASCADE), which without this read the whole table once for every attempt.
 db.exec('CREATE INDEX IF NOT EXISTS code_edits_attempt ON code_edits(attempt_id)');
+// A quiz's runs: the home page asks of each quiz whether it was practiced (teacher/quizzes.js overview),
+// which without this read the whole attempts table once per quiz, everyone's.
+db.exec('CREATE INDEX IF NOT EXISTS runs_quiz ON runs(quiz_id)');
 
 const cache = new Map();
 function q(sql) {
