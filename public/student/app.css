@@ -535,7 +535,7 @@ select.input:not([multiple]), select.select {
   .theme-btn, .icon-btn { width: 40px; height: 40px; }
   .sheet-dot { min-width: 40px; height: 40px; }
   .link-btn, .mark-btn, .trace-cell { min-height: 40px; }
-  .calc-area input { height: 40px; } /* beside Find, a small button */
+  .calc-panel .calc-area input { height: 40px; } /* beside Find, a small button */
 }
 /* Headings take focus on a new screen for screen readers; they don't need a ring for it. */
 h1[tabindex="-1"]:focus { outline: none; }
