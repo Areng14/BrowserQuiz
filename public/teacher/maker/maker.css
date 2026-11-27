@@ -87,7 +87,7 @@
 .qe-add-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .qe-add-btn svg:last-child { transition: transform 0.15s; }
 .qe-add-btn[aria-expanded="true"] svg:last-child { transform: rotate(180deg); }
-.qe-add-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08); }
+.qe-add-menu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; padding: 6px; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
 .qe-add-menu[hidden] { display: none; }
 .qe-add-sep { grid-column: 1 / -1; width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
 .qe-start { display: grid; gap: 16px; }
@@ -116,7 +116,7 @@ details.qe-card:not([open]) { padding-bottom: 16px; }
 .qe-more[open] > .qe-stack { margin-top: 10px; padding: 16px 18px 18px; border: 1px solid var(--line); border-radius: 10px; }
 .qe-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-.qe-add-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; font: 500 14px var(--font); color: var(--ink); text-align: left; background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.qe-add-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 0 10px; font: 14px var(--font); color: var(--ink); text-align: left; background: none; border: 0; border-radius: 6px; cursor: pointer; }
 .qe-add-item svg { flex: none; color: var(--ink-2); }
 .qe-add-item:hover:not(:disabled), .qe-add-item:focus-visible { background: var(--soft); outline: none; }
 .qe-add-item:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
@@ -270,7 +270,7 @@ th .qe-gridcell { font: 600 13px var(--font); }
 .qe-tools .qe-tool { min-height: 34px; } /* the same height as the language picker beside them */
 .qe-choice > .input.t-points { height: 40px; min-height: 40px; } /* a rubric item's points, as tall as its text */
 .qe-cell .qe-tool { min-height: 30px; } /* a trace column's remove button, as tall as its name */
-@media (pointer: coarse) { .qe-tool { min-height: 40px; min-width: 40px; } .qe-grip { min-width: 40px; } }
+@media (pointer: coarse) { .qe-tool { min-height: 40px; min-width: 40px; } .qe-grip { min-width: 40px; } .qe-add-item, .qe-vopt { min-height: 40px; } }
 
 .qe-off { color: var(--warn); font-weight: 600; } /* the rubric doesn't add up to the question's points */
 
@@ -291,7 +291,7 @@ th .qe-gridcell { font: 600 13px var(--font); }
 .qe-vbrace { opacity: 0.4; }
 .qe-vtool { display: inline-flex; align-items: center; gap: 5px; }
 /* the list of values, under the cursor */
-.qe-vmenu { position: fixed; z-index: 70; font: 15px/1.4 var(--font); color: var(--ink); display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; width: 340px; max-width: calc(100vw - 16px); max-height: 300px; overflow: auto; margin: 0; padding: 6px; list-style: none; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2); }
+.qe-vmenu { position: fixed; z-index: 70; font: 14px/1.4 var(--font); color: var(--ink); display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; width: 340px; max-width: calc(100vw - 16px); max-height: 300px; overflow: auto; margin: 0; padding: 6px; list-style: none; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12); }
 .qe-vopt { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 36px; padding: 0 10px; border-radius: 6px; cursor: pointer; }
 .qe-vopt[aria-selected="true"] { background: var(--soft); }
 .qe-vopt .qe-tag { flex: none; }
