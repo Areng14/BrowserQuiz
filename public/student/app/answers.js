@@ -4,7 +4,7 @@ import { ERRORS, PARTS, S, api, cfg } from './state.js';
 import { announce, h, toast } from './dom.js';
 import { icon } from './theme.js';
 import { screenJoin } from './entry.js';
-import { lockOn, renderQuestion } from './quiz.js';
+import { lockOn, renderQuestion, toTop } from './quiz.js';
 import { toggleScratch } from './scratch.js';
 import { renderSheet } from './nav.js';
 import { endQuiz, leaveQuiz, showNotice, signedOut } from './overlays.js';
@@ -185,7 +185,7 @@ function setPaused(at) {
   }
   renderQuestion();
   if (S.tickTimer) S.tickTimer(); // the clock says Paused, or runs, now rather than at its next tick
-  S.el.main.scrollTop = 0;
+  toTop();
   if (!cfg.watch) {
     const head = document.getElementById('q-heading');
     if (head && !S.el.wrap.querySelector('.modal-backdrop')) head.focus({ preventScroll: true });
@@ -221,7 +221,7 @@ async function partTimeUp(done) {
   S.idx = next.start;
   S.dirOpen = true;
   renderQuestion();
-  S.el.main.scrollTop = 0;
+  toTop();
   const head = document.getElementById('q-heading');
   if (head) head.focus({ preventScroll: true });
 }

@@ -98,21 +98,28 @@ function goNow(i) {
   S.idx = i;
   S.dirOpen = !S.partsSeen.has(partOf(i).n);
   renderQuestion();
-  S.el.main.scrollTop = 0;
+  toTop();
   S.el.main.focus({ preventScroll: true });
+}
+// A new page of the quiz opens at its top: the question's own scroll, and in a short window (a phone held
+// sideways, a page zoomed in) the whole quiz's, which scrolls as one there (app.css).
+function toTop() {
+  S.el.main.scrollTop = 0;
+  S.el.wrap.scrollTop = 0;
 }
 // Every question at a glance before turning in (Bluebook's "Check your work").
 function openReview() {
   S.reviewOpen = true;
   S.dirOpen = false;
   renderQuestion();
-  S.el.main.scrollTop = 0;
+  toTop();
   const head = document.getElementById('q-heading');
   if (head) head.focus({ preventScroll: true });
 }
 function openDirections() {
   S.dirOpen = true;
   renderQuestion();
+  toTop();
   S.el.main.focus({ preventScroll: true });
 }
 function closeDirections() {
@@ -121,6 +128,7 @@ function closeDirections() {
   S.dirOpen = false;
   S.introOpen = false;
   renderQuestion();
+  toTop();
   S.el.main.focus({ preventScroll: true });
 }
 
@@ -222,4 +230,4 @@ function renderQuestion() {
   renderScratch();
 }
 
-export { closeDirections, disposeEditor, go, lockOn, lockedAt, openDirections, openReview, renderQuestion, reviewButtons, screenQuiz };
+export { closeDirections, disposeEditor, go, lockOn, lockedAt, openDirections, openReview, renderQuestion, reviewButtons, screenQuiz, toTop };
