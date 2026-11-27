@@ -50,13 +50,21 @@ function prune() {
     if (seen[b.kind] > KEEP[b.kind]) fs.rmSync(path.join(DIR, b.name), { force: true });
   }
 }
-// kind: nightly, manual or before-restore -> its name
+// kind: nightly, manual or before-restore -> its name. Written under another name first, so one that fails
+// (a full disk) leaves no empty file in the list.
 function make(kind) {
   fs.mkdirSync(DIR, { recursive: true, mode: 0o700 });
   const name = `browserquiz-${new Date().toISOString().slice(0, 16).replace('T', '-').replace(':', '')}-${kind}.db`;
   const file = path.join(DIR, name);
-  fs.rmSync(file, { force: true }); // two in the same minute: the newer one
-  db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+  const part = file + '.part';
+  fs.rmSync(part, { force: true });
+  try {
+    db.exec(`VACUUM INTO '${part.replace(/'/g, "''")}'`);
+    fs.renameSync(part, file); // two in the same minute: the newer one
+  } catch (e) {
+    fs.rmSync(part, { force: true });
+    throw e;
+  }
   prune();
   return name;
 }
