@@ -193,6 +193,41 @@ async function checkReferences(quiz) {
   if (problems.length) throw new QuizError('The reference solution check failed:\n- ' + problems.slice(0, 20).join('\n- '));
 }
 
+// The quiz maker's check as a question is written: every solution against every test, nothing saved or
+// filled in. Per language, per test: what came back (and as that language writes it), and whether it
+// matches the expected value typed (null where none was typed). Class tests say it per step.
+async function checkSolutions(q) {
+  const tests = q.tests.hidden; // the maker sends every test as hidden
+  const out = {};
+  for (const [lang, code] of Object.entries(q.reference || {})) {
+    if (!code.trim()) continue;
+    const r = await runTests(q, lang, code, tests);
+    if (r.status !== 'ok') { out[lang] = { status: r.status === 'compile_error' ? 'compile_error' : 'error', message: String(r.message || '').slice(0, 1000) }; continue; }
+    const banned = [...B.bannedUse(q.ban, lang, r.scan, q.types), ...B.macroUse(q.ban, lang, code)];
+    out[lang] = {
+      status: 'ok',
+      banned,
+      tests: r.tests.map((res, i) => {
+        if (res.error) return { error: String(res.error).slice(0, 300) };
+        if (q.mode === 'method') {
+          const got = H.clean(q.signature.returns, res.got, q.types);
+          return { pass: res.pass, got, shown: H.show(q.signature.returns, got, lang, q.types) };
+        }
+        return {
+          pass: res.pass,
+          steps: tests[i].steps.map((st, k) => {
+            if (!(k in res.gotSteps)) return null;
+            const m = q.class.methods.find((x) => x.name === st.call) || {};
+            const got = H.clean(m.returns, res.gotSteps[k], q.types);
+            return { got, shown: H.show(m.returns, got, lang, q.types), pass: st.expect === undefined ? null : H.same(m.returns, st.expect, res.gotSteps[k], q.compare === 'unordered', q.types) };
+          }),
+        };
+      }),
+    };
+  }
+  return out;
+}
+
 // "Predict the output": run each snippet. A missing answer is filled in from what it prints; an answer the
 // teacher typed has to match it.
 async function checkOutputs(quiz) {
@@ -219,4 +254,4 @@ async function checkOutputs(quiz) {
   if (problems.length) throw new QuizError('The output check failed:\n- ' + problems.slice(0, 20).join('\n- '));
 }
 
-module.exports = { runSamples, gradeCode, checkReferences, checkOutputs, runnerConfigured, runnerHealthy };
+module.exports = { runSamples, gradeCode, checkReferences, checkSolutions, checkOutputs, runnerConfigured, runnerHealthy };

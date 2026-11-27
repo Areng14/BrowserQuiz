@@ -384,3 +384,60 @@ div.qe-group-material { padding: 12px; }
 .qe-hl-in { width: max-content; min-width: 100%; }
 .qe-hl > .qe-hl-layer .tk-comment { font-style: normal; } /* italics can be wider: the layer has to match the box letter for letter */
 .qe-hl-blank { border-radius: 2px; background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* ---------- code questions, solution first (codeq.js, testgrid.js, sigform.js) ---------- */
+.qe-codeq .qe-tools { gap: 8px 12px; }
+.qe-ltabs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; }
+.qe-ltab { display: inline-flex; align-items: center; border-radius: 6px; }
+.qe-ltab > button[role=tab] { min-height: 28px; padding: 0 12px; font: inherit; font-size: 14px; font-weight: 600; color: var(--ink-2); background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.qe-ltab.on { background: var(--bg); box-shadow: 0 0 0 1px var(--line); }
+.qe-ltab.on > button[role=tab] { color: var(--ink); }
+.qe-ltab-x { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 28px; margin-left: -8px; padding: 0; color: var(--ink-2); background: none; border: 0; border-radius: 6px; cursor: pointer; }
+.qe-ltab-x:hover { color: var(--bad); }
+.qe-ltabs .btn.t-menu-btn { width: 28px; min-height: 28px; height: 28px; padding: 0; background: none; border-color: transparent; }
+.qe-compile { display: grid; gap: 4px; color: var(--bad); }
+.qe-compile[hidden] { display: none; }
+.qe-compile pre { max-height: 160px; margin: 0; padding: 8px 12px; overflow: auto; font-size: 13px; white-space: pre-wrap; color: var(--ink); background: var(--soft); border-radius: 6px; }
+.qe-sig { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; min-height: 34px; padding: 8px 12px; background: var(--soft); border: 1px solid var(--line); border-radius: 8px; }
+.qe-sig-label { font-size: 14px; color: var(--ink-2); }
+.qe-sig-code { display: grid; gap: 4px; min-width: 0; }
+.qe-sig-code code { padding: 0; font-size: 15px; white-space: pre-wrap; overflow-wrap: anywhere; background: none; }
+.qe-sig-warn { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; color: var(--warn); }
+.qe-sigform { display: grid; gap: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; }
+.qe-sigform-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; align-items: start; }
+.qe-param { display: grid; grid-template-columns: minmax(0, 1fr) 160px 40px; gap: 8px; align-items: center; }
+.qe-param > .input { min-width: 0; }
+.qe-param > .btn.qe-x { width: 40px; min-height: 40px; }
+.qe-method { border: 1px solid var(--line); border-radius: 8px; }
+.qe-method.open { border-color: var(--field-line); }
+.qe-method-head { display: flex; align-items: center; gap: 4px; padding-right: 4px; }
+.qe-msum { display: flex; flex: 1; align-items: center; gap: 8px; min-width: 0; min-height: 44px; padding: 0 12px; font: inherit; text-align: left; color: var(--ink); background: none; border: 0; border-radius: 8px; cursor: pointer; }
+.qe-msig { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qe-method-body { padding: 4px 12px 16px 36px; }
+.btn.qe-plain { display: inline-flex; align-items: center; gap: 8px; padding-left: 8px; background: none; border-color: transparent; }
+.qe-tstatus { margin-left: 8px; font-size: 14px; font-weight: 600; color: var(--ink-2); }
+.qe-tstatus.ok { color: var(--good); }
+.qe-tstatus.no { color: var(--bad); }
+.qe-tests { display: grid; gap: 12px; min-width: 0; }
+.qe-ttable, .qe-tcard { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; } /* positioned, so a hidden label inside stays inside */
+.qe-trow { display: grid; align-items: center; column-gap: 12px; min-width: 560px; min-height: 52px; padding: 0 12px; border-top: 1px solid var(--line); }
+.qe-thead { min-height: 40px; font-size: 13px; font-weight: 600; color: var(--ink-2); background: var(--soft); border-top: 0; }
+.qe-tcard .qe-thead { background: none; border-top: 1px solid var(--line); }
+.qe-tname { color: var(--ink); }
+.qe-tcell { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.qe-tcell > .input { width: 100%; min-width: 0; height: 34px; min-height: 34px; padding: 0 8px; font-size: 14px; }
+.qe-tmark { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.qe-tres { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.qe-tres.ok { color: var(--good); }
+.qe-tres.no { color: var(--bad); }
+.qe-tcheck { display: flex; justify-content: center; }
+.qe-tdetail { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; min-width: 560px; padding: 0 12px 12px; font-size: 14px; color: var(--bad); }
+.qe-tdetail[hidden] { display: none; }
+.qe-tfoot { position: sticky; left: 0; padding: 8px 12px; border-top: 1px solid var(--line); }
+.qe-tcard-head { position: sticky; left: 0; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 12px; background: var(--soft); }
+.qe-tcard-title { font-weight: 600; }
+.qe-tstep { grid-template-columns: minmax(0, 1fr) minmax(120px, 200px) 128px 34px; }
+@media (max-width: 700px) {
+  .qe-sigform-grid { grid-template-columns: minmax(0, 1fr); }
+  .qe-param { grid-template-columns: minmax(0, 1fr) 120px 40px; }
+}

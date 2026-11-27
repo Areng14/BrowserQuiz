@@ -17,6 +17,7 @@ const doneBtn = () => h('button', { class: 'btn small qe-done', type: 'button', 
 import { choicesEditor } from './choices.js';
 import { promptEditor, rubricEditor } from './prompt.js';
 import { codeEditor, fillEditor, outputEditor, traceEditor } from './code.js';
+import { solutionEditor } from './codeq.js';
 import { aiCard } from './fromai.js';
 import { addQuestion, closeOpen, duplicate, moveQuestion, remove, renderOutline, reveal, rowOf, select, settingsOpen } from './outline.js';
 import { showQuizEditor } from './main.js';
@@ -131,7 +132,7 @@ function questionPane(q, i) {
   const calcField = field('Calculator', calcOverrideSelect(q, `Same as the ${secAbove && secAbove.calculator ? 'section' : 'quiz'} (${CALC_NAMES[inherited]})`));
   const more = h('details', { class: 'qe-more', open: !!(q.explanation || q.vars || q.calculator) }, h('summary', { text: 'More options' }),
     h('div', { class: 'qe-stack' }, explanation, name, calcField, VAR_TYPES.has(q.type) ? valuesEditor(q, touch, (t) => window.BQ.md.render(t, { lang: ed.quiz.language, assetUrl: assetSrc })) : null));
-  const code = q.type === 'code' || (q.type === 'fill' && q._ui.run) ? codeEditor(q) : null;
+  const code = q.type === 'code' ? solutionEditor(q) : q.type === 'fill' && q._ui.run ? codeEditor(q) : null;
   const main = h('div', { class: 'qe-stack' },
     card(null, promptEditor(q)),
     answer.length ? card(answerTitle, ...answer) : null,

@@ -3,7 +3,7 @@
 import { ICONS, h, icon, plural, tip } from '../dash/core.js';
 import { ed } from './state.js';
 import { BT, LANGS, countBlanks } from './formats.js';
-import { readCode, realign, refLangsOf, starterCode } from './model.js';
+import { readCode, realign } from './model.js';
 import { codeKeys, grow, insert } from './editing.js';
 import { area, card, check, field, input, touch } from './core.js';
 import { BAN_HINT, rubricEditor } from './prompt.js';
@@ -123,25 +123,11 @@ function fillEditor(q) {
   };
 }
 
-// ---------- code questions, and fill questions graded by running ----------
+// ---------- fill questions graded by running ----------
+// (Code questions are written solution first: codeq.js.)
 function codeEditor(q) {
   const u = q._ui;
-  const fill = q.type === 'fill';
-  const from = fill ? 'your answers for the blanks' : 'the reference solution';
   const isClass = q.mode === 'class';
-  // "Any language": every language that can run the question (the server leaves out the ones that can't)
-  const anyBox = check(q, !!q.languagesAny, 'Any language', (v) => {
-    q.languages = v ? Object.keys(LANGS) : refLangsOf(q);
-    q.languagesAny = v;
-    renderPane();
-  });
-  const langBox = (el) => { el.classList.add('qe-lang'); return el; };
-  const langs = fill ? null : h('div', { class: 'qe-langs', role: 'group', 'aria-label': 'Languages' }, langBox(anyBox),
-    q.languagesAny ? null : Object.entries(LANGS).map(([l, name]) => langBox(check(q, q.languages.includes(l), name, (v) => {
-      q.languages = Object.keys(LANGS).filter((x) => (x === l ? v : q.languages.includes(x)));
-      if (!q.languages.length) q.languages = [l === 'java' ? 'python' : 'java'];
-      renderPane();
-    }))));
   const mode = h('select', { class: 'input qe-narrow', 'aria-label': 'What students write' },
     h('option', { value: 'method', text: 'Write a method', selected: !isClass }),
     h('option', { value: 'class', text: 'Write a class', selected: isClass }));
@@ -156,134 +142,86 @@ function codeEditor(q) {
   const shapeNote = h('p', { class: 't-small qe-note' });
   const notes = { sample: h('p', { class: 't-small qe-note' }), hidden: h('p', { class: 't-small qe-note' }) };
   const testsField = (label, box, note, what) => (what ? tip(field(label, box, note), box.querySelector('textarea'), what) : field(label, box, note));
-  // tests are written the same for every language; colored as the first one reads
   const tests = (kind, rows, placeholder) => colored(area(q, u[kind], (v) => { u[kind] = v; }, { rows, placeholder, class: 'input qe-area qe-mono qe-code', 'data-tests': kind }),
-    () => (fill ? langOf(q)() : q.languages[0] || 'java'));
-  const starters = [];
-  const refLangs = fill ? [] : refLangsOf(q);
-  // One language's reference at a time, with a tab for each
-  if (!refLangs.includes(u.refTab)) u.refTab = refLangs[0];
-  const tabbed = refLangs.length > 1;
-  const panels = refLangs.map((l) => {
-    const ta = area(q, (q.reference || {})[l], (v) => { q.reference = Object.assign({}, q.reference, { [l]: v }); }, { rows: 8, class: 'input qe-area qe-mono qe-code' });
-    codeKeys(ta);
-    const btn = h('button', { class: 'btn small', type: 'button', text: 'Insert the starter code', onclick: () => {
-      const shape = readCode(q).shape;
-      if (!shape) return;
-      ta.select();
-      insert(ta, starterCode(shape, l, false));
-    } });
-    starters.push({ ta, btn });
-    const label = h('label', { class: 'field' }, h('span', { class: `field-label${tabbed ? ' qe-sr' : ''}`, text: `Reference solution (${LANGS[l]})` }), colored(ta, () => l));
-    return h('div', { class: 'qe-ref', id: `qe-ref-${l}`, role: tabbed ? 'tabpanel' : null, hidden: l !== u.refTab }, label, h('div', {}, btn));
-  });
-  const tabs = tabbed ? h('div', { class: 't-tabs qe-reftabs', role: 'tablist', 'aria-label': 'Reference solutions' }, refLangs.map((l) => h('button', {
-    class: 't-tab', type: 'button', role: 'tab', 'aria-selected': String(l === u.refTab), 'aria-controls': `qe-ref-${l}`, text: LANGS[l],
-    onclick: (e) => {
-      u.refTab = l;
-      for (const b of e.currentTarget.parentNode.children) b.setAttribute('aria-selected', String(b === e.currentTarget));
-      panels.forEach((p, k) => { p.hidden = refLangs[k] !== l; });
-      const ta = panels[refLangs.indexOf(l)].querySelector('textarea');
-      grow(ta);
-    },
-  }))) : null;
-  const refs = [tabs, ...panels];
-  // With "any", a reference in another language is one pick away
-  const more = q.languagesAny ? Object.keys(LANGS).filter((l) => !refLangs.includes(l)) : [];
-  if (more.length) {
-    const add = h('select', { class: 'input qe-narrow', 'aria-label': 'Add a reference solution' },
-      h('option', { value: '', text: 'Add a reference in…' }), more.map((l) => h('option', { value: l, text: LANGS[l] })));
-    add.addEventListener('change', () => { if (add.value) { u.refLangs = [...(u.refLangs || refLangs), add.value]; u.refTab = add.value; renderPane(); } });
-    refs.push(h('div', { class: 'qe-line' }, add));
-  }
-  const rubric = fill ? null : rubricEditor(q, 'Uses private instance variables', refLangs);
-  // Methods students may not use: comma separated, one list for every language or one per language (a
-  // Class.method entry names one language's class). Using one scores 0 (server/src/bans.js).
-  const banLangs = fill ? [] : q.languages.filter(BT.hasBans); // a fill question has no languages of its own, nor bans
-  const parse = (v) => v.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
-  const cppOnly = (l) => l === 'cpp' || (!l && banLangs.length === 1 && banLangs[0] === 'cpp');
-  const banField = (label, list, set, hint, l) => {
-    const box = input(q, list.map((b) => (cppOnly(l) ? b.replace('.', '::') : b)).join(', '), (v) => set(parse(v)), { class: 'input qe-mono', placeholder: hint, spellcheck: 'false' });
-    return tip(field(label, box), box, "An answer that uses any of these scores 0.");
-  };
-  let bans = null;
-  if (!fill) {
-    const perLang = !!q.ban && !Array.isArray(q.ban);
-    const fields = perLang
-      ? banLangs.map((l) => banField(`Not allowed in ${LANGS[l]}`, q.ban[l] || [], (list) => {
-        if (list.length) q.ban[l] = list; else delete q.ban[l];
-      }, BAN_HINT[l], l))
-      : [banField('Not allowed (methods students may not use)', q.ban || [], (list) => { if (list.length) q.ban = list; else delete q.ban; },
-        banLangs.length === 1 ? BAN_HINT[banLangs[0]] : banLangs.every((l) => l === 'java' || l === 'python') ? BAN_HINT.java + ', sorted' : 'sort')];
-    const split = banLangs.length > 1 && !q.languagesAny ? check(q, perLang, 'Per language', (v) => {
-      const all = [...new Set(Array.isArray(q.ban) ? q.ban : Object.values(q.ban || {}).flat())];
-      if (v) q.ban = Object.fromEntries(banLangs.map((l) => [l, all.slice()]));
-      else if (all.length) q.ban = all; else delete q.ban;
-      renderPane();
-    }) : null;
-    bans = h('div', { class: 'qe-stack' }, ...fields, split);
-  }
-
+    () => q.language || (ed.quiz.language === 'none' ? 'java' : ed.quiz.language));
   const tick = () => {
     const r = readCode(q);
-    const hasRef = fill || q.languages.some((l) => ((q.reference || {})[l] || '').trim());
     shapeNote.textContent = r.shapeErrors.join('\n') || `Types: ${BT.HELP}${isClass ? ', void' : ''}`;
     shapeNote.classList.toggle('t-error', !!r.shapeErrors.length);
     for (const kind of ['sample', 'hidden']) {
       const p = r[kind];
       const open = isClass ? 0 : p.tests.filter((t) => t.expected === undefined).length;
       notes[kind].textContent = p.errors.map((e) => e[0].toUpperCase() + e.slice(1)).join('\n')
-        || (p.tests.length ? `${plural(p.tests.length, 'test')}${p.tests.some((t) => t.speed) ? `, ${plural(p.tests.filter((t) => t.speed).length, 'speed test')}` : ''}${open && hasRef ? `, ${open} filled in from ${from} when you save` : ''}` : '');
+        || (p.tests.length ? `${plural(p.tests.length, 'test')}${open ? `, ${open} filled in from your answers for the blanks when you save` : ''}` : '');
       notes[kind].classList.toggle('t-error', !!p.errors.length);
     }
-    for (const s of starters) { s.btn.hidden = !!s.ta.value.trim(); s.btn.disabled = !r.shape; }
-    if (rubric) {
-      const any = q.rubric.some((x) => x.text.trim());
-      rubric.worth.textContent = !any ? '' : r.rubric < Number(q.points) ? `Tests are worth ${Number(q.points) - r.rubric} of ${q.points}`
-        : `The rubric is worth all ${q.points} points, so the tests count for nothing.`;
-      rubric.worth.classList.toggle('qe-off', any && r.rubric >= Number(q.points));
-    }
   };
-
-  const emptyClass = isClass && !fill ? check(q, q.starter === 'empty', 'Start with an empty class', (v) => { if (v) q.starter = 'empty'; else delete q.starter; }) : null;
   const shape = [
-    h('div', { class: 'qe-line' }, mode, emptyClass),
-    langs,
+    h('div', { class: 'qe-line' }, mode),
     isClass
       ? [h('div', { class: 'qe-pair' },
         field('Class name', input(q, u.className, (v) => { u.className = v; }, Object.assign({}, mono, { placeholder: 'BankAccount' }))),
         field('Constructor', input(q, u.ctor, (v) => { u.ctor = v; }, Object.assign({}, mono, { placeholder: '(owner: string, balance: double)' })))),
       field('Methods, one per line', area(q, u.methods, (v) => { u.methods = v; }, { rows: 3, class: 'input qe-area qe-mono', placeholder: 'deposit(amount: double): void\ngetBalance(): double' }))]
       : field('Signature', input(q, u.sig, (v) => { u.sig = v; }, Object.assign({}, mono, { placeholder: 'countVowels(s: string): int' }))),
-    fill ? null : field('Classes (optional, one per line)', area(q, u.types, (v) => { u.types = v; }, { rows: 1, class: 'input qe-area qe-mono', placeholder: 'Point(x: int, y: int)' })),
     shapeNote];
   const testFields = [
     testsField('Sample tests (students can run these)', tests('sample', 2, isClass ? 'new BankAccount("Ava", 100.0)\ndeposit(50.0)\ngetBalance() -> 150.0' : '("hello") -> 2'), notes.sample,
       "Students can run these while they work to see what their code returns. They don't affect the grade."),
-    // the line under them has the rest of how to write one; speed (method mode only) is said nowhere else
-    testsField('Hidden tests (used for grading)', tests('hidden', 4, isClass ? 'a = new BankAccount("Jo", 20.0)\na.withdraw(50.0) -> false\na.getBalance() -> ?\n*2' : '("AEIOU") -> 5\n("rhythm") -> 0\n("Programming is fun") *2'), notes.hidden,
-      isClass ? null : "Ending a line with speed (or speed x1000 for 1,000 calls) makes it a timed test. Code more than 10 times slower than your reference solution fails it."),
+    testsField('Hidden tests (used for grading)', tests('hidden', 4, isClass ? 'a = new BankAccount("Jo", 20.0)\na.withdraw(50.0) -> false\na.getBalance() -> ?\n*2' : '("AEIOU") -> 5\n("rhythm") -> 0\n("Programming is fun") *2'), notes.hidden),
     h('p', { class: 't-muted t-small', text: isClass
-      ? `A blank line starts the next test. -> ? takes the value from ${from}. A line with *2 makes the test count double.`
-      : `One test per line. Leave out -> to take the value from ${from}. *2 at the end counts double.` })];
+      ? 'A blank line starts the next test. -> ? takes the value from your answers for the blanks. A line with *2 makes the test count double.'
+      : 'One test per line. Leave out -> to take the value from your answers for the blanks. *2 at the end counts double.' })];
   const unordered = check(q, q.compare === 'unordered', 'Array/list results can be in any order', (v) => { if (v) q.compare = 'unordered'; else delete q.compare; });
   const noRun = check(q, !!q.noRun, "Students can't run their code (like on paper)", (v) => { if (v) q.noRun = true; else delete q.noRun; });
-  const stack = (...kids) => h('div', { class: 'qe-stack' }, ...kids);
-  // A fill question has no reference field: what students are to write, then the tests.
-  if (fill) return { node: h('div', { class: 'qe-codegrid' }, card('What students write', shape, noRun), card('Tests', testFields, unordered)), tick };
-  // Bans and the rubric are folded away until one is set; folded, the heading says what's there.
+  return { node: h('div', { class: 'qe-codegrid' }, card('What students write', shape, noRun), card('Tests', testFields, unordered)), tick };
+}
+
+// ---------- a code question's rules: bans, the rubric, running ----------
+// Folded away until one is set; folded, the heading says what's there. extra: more of the same kind.
+function rulesPart(q, refLangs, ...extra) {
+  const rubric = rubricEditor(q, 'Uses private instance variables', refLangs);
+  // Methods students may not use: comma separated, one list for every language or one per language (a
+  // Class.method entry names one language's class). Using one scores 0 (server/src/bans.js).
+  const banLangs = q.languages.filter(BT.hasBans);
+  const parse = (v) => v.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
+  const cppOnly = (l) => l === 'cpp' || (!l && banLangs.length === 1 && banLangs[0] === 'cpp');
+  const banField = (label, list, set, hint, l) => {
+    const box = input(q, list.map((b) => (cppOnly(l) ? b.replace('.', '::') : b)).join(', '), (v) => set(parse(v)), { class: 'input qe-mono', placeholder: hint, spellcheck: 'false' });
+    return tip(field(label, box), box, "An answer that uses any of these scores 0.");
+  };
+  const perLang = !!q.ban && !Array.isArray(q.ban);
+  const fields = perLang
+    ? banLangs.map((l) => banField(`Not allowed in ${LANGS[l]}`, q.ban[l] || [], (list) => {
+      if (list.length) q.ban[l] = list; else delete q.ban[l];
+    }, BAN_HINT[l], l))
+    : [banField('Not allowed (methods students may not use)', q.ban || [], (list) => { if (list.length) q.ban = list; else delete q.ban; },
+      banLangs.length === 1 ? BAN_HINT[banLangs[0]] : banLangs.every((l) => l === 'java' || l === 'python') ? BAN_HINT.java + ', sorted' : 'sort')];
+  const split = banLangs.length > 1 && !q.languagesAny ? check(q, perLang, 'Per language', (v) => {
+    const all = [...new Set(Array.isArray(q.ban) ? q.ban : Object.values(q.ban || {}).flat())];
+    if (v) q.ban = Object.fromEntries(banLangs.map((l) => [l, all.slice()]));
+    else if (all.length) q.ban = all; else delete q.ban;
+    renderPane();
+  }) : null;
+  const noRun = check(q, !!q.noRun, "Students can't run their code (like on paper)", (v) => { if (v) q.noRun = true; else delete q.noRun; });
   const said = [];
   const banned = [...new Set(Array.isArray(q.ban) ? q.ban : Object.values(q.ban || {}).flat())];
   if (banned.length) said.push(`Not allowed: ${banned.slice(0, 4).join(', ')}${banned.length > 4 ? ', …' : ''}`);
   const items = q.rubric.filter((x) => x.text.trim()).length;
   if (items) said.push(plural(items, 'rubric item'));
   if (q.noRun) said.push("Students can't run their code");
-  const rules = h('details', { class: 'qe-card qe-rules', open: said.length > 0 },
+  if (q.compare === 'unordered') said.push('Lists in any order');
+  const node = h('details', { class: 'qe-card qe-rules', open: said.length > 0 },
     h('summary', {}, h('span', { class: 'qe-card-title', text: 'Rules and grading' }), said.length ? h('span', { class: 't-small t-muted qe-rules-said', text: said.join(' · ') }) : null),
-    h('div', { class: 'qe-stack' }, bans, rubric.node, noRun));
-  return { tick, node: h('div', { class: 'qe-codegrid' },
-    stack(card('What students write', shape), card('Tests', testFields, unordered)),
-    stack(card(tabbed ? 'Reference solutions' : 'Reference solution', refs), rules)) };
+    h('div', { class: 'qe-stack' }, h('div', { class: 'qe-stack' }, ...fields, split), rubric.node, noRun, ...extra));
+  // what the rubric leaves the tests
+  const tick = (rubricPoints) => {
+    const any = q.rubric.some((x) => x.text.trim());
+    rubric.worth.textContent = !any ? '' : rubricPoints < Number(q.points) ? `Tests are worth ${Number(q.points) - rubricPoints} of ${q.points}`
+      : `The rubric is worth all ${q.points} points, so the tests count for nothing.`;
+    rubric.worth.classList.toggle('qe-off', any && rubricPoints >= Number(q.points));
+  };
+  return { node, tick };
 }
 
-export { codeEditor, fillEditor, outputEditor, traceEditor };
+export { codeEditor, fillEditor, langOf, outputEditor, rulesPart, traceEditor };

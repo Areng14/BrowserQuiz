@@ -9,7 +9,7 @@ const Rekey = require('../rekey');
 const { gradeAttempt, isRun, cleanAnswers, gradeAuto } = require('../grade');
 const { writeZip } = require('../zip');
 const { publicQuiz } = require('../student');
-const { runSamples, gradeCode } = require('../coderun');
+const { runSamples, gradeCode, checkSolutions, runnerConfigured } = require('../coderun');
 const { audit, requireTeacher } = require('./common');
 const { checkQuiz, getQuizRow, imagePaths, parseQuizJson, previewLayout, questionPrompt, quizError, quizPrompt, quizSource, retireQuiz, saveQuiz, staleRuns } = require('./library');
 
@@ -120,6 +120,31 @@ module.exports = function quizRoutes(r) {
       const quiz = normalizeQuiz(raw, images);
       json(res, 200, { quiz: quizSource(quiz), missingImages: [...images] });
     } catch (e) { return quizError(res, e); }
+  });
+
+  // A code question as it's being written, its solutions run against its tests: nothing is saved. One check
+  // at a time per teacher (the maker sends the next when this one answers).
+  const checking = new Set();
+  r.post('/api/t/check-code', async (req, res) => {
+    const me = requireTeacher(req);
+    const body = await readJson(req, 512 * 1024);
+    if (!runnerConfigured()) return json(res, 200, { status: 'offline' });
+    if (checking.has(me.id)) return json(res, 200, { status: 'busy' });
+    let quiz;
+    try {
+      quiz = normalizeQuiz({ title: 'Check', questions: [body.question] }, new Set());
+    } catch (e) {
+      if (e instanceof QuizError) return json(res, 200, { status: 'invalid', message: e.message });
+      throw e;
+    }
+    const qq = quiz.questions[0];
+    if (qq.type !== 'code') throw new HttpError(400, 'bad_request');
+    checking.add(me.id);
+    try {
+      json(res, 200, { status: 'ok', results: await checkSolutions(qq) });
+    } catch (e) {
+      json(res, 200, { status: 'offline' });
+    } finally { checking.delete(me.id); }
   });
 
   r.get('/api/t/quiz-prompt', (req, res) => {
