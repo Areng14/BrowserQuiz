@@ -77,6 +77,10 @@ async function handle(req, res) {
 }
 
 const server = http.createServer((req, res) => {
+  // The whole request within a minute (Node's requestTimeout, kept here so the admin's restore from a file,
+  // a big upload, can take longer: teacher/server.js longUpload)
+  const deadline = setTimeout(() => { if (!req.complete && !req.longUpload) req.socket.destroy(); }, 60000);
+  req.on('close', () => clearTimeout(deadline)); // all of it arrived (or the connection's gone)
   Promise.resolve().then(() => handle(req, res)).catch((e) => {
     if (res.headersSent) { res.destroy(); return; }
     if (e instanceof HttpError) {
@@ -88,7 +92,7 @@ const server = http.createServer((req, res) => {
   });
 });
 server.headersTimeout = 20000;
-server.requestTimeout = 60000;
+server.requestTimeout = 0; // above, per request
 
 // Sweeper: flag lost heartbeats, submit time-up attempts with their autosaved answers, and every
 // minute retry grading that failed (usually the runner was down) or never started (the quiz was locked

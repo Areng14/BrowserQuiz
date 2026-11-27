@@ -97,6 +97,9 @@ module.exports = function serverRoutes(r) {
   r.post('/api/t/server/restore-upload', async (req, res) => {
     const me = requireAdmin(req);
     if (B.quizInProgress()) throw new HttpError(409, 'busy', 'Students are in a quiz. Restore once it ends.');
+    // A backup can take minutes to upload (index.js gives other requests one): only a stalled one stops
+    req.longUpload = true;
+    req.setTimeout(60000, () => req.destroy(new Error('upload stalled')));
     const tmp = path.join(DATA_DIR, 'restore-upload.tmp');
     await new Promise((resolve, reject) => {
       let n = 0;
