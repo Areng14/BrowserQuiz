@@ -18,7 +18,7 @@ BrowserQuiz runs on one server on your school's own network, and it's free. The 
    git clone https://github.com/Areng14/BrowserQuiz.git && cd BrowserQuiz
    ./setup.sh
    ```
-3. The script asks for the admin password (or makes one up), writes the secrets to `.env`, builds everything and prints the address.
+3. The script checks the server, asks for the admin password (or makes one up) and what students write code in, writes the secrets to `.env`, downloads everything and prints the address.
 4. The admin signs in at `/teacher` as `admin` and picks their own username and password. Admin adds any other teachers from **Teachers**, in the menu under their name.
 
 It starts again on its own after a reboot: Docker starts at boot, and the containers restart with it.

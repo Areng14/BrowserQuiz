@@ -3,7 +3,8 @@
 A self-hosted quiz and CS exam app.
 - Node server in `server/` (no runtime dependencies, SQLite through `node:sqlite`)
 - Student app and teacher dashboard in `public/`
-- Sandboxed Java/Python code runner in `runner/`
+- Sandboxed code runner in `runner/`: the standard one runs Java, Python, JavaScript and TypeScript, and
+  `RUNNER_LANGS=full` adds C, C++, C#, Go and Rust. The app asks it which it has (`/health`).
 - Everything runs with Docker Compose; see `docs/setup.md`
 
 ## Code layout

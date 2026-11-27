@@ -126,6 +126,9 @@ answer keys. Images go in `quizzes/<short-name>/assets/`.
     (`"types": { "Node": { "val": "int", "next": "Node" } }`, objects in tests as
     `{ "val": 1, "next": { "val": 2 } }`). Don't write those classes in the starter or reference:
     they're given. Overloads only work when the languages are only Java, C++ and C#.
+  - A server's code runner is often the standard one: Java, Python, JavaScript and TypeScript. C, C++,
+    C#, Go and Rust need the full one, and a quiz that uses them won't save on a standard server, so
+    use them only when asked.
   - Other languages than Java and Python have limits (spec, "Languages"): speed tests only in
     Java, Python, JavaScript and TypeScript, no maps or
     class questions in C, ASCII chars in C, C++ and Go, no null strings or arrays in C++ and Rust

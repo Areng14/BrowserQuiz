@@ -13,7 +13,7 @@ git clone https://github.com/Areng14/BrowserQuiz.git && cd BrowserQuiz
 
 On Windows, double-click `setup.cmd` instead of running `./setup.sh`.
 
-The setup script will ask you for an admin password (or make one up for you), create the other secrets in `.env`, pick a free port, download BrowserQuiz, start it and print the address to open. You can run it again at any time since it keeps everything that is already set. If the download is blocked, it builds BrowserQuiz on your computer instead, which takes 10 minutes or more the first time.
+The setup script checks your computer first, then asks for an admin password (or makes one up for you) and what students write code in ([Languages](#languages)). It creates the other secrets in `.env`, picks a free port, downloads BrowserQuiz, starts it and prints the address to open. You can run it again at any time since it keeps everything that is already set. If the download is blocked, it builds BrowserQuiz on your computer instead, which takes 10 minutes or more the first time.
 
 If students cannot reach it, open the port the script printed in the server's firewall. Default is 8080.
 
@@ -188,7 +188,7 @@ docker compose up -d
 | `server/` | The server (Node, no dependencies, SQLite through `node:sqlite`) |
 | `public/student/` | The student app: quiz screens, code editor, exam lockdown |
 | `public/teacher/` | The teacher dashboard, quiz maker and reports |
-| `runner/` | The code runner: Java, Python, JavaScript, TypeScript, C, C++, C#, Go and Rust, in a sandbox |
+| `runner/` | The code runner, in a sandbox: Java, Python, JavaScript and TypeScript, and with `RUNNER_LANGS=full` C, C++, C#, Go and Rust |
 | `examples/` | Example quizzes and a class |
 | `demo/` | A self-contained demo, with a fake server |
 | `docs/` | These guides |
