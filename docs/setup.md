@@ -17,7 +17,7 @@ The setup script will ask you for an admin password (or make one up for you), cr
 
 If students cannot reach it, open the port the script printed in the server's firewall. Default is 8080.
 
-**Requirements.** Docker Compose v2 (the `docker compose` command) and Linux 5.13 or newer, which any current Linux and Docker Desktop already have. The code runner checks this when it starts. If something is missing, code questions will not run but everything else still works, and `docker compose logs runner` will tell you why.
+**Requirements.** Docker Compose v2 (the `docker compose` command) and Linux 5.13 or newer on a 64-bit processor, which any current Linux and Docker Desktop already have. The setup script checks these first, with the memory, the free disk on a Linux server and whether it can download, and stops before downloading anything if it can't go on. With an older Linux, code questions will not run but everything else still works, and `docker compose logs runner` will tell you why.
 
 **Doing it by hand.** Copy `.env.example` to `.env`, fill in the three secrets, then run `docker compose pull && docker compose up -d`.
 

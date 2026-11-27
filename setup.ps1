@@ -5,6 +5,7 @@
 #   -Languages: ask again what students write code in.
 #   -Build: build the images here instead of downloading them. -NoBuild: start with the images already here.
 param([switch]$Languages, [switch]$Build, [switch]$NoBuild)
+$mode = if ($Build) { 'build' } elseif ($NoBuild) { 'none' } else { 'pull' }
 Set-Location -LiteralPath $PSScriptRoot
 
 function New-RandomString([int]$Length, [string]$Chars) {
@@ -20,17 +21,59 @@ function New-Password {
   '{0}-{1}-{2}' -f $s.Substring(0, 4), $s.Substring(4, 4), $s.Substring(8, 4)
 }
 
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-  Write-Host "Docker isn't installed. Get Docker Desktop: https://www.docker.com/products/docker-desktop/"
-  exit 1
+# A check is + when it's fine, ! when it's not but setup goes on, x when setup can't
+function Write-Check([string]$Mark, [string]$What, [string]$Text) {
+  $color = @{ '+' = 'Green'; '!' = 'Yellow'; 'x' = 'Red' }[$Mark]
+  Write-Host "$Mark " -ForegroundColor $color -NoNewline
+  Write-Host $What.PadRight(15) -NoNewline
+  Write-Host $Text
 }
-docker info 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) {
-  Write-Host "Docker isn't running. Open Docker Desktop, wait for 'Engine running', then run this again."
-  exit 1
+function Stop-Setup([string]$What, [string]$Text) { Write-Check 'x' $What $Text; Write-Host ''; exit 1 }
+function Get-DockerInfo([string]$Format) { $v = docker info --format $Format 2>$null; if ($LASTEXITCODE -eq 0) { "$v".Trim() } else { '' } }
+function Test-Reach([string]$Url) { # any answer at all, an error status included, means it can be reached
+  try { Invoke-WebRequest -UseBasicParsing -Method Head -TimeoutSec 6 -Uri $Url | Out-Null; return $true }
+  catch { return [bool]$_.Exception.Response }
 }
+
 Write-Host ''
 Write-Host 'BrowserQuiz setup' -ForegroundColor White
+Write-Host ''
+
+# ---------- this computer ----------
+Write-Host 'Checking this computer' -ForegroundColor White
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Stop-Setup 'Docker' 'not installed: https://www.docker.com/products/docker-desktop/' }
+docker info 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) { Stop-Setup 'Docker' "not running: open Docker Desktop, wait for 'Engine running', then run this again" }
+$compose = docker compose version --short 2>$null
+if ($LASTEXITCODE -ne 0 -or -not $compose) { Stop-Setup 'Compose' 'not installed: https://docs.docker.com/compose/install/' }
+$server = docker version --format '{{.Server.Version}}' 2>$null
+Write-Check '+' 'Docker' "$server (Compose $("$compose".Trim().TrimStart('v')))"
+# The code sandbox needs Linux 5.13+ (Landlock) on a 64-bit processor; without them all but code questions works
+$arch = Get-DockerInfo '{{.Architecture}}'
+$cpu = if (@('x86_64', 'amd64') -contains $arch) { '64-bit Intel/AMD' } elseif (@('aarch64', 'arm64') -contains $arch) { '64-bit ARM' } else { '' }
+$kv = [regex]::Match((Get-DockerInfo '{{.KernelVersion}}'), '^(\d+)\.(\d+)')
+$system = if ((Get-DockerInfo '{{.OperatingSystem}}') -like '*Docker Desktop*') { 'Docker Desktop' } else { "Linux $($kv.Groups[1].Value).$($kv.Groups[2].Value)" }
+$oldKernel = $kv.Success -and ([int]$kv.Groups[1].Value -lt 5 -or ([int]$kv.Groups[1].Value -eq 5 -and [int]$kv.Groups[2].Value -lt 13))
+if ($oldKernel) { Write-Check '!' 'System' "${system}: code questions need Linux 5.13+ (the rest works)" }
+elseif (-not $cpu) { Write-Check '!' 'System' "${system}, ${arch}: code questions need 64-bit (the rest works)" }
+else { Write-Check '+' 'System' "${system}, $cpu" }
+$mem = 0L
+[void][long]::TryParse((Get-DockerInfo '{{.MemTotal}}'), [ref]$mem)
+if ($mem -gt 0) {
+  $gb = '{0:0.0}' -f ($mem / 1GB)
+  if ($mem -lt 1900000000) { Write-Check '!' 'Memory' "$gb GB for Docker: tight for a class (2 GB+ is better)" }
+  else { Write-Check '+' 'Memory' "$gb GB for Docker" }
+}
+# (Docker Desktop keeps images in its own virtual machine, so there's no disk here to check)
+if ($mode -eq 'pull') {
+  if (Test-Reach 'https://ghcr.io/v2/') { Write-Check '+' 'Internet' 'can reach GitHub' }
+  elseif (Test-Reach 'https://registry-1.docker.io/v2/') { Write-Check '!' 'Internet' "can't reach GitHub: building here instead (10+ min)"; $mode = 'build' }
+  else {
+    docker image inspect ghcr.io/areng14/browserquiz-app:latest 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { Write-Check '!' 'Internet' "offline: starting the copy that's already here"; $mode = 'none' }
+    else { Stop-Setup 'Internet' 'offline: BrowserQuiz has to download once (about 220 MB)' }
+  }
+}
 Write-Host ''
 
 # ---------- .env ----------
@@ -143,7 +186,7 @@ try {
   if ($cfg) { $ip = @($cfg.IPv4Address)[0].IPAddress }
 } catch { }
 if ($ip) { $env:HOST_LAN_IP = $ip }
-if (-not $Build -and -not $NoBuild) {
+if ($mode -eq 'pull') {
   Write-Host 'Downloading BrowserQuiz...' -ForegroundColor White
   # A network that blocks the download: up builds what's missing here instead (10+ minutes the first time)
   docker compose pull --ignore-pull-failures app runner
@@ -151,7 +194,7 @@ if (-not $Build -and -not $NoBuild) {
   Write-Host ''
 }
 Write-Host 'Starting BrowserQuiz...' -ForegroundColor White
-if ($Build) { docker compose up -d --build } else { docker compose up -d }
+if ($mode -eq 'build') { docker compose up -d --build } else { docker compose up -d }
 if ($LASTEXITCODE -ne 0) { Write-Host 'docker compose failed (see above).'; exit 1 }
 
 Write-Host -NoNewline 'Waiting for it to answer'
@@ -172,7 +215,9 @@ if (-not $ip) { $ip = "<this computer's IP>" }
 
 Write-Host ''
 if (-not $up) {
-  Write-Host "BrowserQuiz didn't come up. Here's what it said:"
+  Write-Host 'x ' -ForegroundColor Red -NoNewline
+  Write-Host "BrowserQuiz didn't start. Here's what it said:"
+  Write-Host ''
   docker compose logs app --tail 15
   exit 1
 }

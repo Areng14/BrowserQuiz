@@ -27,15 +27,19 @@ made_up_password() {
 }
 
 # ---------- asking ----------
-# A question is "? Question", and once answered, a line "✔ What  answer". Colors only on a terminal.
-B= D= C= G= R=
+# A question is "? Question", and once answered, a line "✔ What  answer". A check is ✔ when it's fine,
+# ! when it's not but setup goes on, ✘ when setup can't. Colors only on a terminal.
+B= D= C= G= Y= X= R=
 if [ -t 1 ]; then
   B=$(tput bold 2>/dev/null || true); D=$(tput dim 2>/dev/null || true); R=$(tput sgr0 2>/dev/null || true)
   C=$(tput setaf 6 2>/dev/null || true); G=$(tput setaf 2 2>/dev/null || true)
+  Y=$(tput setaf 3 2>/dev/null || true); X=$(tput setaf 1 2>/dev/null || true)
 fi
-case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in *[Uu][Tt][Ff]-8* | *[Uu][Tt][Ff]8*) TICK='✔' PICK='❯' ;; *) TICK='+' PICK='>' ;; esac
+case "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" in *[Uu][Tt][Ff]-8* | *[Uu][Tt][Ff]8*) TICK='✔' CROSS='✘' PICK='❯' ;; *) TICK='+' CROSS='x' PICK='>' ;; esac
 ask() { printf '%s?%s %s%s%s %s(%s)%s ' "$C" "$R" "$B" "$1" "$R" "$D" "$2" "$R"; }
 answered() { printf '%s%s%s %s%-14s%s %s\n' "$G" "$TICK" "$R" "$B" "$1" "$R" "$2"; }
+warn() { printf '%s!%s %s%-14s%s %s\n' "$Y" "$R" "$B" "$1" "$R" "$2"; }
+fail() { printf '%s%s%s %s%-14s%s %s\n\n' "$X" "$CROSS" "$R" "$B" "$1" "$R" "$2"; exit 1; }
 trap 'tput cnorm 2>/dev/null || true' EXIT
 # choose "Question" "Label" "option 1" "option 2" ...: up and down arrows (or an option's number), then Enter.
 # The question and its options are then replaced by its answered line. -> CHOICE (from 0)
@@ -69,10 +73,62 @@ choose() {
   CHOICE=$sel
 }
 
-command -v docker >/dev/null || { echo "Docker isn't installed: https://docs.docker.com/get-docker/"; exit 1; }
-docker info >/dev/null 2>&1 || { echo "Docker isn't running. Start it, then run this again."; exit 1; }
 echo
 echo "${B}BrowserQuiz setup${R}"
+echo
+
+# ---------- this computer ----------
+echo "${B}Checking this computer${R}"
+command -v docker >/dev/null || fail Docker "not installed: https://docs.docker.com/get-docker/"
+docker info >/dev/null 2>&1 || fail Docker "not running: start it, then run this again"
+compose=$(docker compose version --short 2>/dev/null || true)
+[ -n "$compose" ] || fail Compose "not installed: https://docs.docker.com/compose/install/"
+info() { docker info --format "$1" 2>/dev/null || true; }
+answered Docker "$(docker version --format '{{.Server.Version}}' 2>/dev/null || echo '?') (Compose ${compose#v})"
+# The code sandbox needs Linux 5.13+ (Landlock) on a 64-bit processor; without them all but code questions works
+arch=$(info '{{.Architecture}}')
+case "$arch" in x86_64 | amd64) cpu="64-bit Intel/AMD" ;; aarch64 | arm64) cpu="64-bit ARM" ;; *) cpu= ;; esac
+read -r kmaj kmin <<EOF2
+$(info '{{.KernelVersion}}' | sed -n 's/^\([0-9]*\)\.\([0-9]*\).*/\1 \2/p')
+EOF2
+case "$(info '{{.OperatingSystem}}')" in *"Docker Desktop"*) system="Docker Desktop" ;; *) system="Linux ${kmaj:-?}.${kmin:-?}" ;; esac
+if [ -n "${kmaj:-}" ] && { [ "$kmaj" -lt 5 ] || { [ "$kmaj" -eq 5 ] && [ "${kmin:-0}" -lt 13 ]; }; }; then
+  warn System "$system: code questions need Linux 5.13+ (the rest works)"
+elif [ -z "$cpu" ]; then
+  warn System "$system, $arch: code questions need 64-bit (the rest works)"
+else
+  answered System "$system, $cpu"
+fi
+mem=$(info '{{.MemTotal}}')
+if [ -n "$mem" ] && [ "$mem" -gt 0 ] 2>/dev/null; then
+  gb=$(awk -v m="$mem" 'BEGIN { printf "%.1f", m / 1073741824 }')
+  if [ "$mem" -lt 1900000000 ]; then warn Memory "$gb GB for Docker: tight for a class (2 GB+ is better)"
+  else answered Memory "$gb GB for Docker"; fi
+fi
+# Free space where Docker keeps images: on a Linux server (Docker Desktop keeps them in its own VM)
+root=$(info '{{.DockerRootDir}}')
+avail=$([ -n "$root" ] && [ -d "$root" ] && df -Pk "$root" 2>/dev/null | awk 'NR == 2 { print $4 }' || true)
+if [ -n "$avail" ]; then
+  free=$(awk -v k="$avail" 'BEGIN { g = k / 1048576; printf (g < 10 ? "%.1f" : "%.0f"), g }')
+  if [ "$avail" -lt 1572864 ]; then fail Disk "$free GB free: needs at least 1.5 GB"
+  elif [ "$avail" -lt 4194304 ]; then warn Disk "$free GB free: not enough for all nine languages (4 GB)"
+  else answered Disk "$free GB free"; fi
+fi
+# Can it download? (-k: a school network that inspects HTTPS mustn't look offline; only the status is used)
+if [ -n "$get_images" ] && command -v curl >/dev/null; then
+  reach() { [ "$(curl -ks -o /dev/null -m 6 -w '%{http_code}' "$1" 2>/dev/null || true)" != 000 ]; }
+  if reach https://ghcr.io/v2/; then
+    answered Internet "can reach GitHub"
+  elif reach https://registry-1.docker.io/v2/; then
+    warn Internet "can't reach GitHub: building here instead (10+ min)"
+    get_images=build
+  elif docker image inspect ghcr.io/areng14/browserquiz-app:latest >/dev/null 2>&1; then
+    warn Internet "offline: starting the copy that's already here"
+    get_images=
+  else
+    fail Internet "offline: BrowserQuiz has to download once (about 220 MB)"
+  fi
+fi
 echo
 
 # ---------- .env ----------
@@ -175,7 +231,7 @@ runner=$(docker compose logs runner --tail 30 --no-log-prefix 2>/dev/null || tru
 [ -n "$ip" ] || ip="<this computer's IP>"
 echo
 if [ -z "$up" ]; then
-  echo "BrowserQuiz didn't come up. Here's what it said:"
+  printf '%s%s%s %sBrowserQuiz didn'"'"'t start.%s Here'"'"'s what it said:\n\n' "$X" "$CROSS" "$R" "$B" "$R"
   docker compose logs app --tail 15
   exit 1
 fi
