@@ -7,13 +7,15 @@ import { readCode, realign, refLangsOf, starterCode } from './model.js';
 import { codeKeys, grow, insert } from './editing.js';
 import { area, card, check, field, input, touch } from './core.js';
 import { BAN_HINT, rubricEditor } from './prompt.js';
+import { colored, recolor } from './colors.js';
 import { renderPane } from './pane.js';
 
 // ---------- the code students read: output, trace and fill questions ----------
 const codeAttrs = (rows, more) => Object.assign({ rows, class: 'input qe-area qe-mono qe-code', autocomplete: 'off' }, more || {});
+const langOf = (q) => () => q.language || (ed.quiz.language === 'none' ? 'java' : ed.quiz.language);
 function langSelect(q, onChange) {
   const sel = h('select', { class: 'input qe-narrow', 'aria-label': 'Language' }, Object.entries(LANGS).map(([v, t]) => h('option', { value: v, text: t, selected: (q.language || (ed.quiz.language === 'none' ? 'java' : ed.quiz.language)) === v })));
-  sel.addEventListener('change', () => { q.language = sel.value; if (onChange) onChange(); touch(q); });
+  sel.addEventListener('change', () => { q.language = sel.value; if (onChange) onChange(); touch(q); recolor(ed.pane); });
   return sel;
 }
 const codeHead = (q, label, onLang, ...tools) => h('div', { class: 'qe-tools' },
@@ -27,7 +29,7 @@ function outputEditor(q) {
   const stale = () => { if (q.answer != null && q.answer === u.auto) { delete q.answer; out.value = ''; grow(out); } };
   const code = area(q, q.code, (v) => { q.code = v; stale(); }, codeAttrs(5, { id: 'qe-code', placeholder: OUTPUT_HINT[q.language || ed.quiz.language] || OUTPUT_HINT.java }));
   codeKeys(code);
-  return [h('div', { class: 'field' }, codeHead(q, 'Code', stale), code), field('Output', out)];
+  return [h('div', { class: 'field' }, codeHead(q, 'Code', stale), colored(code, langOf(q))), field('Output', out)];
 }
 
 const OUTPUT_HINT = {
@@ -78,7 +80,7 @@ function traceEditor(q) {
     return td;
   }), h('td', { class: 'qe-grid-side' }, h('button', { class: 'qe-tool', type: 'button', title: 'Remove row', 'aria-label': `Remove row ${r + 1}`, disabled: u.cells.length <= 1,
     onclick: () => edit(() => u.cells.splice(r, 1)) }, icon(ICONS.x, 14)))));
-  return [h('div', { class: 'field' }, codeHead(q, 'Code (optional)'), code),
+  return [h('div', { class: 'field' }, codeHead(q, 'Code (optional)'), colored(code, langOf(q))),
     h('div', { class: 'field' }, h('span', { class: 'field-label', text: 'Table, with the correct values' }),
       h('div', { class: 'qe-grid-wrap' }, h('table', { class: 'qe-grid' }, h('thead', {}, head), h('tbody', {}, body))),
       h('div', { class: 'qe-line' },
@@ -114,7 +116,7 @@ function fillEditor(q) {
   return {
     after: renderBlanks,
     nodes: [
-      h('div', { class: 'field' }, codeHead(q, 'Code', null, h('button', { class: 'qe-tool', type: 'button', text: 'Blank', title: 'Turn the selected code into a blank', onclick: makeBlank })), code),
+      h('div', { class: 'field' }, codeHead(q, 'Code', null, h('button', { class: 'qe-tool', type: 'button', text: 'Blank', title: 'Turn the selected code into a blank', onclick: makeBlank })), colored(code, langOf(q), { blanks: true })),
       h('div', { class: 'field' }, label, list),
       run,
       u.run ? h('p', { class: 't-small t-muted', text: 'The code has to be the whole class.' }) : null],
@@ -153,8 +155,10 @@ function codeEditor(q) {
   const mono = { class: 'input qe-mono', spellcheck: 'false', autocomplete: 'off' };
   const shapeNote = h('p', { class: 't-small qe-note' });
   const notes = { sample: h('p', { class: 't-small qe-note' }), hidden: h('p', { class: 't-small qe-note' }) };
-  const testsField = (label, box, note, what) => (what ? tip(field(label, box, note), box, what) : field(label, box, note));
-  const tests = (kind, rows, placeholder) => area(q, u[kind], (v) => { u[kind] = v; }, { rows, placeholder, class: 'input qe-area qe-mono qe-code', 'data-tests': kind });
+  const testsField = (label, box, note, what) => (what ? tip(field(label, box, note), box.querySelector('textarea'), what) : field(label, box, note));
+  // tests are written the same for every language; colored as the first one reads
+  const tests = (kind, rows, placeholder) => colored(area(q, u[kind], (v) => { u[kind] = v; }, { rows, placeholder, class: 'input qe-area qe-mono qe-code', 'data-tests': kind }),
+    () => (fill ? langOf(q)() : q.languages[0] || 'java'));
   const starters = [];
   const refLangs = fill ? [] : refLangsOf(q);
   // One language's reference at a time, with a tab for each
@@ -170,7 +174,7 @@ function codeEditor(q) {
       insert(ta, starterCode(shape, l, false));
     } });
     starters.push({ ta, btn });
-    const label = h('label', { class: 'field' }, h('span', { class: `field-label${tabbed ? ' qe-sr' : ''}`, text: `Reference solution (${LANGS[l]})` }), ta);
+    const label = h('label', { class: 'field' }, h('span', { class: `field-label${tabbed ? ' qe-sr' : ''}`, text: `Reference solution (${LANGS[l]})` }), colored(ta, () => l));
     return h('div', { class: 'qe-ref', id: `qe-ref-${l}`, role: tabbed ? 'tabpanel' : null, hidden: l !== u.refTab }, label, h('div', {}, btn));
   });
   const tabs = tabbed ? h('div', { class: 't-tabs qe-reftabs', role: 'tablist', 'aria-label': 'Reference solutions' }, refLangs.map((l) => h('button', {

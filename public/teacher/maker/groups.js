@@ -10,6 +10,7 @@ import { ed } from './state.js';
 import { grow } from './editing.js';
 import { area, touch } from './core.js';
 import { addImage, addInlineImage, assetSrc, imageEditor } from './choices.js';
+import { colorIn } from './colors.js';
 
 const POOL_NAME = /[^A-Za-z0-9_-]/g; // what a pool's name can't have (quizfile.js QID)
 const firstShared = (q) => [].concat(q.shared || [])[0] || null;
@@ -243,6 +244,7 @@ function materialBox(id, list) {
     const md = window.BQ && window.BQ.md;
     if (m.image) view.append(h('img', { class: 'qe-group-img', src: assetSrc(m.image), alt: m.imageAlt || '' }));
     view.append(md ? md.render(m.text || '', { lang: ed.quiz.language, assetUrl: assetSrc }) : m.text || '');
+    colorIn(view);
     body = view;
   }
   const head = h('div', { class: 'qe-group-head' }, kindLabel('material'), title, h('span', { class: 'qe-grow' }),

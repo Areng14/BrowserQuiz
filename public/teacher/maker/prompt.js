@@ -7,6 +7,7 @@ import { MOD, grow, insert, wrap } from './editing.js';
 import { VAR_TYPES, area, input, touch, xBtn } from './core.js';
 import { addImage, addInlineImage, assetSrc, imageEditor } from './choices.js';
 import { tagsIn, valueButton, withValues } from './values.js';
+import { colorIn } from './colors.js';
 import { renderPane } from './pane.js';
 
 // ---------- prompt ----------
@@ -32,6 +33,7 @@ function promptEditor(q) {
     if (editing) { grow(ta); return; }
     const md = window.BQ && window.BQ.md;
     view.replaceChildren(md ? md.render(ta.value, { lang: ed.quiz.language, assetUrl: assetSrc }) : ta.value);
+    colorIn(view);
     if (values) tagsIn(view, q); // {{name}} as the value's tag
   };
   ta.addEventListener('focus', paint);

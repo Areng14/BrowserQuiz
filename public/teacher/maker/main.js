@@ -52,7 +52,7 @@ async function showQuizEditor(id, preset) {
   ed.total = h('span', { class: 't-small t-muted qe-total' });
   ed.outline = h('ol', { class: 'qe-outline', 'aria-label': 'Questions' });
   ed.undoRow = h('span', { class: 't-small qe-undo' });
-  ed.pane = h('main', { class: 'qe-list' });
+  ed.pane = h('main', { class: 'qe-list tk-scope' });
   ed.wantSettings = false; // Settings asked for, on a quiz with no questions yet
   ed.settingsBtn = iconButton(h('button', { class: 'btn', type: 'button', 'aria-expanded': 'false', onclick: () => {
     if (settingsOpen()) { closeOpen(); return; }

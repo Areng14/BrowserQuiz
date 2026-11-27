@@ -374,3 +374,13 @@ div.qe-group-material { padding: 12px; }
   .qe-group-head .input.qe-group-name, .qe-group-head .input.qe-group-title { flex: 1 1 160px; width: auto; height: 40px; min-height: 40px; }
   .qe-group-head .input.qe-group-num { height: 40px; min-height: 40px; }
 }
+
+/* ---------- code boxes colored as they're typed (colors.js) ---------- */
+.qe-hl { position: relative; }
+.qe-hl > .qe-hl-text { color: transparent; caret-color: var(--ink); }
+.qe-hl > .qe-hl-text::placeholder { color: var(--ink-2); opacity: 1; }
+.qe-hl > .qe-hl-text::selection { color: transparent; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.qe-hl-layer { position: absolute; inset: 0; z-index: 1; box-sizing: border-box; margin: 0; overflow: hidden; pointer-events: none; color: var(--ink); white-space: pre; border: solid transparent; }
+.qe-hl-in { width: max-content; min-width: 100%; }
+.qe-hl > .qe-hl-layer .tk-comment { font-style: normal; } /* italics can be wider: the layer has to match the box letter for letter */
+.qe-hl-blank { border-radius: 2px; background: color-mix(in srgb, var(--accent) 22%, transparent); }
