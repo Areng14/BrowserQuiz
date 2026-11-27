@@ -12,10 +12,12 @@ const { revision, version } = require('../version');
 
 const MAX_UPLOAD = 2 * 1024 * 1024 * 1024;
 
-// How many newer versions GitHub has that change the app (a change to the docs alone doesn't count), asked
-// when the admin opens the page and kept 6 hours. Only this commit's id goes to GitHub.
+// How many newer versions GitHub has that change the app, asked when the admin opens the page and kept 6
+// hours. Only this commit's id goes to GitHub. Only the app image's own files count (images.yml builds it
+// from these): its version is the commit it was built at, so a change elsewhere (the runner, setup, docs)
+// would leave an update showing after updating.
 let latest = { at: 0, sha: '', val: null };
-const DOCS = /^(docs\/(?!quiz-format\.md)|README\.md$|AGENTS\.md$|CLAUDE\.md$|NOTICE\.md$|LICENSE$|\.claude\/|\.github\/|spikes\/|demo\/)/;
+const APP = /^(server\/|public\/|scripts\/|package(-lock)?\.json$|docs\/quiz-format\.md$|examples\/sample-exam\/quiz\.json$)/;
 async function updates(sha) {
   if (!/^[0-9a-f]{7,40}$/.test(sha)) return null;
   if (latest.sha === sha && Date.now() - latest.at < 6 * 3600e3) return latest.val;
@@ -27,7 +29,7 @@ async function updates(sha) {
     });
     if (!res.ok) throw new Error(String(res.status));
     const j = await res.json();
-    const app = (j.files || []).some((f) => !DOCS.test(f.filename));
+    const app = (j.files || []).some((f) => APP.test(f.filename));
     const commits = j.commits || [];
     val = { behind: j.status === 'ahead' && app ? j.ahead_by : 0, newest: commits.length ? Date.parse(commits[commits.length - 1].commit.committer.date) : null };
   } catch (e) {
@@ -87,7 +89,7 @@ module.exports = function serverRoutes(r) {
     const body = await readJson(req);
     const file = B.fileOf(body.name);
     if (!file) throw new HttpError(404, 'not_found');
-    if (B.quizInProgress()) throw new HttpError(409, 'busy', 'Students are in a quiz. Restore once it ends.');
+    if (B.quizInProgress(true)) throw new HttpError(409, 'busy', 'Students are in a quiz. Restore once it ends.');
     try { B.stage(file, false); } catch (e) { throw new HttpError(400, 'bad_backup', e.message); }
     audit(me, 'restore', null, path.basename(file));
     restart(res);
@@ -96,7 +98,7 @@ module.exports = function serverRoutes(r) {
   // Restore a downloaded backup: the file is the request's body
   r.post('/api/t/server/restore-upload', async (req, res) => {
     const me = requireAdmin(req);
-    if (B.quizInProgress()) throw new HttpError(409, 'busy', 'Students are in a quiz. Restore once it ends.');
+    if (B.quizInProgress(true)) throw new HttpError(409, 'busy', 'Students are in a quiz. Restore once it ends.');
     // A backup can take minutes to upload (index.js gives other requests one): only a stalled one stops
     req.longUpload = true;
     req.setTimeout(60000, () => req.destroy(new Error('upload stalled')));
@@ -111,7 +113,7 @@ module.exports = function serverRoutes(r) {
       req.pipe(out);
     }).catch((e) => { fs.rmSync(tmp, { force: true }); throw e; });
     // and again once it's here: a quiz may have started while it uploaded
-    if (B.quizInProgress()) { fs.rmSync(tmp, { force: true }); throw new HttpError(409, 'busy', 'Students are in a quiz. Restore once it ends.'); }
+    if (B.quizInProgress(true)) { fs.rmSync(tmp, { force: true }); throw new HttpError(409, 'busy', 'Students are in a quiz. Restore once it ends.'); }
     try { B.stage(tmp, true); } catch (e) { fs.rmSync(tmp, { force: true }); throw new HttpError(400, 'bad_backup', e.message); }
     audit(me, 'restore', null, 'uploaded file');
     restart(res);

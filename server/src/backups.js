@@ -21,10 +21,12 @@ const TABLES = ['quizzes', 'rosters', 'runs', 'attempts', 'teachers'];
 
 // Students in a quiz right now: signed in and sending heartbeats, or in a quiz the teacher paused. (A deploy,
 // a restore and a nightly backup all wait for this to be false.)
-function quizInProgress() {
+// practice: count practice and corrections runs too (a restore would throw their students' work away;
+// an update's restart only drops them for a moment)
+function quizInProgress(practice) {
   return q(`SELECT COUNT(*) AS n FROM attempts a JOIN runs r ON r.id = a.run_id
-    WHERE r.status = 'open' AND r.mode != 'practice' AND a.archived = 0 AND a.status IN ('waiting', 'admitted', 'active')
-    AND (a.last_beat > ? OR (r.paused_at IS NOT NULL AND a.status = 'active'))`).get(Date.now() - 90000).n > 0;
+    WHERE r.status = 'open' AND (? OR r.mode != 'practice') AND a.archived = 0 AND a.status IN ('waiting', 'admitted', 'active')
+    AND (a.last_beat > ? OR (r.paused_at IS NOT NULL AND a.status = 'active'))`).get(practice ? 1 : 0, Date.now() - 90000).n > 0;
 }
 
 // -> [{ name, kind, at, bytes }], newest first
