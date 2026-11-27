@@ -131,7 +131,7 @@ function questionPane(q, i) {
   const secAbove = [...(ed.quiz.sections || [])].filter((d) => d.at <= i).sort((a, b) => b.at - a.at)[0];
   const inherited = (secAbove && secAbove.calculator) || ed.quiz.calculator || 'none';
   const calcField = field('Calculator', calcOverrideSelect(q, `Same as the ${secAbove && secAbove.calculator ? 'section' : 'quiz'} (${CALC_NAMES[inherited]})`));
-  const more = h('details', { class: 'qe-more', open: !!(q.explanation || q.vars || q.calculator) }, h('summary', { text: 'More options' }),
+  const more = h('details', { class: 'qe-more' }, h('summary', { text: 'More options' }),
     h('div', { class: 'qe-stack' }, explanation, name, calcField, VAR_TYPES.has(q.type) ? valuesEditor(q, touch, (t) => window.BQ.md.render(t, { lang: ed.quiz.language, assetUrl: assetSrc })) : null));
   const code = q.type === 'code' ? solutionEditor(q) : q.type === 'fill' && q._ui.run ? fillTestsEditor(q, fillParts.compile) : null;
   if (code && code.sync) fillHooks.changed = code.sync;
@@ -192,8 +192,8 @@ function settingsPane() {
   const lockParts = tipped(check(q, ed.quiz.lockParts === true || timedSum > 0, timedSum ? 'Lock each part once it\'s done (timed sections do)' : 'Lock each part once it\'s done', (v) => { if (v) ed.quiz.lockParts = true; else delete ed.quiz.lockParts; }),
     "After a student moves on from a part, they can't go back to change its answers. A part is a section, or a run of questions of one type.");
   if (timedSum) lockParts.querySelector('input').disabled = true;
-  return [h('div', { class: 'qe-head' }, h('h2', { class: 'qe-n', text: 'Quiz settings' }), h('span', { class: 'qe-grow' }), doneBtn()),
-    h('div', { class: 'qe-settings-cards' },
+  return [h('header', { class: 't-dialog-head' }, h('h2', { id: 'qe-settings-t', text: 'Quiz settings' }), doneBtn()),
+    h('div', { class: 'qe-settings-cards qe-settings-body' },
       card('Quiz',
         h('div', { class: 'qe-settings-grid' },
           timedSum ? field('Time limit (minutes, the sections added up)', input(q, timedSum, () => {}, { type: 'number', disabled: true }))
@@ -348,14 +348,34 @@ function renderPane() {
   sortable(rows, moveQuestion, (row) => row.querySelector('.qe-grip'));
   ed.outline.replaceChildren(...kids);
   const ai = ed.aiOpen ? h('section', { class: 'qe-open qe-open-ai', 'aria-label': 'Question from an AI' }, aiCard(closeOpen)) : null;
-  // Settings at the top when open; a quiz with no questions yet shows the kinds to start with (under
-  // Settings too, so the first question is never more than a click away)
-  const settings = settingsOpen() ? h('section', { class: 'qe-open qe-open-settings', 'aria-label': 'Quiz settings' }, settingsPane()) : null;
+  // Settings in a dialog over the list; a quiz with no questions yet shows the kinds to start with
   const start = !qs.length && !ai ? h('section', { class: 'qe-start' }, startPane()) : null;
-  ed.pane.replaceChildren(...[settings, start, ed.outline, ai, qs.length && !ai ? ed.addWrap : null, ed.keysEl].filter(Boolean));
+  ed.pane.replaceChildren(...[start, ed.outline, ai, qs.length && !ai ? ed.addWrap : null, ed.keysEl].filter(Boolean));
+  settingsDialog(settingsOpen() ? settingsPane() : null);
   ed.pane.querySelectorAll('textarea.qe-area').forEach(grow);
   if (ed.paneTick) ed.paneTick();
   renderOutline();
+}
+
+// Quiz settings: a dialog over the quiz, its page dimmed behind. Done, Escape or a click on the dimmed page
+// closes it (closeOpen, which gives the focus back to the Settings button). It's in the maker's own element,
+// so leaving the maker takes it away too.
+function settingsDialog(content) {
+  let d = ed.settingsDlg;
+  if (!content) { if (d && d.open) d.close(); return; }
+  if (!d || !d.isConnected) {
+    d = ed.settingsDlg = h('dialog', { class: 't-dialog qe-settings-dlg', 'aria-labelledby': 'qe-settings-t' });
+    d.addEventListener('cancel', (e) => { e.preventDefault(); closeOpen(); });
+    let onVeil = false; // pressed and let go on the dimmed page, not a drag that ended there
+    d.addEventListener('pointerdown', (e) => { onVeil = e.target === d; });
+    d.addEventListener('click', (e) => { if (onVeil && e.target === d) closeOpen(); onVeil = false; });
+    (ed.root || document.body).append(d);
+  }
+  const opening = !d.open;
+  d.replaceChildren(...content);
+  if (opening) d.showModal();
+  d.querySelectorAll('textarea.qe-area').forEach(grow);
+  if (opening) { const first = d.querySelector('.qe-settings-body input:not([disabled]), .qe-settings-body select'); if (first) first.focus(); }
 }
 
 export { addDivider, openAi, renderPane, sectionTimeProblem, selectDivider };

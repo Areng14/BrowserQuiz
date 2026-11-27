@@ -262,7 +262,7 @@ input[type="file"].input { padding: 6px 10px; }
 /* A dialog (Grade with AI): a header with a close button, the content, and a footer of actions */
 .t-dialog { width: min(680px, calc(100vw / var(--zoom, 1) - 32px)); max-height: calc(100dvh / var(--zoom, 1) - 48px); padding: 0; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); overflow: hidden; }
 .t-dialog[open] { display: flex; flex-direction: column; }
-.t-dialog::backdrop, .t-ask-back { background: rgba(15, 23, 42, 0.45); }
+.t-dialog::backdrop, .t-ask-back { background: rgba(15, 23, 42, 0.45); background: var(--backdrop, rgba(15, 23, 42, 0.45)); } /* darker in dark mode (app.css) */
 /* a password dialog isn't modal (ask.js): centred over its own backdrop, so password managers still work */
 .t-ask-back { position: fixed; inset: 0; z-index: 90; }
 .t-dialog.t-loose { position: fixed; inset: 0; z-index: 91; height: fit-content; margin: auto; }

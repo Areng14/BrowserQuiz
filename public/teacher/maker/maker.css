@@ -52,14 +52,17 @@
 .qe-open { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; padding: 16px 20px 20px; border: 1px solid var(--accent); border-radius: 10px; box-shadow: 0 0 0 1px var(--accent); scroll-margin-top: 96px; }
 .qe-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .t-app h2.qe-n { margin: 0 4px 0 0; font-size: 18px; font-weight: 700; }
-.qe-open .qe-card { padding: 0; border: 0; border-radius: 0; }
-.qe-open details.qe-card:not([open]) { padding-bottom: 0; }
+.qe-open .qe-card, .qe-settings-dlg .qe-card { padding: 0; border: 0; border-radius: 0; }
+.qe-open details.qe-card:not([open]), .qe-settings-dlg details.qe-card:not([open]) { padding-bottom: 0; }
 .qe-open > .qe-stack > :is(.qe-card, .qe-codegrid, .qe-more) + :is(.qe-card, .qe-codegrid, .qe-more), .qe-settings-cards > * + * { padding-top: 16px; border-top: 1px solid var(--line); }
 /* a section's short fields stay short */
 .qe-open-div .field > input[type="number"] { max-width: 160px; }
 .qe-open-div .field > select { max-width: 360px; }
 .qe-open .qe-more[open] > .qe-stack { margin-top: 12px; padding: 0; border: 0; }
 .qe-settings-cards { display: grid; gap: 16px; }
+/* Quiz settings, a dialog (pane.js settingsDialog): wide enough for its three fields in a row, the cards scroll */
+.t-dialog.qe-settings-dlg { width: min(960px, calc(100vw / var(--zoom, 1) - 32px)); }
+.qe-settings-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 20px; }
 /* a graph question: its fields, and the answer drawn beside them */
 .qe-graph-ans { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 16px 24px; }
 .qe-graph-ans > .qe-stack { flex: 1 1 340px; }

@@ -87,7 +87,7 @@ async function showQuizEditor(id, preset) {
       closeAdd();
       ed.wantSettings = true;
       select(-1);
-      const d = ed.pane.querySelector('.qe-paste-json');
+      const d = ed.settingsDlg && ed.settingsDlg.querySelector('.qe-paste-json');
       if (d) { d.open = true; d.querySelector('textarea').focus(); }
     } }, icon(ICONS.copy, 16), h('span', { text: 'Paste a quiz.json' })));
   ed.addBtn.addEventListener('click', () => {
