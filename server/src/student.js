@@ -2,7 +2,7 @@
 // Student API. Every response looks the same whatever the integrity state: the server never tells
 // a student about strikes or invalidation.
 const crypto = require('node:crypto');
-const { q } = require('./db');
+const { q, tx } = require('./db');
 const store = require('./store');
 const P = require('./people');
 const H = require('./harness');
@@ -593,7 +593,7 @@ module.exports = function studentRoutes(r) {
     if (store.watched(a) && Object.hasOwn(store.CLIENT_EVENTS, body.type)
       && (store.CLIENT_EVENTS[body.type] === 'violation' || allow(a.id, Date.now()))) {
       const detail = eventDetail(a, quiz, body.type, body.detail);
-      if (detail !== null) store.record(a, body.type, detail, quiz);
+      if (detail !== null) tx(() => store.record(a, body.type, detail, quiz)); // the event and the attempt: one write to disk
     }
     json(res, 200, { ok: true });
   });
@@ -608,7 +608,8 @@ module.exports = function studentRoutes(r) {
     if (inQuiz && !allow(a.id, now)) {
       // Over the budget: answered the same, nothing stored.
       live = W.isWatched(a.runId, now) ? { beatMs: W.FAST_BEAT_MS } : {};
-    } else if (store.watched(a)) { // in the quiz, or waiting for its start in lockdown
+    } else if (store.watched(a)) tx(() => { // in the quiz, or waiting for its start in lockdown
+      // what it stores (late events, the mouse trail, typing, the attempt) is one write to disk, not one each
       takeLate(a, quiz, body.late, now);
       if (a.beatLost) store.logEvent(a, 'reconnect', 'info', Math.round((now - a.lastBeat) / 1000) + 's offline');
       a.lastBeat = now;
@@ -655,7 +656,7 @@ module.exports = function studentRoutes(r) {
       else if (body.answers && !(a.deadline && clk > a.deadline)) { a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers), clk); a.answersAt = now; }
       }
       store.save(a);
-    }
+    });
     // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
     const notice = a.status !== 'submitted' ? store.notices.get(run.id) : null; // the teacher's message to everyone
     const note = a.status !== 'submitted' ? store.notes.get(a.id) : null; // and to this student

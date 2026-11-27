@@ -2,7 +2,7 @@
 // BrowserQuiz server: student app + teacher dashboard + API. Zero dependencies, Node 22+.
 const http = require('node:http');
 const path = require('node:path');
-const { q } = require('./db');
+const { q, tx } = require('./db');
 const store = require('./store');
 const V = require('./vault');
 const P = require('./people');
@@ -95,7 +95,9 @@ server.requestTimeout = 60000;
 // until its teacher signed in after a restart). Locked quizzes are skipped until then.
 const quizOf = (run) => { try { return run && store.getQuiz(run.quiz_id); } catch (e) { return null; } };
 let sweeps = 0;
-setInterval(() => {
+// One transaction a sweep: when time runs out for a whole class at once, turning everyone in is one write
+// to disk instead of a few for each student.
+setInterval(() => tx(() => {
   const now = Date.now();
   if (++sweeps % 30 === 0) {
     for (const a of store.attempts.values()) {
@@ -119,7 +121,7 @@ setInterval(() => {
     }
     if (a.deadline && !a.pausedAt && now > a.deadline + 30000) studentRoutes.submit(a, quiz, null, 'time ran out');
   }
-}, 2000).unref();
+}), 2000).unref();
 
 // Results stored before quiz encryption kept the hidden tests' inputs and expected values: drop them.
 for (const row of q(`SELECT id, result FROM attempts WHERE result LIKE '%"expected"%'`).all()) {
