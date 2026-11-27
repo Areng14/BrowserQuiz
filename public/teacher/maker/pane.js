@@ -6,13 +6,15 @@ import { ed } from './state.js';
 import { LANGS, TYPES } from './formats.js';
 import { blank } from './model.js';
 import { grow, sortable } from './editing.js';
-import { FORMS, FORM_TIP, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, input, poolSettings, problemsOf, touch, typeset } from './core.js';
+import { FORMS, FORM_TIP, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, input, problemsOf, touch, typeset } from './core.js';
 import { valuesEditor, withValues } from './values.js';
+import { acceptedEditor } from './answers.js';
+import { firstShared, materialBox, menuItems, poolBox } from './groups.js';
 import { assetSrc } from './choices.js';
 
 // Done: what's open goes back to being a row
 const doneBtn = () => h('button', { class: 'btn small qe-done', type: 'button', text: 'Done', onclick: () => closeOpen() });
-import { addImage, addInlineImage, choicesEditor, imageEditor } from './choices.js';
+import { choicesEditor } from './choices.js';
 import { promptEditor, rubricEditor } from './prompt.js';
 import { codeEditor, fillEditor, outputEditor, traceEditor } from './code.js';
 import { aiCard } from './fromai.js';
@@ -37,35 +39,26 @@ function questionPane(q, i) {
     h('span', { class: 'qe-grip', title: 'Drag to move', 'aria-hidden': 'true' }, icon(ICONS.grip, 16)),
     h('h2', { class: 'qe-n' }, h('span', { class: 'qe-sr', text: 'Question ' }), String(i + 1)),
     h('span', { class: 'qe-type' }, icon(ICONS[q.type], 18), type),
-    h('label', { class: 'qe-pts' }, 'Points', input(q, q.points, (v) => { q.points = Number(v); }, { type: 'number', min: '0.5', step: '0.5', class: 'input t-points' })),
+    h('label', { class: 'qe-pts' }, 'Points', input(q, q.points, (v) => { q.points = Number(v); if (q.pool) for (const x of ed.quiz.questions) if (x.pool === q.pool) x.points = q.points; }, { type: 'number', min: '0.5', step: '0.5', class: 'input t-points' })),
     h('span', { class: 'qe-grow' }),
     // Duplicate in view; moving (also by dragging in the list, or Alt+Shift+arrows) and Delete under ⋯
     h('button', { class: 'btn small qe-act', type: 'button', onclick: () => duplicate(i) }, icon(ICONS.copy, 15), 'Duplicate'),
     moreMenu(`More for question ${i + 1}`, 'qe-more-q', [
       i > 0 ? { text: 'Move up', onclick: () => moveQuestion(i, i - 1) } : null,
       i < n - 1 ? { text: 'Move down', onclick: () => moveQuestion(i, i + 1) } : null,
+      ...menuItems(q, () => select(ed.quiz.questions.indexOf(q))),
       { text: 'Delete', danger: true, onclick: () => remove(i) },
     ].filter(Boolean)),
     doneBtn());
   const probs = h('ul', { class: 't-error qe-problems', role: 'alert' });
   // Optional. Students see names, types and points before they start, so a name shouldn't give the answer away.
   const name = field('Name', input(q, q.name || '', (v) => { const t = v.replace(/\s+/g, ' ').trim(); if (t) q.name = t; else delete q.name; renderOutline(); }, { class: 'input qe-name', maxlength: '80', placeholder: 'Optional' }));
-  // A question pool: each student gets some of a pool's questions, picked at random (how many: Settings).
-  const poolNames = [...new Set(ed.quiz.questions.map((x) => x.pool).filter(Boolean))];
-  const pool = field('Question pool', input(q, q.pool || '', (v) => { const t = v.trim(); if (t) q.pool = t; else delete q.pool; renderOutline(); },
-    { class: 'input qe-pool', maxlength: '40', placeholder: 'Optional', list: 'qe-pool-names', autocomplete: 'off', spellcheck: 'false' }),
-  h('datalist', { id: 'qe-pool-names' }, poolNames.map((p) => h('option', { value: p }))));
-  tip(pool, pool.querySelector('input'), "Questions with the same pool name share one spot in the quiz, and each student gets some of them at random. Set how many in Settings.");
   // What's to be answered, by type (a code question's parts come under the columns)
   const answer = [];
   const add = (nodes) => answer.push(...nodes.filter(Boolean));
   let answerTitle = null;
   if (q.type === 'single' || q.type === 'multi') { answer.push(choicesEditor(q)); answerTitle = null; }
-  if (q.type === 'text') {
-    answerTitle = 'Accepted answers';
-    answer.push(field('One per line', vt(area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: '3.5\n/^(binary|bin) search$/' }))),
-      check(q, q.caseSensitive, 'Capital letters count', (v) => { if (v) q.caseSensitive = true; else delete q.caseSensitive; }));
-  }
+  if (q.type === 'text') answer.push(acceptedEditor(q)); // its own two headings: Accepted answers, Try an answer
   let answerTick = null;
   if (q.type === 'math') {
     answerTitle = 'Accepted answers';
@@ -136,8 +129,8 @@ function questionPane(q, i) {
   const secAbove = [...(ed.quiz.sections || [])].filter((d) => d.at <= i).sort((a, b) => b.at - a.at)[0];
   const inherited = (secAbove && secAbove.calculator) || ed.quiz.calculator || 'none';
   const calcField = field('Calculator', calcOverrideSelect(q, `Same as the ${secAbove && secAbove.calculator ? 'section' : 'quiz'} (${CALC_NAMES[inherited]})`));
-  const more = h('details', { class: 'qe-more', open: !!(q.explanation || q.pool || q.shared || q.vars || q.calculator) }, h('summary', { text: 'More options' }),
-    h('div', { class: 'qe-stack' }, explanation, h('div', { class: 'qe-pair' }, name, pool), calcField, sharedEditor(q, i), VAR_TYPES.has(q.type) ? valuesEditor(q, touch, (t) => window.BQ.md.render(t, { lang: ed.quiz.language, assetUrl: assetSrc })) : null));
+  const more = h('details', { class: 'qe-more', open: !!(q.explanation || q.vars || q.calculator) }, h('summary', { text: 'More options' }),
+    h('div', { class: 'qe-stack' }, explanation, name, calcField, VAR_TYPES.has(q.type) ? valuesEditor(q, touch, (t) => window.BQ.md.render(t, { lang: ed.quiz.language, assetUrl: assetSrc })) : null));
   const code = q.type === 'code' || (q.type === 'fill' && q._ui.run) ? codeEditor(q) : null;
   const main = h('div', { class: 'qe-stack' },
     card(null, promptEditor(q)),
@@ -152,67 +145,6 @@ function questionPane(q, i) {
     if (code) code.tick();
   };
   return [head, probs, main];
-}
-
-// ---------- shared material: a case or passage written once, used by several questions ----------
-// Shared material: a question can use up to 3. Each in use gets its own picker and fields; "Also uses"
-// adds another. One is saved as an id, more as a list.
-function sharedEditor(q, i) {
-  ed.quiz.shared = ed.quiz.shared || [];
-  const ids = [].concat(q.shared || []);
-  const setIds = (next) => { const list = [...new Set(next.filter(Boolean))]; if (!list.length) delete q.shared; else q.shared = list.length === 1 ? list[0] : list; };
-  const newShared = () => {
-    let n = ed.quiz.shared.length + 1;
-    while (ed.quiz.shared.some((m) => m.id === `s${n}`)) n++;
-    ed.quiz.shared.push({ id: `s${n}`, title: '', text: '' });
-    return `s${n}`;
-  };
-  // slot k: the k-th material it uses, or (k === ids.length) a picker to add one
-  const picker = (k) => {
-    const cur = ids[k] || '';
-    const pick = h('select', { class: 'input qe-narrow', id: `qe-shared-${k}`, 'aria-label': k ? 'Also uses' : 'Shared material' },
-      h('option', { value: '', text: 'None', selected: !cur }),
-      ed.quiz.shared.filter((m) => m.id === cur || !ids.includes(m.id)).map((m) => h('option', { value: m.id, text: m.title.trim() || `Shared material ${ed.quiz.shared.indexOf(m) + 1}`, selected: cur === m.id })),
-      h('option', { value: '+', text: 'New shared material' }));
-    pick.addEventListener('change', () => {
-      const v = pick.value === '+' ? newShared() : pick.value;
-      const next = ids.slice();
-      if (v) next[k] = v; else next.splice(k, 1);
-      setIds(next);
-      touch(q);
-      renderPane();
-      if (pick.value === '+') { const t = ed.pane.querySelector(`#qe-shared-${k}`)?.closest('.qe-shared')?.querySelector('input[type=text]'); if (t) t.focus(); }
-    });
-    return pick;
-  };
-  const block = (k) => {
-    const m = ed.quiz.shared.find((x) => x.id === ids[k]);
-    const others = m ? ed.quiz.questions.map((x, j) => ([].concat(x.shared || []).includes(m.id) && j !== i ? j + 1 : null)).filter(Boolean) : [];
-    // Images work like a question's: the button, or paste or drop one into the text.
-    const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml' });
-    file.addEventListener('change', () => addImage(m, file.files[0]));
-    const text = m ? area(q, m.text, (v) => { m.text = v; }, { rows: 6, placeholder: 'The case, passage or code every question in the set uses. Markdown works.', 'aria-label': 'Shared material' }) : null;
-    const takeImage = (files, e) => { const f = [...(files || [])].find((x) => /^image\//.test(x.type)); if (f) { e.preventDefault(); if (m.image) addInlineImage(text, f); else addImage(m, f); } };
-    if (text) {
-      text.addEventListener('paste', (e) => takeImage(e.clipboardData && e.clipboardData.files, e));
-      text.addEventListener('drop', (e) => takeImage(e.dataTransfer && e.dataTransfer.files, e));
-    }
-    return h('div', { class: 'qe-shared' + (m ? ' on' : '') },
-      (() => {
-        const pick = picker(k);
-        const line = h('div', { class: 'qe-line' }, h('label', { class: 'field-label', for: `qe-shared-${k}`, text: k ? 'Also uses' : 'Shared material' }), pick,
-          others.length ? h('span', { class: 't-small t-muted', text: `Also on question${others.length > 1 ? 's' : ''} ${others.join(', ')}` }) : null);
-        return k ? line : tip(line, pick, "A passage, case or code block shown with this question and any other question that uses it. Shuffling keeps those questions together.");
-      })(),
-      m ? [
-        input(q, m.title, (v) => { m.title = v; }, { type: 'text', placeholder: 'Title, like Case A', 'aria-label': 'Shared material title', maxlength: '120' }),
-        text, file,
-        m.image ? imageEditor(m, file) : h('div', {}, h('button', { class: 'btn small', type: 'button', text: 'Add image', onclick: () => file.click() })),
-      ] : null);
-  };
-  const blocks = ids.map((_, k) => block(k));
-  if (!ids.length) return block(0);
-  return h('div', { class: 'qe-stack' }, blocks, ids.length < 3 ? h('div', { class: 'qe-line' }, h('label', { class: 'field-label', for: `qe-shared-${ids.length}`, text: 'Also uses' }), picker(ids.length)) : null);
 }
 
 // The student app's built-in directions for each part (student/app/state.js PARTS), shown as placeholders.
@@ -252,7 +184,6 @@ function settingsPane() {
   const tipped = (el, text) => tip(el, el.querySelector('input, select'), text);
   calcSel.addEventListener('change', () => { if (calcSel.value) ed.quiz.calculator = calcSel.value; else delete ed.quiz.calculator; touch(); });
   ed.paneTick = null;
-  const pools = poolSettings(q);
   // timed sections set the quiz's time (their total) and lock each part
   const timedSum = (ed.quiz.sections || []).reduce((t, d) => t + (d.timeLimitMin || 0), 0);
   const lockParts = tipped(check(q, ed.quiz.lockParts === true || timedSum > 0, timedSum ? 'Lock each part once it\'s done (timed sections do)' : 'Lock each part once it\'s done', (v) => { if (v) ed.quiz.lockParts = true; else delete ed.quiz.lockParts; }),
@@ -272,7 +203,6 @@ function settingsPane() {
           lockParts,
           tipped(check(q, ed.quiz.turnInEarly === true, 'Students can turn in before time is up', (v) => { if (v) ed.quiz.turnInEarly = true; else delete ed.quiz.turnInEarly; }),
             "When this is off, students who finish early have to wait until time is nearly up to turn in."))),
-      pools ? card('Question pools', pools) : null,
       card('Directions',
         field('For the whole quiz', area(q, dirs.quiz, (v) => setDir('quiz', v), Object.assign({ rows: 3, placeholder: 'Optional' }, prose))),
         used.length ? h('details', { class: 'qe-paste', open: used.some((t) => dirs[t]) },
@@ -378,6 +308,7 @@ function openAi() {
   if (b) b.focus({ preventScroll: true });
 }
 
+ed.rerender = () => renderPane(); // for groups.js, which can't import this module
 function renderPane() {
   const qs = ed.quiz.questions;
   ed.problems = qs.map(problemsOf);
@@ -388,17 +319,28 @@ function renderPane() {
   const rows = [];
   ed.parts = [];
   let part = null;
+  // Questions using the same shared material go in its box, and a pool's in its own box, inside the
+  // material's when its questions use one (groups.js). Each box lasts while the questions keep its key.
+  let mat = null; // { id, list }
+  let pool = null; // { name, list }
+  const into = () => (pool || mat || { list: kids }).list;
+  const listEl = () => { const ol = h('ol', { class: 'qe-group-list' }); return [ol, { push: (el) => ol.append(el) }]; };
   qs.forEach((q, i) => {
     const k = ed.quiz.sections.findIndex((d) => d.at === i);
+    const s = firstShared(q);
+    if (k >= 0 || (mat && mat.id !== s)) { mat = null; pool = null; }
+    if (pool && pool.name !== q.pool) pool = null;
     if (k >= 0) kids.push(openDiv === k ? h('li', { class: 'qe-open qe-open-div', 'data-k': String(k) }, dividerPane(k)) : dividerRow(k));
     if (i === 0 || k >= 0 || qs[i - 1].type !== q.type) {
       part = { from: i, to: i + 1, pts: h('span', { class: 'qe-part-pts' }) };
       ed.parts.push(part);
-      kids.push(h('li', { class: 'qe-part' }, h('h2', { class: 'qe-part-name', text: TYPES[q.type] }), part.pts));
+      into().push(h('li', { class: 'qe-part' }, h('h2', { class: 'qe-part-name', text: TYPES[q.type] }), part.pts));
     } else part.to = i + 1;
+    if (s && !mat) { const [ol, list] = listEl(); kids.push(materialBox(s, ol)); mat = { id: s, list }; }
+    if (q.pool && !pool) { const [ol, list] = listEl(); into().push(poolBox(q.pool, ol)); pool = { name: q.pool, list }; }
     const el = i === openQ ? h('li', { class: 'qe-open', 'data-q': String(i) }, questionPane(q, i)) : rowOf(i);
     rows.push(el);
-    kids.push(el);
+    into().push(el);
   });
   sortable(rows, moveQuestion, (row) => row.querySelector('.qe-grip'));
   ed.outline.replaceChildren(...kids);

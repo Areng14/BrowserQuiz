@@ -44,6 +44,8 @@ const NAMES = {
   results: 'ChartColumn',
   recent: 'History', // quizzes given lately
   braces: 'Braces', // a random value, in the quiz maker
+  pool: 'Shuffle', // a question pool: each student gets some of its questions
+  material: 'BookOpen', // shared material: a case or passage several questions use
   quizzes: 'FileText',
   classes: 'Users',
   teachers: 'Shield',

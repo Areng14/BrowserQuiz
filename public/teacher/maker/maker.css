@@ -326,3 +326,51 @@ th .qe-gridcell { font: 600 13px var(--font); }
 .qe-vexplain { font-size: 14px; color: var(--ink-2); }
 .qe-vanswer { margin: 0; }
 .qe-filled { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 70%, transparent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+/* ---------- short answers (answers.js): accepted answers, and Try an answer beside them ---------- */
+.qe-acc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 32px; align-items: start; }
+.qe-acc-side { display: grid; gap: 10px; min-width: 0; }
+.qe-acc-list { display: grid; gap: 8px; }
+.qe-acc-row { display: grid; gap: 4px; }
+.qe-acc-line { display: flex; align-items: center; gap: 8px; }
+.qe-acc-line > .input { flex: 1; min-width: 0; }
+.qe-acc-row > .t-error:empty { display: none; }
+.qe-try-result { display: flex; align-items: center; gap: 8px; min-height: 24px; font-weight: 600; }
+.qe-try-result.qe-try-ok { color: var(--good); }
+.qe-try-result.qe-try-no { color: var(--bad); }
+.qe-try-by { font-weight: 400; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qe-try-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.qe-try-list > li { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+.qe-try-list > li:last-child { border-bottom: 0; }
+.qe-try-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre; }
+.qe-try-mark { flex: none; display: inline-flex; align-items: center; gap: 4px; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
+.qe-try-list > li .qe-try-text { color: var(--ink); }
+.qe-try-list > li.qe-try-ok .qe-try-mark { color: var(--good); }
+.qe-try-list > li.qe-try-no .qe-try-mark { color: var(--bad); }
+@media (max-width: 700px) { .qe-acc { grid-template-columns: minmax(0, 1fr); } }
+/* ---------- pools and shared material (groups.js): a box in the list with its questions ---------- */
+.qe-group { display: grid; gap: 8px; padding: 8px; list-style: none; background: var(--soft); border: 1px solid color-mix(in srgb, var(--ink-2) 35%, var(--line)); border-radius: 10px; }
+.qe-group-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.qe-group-list > .qe-part { margin-top: 8px; }
+.qe-group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 42px; padding-left: 8px; color: var(--ink-2); }
+.qe-group-kind { flex: none; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--ink); }
+.qe-group-head .input.qe-group-name { width: 220px; height: 34px; min-height: 34px; padding: 0 8px; font-weight: 700; }
+.qe-group-head .input.qe-group-title { width: 300px; }
+.qe-group-set { display: inline-flex; align-items: center; gap: 8px; }
+.qe-group-set + .qe-group-set { margin-left: 4px; }
+.qe-group-head .input.qe-group-num { width: 56px; height: 34px; min-height: 34px; padding: 0 8px; text-align: right; }
+.qe-group-material { display: block; width: 100%; text-align: left; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+button.qe-group-material { padding: 12px 14px; cursor: text; }
+button.qe-group-material:hover { border-color: color-mix(in srgb, var(--ink-2) 45%, var(--line)); }
+button.qe-group-material:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+div.qe-group-material { padding: 12px; }
+.qe-group-img { display: block; max-width: 100%; max-height: 240px; margin-bottom: 10px; }
+.qe-row-note { font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+@media (max-width: 700px) {
+  /* the kind on its own line, then the name with ⋯ beside it, then the pool's numbers */
+  .qe-group-kind { flex-basis: 100%; }
+  .qe-group-head > .qe-grow { display: none; }
+  .qe-group-head > :last-child { order: 1; }
+  .qe-group-head > :is(.qe-group-set, .qe-group-count) { order: 2; }
+  .qe-group-head .input.qe-group-name, .qe-group-head .input.qe-group-title { flex: 1 1 160px; width: auto; height: 40px; min-height: 40px; }
+  .qe-group-head .input.qe-group-num { height: 40px; min-height: 40px; }
+}

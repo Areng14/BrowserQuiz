@@ -51,7 +51,7 @@ function problemsOf(q) {
   for (const p of markdownImages({ questions: [q], shared: sharedOf })) if (imageMissing(p)) out.push(`Add the image file for ${p}, or take it out of the text.`);
   for (const sid of [].concat(q.shared || [])) {
     const m = (ed.quiz.shared || []).find((x) => x.id === sid);
-    if (!m || (!(m.text || '').trim() && !m.image)) out.push('Write the shared material, or pick None.');
+    if (!m || (!(m.text || '').trim() && !m.image)) out.push('Write the shared material, or stop using it (⋯).');
     else if (m.image && imageMissing(m.image)) out.push(`Add the image file for ${m.image}.`);
   }
   if (q.type === 'single' || q.type === 'multi') {
@@ -157,23 +157,6 @@ const check = (q, checked, label, on) => {
 const field = (label, el, ...more) => h('label', { class: 'field' }, h('span', { class: 'field-label', text: label }), el, ...more);
 // A part of the open question or settings, in a box of its own
 const card = (title, ...kids) => h('section', { class: 'qe-card' }, title ? h('h2', { class: 'qe-card-title', text: title }) : null, ...kids.flat(Infinity).filter(Boolean));
-// Settings: how many of each pool's questions a student gets
-const poolSettings = (q) => {
-  const sizes = new Map();
-  for (const x of ed.quiz.questions) if (x.pool) sizes.set(x.pool, (sizes.get(x.pool) || 0) + 1);
-  if (!sizes.size) return null;
-  return h('div', { class: 'qe-settings-grid' }, [...sizes].map(([name, count]) => field(`Pool "${name}": questions each student gets`,
-    h('span', { class: 'qe-line' },
-      (() => {
-        const el = input(q, Math.min(count, (ed.quiz.pools || {})[name] || 1), (v) => {
-          ed.quiz.pools = Object.assign({}, ed.quiz.pools, { [name]: Math.max(1, Math.min(count, Math.round(Number(v)) || 1)) });
-          renderOutline(); // the total under the outline: what each student gets
-        }, { type: 'number', min: '1', max: String(count), class: 'input t-points' });
-        el.addEventListener('change', () => { el.value = String((ed.quiz.pools || {})[name] || 1); }); // 9 of 3 shows as 3
-        return el;
-      })(),
-      h('span', { class: 't-muted', text: `of ${count}` })))));
-};
 const xBtn = (label, onclick, disabled) => h('button', { class: 'btn small qe-x', type: 'button', 'aria-label': label, title: label, disabled, onclick }, icon(ICONS.x, 16));
 
-export { FORMS, FORM_TIP, FORM_WORDS, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, imageMissing, input, markdownImages, nextId, poolSettings, problemsOf, refreshSoon, setStatus, touch, typeset, xBtn };
+export { FORMS, FORM_TIP, FORM_WORDS, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, imageMissing, input, markdownImages, nextId, problemsOf, refreshSoon, setStatus, touch, typeset, xBtn };

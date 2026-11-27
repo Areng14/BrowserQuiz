@@ -8,6 +8,7 @@ import { blank, readCode, readTrace } from './model.js';
 import { FORM_WORDS, M, answersOf, graphShapes, nextId, problemsOf, touch } from './core.js';
 import { assetSrc } from './choices.js';
 import { renderPane } from './pane.js';
+import { crossEdge, rowNote, settle } from './groups.js';
 
 // ---------- a question's row ----------
 const md = () => window.BQ && window.BQ.md;
@@ -93,9 +94,8 @@ function rowBody(i) {
       h('span', { class: `qe-row-text${text ? '' : ' t-muted'}` }, ...(q.name ? [q.name] : text ? [inline(text)] : ['No prompt yet'])),
       second),
     thumbOf(q),
-    h('span', { class: 'qe-row-end' },
-      q.pool ? h('span', { class: 'qe-row-pool', text: q.pool, title: `Question pool: ${q.pool}` }) : null,
-      h('span', { class: 'qe-row-pts', text: plural(Number(q.points) || 0, 'pt') })),
+    h('span', { class: 'qe-row-end' }, rowNote(q),
+      q.pool ? null : h('span', { class: 'qe-row-pts', text: plural(Number(q.points) || 0, 'pt') })), // a pool's box says its points
   ];
 }
 // Everything a row's insides are drawn from, so a row is only drawn again when one of them changed: each
@@ -255,9 +255,11 @@ function moveQuestion(from, to) {
   const at = (i) => ed.quiz.sections.find((d) => d.at === i);
   const crossUp = to === from - 1 && at(from) && !at(from + 1) && from + 1 < ed.quiz.questions.length;
   const crossDown = to === from + 1 && at(to) && !at(from);
-  if (crossUp) at(from).at = from + 1;
+  const crossed = !crossUp && !crossDown && crossEdge(moved, from, to); // out of its box, or into the one beside it
+  if (crossed) { /* it stays where it is */ } else if (crossUp) at(from).at = from + 1;
   else if (crossDown) at(to).at = from;
   else ed.quiz.questions.splice(to, 0, ed.quiz.questions.splice(from, 1)[0]);
+  if (!crossed && Math.abs(to - from) > 1) settle(moved); // a drag: between two of a box's questions it joins, away from its own it leaves
   ed.sel = cur ? ed.quiz.questions.indexOf(cur) : ed.sel;
   ed.removed = null;
   touch();
