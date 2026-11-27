@@ -107,6 +107,8 @@ module.exports = function serverRoutes(r) {
       out.on('finish', resolve);
       req.pipe(out);
     }).catch((e) => { fs.rmSync(tmp, { force: true }); throw e; });
+    // and again once it's here: a quiz may have started while it uploaded
+    if (B.quizInProgress()) { fs.rmSync(tmp, { force: true }); throw new HttpError(409, 'busy', 'Students are in a quiz. Restore once it ends.'); }
     try { B.stage(tmp, true); } catch (e) { fs.rmSync(tmp, { force: true }); throw new HttpError(400, 'bad_backup', e.message); }
     audit(me, 'restore', null, 'uploaded file');
     restart(res);
