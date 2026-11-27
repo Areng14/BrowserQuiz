@@ -21,7 +21,7 @@ COPY server ./server
 COPY public ./public
 # The quiz format and an example go into the AI prompt teachers can download.
 COPY docs/quiz-format.md ./docs/quiz-format.md
-COPY examples/ap-csa-unit4/quiz.json ./examples/ap-csa-unit4/quiz.json
+COPY examples/sample-exam/quiz.json ./examples/sample-exam/quiz.json
 COPY --from=editor /src/public/vendor ./public/vendor
 RUN mkdir -p /data && chown node:node /data
 # Starts as root only to make the data volume the app's, then runs the app as the node user.
