@@ -232,15 +232,20 @@ async function partTimeUp(done) {
 // another computer since). Cleared once saved, and on turn-in.
 const unsentKey = () => 'bq-unsent:' + [S.run && (S.run.id || S.run.code || S.run.title), S.me && S.me.name, S.tag || ''].join(':');
 let unsentTimer = 0;
+function writeUnsent() {
+  unsentTimer = 0;
+  try { localStorage.setItem(unsentKey(), JSON.stringify({ at: Date.now() + (S.skew || 0), answers: serializeAnswers() })); } catch (e) { /* kept on the server only */ }
+}
 function keepUnsent() {
   if (cfg.preview || cfg.watch || cfg.demo || !S.monitor) return;
   clearTimeout(unsentTimer);
-  unsentTimer = setTimeout(() => {
-    try { localStorage.setItem(unsentKey(), JSON.stringify({ at: Date.now() + (S.skew || 0), answers: serializeAnswers() })); } catch (e) { /* kept on the server only */ }
-  }, 300);
+  unsentTimer = setTimeout(writeUnsent, 300);
 }
+// Reloaded or closed before that: kept now, as the page goes.
+window.addEventListener('pagehide', () => { if (unsentTimer) { clearTimeout(unsentTimer); writeUnsent(); } });
 function clearUnsent() {
   clearTimeout(unsentTimer);
+  unsentTimer = 0;
   try { localStorage.removeItem(unsentKey()); } catch (e) { /* nothing kept */ }
 }
 function takeUnsent(savedAt) {
