@@ -54,7 +54,7 @@
 .bq-app h1 { font-size: 24px; line-height: 1.25; }
 .bq-app h2 { font-size: 20px; line-height: 1.25; }
 .bq-app code { font-family: var(--mono); font-size: 0.92em; background: var(--soft); padding: 0 4px; border-radius: 3px; }
-.bq-app :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:is(.bq-app, .t-app) :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; } /* one ring: the student app, the dashboard, the maker */
 .muted { color: var(--ink-2); }
 
 .btn {
@@ -123,7 +123,7 @@ select.input:not([multiple]), select.select {
   background-image: var(--chev); background-position: right 12px center; background-size: 16px; background-repeat: no-repeat;
 }
 @media (forced-colors: active) { select.input, select.select { appearance: auto; background-image: none; padding-right: 10px; } }
-.input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.input:focus, .select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 /* The browser's own "Choose File" button ignores the theme unless styled. */
 .input[type="file"] { box-sizing: border-box; height: 40px; padding: 4px 5px; font-size: 14px; color: var(--ink-2); }
 .input[type="file"]::file-selector-button {

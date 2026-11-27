@@ -44,7 +44,7 @@
 .gr-seg button:hover { color: var(--ink); }
 .gr-seg button[aria-pressed="true"] { color: var(--ink); background: var(--bg); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18); }
 .gr-edit .gr-shape { cursor: pointer; }
-.gr-handle, .bq-app .gr-handle:focus-visible { cursor: grab; outline: none; } /* the ring around the point shows focus */
+.gr-handle, :is(.bq-app, .t-app) .gr-handle:focus-visible { cursor: grab; outline: none; } /* the ring around the point shows focus */
 .gr-handle:active { cursor: grabbing; }
 .gr-hit { fill: transparent; }
 .gr-handle.asym .gr-knob { fill: var(--editor, var(--bg)); stroke: var(--ink-2); stroke-width: 2; }
