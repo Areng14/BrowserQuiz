@@ -118,11 +118,13 @@ function themeButton() {
 dash.who = null; // the signed-in teacher, from /api/t/me
 // The password just typed at sign-in, so picking a new one doesn't ask for it again (memory only).
 dash.justTyped = null;
-// The signed-in teacher's name, opening a menu: Settings (in the sidebar too, but not on phones) and Sign out.
+// The signed-in teacher's name, opening a menu: Settings, Teachers (an admin's), and Sign out. They're
+// here rather than in the sidebar: rarely needed, and a phone's tab bar has room for six at most.
 function accountMenu() {
   if (!dash.who) return null;
   return moreMenu(`Account, ${dash.who.name}`, 'account', [
     { text: 'Settings', onclick: () => { location.hash = '#settings'; } },
+    dash.who.role === 'admin' ? { text: 'Teachers', onclick: () => { location.hash = '#teachers'; } } : null,
     { text: 'Sign out', onclick: async () => { await post('/api/t/logout'); dash.who = null; forgetCode(); showLogin(); } },
   ], null, { text: dash.who.name });
 }

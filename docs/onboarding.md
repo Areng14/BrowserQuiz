@@ -20,7 +20,7 @@ BrowserQuiz is quizzes and CS exams in the browser. Students join with a 6-lette
 
 ## Settings
 
-**Settings** is in the sidebar, and in the menu under your name (on a phone, only there). Each section saves on its own button.
+**Settings** is in the menu under your name. Each section saves on its own button.
 
 - **You.** Your name, the time zone your quizzes, results and downloaded grades show times in, and light or dark on this computer.
 - **Password, recovery code and passkeys.** Changing your password signs you out everywhere else.
@@ -84,7 +84,7 @@ Most questions grade themselves the second a student turns in. Only written answ
 - **Grade by question.** Or do it yourself: one question across the whole class, with feedback for each student.
 - **Corrections.** If you wish to offer corrections, click on the corrections button which will open a new "quiz" that students can enter to do corrections. It will not lock their computer down and they are free to search online or ask friends how to solve this.
 - **Reports.** A class report (averages, the hardest questions, copied code, same wrong answers), a printable report per student, and **Download grades**, a spreadsheet for your gradebook.
-- **Grades.** Every quiz a class took, side by side: each student's percent, their average, and the class's. Practice and open quizzes aren't in it, and corrections are counted in the exam's score. **Download grades** there gives the whole table as a spreadsheet. Every quiz you've given is under **All classes**.
+- **Grades.** Every quiz a class took, side by side: each student's percent, their average, and the class's. Practice and open quizzes aren't in it, and corrections are counted in the exam's score. **Download grades** there gives the whole table as a spreadsheet. Every quiz you've given, practice and open ones too, is on **Recent**.
 
 ## Troubleshooting
 

@@ -33,7 +33,9 @@ function gradebook(me, rosterId) {
   const roster = getRoster(me, rosterId);
   const students = q(`SELECT id, bq_name(name, id, roster_id) AS name FROM roster_students WHERE roster_id = ? AND removed = 0
     ORDER BY name COLLATE NOCASE`).all(roster.id);
+  // one nobody turned in (started by mistake, say) has nothing to show
   const runs = q(`SELECT * FROM runs WHERE roster_id = ? AND owner_id = ? AND mode != 'practice' AND corrects IS NULL AND status = 'closed'
+    AND EXISTS (SELECT 1 FROM attempts WHERE attempts.run_id = runs.id AND archived = 0 AND status = 'submitted')
     ORDER BY created_at`).all(roster.id, me.id);
   const rows = students.map((s) => ({ id: s.id, name: s.name, cells: [] }));
   const quizzes = runs.map((run) => {

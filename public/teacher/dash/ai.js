@@ -1,6 +1,6 @@
 // Grading with AI: the dialog, with an API key or by pasting into any chat.
 
-import { ICONS, api, ask, h, icon, plural, post, root } from './core.js';
+import { ICONS, api, ask, h, icon, plural, post, root, sortableTable } from './core.js';
 import { CHATS } from './cells.js';
 import { aiKeyEditor } from './aikey.js';
 
@@ -56,12 +56,12 @@ async function aiDialog(runId, attemptId, done) {
     if (n !== seq || text !== replyBox.value) return;
     const rows = (r.preview || []).map((x) => h('tr', {},
       h('td', { text: x.name }),
-      h('td', {}, `Q${x.n}`, x.qname ? h('span', { class: 't-muted', text: ` ${x.qname}` }) : null,
+      h('td', { 'data-sort': String(x.n) }, `Q${x.n}`, x.qname ? h('span', { class: 't-muted', text: ` ${x.qname}` }) : null,
         x.items.length ? h('span', { class: 't-ai-items' }, x.items.map((it) => h('span', { class: it.met ? 'met' : 'unmet', title: it.met ? 'Met' : 'Not met' }, icon(it.met ? ICONS.check : ICONS.cross, 13), it.text))) : null),
-      h('td', { class: 'num' }, h('b', { text: `${x.got}/${x.of}` }))));
+      h('td', { class: 'num', 'data-sort': String(x.of ? x.got / x.of : 0) }, h('b', { text: `${x.got}/${x.of}` }))));
     const problems = r.skipped;
     preview.replaceChildren(...[
-      rows.length ? h('div', { class: 't-ai-table' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Student' }), h('th', { text: 'Question' }), h('th', { class: 'num', text: "AI's grade" }))), h('tbody', {}, rows))) : null,
+      rows.length ? h('div', { class: 't-ai-table' }, sortableTable(h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Student' }), h('th', { text: 'Question' }), h('th', { class: 'num', text: "AI's grade" }))), h('tbody', {}, rows)), ["AI's grade"])) : null,
       problems.length ? h('div', { class: 't-ai-warn', role: 'note' }, h('b', { text: r.found ? 'Left for you' : "Couldn't read that" }),
         h('ul', {}, problems.map((x) => h('li', { text: x })))) : null,
     ].filter(Boolean)); // replaceChildren would print a null

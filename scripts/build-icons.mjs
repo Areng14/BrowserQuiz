@@ -42,6 +42,7 @@ const NAMES = {
   moon: 'Moon',
   // the teacher's sidebar
   results: 'ChartColumn',
+  recent: 'History', // quizzes given lately
   quizzes: 'FileText',
   classes: 'Users',
   teachers: 'Shield',

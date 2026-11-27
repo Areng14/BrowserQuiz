@@ -202,7 +202,7 @@ async function showRun(runId) {
         noteRuns(o.runs);
         const nav = root.querySelector('.t-side');
         const cur = dash.openRuns.some((r) => r.id === runId);
-        if (nav && root.contains(tbody)) nav.replaceWith(shell(cur ? 'open' : dash.tab === 'grades' ? 'grades' : 'give').querySelector('.t-side'));
+        if (nav && root.contains(tbody)) nav.replaceWith(shell(cur ? 'open' : ['grades', 'recent'].includes(dash.tab) ? dash.tab : 'give').querySelector('.t-side'));
       }).catch(() => {});
     }
     title.textContent = run.title;
@@ -529,7 +529,7 @@ async function showRun(runId) {
   detail.setAttribute('aria-labelledby', 't-detail-name');
   if (dash.openRuns === null) { try { noteRuns((await api('/api/t/overview')).runs); } catch (e) { /* the tab can wait */ } }
   const isOpen = dash.openRuns && dash.openRuns.some((r) => r.id === runId);
-  mount(shell(isOpen ? 'open' : dash.tab === 'grades' ? 'grades' : 'give',
+  mount(shell(isOpen ? 'open' : ['grades', 'recent'].includes(dash.tab) ? dash.tab : 'give',
       pausedBar,
       h('section', { class: 't-section' },
         h('div', { class: 't-code' }, code, h('div', {}, title, meta)),

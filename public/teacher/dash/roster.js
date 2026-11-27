@@ -1,7 +1,7 @@
 // The roster maker: a class from a pasted list or a CSV.
 
 import { dash } from './state.js';
-import { api, ask, h, mount, plural, post, tip } from './core.js';
+import { actionsHead, api, ask, h, mount, plural, post, sortableTable, tip } from './core.js';
 import { guard, setHash, shell, showHome } from './home.js';
 
 // ---------- roster maker ----------
@@ -18,7 +18,8 @@ async function showRoster(id) {
   const add = h('textarea', { class: 'input t-textarea', id: 'class-add', rows: 8, spellcheck: 'false', placeholder: 'Ava Martinez, 204511\nDiego Ramos, 204651' });
   const msg = h('p', { class: 't-error', role: 'alert' });
   const save = h('button', { class: 'btn primary', type: 'button', text: 'Save' });
-  const list = roster.students.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table' },
+  const list = roster.students.length ? h('div', { class: 't-table-wrap' }, sortableTable(h('table', { class: 't-table' },
+    h('thead', {}, h('tr', {}, h('th', { text: 'Student' }), h('th', { text: 'Time' }), actionsHead())),
     h('tbody', {}, roster.students.map((st) => {
       const row = h('tr', {});
       const btn = h('button', { class: 'btn small outline-danger', type: 'button', text: 'Remove', 'aria-label': `Remove ${st.name}` });
@@ -29,10 +30,11 @@ async function showRoster(id) {
       });
       const time = h('select', { class: 'input t-time-x', 'aria-label': `Time for ${st.name}` },
         [[1, 'Standard time'], [1.25, '1.25× time'], [1.5, '1.5× time'], [2, '2× time']].map(([v, t]) => h('option', { value: String(v), text: t, selected: Number(st.timeX || 1) === v })));
-      time.addEventListener('change', () => { timeChanges[st.id] = Number(time.value); });
-      row.append(h('td', { text: st.name }), h('td', { class: 't-actions' }, time, btn));
+      const timeCell = h('td', { 'data-sort': String(Number(st.timeX || 1)) }, time);
+      time.addEventListener('change', () => { timeChanges[st.id] = Number(time.value); timeCell.dataset.sort = time.value; });
+      row.append(h('td', { text: st.name }), timeCell, h('td', { class: 't-actions' }, btn));
       return row;
-    })))) : null;
+    }))))) : null;
   save.addEventListener('click', async () => {
     save.disabled = true;
     msg.textContent = '';

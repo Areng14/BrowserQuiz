@@ -1,9 +1,9 @@
 // Grades: a class's quizzes side by side, a column each with the newest on the right, every student's
 // percent, their average, and the class's (the server's teacher/grades.js works them out). Every quiz given,
-// open ones too, is All classes in the class picker: the list this tab used to be.
+// open ones and practice too, is the Recent tab.
 
 import { dash } from './state.js';
-import { ICONS, api, date, day, h, icon, iconButton, plural, timeZone, tip } from './core.js';
+import { ICONS, api, date, day, h, icon, iconButton, plural, sortRows, timeZone, tip } from './core.js';
 import { picker } from './picker.js';
 
 const KEEP = 'bq-grades'; // the class picked last, for next time
@@ -17,13 +17,12 @@ function showAt(id) {
 }
 const pct = (p) => (p == null ? '—' : `${Math.round(p)}%`);
 
-// runsTable: the list of every quiz given (home.js), for All classes
-function gradesTab(data, runsTable) {
+function gradesTab(data) {
+  if (!data.rosters.length) return h('section', { class: 't-section' }, h('h1', { text: 'Grades' }), h('p', { class: 't-muted' }, 'Add a ', h('a', { href: '#classes', text: 'class' }), ' first.'));
   const ids = new Set(data.rosters.map((x) => x.id));
   const newest = data.runs.find((r) => ids.has(r.rosterId)); // the class that had a quiz last
-  const first = [dash.gradesFor, recall(), newest && newest.rosterId, data.rosters.length ? data.rosters[0].id : null]
-    .find((x) => x === 'all' || ids.has(x)) || 'all';
-  const items = [...data.rosters.map((x) => ({ value: x.id, label: x.name, meta: [plural(x.students, 'student')] })), { value: 'all', label: 'All classes', meta: [] }];
+  const first = [dash.gradesFor, recall(), newest && newest.rosterId, data.rosters[0].id].find((x) => ids.has(x));
+  const items = data.rosters.map((x) => ({ value: x.id, label: x.name, meta: [plural(x.students, 'student')] }));
   const body = h('div', { class: 'gb-body' });
   const dl = h('button', { class: 'btn t-ib gb-dl', type: 'button', 'aria-label': 'Download grades', disabled: true },
     icon(ICONS.download, 16), h('span', { class: 'gb-dl-text', text: 'Download grades' }));
@@ -39,12 +38,6 @@ function gradesTab(data, runsTable) {
     dash.gradesFor = id;
     remember(id);
     showAt(id);
-    if (id === 'all') {
-      shown = null;
-      dl.disabled = true;
-      body.replaceChildren(data.runs.length ? runsTable(data.runs) : h('p', { class: 't-muted', text: 'None yet.' }));
-      return;
-    }
     let g;
     try { g = await api(`/api/t/rosters/${encodeURIComponent(id)}/grades`); } catch (e) {
       if (n === seq && e.message !== 'login') body.replaceChildren(h('p', { class: 't-error', text: e.message }));
@@ -63,15 +56,28 @@ function gradesTab(data, runsTable) {
 }
 
 const AVG_TIP = "Each quiz counts the same. A quiz a student didn't take is left out; an invalidated one counts as 0.";
-// The Average column comes twice: last, pinned on the right, and second, pinned after the names, which
-// phones show instead (grades.css).
-function avgHead(where) {
-  const label = h('span', { class: 'gb-term', tabindex: '0', text: 'Average' });
-  return tip(h('th', { scope: 'col', class: `gb-avg ${where}` }, label), label, AVG_TIP);
-}
 const avgCells = (tag, text, attrs) => ['gb-start', 'gb-end'].map((where) => h(tag, Object.assign({ class: `gb-avg ${where}` }, attrs), text));
 
 function gradebook(g) {
+  // Sorting, as on every list: a click goes up, then down, then back to by name. By name, by average, or by
+  // one quiz, whose date line is its button (its name opens it). Kept while the teacher switches classes.
+  const sorters = [];
+  const sortBtn = (by, text, label, cls) => {
+    const btn = h('button', { class: `t-sort${cls ? ' ' + cls : ''}`, type: 'button', 'aria-label': label || null }, h('span', { text }));
+    btn.addEventListener('click', () => {
+      const s = dash.gradesSort;
+      dash.gradesSort = !s || s.by !== by ? { by, dir: 1 } : s.dir > 0 ? { by, dir: -1 } : null;
+      arrange();
+    });
+    sorters.push({ by, btn });
+    return btn;
+  };
+  // The Average column comes twice: last, pinned on the right, and second, pinned after the names, which
+  // phones show instead (grades.css).
+  const avgHead = (where) => {
+    const btn = sortBtn('avg', 'Average', null, 'gb-term');
+    return tip(h('th', { scope: 'col', class: `gb-avg ${where}` }, btn), btn, AVG_TIP);
+  };
   const older = iconButton(h('button', { class: 'btn small gb-arrow', type: 'button' }), 'prev', 'Older quizzes');
   const newer = iconButton(h('button', { class: 'btn small gb-arrow', type: 'button' }), 'next', 'Newer quizzes');
   const report = (id, text, cls) => h('a', { class: cls || 't-link', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text });
@@ -89,11 +95,11 @@ function gradebook(g) {
   };
   const quizHead = (x) => {
     const link = h('a', { class: 't-link gb-qname', href: '#run/' + encodeURIComponent(x.runId), text: x.title });
-    return tip(h('th', { scope: 'col', class: 'gb-q' }, link, h('span', { class: 'gb-qdate', text: day(x.at) })), link, `${x.title}, ${date(x.at)}`);
+    return tip(h('th', { scope: 'col', class: 'gb-q' }, link, sortBtn(x.runId, day(x.at), `Sort by ${x.title}`, 'gb-qsort')), link, `${x.title}, ${date(x.at)}`);
   };
   const table = h('table', { class: 'gb-table', style: `--n: ${g.quizzes.length}` },
     h('thead', {}, h('tr', {},
-      h('th', { scope: 'col', class: 'gb-name' }, h('div', { class: 'gb-name-head' }, h('span', { text: 'Student' }), older, newer)),
+      h('th', { scope: 'col', class: 'gb-name' }, h('div', { class: 'gb-name-head' }, sortBtn('name', 'Student'), older, newer)),
       avgHead('gb-start'), g.quizzes.map(quizHead), avgHead('gb-end'))),
     h('tbody', {}, g.students.map((s) => {
       const [start, end] = avgCells('td', pct(s.avg));
@@ -105,6 +111,26 @@ function gradebook(g) {
   const [fStart, fEnd] = avgCells('td', pct(g.avg));
   foot.append(fStart, ...g.quizzes.map((x) => h('td', { text: pct(x.avg) })), fEnd);
   table.append(h('tfoot', {}, foot));
+  const tbody = table.tBodies[0];
+  const rows = g.students.map((s, i) => ({ s, tr: tbody.rows[i] }));
+  function arrange() {
+    let sort = dash.gradesSort;
+    const qi = sort ? g.quizzes.findIndex((q) => q.runId === sort.by) : -1;
+    if (sort && sort.by !== 'name' && sort.by !== 'avg' && qi < 0) sort = null; // a quiz this class didn't take
+    const key = !sort ? null : sort.by === 'name' ? (r) => r.s.name : sort.by === 'avg' ? (r) => r.s.avg : (r) => (r.s.cells[qi].p == null ? null : r.s.cells[qi].p);
+    tbody.append(...sortRows(rows, sort, sort ? { [sort.by]: key } : {}, (r) => r.s.name).map((r) => r.tr));
+    for (const { by, btn } of sorters) {
+      const on = !!sort && sort.by === by;
+      const th = btn.closest('th') || btn.parentElement.closest('th');
+      th.classList.toggle('t-sorted', on);
+      if (on) th.setAttribute('aria-sort', sort.dir > 0 ? 'ascending' : 'descending'); else th.removeAttribute('aria-sort');
+      const arrow = icon(on && sort.dir < 0 ? ICONS.down : ICONS.up, 14);
+      arrow.classList.add('t-sort-arrow');
+      const old = btn.querySelector('.t-sort-arrow');
+      if (old) old.replaceWith(arrow); else btn.append(arrow);
+    }
+  }
+  arrange();
   const box = h('div', { class: 'gb-scroll', role: 'region', 'aria-label': `Grades for ${g.roster.name}`, tabindex: '0' }, table);
   const thumb = h('div', { class: 'gb-thumb' });
   const rail = h('div', { class: 'gb-rail' }, thumb);

@@ -32,19 +32,25 @@
 .gb-table thead th { position: sticky; top: 0; z-index: 2; vertical-align: middle; font-size: 13px; font-weight: 600; color: var(--ink-2); background: var(--soft); }
 .gb-table tfoot > tr > * { position: sticky; bottom: 0; z-index: 2; font-weight: 600; background: var(--soft); border-top: 1px solid var(--line); border-bottom: 0; }
 .gb-q { width: var(--q-w); }
-.gb-qname { display: block; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 600; text-decoration: none; }
-.gb-qdate { display: block; margin-top: 1px; font-size: 12px; font-weight: 400; }
+.gb-table .gb-qname { display: block; overflow: hidden; text-overflow: ellipsis; text-align: right; font-size: 14px; font-weight: 600; text-decoration: none; }
+.gb-table .gb-qsort { margin-top: 1px; font-size: 12px; font-weight: 400; color: var(--ink-2); }
+/* sort arrows sit just before right-aligned headings, taking no room, so the words keep their right edge
+   even where a phone's column is narrow */
+.gb-table .gb-qsort, .gb-table .gb-avg .t-sort { position: relative; }
+.gb-table .gb-qsort .t-sort-arrow, .gb-table .gb-avg .t-sort-arrow { position: absolute; right: calc(100% + 3px); top: 50%; translate: 0 -50%; }
+.gb-table .t-sorted .t-sort { color: var(--ink); }
 .gb-table .gb-name { position: sticky; left: 0; z-index: 1; width: var(--name-w); text-align: left; font-weight: 500; color: var(--ink); border-right: 1px solid var(--line); }
 .gb-table .gb-name { padding-left: 14px; }
 .gb-table .gb-avg { padding-right: 14px; }
 .gb-table thead .gb-name { padding: 8px 8px 8px 14px; color: var(--ink-2); }
 .gb-name-head { display: flex; align-items: center; gap: 4px; }
-.gb-name-head > span { flex: 1; min-width: 0; }
+.gb-name-head > .t-sort { flex: 1; min-width: 0; align-self: stretch; }
 .gb-table .gb-avg { position: sticky; right: 0; z-index: 1; width: var(--avg-w); font-weight: 700; color: var(--ink); border-left: 1px solid var(--line); }
 .gb-table .gb-avg.gb-start { display: none; }
 .gb-table :is(thead, tfoot) :is(.gb-name, .gb-avg) { z-index: 3; }
 .gb-table tfoot .gb-name { font-weight: 600; }
-.gb-term { text-decoration: underline dotted; text-underline-offset: 3px; }
+.gb-term, .t-sort.gb-term > span { text-decoration: underline dotted; text-underline-offset: 3px; }
+.t-sort.gb-term { text-decoration: none; }
 /* scores read as numbers: a link shows itself on hover */
 .gb-table a { color: inherit; text-decoration: none; text-underline-offset: 3px; }
 .gb-table a:hover { color: var(--accent); text-decoration: underline; }

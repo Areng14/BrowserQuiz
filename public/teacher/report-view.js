@@ -32,6 +32,49 @@
     for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : String(kid));
     return el;
   }
+  // A list sorts by any column with a heading, as the dashboard's do: a click goes up, then down, then back.
+  // Cells sort by their data-sort, or their text: numbers as numbers, nothing (an empty data-sort) last.
+  function sortable(table) {
+    const head = table.tHead.rows[0];
+    const body = table.tBodies[0];
+    const original = [...body.rows];
+    let sort = null;
+    const key = (tr, i) => {
+      const td = tr.cells[i];
+      const v = td.dataset.sort != null ? td.dataset.sort : td.textContent.trim();
+      return v === '' ? null : /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v.toLowerCase();
+    };
+    const arrow = (down) => {
+      const a = window.BQIcons ? window.BQIcons.svg(down ? 'down' : 'up', 13) : h('span', { text: down ? '↓' : '↑', 'aria-hidden': 'true' });
+      a.classList.add('r-sort-arrow');
+      return a;
+    };
+    function draw() {
+      const rows = !sort ? original : original.slice().sort((a, b) => {
+        const x = key(a, sort.i);
+        const y = key(b, sort.i);
+        if (x == null || y == null) return x == null && y == null ? 0 : x == null ? 1 : -1;
+        return (typeof x === 'string' || typeof y === 'string' ? String(x).localeCompare(String(y), undefined, { numeric: true }) : x - y) * sort.dir;
+      });
+      body.append(...rows);
+      [...head.cells].forEach((th, k) => {
+        const btn = th.querySelector('.r-sort');
+        if (!btn) return;
+        const on = !!sort && sort.i === k;
+        th.classList.toggle('r-sorted', on);
+        if (on) th.setAttribute('aria-sort', sort.dir > 0 ? 'ascending' : 'descending'); else th.removeAttribute('aria-sort');
+        btn.querySelector('.r-sort-arrow').replaceWith(arrow(on && sort.dir < 0));
+      });
+    }
+    [...head.cells].forEach((th, i) => {
+      const text = th.textContent.trim();
+      if (!text) return; // the bars' column
+      const btn = h('button', { class: 'r-sort', type: 'button' }, h('span', { text }), arrow(false));
+      btn.addEventListener('click', () => { sort = !sort || sort.i !== i ? { i, dir: 1 } : sort.dir > 0 ? { i, dir: -1 } : null; draw(); });
+      th.replaceChildren(btn);
+    });
+    return table;
+  }
   const fmtPts = (n) => String(Math.round(n * 100) / 100);
   const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
   // assetUrl: where the quiz's images are, for images written in Markdown.
@@ -426,17 +469,17 @@
         stat('Highest', scores.length ? fmtPts(Math.max(...scores)) : '–'),
         stat('Lowest', scores.length ? fmtPts(Math.min(...scores)) : '–')),
       h('h2', { text: 'Students' }),
-      h('table', { class: 'r-table' },
+      sortable(h('table', { class: 'r-table' },
         h('thead', {}, h('tr', {}, h('th', { text: 'Name' }), h('th', { class: 'num', text: 'Score' }), h('th', { text: '' }))),
         h('tbody', {}, students.map((s, si) => {
           const p = s.score == null ? 0 : pct(s.score, s.max);
           return h('tr', {},
             h('td', {}, h('a', { href: `#s${si}`, text: s.name })),
-            h('td', { class: 'num', text: s.score == null ? '–' : `${fmtPts(s.score)} / ${fmtPts(s.max)}` }),
+            h('td', { class: 'num', 'data-sort': s.score == null || !s.max ? '' : String(s.score / s.max), text: s.score == null ? '–' : `${fmtPts(s.score)} / ${fmtPts(s.max)}` }),
             h('td', { class: 'r-bar-cell' }, bar(p), h('span', { class: 'r-bar-pct', text: s.score == null ? '' : `${p}%` })));
-        }))),
+        })))),
       h('h2', { text: 'Questions' }),
-      h('table', { class: 'r-table' },
+      sortable(h('table', { class: 'r-table' },
         h('thead', {}, h('tr', {}, h('th', { text: '#' }), h('th', { text: 'Question' }), h('th', { class: 'num', text: 'Average' }), h('th', { text: '' }))),
         h('tbody', {}, questions.map((q) => {
           const p = q.avg == null ? 0 : pct(q.avg, q.max);
@@ -444,9 +487,9 @@
             h('td', { class: 'num', text: String(q.n) }),
             h('td', {}, h('span', { class: 'r-qkind', text: q.kind }), ' ', snippet(q.prompt),
               q.pool ? h('span', { class: 'r-qpool', text: ` ${q.given} of ${students.length} students` }) : null),
-            h('td', { class: 'num', text: q.avg == null ? 'Not graded' : `${fmtPts(q.avg)} / ${fmtPts(q.max)}` }),
+            h('td', { class: 'num', 'data-sort': q.avg == null || !q.max ? '' : String(q.avg / q.max), text: q.avg == null ? 'Not graded' : `${fmtPts(q.avg)} / ${fmtPts(q.max)}` }),
             h('td', { class: 'r-bar-cell' }, bar(p), h('span', { class: 'r-bar-pct', text: q.avg == null ? '' : `${p}%` })));
-        }))));
+        })))));
   }
 
   // ---------- syntax colors ----------
@@ -569,12 +612,12 @@
   function sameWrong(students, pairs, quiz) {
     if (!pairs) return null; // no choice, short answer or output questions
     const rows = pairs.map((p) => pairRow(students, p.a, p.b, `${p.same.length} the same: ${p.same.map((x) => x.n).join(', ')}`, () => [
-      h('table', { class: 'r-table r-same-table' },
+      sortable(h('table', { class: 'r-table r-same-table' },
         h('thead', {}, h('tr', {}, h('th', { class: 'num', text: 'Question' }), h('th', { text: 'Their answer' }), h('th', { class: 'num', text: 'Gave it' }))),
         h('tbody', {}, p.same.map((x) => h('tr', {},
           h('td', { class: 'num', text: String(x.n) }),
           h('td', {}, x.choices ? x.choices.map((c, i) => [i ? ', ' : '', inline(c, quiz.language)]) : x.math ? mathEl(x.text, true) : h('code', { text: x.text })),
-          h('td', { class: 'num', text: x.of > 2 ? `${x.of} students` : 'Only these two' }))))),
+          h('td', { class: 'num', 'data-sort': String(x.of), text: x.of > 2 ? `${x.of} students` : 'Only these two' })))))),
     ]));
     return pairSection('r-same-wrong', 'Same wrong answers', rows,
       "Pairs of students who gave identical wrong answers on choice, short answer and output questions. Wrong answers that few others gave rank a pair higher.");

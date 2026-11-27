@@ -28,7 +28,7 @@ If students cannot reach it, open the port the script printed in the server's fi
 - If you do not want a password in `.env`, leave `ADMIN_PASSWORD` empty. The server will print a one-time code to its log (`docker compose logs app`) that you can sign in with instead.
 - If you forget the admin password, set `ADMIN_RESET` in `.env` to any new word and restart the server. The log will show a new one-time code, and your recovery code will get your quizzes back.
 
-**Teachers.** Admin adds teachers from the **Teachers** tab. Each teacher gets a temporary password to pass on, and they pick their own the first time they sign in.
+**Teachers.** Admin adds teachers from **Teachers**, in the menu under their name. Each teacher gets a temporary password to pass on, and they pick their own the first time they sign in.
 
 - **Reset password** gives the teacher a new temporary password and signs them out.
 - **Disable** stops the teacher from signing in, but keeps their quizzes and results.

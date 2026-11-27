@@ -17,10 +17,12 @@ import { gradesTab } from './grades.js';
 const TABS = [
   { id: 'give', label: 'Give a quiz', short: 'Give', icon: 'play' },
   { id: 'grades', label: 'Grades', icon: 'results' },
+  { id: 'recent', label: 'Recent', icon: 'recent' },
   { id: 'quizzes', label: 'Quizzes', icon: 'quizzes' },
   { id: 'classes', label: 'Classes', icon: 'classes' },
-  { id: 'teachers', label: 'Teachers', icon: 'teachers', admin: true },
-  { id: 'settings', label: 'Settings', icon: 'settings', wide: true }, // on phones, in the account menu
+  // in the menu under the teacher's name (core.js accountMenu), not the sidebar
+  { id: 'teachers', label: 'Teachers', icon: 'teachers', admin: true, menu: true },
+  { id: 'settings', label: 'Settings', icon: 'settings', menu: true },
 ];
 // Open quizzes: one goes straight to its live page, two or more to a list of them (#open).
 const OPEN = { id: 'open', label: 'Open quizzes', short: 'Open', icon: 'live' };
@@ -60,7 +62,8 @@ async function route() {
   else if (a === 'grade' && id) showGrade(id, c ? decodeURIComponent(c) : null);
   else if (a === 'class') showRoster(id === 'new' ? null : id);
   else if (a === 'quiz') openQuiz(id === 'new' ? null : id);
-  else if (a === 'grades' || a === 'results') { dash.gradesFor = id; showHome('grades'); } // #grades/<class>, or all; #results was its old name
+  else if (a === 'grades' && id !== 'all') { dash.gradesFor = id; showHome('grades'); } // #grades/<class>
+  else if (a === 'results' || a === 'grades') { history.replaceState(null, '', '#recent'); showHome('recent'); } // the list's old addresses
   else showHome(a === 'open' || TABS.some((t) => t.id === a) ? a : 'give');
 }
 window.addEventListener('hashchange', route);
@@ -70,13 +73,13 @@ function openQuiz(id) {
 }
 // The page frame: tabs on the left, the page on the right. active: the tab this page belongs to.
 function shell(active, ...content) {
-  const tabs = TABS.filter((t) => !t.admin || (dash.who && dash.who.role === 'admin'));
+  const tabs = TABS.filter((t) => !t.menu && (!t.admin || (dash.who && dash.who.role === 'admin')));
   const one = dash.openRuns && dash.openRuns.length === 1 && dash.openRuns[0];
   if (dash.openRuns && dash.openRuns.length) tabs.splice(1, 0, Object.assign({}, OPEN, one ? { label: 'Open quiz', href: '#run/' + encodeURIComponent(one.id), title: `${one.title} (${one.code})` } : {}));
   return h('div', { class: 't-shell' },
     h('nav', { class: 't-side', 'aria-label': 'Dashboard' },
       h('div', { class: 't-brand' }, h('img', { class: 't-brand-icon', src: '/icon.svg', alt: '', width: 26, height: 26 }), 'BrowserQuiz'),
-      h('div', { class: 't-nav' }, tabs.map((t) => h('a', { class: t.wide ? 't-nav-item t-nav-wide' : 't-nav-item', href: t.href || '#' + t.id, title: t.title || null, 'aria-current': t.id === active ? 'page' : null },
+      h('div', { class: 't-nav' }, tabs.map((t) => h('a', { class: 't-nav-item', href: t.href || '#' + t.id, title: t.title || null, 'aria-current': t.id === active ? 'page' : null },
         icon(t.icon), h('span', { class: 't-nav-label' }, t.short || t.label, t.short ? h('span', { class: 't-nav-more', text: t.label.slice(t.short.length) }) : null),
         t.id === 'open' && dash.live > 1 ? h('span', { class: 't-badge', title: `${dash.live} open`, 'aria-label': `${dash.live} open`, text: String(dash.live) }) : null))),
       h('div', { class: 't-side-foot' }, accountMenu(), themeButton())),
@@ -97,7 +100,7 @@ async function showHome(next) {
   if (dash.tab === 'teachers' && !(dash.who && dash.who.role === 'admin')) { showHome('give'); return; }
   noteRuns(data.runs);
   if (dash.tab === 'open' && dash.live < 2) { if (dash.live) { history.replaceState(null, '', '#run/' + encodeURIComponent(dash.openRuns[0].id)); showRun(dash.openRuns[0].id); } else showHome('give'); return; }
-  const page = { open: openTab, give: giveTab, grades: (d) => gradesTab(d, runsTable), quizzes: quizzesTab, classes: classesTab, teachers: teachersSection, settings: settingsTab }[dash.tab](data, me);
+  const page = { open: openTab, give: giveTab, grades: gradesTab, recent: recentTab, quizzes: quizzesTab, classes: classesTab, teachers: teachersSection, settings: settingsTab }[dash.tab](data, me);
   const y = same ? window.scrollY : 0;
   mount(shell(dash.tab, page));
   window.scrollTo(0, y);
@@ -159,6 +162,30 @@ function openTab(data) {
   return h('section', { class: 't-section' }, h('h1', { text: 'Open quizzes' }), runsTable(data.runs.filter((r) => r.status === 'open')));
 }
 
+// Every quiz given, open ones first, then newest first: where a practice run, corrections or one still
+// open is found (Grades has closed exams only). Search, once the list is long enough to need it.
+function recentTab(data) {
+  const runs = [...data.runs.filter((r) => r.status === 'open'), ...data.runs.filter((r) => r.status !== 'open')];
+  if (!runs.length) return h('section', { class: 't-section' }, h('h1', { text: 'Recent' }), h('p', { class: 't-muted', text: 'None yet.' }));
+  const table = runsTable(runs);
+  const rows = [...table.querySelectorAll('tbody tr')];
+  rows.forEach((tr, i) => { const r = runs[i]; tr.dataset.find = `${r.code} ${r.quiz} ${r.roster}`.toLowerCase(); });
+  const none = h('p', { class: 't-muted', text: 'None found.', hidden: true });
+  const filter = () => {
+    const want = (dash.recentFind || '').trim().toLowerCase();
+    for (const tr of rows) tr.hidden = !!want && !tr.dataset.find.includes(want);
+    none.hidden = rows.some((tr) => !tr.hidden);
+    table.hidden = !none.hidden;
+  };
+  const findBox = h('input', { class: 'input t-search', type: 'search', value: dash.recentFind || '', placeholder: 'Search', 'aria-label': 'Search quizzes given', autocomplete: 'off', spellcheck: 'false' });
+  findBox.addEventListener('input', () => { dash.recentFind = findBox.value; filter(); });
+  const long = runs.length > 6;
+  if (long) filter();
+  return h('section', { class: 't-section' },
+    h('div', { class: 't-head t-head-wrap' }, h('h1', { text: 'Recent' }), long ? findBox : null),
+    table, none);
+}
+
 function quizzesTab(data) {
   // Only .quiz (and quiz.json) files can be picked, except in Safari's engine (Safari, and every iPhone
   // and iPad browser): it only knows file types it has heard of, so it greys .quiz files out. There any
@@ -200,13 +227,13 @@ function quizzesTab(data) {
       copyPromptBtn(),
       labeled(h('button', { class: 'btn small primary', type: 'button', onclick: () => openQuiz(null) }), 'plus', 'New quiz')),
     search,
-    data.quizzes.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
-      h('thead', { class: 'sr-only' }, h('tr', {}, ['Quiz', 'Questions', 'Time limit', 'Added'].map((x) => h('th', { text: x })), actionsHead())),
+    data.quizzes.length ? h('div', { class: 't-table-wrap' }, sortableTable(h('table', { class: 't-table t-list' },
+      h('thead', {}, h('tr', {}, ['Quiz', 'Questions', 'Time limit', 'Added'].map((x) => h('th', { text: x })), actionsHead())),
       h('tbody', {}, data.quizzes.map((x) => h('tr', { 'data-title': x.title.toLowerCase() },
         h('td', { role: 'rowheader', class: 't-rowhead' }, h('button', { class: 't-link', type: 'button', text: x.title, onclick: () => openQuiz(x.id) })),
-        h('td', { class: 't-muted', text: plural(x.questions, 'question') }),
-        h('td', { class: 't-muted', text: x.timeLimitMin ? `${x.timeLimitMin} min` : 'No time limit' }),
-        h('td', { class: 't-muted', text: date(x.createdAt) }),
+        h('td', { class: 't-muted', 'data-sort': String(x.questions), text: plural(x.questions, 'question') }),
+        h('td', { class: 't-muted', 'data-sort': x.timeLimitMin ? String(x.timeLimitMin) : '', text: x.timeLimitMin ? `${x.timeLimitMin} min` : 'No time limit' }),
+        h('td', { class: 't-muted', 'data-sort': String(x.createdAt), text: date(x.createdAt) }),
         h('td', { class: 't-actions' },
           iconButton(h('button', { class: 'btn small', type: 'button', 'aria-label': `Edit ${x.title}`, onclick: () => openQuiz(x.id) }), 'pencil', 'Edit'),
           moreMenu(`More for ${x.title}`, `quiz:${x.id}`, [
@@ -217,7 +244,7 @@ function quizzesTab(data) {
               try { openQuiz((await post(`/api/t/quizzes/${encodeURIComponent(x.id)}/duplicate`)).id); } catch (e) { if (e.message !== 'login') quizMsg.textContent = e.message; }
             } },
             linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
-            { text: 'Delete', danger: true, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}?`, 'Past results stay.') }]))))))) : null,
+            { text: 'Delete', danger: true, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}?`, 'Past results stay.') }])))))))) : null,
     h('div', { class: 't-row t-add' }, tip(h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizFile,
       "Upload a quiz file: a .quiz downloaded from a quiz's ⋯ menu, or a quiz.json an AI wrote from Copy AI prompt."), quizBtn),
     h('details', { class: 't-paste' }, (() => {
@@ -244,15 +271,15 @@ function classesTab(data) {
   return h('section', { class: 't-section' },
     h('div', { class: 't-head' }, h('h1', { text: 'Classes' }),
       labeled(h('button', { class: 'btn small primary', type: 'button', onclick: () => showRoster(null) }), 'plus', 'New class')),
-    data.rosters.length ? h('div', { class: 't-table-wrap' }, h('table', { class: 't-table t-list' },
-      h('thead', { class: 'sr-only' }, h('tr', {}, ['Class', 'Students'].map((x) => h('th', { text: x })), actionsHead())),
+    data.rosters.length ? h('div', { class: 't-table-wrap' }, sortableTable(h('table', { class: 't-table t-list' },
+      h('thead', {}, h('tr', {}, ['Class', 'Students'].map((x) => h('th', { text: x })), actionsHead())),
       h('tbody', {}, data.rosters.map((x) => h('tr', {},
         h('td', { role: 'rowheader', class: 't-rowhead' }, h('button', { class: 't-link', type: 'button', text: x.name, onclick: () => showRoster(x.id) })),
-        h('td', { class: 't-muted', text: plural(x.students, 'student') }),
+        h('td', { class: 't-muted', 'data-sort': String(x.students), text: plural(x.students, 'student') }),
         h('td', { class: 't-actions' },
           iconButton(h('button', { class: 'btn small', type: 'button', 'aria-label': `Edit ${x.name}`, onclick: () => showRoster(x.id) }), 'pencil', 'Edit'),
           moreMenu(`More for ${x.name}`, `class:${x.id}`, [
-            { text: 'Delete', danger: true, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}?`, 'Past results stay.') }]))))))) : null,
+            { text: 'Delete', danger: true, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}?`, 'Past results stay.') }])))))))) : null,
     h('div', { class: 't-row t-add' },
       h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
       tip(h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile), rosterFile,
