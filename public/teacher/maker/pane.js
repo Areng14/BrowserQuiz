@@ -6,7 +6,9 @@ import { ed } from './state.js';
 import { LANGS, TYPES } from './formats.js';
 import { blank } from './model.js';
 import { grow, sortable } from './editing.js';
-import { FORMS, FORM_TIP, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, input, poolSettings, problemsOf, touch, typeset, varsEditor } from './core.js';
+import { FORMS, FORM_TIP, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, input, poolSettings, problemsOf, touch, typeset } from './core.js';
+import { valuesEditor, withValues } from './values.js';
+import { assetSrc } from './choices.js';
 
 // Done: what's open goes back to being a row
 const doneBtn = () => h('button', { class: 'btn small qe-done', type: 'button', text: 'Done', onclick: () => closeOpen() });
@@ -19,6 +21,7 @@ import { showQuizEditor } from './main.js';
 
 // ---------- the open question ----------
 function questionPane(q, i) {
+  const vt = (el) => (VAR_TYPES.has(q.type) ? withValues(el, q) : el); // a text box whose {{name}}s show as tags
   const n = ed.quiz.questions.length;
   const type = h('select', { class: 'input qe-narrow', 'aria-label': 'Type' }, Object.entries(TYPES).map(([v, t]) => h('option', { value: v, text: t, selected: q.type === v })));
   type.addEventListener('change', () => {
@@ -60,7 +63,7 @@ function questionPane(q, i) {
   if (q.type === 'single' || q.type === 'multi') { answer.push(choicesEditor(q)); answerTitle = null; }
   if (q.type === 'text') {
     answerTitle = 'Accepted answers';
-    answer.push(field('One per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: '3.5\n/^(binary|bin) search$/' })),
+    answer.push(field('One per line', vt(area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: '3.5\n/^(binary|bin) search$/' }))),
       check(q, q.caseSensitive, 'Capital letters count', (v) => { if (v) q.caseSensitive = true; else delete q.caseSensitive; }));
   }
   let answerTick = null;
@@ -73,7 +76,7 @@ function questionPane(q, i) {
     };
     const form = h('select', { class: 'input qe-narrow' }, FORMS.map(([v, t]) => h('option', { value: v, text: t, selected: (q.form || '') === v })));
     form.addEventListener('change', () => { if (form.value) q.form = form.value; else delete q.form; tip.text(form, FORM_TIP[form.value]); touch(q); });
-    answer.push(field('One per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'x = 4' })), reads,
+    answer.push(field('One per line', vt(area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'x = 4' }))), reads,
       h('div', { class: 'qe-line qe-fields' }, tip(field('Answer form', form), form, FORM_TIP[q.form || '']),
         (() => {
           const tol = input(q, q.tolerance || '', (v) => { if (Number(v) > 0) q.tolerance = Number(v); else delete q.tolerance; }, { type: 'number', min: '0', step: 'any', class: 'input t-points', placeholder: '0' });
@@ -92,7 +95,7 @@ function questionPane(q, i) {
     // the fields, and the answer drawn beside them
     answer.push(h('div', { class: 'qe-graph-ans' },
       h('div', { class: 'qe-stack' },
-        field('Equations, inequalities or points, one per line', area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'e.g. y = 3x + 2' })),
+        field('Equations, inequalities or points, one per line', vt(area(q, q.answer.join('\n'), (v) => { q.answer = v.split('\n'); }, { rows: 2, placeholder: 'e.g. y = 3x + 2' }))),
         h('div', { class: 'qe-line' },
           field('x from', num(0, 'x from')), field('x to', num(1, 'x to')), field('y from', num(2, 'y from')), field('y to', num(3, 'y to')),
           (() => {
@@ -126,15 +129,15 @@ function questionPane(q, i) {
     add([h('div', { class: 'qe-line' }, field('Students write', kind)), rubric.node]);
   }
   // Why the answer is right: with the answer in a practice quiz's review, in reports, and for AI grading
-  const explanation = field('Explanation', area(q, q.explanation || '', (v) => { if (v.trim()) q.explanation = v; else delete q.explanation; },
-    { rows: 2, spellcheck: 'true', placeholder: 'Optional. Shown with the answer after a practice quiz.' }));
+  const explanation = field('Explanation', vt(area(q, q.explanation || '', (v) => { if (v.trim()) q.explanation = v; else delete q.explanation; },
+    { rows: 2, spellcheck: 'true', placeholder: 'Optional. Shown with the answer after a practice quiz.' })));
   // Pools and shared material: most questions have neither, so they're folded away until used
   // the calculator: the section's (or the quiz's), unless this question says otherwise
   const secAbove = [...(ed.quiz.sections || [])].filter((d) => d.at <= i).sort((a, b) => b.at - a.at)[0];
   const inherited = (secAbove && secAbove.calculator) || ed.quiz.calculator || 'none';
   const calcField = field('Calculator', calcOverrideSelect(q, `Same as the ${secAbove && secAbove.calculator ? 'section' : 'quiz'} (${CALC_NAMES[inherited]})`));
   const more = h('details', { class: 'qe-more', open: !!(q.explanation || q.pool || q.shared || q.vars || q.calculator) }, h('summary', { text: 'More options' }),
-    h('div', { class: 'qe-stack' }, explanation, h('div', { class: 'qe-pair' }, name, pool), calcField, sharedEditor(q, i), VAR_TYPES.has(q.type) ? varsEditor(q) : null));
+    h('div', { class: 'qe-stack' }, explanation, h('div', { class: 'qe-pair' }, name, pool), calcField, sharedEditor(q, i), VAR_TYPES.has(q.type) ? valuesEditor(q, touch, (t) => window.BQ.md.render(t, { lang: ed.quiz.language, assetUrl: assetSrc })) : null));
   const code = q.type === 'code' || (q.type === 'fill' && q._ui.run) ? codeEditor(q) : null;
   const main = h('div', { class: 'qe-stack' },
     card(null, promptEditor(q)),

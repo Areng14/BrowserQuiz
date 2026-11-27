@@ -69,7 +69,7 @@
 
 /* The prompt: Markdown while you're in it, the way it reads when you're not */
 .qe-pbox { position: relative; }
-.qe-pbox:not(.editing) > textarea { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
+.qe-pbox:not(.editing) > :is(textarea, .qe-vwrap) { position: absolute; inset: 0; opacity: 0; pointer-events: none; }
 .qe-pbox.editing > .qe-pview { display: none; }
 .qe-pview { min-height: 64px; padding: 8px 10px; font-size: 16px; background: var(--bg); border: 1px solid var(--field-line); border-radius: 6px; cursor: text; overflow-wrap: anywhere; }
 .qe-pview:hover { border-color: var(--ink-2); }
@@ -270,3 +270,59 @@ th .qe-gridcell { font: 600 13px var(--font); }
 @media (pointer: coarse) { .qe-tool { min-height: 40px; min-width: 40px; } .qe-grip { min-width: 40px; } }
 
 .qe-off { color: var(--warn); font-weight: 600; } /* the rubric doesn't add up to the question's points */
+
+/* ---------- random values (values.js): {{name}} as a tag, the table of values, and Preview ---------- */
+.qe-tag { display: inline-flex; align-items: center; height: 1.45em; padding: 0 6px; margin: 0 1px; border-radius: 5px; font: 600 0.9em/1 var(--font); color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); vertical-align: 0.08em; white-space: nowrap; }
+.qe-tag.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 12%, transparent); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+/* a box with values: its own text is hidden under a layer that draws it, tags and all */
+.qe-vwrap { position: relative; min-width: 0; }
+.qe-choice > .qe-vwrap { flex: 1; }
+.qe-vwrap.has-values > textarea { color: transparent; caret-color: var(--ink); }
+.qe-vwrap.has-values > textarea::selection { color: transparent; }
+.qe-vlayer { position: absolute; inset: 0; z-index: 1; box-sizing: border-box; overflow: hidden; pointer-events: none; color: var(--ink); white-space: pre-wrap; overflow-wrap: break-word; border: solid transparent; }
+.qe-vwrap:not(.has-values) > .qe-vlayer { display: none; }
+.qe-vmeasure { visibility: hidden; }
+/* while it's being edited: the same letters, the braces faded and the name marked, so nothing moves */
+.qe-vref { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 4px; }
+.qe-vref.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--bad) 45%, transparent); }
+.qe-vbrace { opacity: 0.4; }
+.qe-vtool { display: inline-flex; align-items: center; gap: 5px; }
+/* the list of values, under the cursor */
+.qe-vmenu { position: fixed; z-index: 70; font: 15px/1.4 var(--font); color: var(--ink); display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; width: 340px; max-width: calc(100vw - 16px); max-height: 300px; overflow: auto; margin: 0; padding: 6px; list-style: none; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2); }
+.qe-vopt { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 36px; padding: 0 10px; border-radius: 6px; cursor: pointer; }
+.qe-vopt[aria-selected="true"] { background: var(--soft); }
+.qe-vopt .qe-tag { flex: none; }
+.qe-vsample { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--ink-2); }
+/* the table: a column per value, a row per student */
+.qe-values { gap: 10px; }
+.qe-term { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+.qe-vtable-wrap { width: fit-content; max-width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.qe-vtable { width: max-content; border-collapse: collapse; font-size: 14px; }
+.qe-vtable th, .qe-vtable td { padding: 5px 4px; text-align: left; border-bottom: 1px solid var(--line); }
+.qe-vtable tbody tr:last-child td { border-bottom: 0; }
+.qe-vtable thead th { background: var(--soft); }
+.qe-vtable .qe-vrow { width: 36px; padding-left: 10px; text-align: right; font-size: 13px; font-weight: 400; }
+.qe-vtable .qe-vend { width: 1%; padding-right: 8px; text-align: right; white-space: nowrap; }
+.qe-vhead-cell { display: flex; align-items: center; gap: 2px; }
+/* a column's remove: small and quiet, beside its name */
+.qe-vdel { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; color: var(--ink-2); background: none; border: 0; border-radius: 4px; cursor: pointer; }
+.qe-vdel:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
+.qe-vdel:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.qe-vtable .input { width: 100%; min-width: 0; }
+.qe-vhead-cell > .input { flex: 1; }
+.qe-vtable .input.qe-vname { height: 34px; min-height: 34px; padding: 0 8px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--bg)); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+.qe-vtable .input.qe-vcell { height: 34px; min-height: 34px; padding: 0 8px; font-size: 15px; }
+/* Preview: the question as one row makes it */
+.qe-vpreview-wrap { display: grid; gap: 10px; }
+.qe-vstep { min-width: 92px; text-align: center; font-variant-numeric: tabular-nums; }
+.qe-vpreview { display: grid; gap: 12px; padding: 14px 16px; background: var(--soft); border-radius: 8px; }
+.qe-vpreview :is(.qe-vprompt, .qe-vexplain, .qe-vchoice) > :first-child { margin-top: 0; }
+.qe-vpreview :is(.qe-vprompt, .qe-vexplain, .qe-vchoice) > :last-child { margin-bottom: 0; }
+.qe-vchoices { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.qe-vchoices > li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+.qe-vchoices > li.right { border-color: var(--good); }
+.qe-vchoice { flex: 1; min-width: 0; }
+.qe-vright { font-size: 13px; font-weight: 600; color: var(--good); }
+.qe-vexplain { font-size: 14px; color: var(--ink-2); }
+.qe-vanswer { margin: 0; }
+.qe-filled { text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 70%, transparent); text-decoration-thickness: 2px; text-underline-offset: 3px; }

@@ -7,6 +7,7 @@ import { readCode, readTrace } from './model.js';
 import { grow } from './editing.js';
 import { renderOutline } from './outline.js';
 import { firstRow } from './prompt.js';
+import { valueProblems } from './values.js';
 
 const imageMissing = (p) => !ed.newAssets[p] && !ed.existingAssets.has(p);
 // The images written into text as Markdown: prompts, choices, shared material and directions.
@@ -81,6 +82,7 @@ function problemsOf(q) {
   if (q.type === 'essay' && (q.rubric || []).filter((x) => x.text.trim()).reduce((sum, x) => sum + (Number(x.points) || 0), 0) > Number(q.points)) {
     out.push('Rubric points add up to more than the question\'s points.');
   }
+  if (VAR_TYPES.has(q.type)) out.push(...valueProblems(q));
   return out.concat(ed.fromServer.get(q) || []);
 }
 
@@ -90,8 +92,7 @@ const input = (q, value, on, attrs) => {
   el.addEventListener('input', () => { on(el.value); touch(q); });
   return el;
 };
-// Random values: a little table, names on the first line, then a row of values per line. Each student
-// gets one row, put in for {{name}} in the question (server: quizfile.js checkVars).
+// The question types that can have random values (values.js; server: quizfile.js checkVars)
 const VAR_TYPES = new Set(['single', 'multi', 'text', 'math', 'graph', 'output', 'trace']);
 // Math and graph answers, read the way the server reads them (mathexpr.js). With random values, the
 // first row's.
@@ -142,23 +143,6 @@ const typeset = (src) => {
   const t = M ? M.toTex(src) : null;
   return t == null ? null : h('span', { class: 'qe-math' }, window.BQ.md.renderInline(`$${t}$`));
 };
-const cells = (line) => [...line.matchAll(/\s*("(?:[^"]|"")*"|[^,]*)\s*(?:,|$)/g)].map((m) => m[1]).slice(0, -1)
-  .map((c) => (/^".*"$/.test(c) ? c.slice(1, -1).replace(/""/g, '"') : c.trim()));
-const varsText = (rows) => {
-  if (!Array.isArray(rows) || !rows.length) return '';
-  const names = Object.keys(rows[0]);
-  const cell = (v) => (/[",]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
-  return [names.join(', '), ...rows.map((r) => names.map((n) => cell(r[n] ?? '')).join(', '))].join('\n');
-};
-const varsEditor = (q) => { const box = area(q, varsText(q.vars), (v) => {
-    const lines = v.split('\n').filter((l) => l.trim());
-    if (lines.length < 2) { delete q.vars; return; }
-    const names = cells(lines[0]);
-    q.vars = lines.slice(1).map((l) => { const vals = cells(l); return Object.fromEntries(names.map((n, k) => [n, vals[k] ?? ''])); });
-  }, { rows: 3, placeholder: 'x, y, out\n7, 2, 1\n9, 4, 1' });
-  return tip(field('Random values: names, then one row per line. Each student gets a row; write {{name}} where it goes', box), box,
-    "Each line after the first is one set of values, and each student gets one set. For example, with the lines a, b then 3, 4 then 5, 12, {{a}} in the question shows as 3 or 5.");
-};
 const area = (q, value, on, attrs) => {
   const el = h('textarea', Object.assign({ class: 'input qe-area', spellcheck: 'false', rows: 2 }, attrs || {}));
   el.value = value || '';
@@ -192,4 +176,4 @@ const poolSettings = (q) => {
 };
 const xBtn = (label, onclick, disabled) => h('button', { class: 'btn small qe-x', type: 'button', 'aria-label': label, title: label, disabled, onclick }, icon(ICONS.x, 16));
 
-export { FORMS, FORM_TIP, FORM_WORDS, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, imageMissing, input, markdownImages, nextId, poolSettings, problemsOf, refreshSoon, setStatus, touch, typeset, varsEditor, xBtn };
+export { FORMS, FORM_TIP, FORM_WORDS, M, VAR_TYPES, answersOf, area, card, check, field, graphShapes, imageMissing, input, markdownImages, nextId, poolSettings, problemsOf, refreshSoon, setStatus, touch, typeset, xBtn };

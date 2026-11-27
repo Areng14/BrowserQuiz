@@ -3,7 +3,8 @@
 import { ICONS, h, icon, tip } from '../dash/core.js';
 import { ed } from './state.js';
 import { IMAGE_MIME, extOf, insert, sortable } from './editing.js';
-import { area, check, field, imageMissing, input, touch, xBtn } from './core.js';
+import { VAR_TYPES, area, check, field, imageMissing, input, touch, xBtn } from './core.js';
+import { withValues } from './values.js';
 import { renderPane } from './pane.js';
 
 // ---------- choices ----------
@@ -81,7 +82,7 @@ function choicesEditor(q) {
       const g = ed.pane.querySelectorAll('.qe-choice .qe-grip')[to];
       if (g) g.focus();
     });
-    return h('div', { class: 'qe-choice qe-choice-row' }, grip, h('label', { class: 'qe-mark', title: 'Correct' }, mark, h('span', { class: 'qe-mark-text', text: 'Correct' })), text,
+    return h('div', { class: 'qe-choice qe-choice-row' }, grip, h('label', { class: 'qe-mark', title: 'Correct' }, mark, h('span', { class: 'qe-mark-text', text: 'Correct' })), VAR_TYPES.has(q.type) ? withValues(text, q) : text,
       xBtn('Remove choice', () => editChoices(q, (r) => r.splice(k, 1)), q.choices.length <= 2));
   });
   // The right answer stands out: its row is marked, and says so

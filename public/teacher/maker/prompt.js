@@ -4,8 +4,9 @@ import { h } from '../dash/core.js';
 import { ed } from './state.js';
 import { LANGS } from './formats.js';
 import { MOD, grow, insert, wrap } from './editing.js';
-import { area, input, touch, xBtn } from './core.js';
+import { VAR_TYPES, area, input, touch, xBtn } from './core.js';
 import { addImage, addInlineImage, assetSrc, imageEditor } from './choices.js';
+import { tagsIn, valueButton, withValues } from './values.js';
 import { renderPane } from './pane.js';
 
 // ---------- prompt ----------
@@ -23,13 +24,15 @@ function promptEditor(q) {
   // a mousedown that keeps the focus in the prompt, so it doesn't flip to the read view and back
   const tool = (text, title, fn, cls) => h('button', { class: `qe-tool ${cls || ''}`, type: 'button', text, title, onclick: fn, onmousedown: (e) => { if (document.activeElement === ta) e.preventDefault(); } });
   const view = h('div', { class: 'qe-pview prompt', 'aria-hidden': 'true' });
-  const box = h('div', { class: 'qe-pbox' }, view, ta);
+  const values = VAR_TYPES.has(q.type);
+  const box = h('div', { class: 'qe-pbox' }, view, values ? withValues(ta, q) : ta);
   const paint = () => {
     const editing = document.activeElement === ta || !ta.value.trim();
     box.classList.toggle('editing', editing);
     if (editing) { grow(ta); return; }
     const md = window.BQ && window.BQ.md;
     view.replaceChildren(md ? md.render(ta.value, { lang: ed.quiz.language, assetUrl: assetSrc }) : ta.value);
+    if (values) tagsIn(view, q); // {{name}} as the value's tag
   };
   ta.addEventListener('focus', paint);
   ta.addEventListener('blur', () => { if (pressing) addEventListener('pointerup', () => setTimeout(paint), { once: true, capture: true }); else paint(); });
@@ -67,6 +70,7 @@ function promptEditor(q) {
         const s = ta.value.slice(0, ta.selectionStart);
         insert(ta, `${s && !s.endsWith('\n') ? '\n\n' : s && !s.endsWith('\n\n') ? '\n' : ''}| Column | Column |\n| --- | --- |\n|  |  |\n`);
       }),
+      values ? valueButton(q, ta) : null,
       tool('Image', q.image ? 'Add another image where the cursor is. You can also paste or drop one' : 'Add an image. You can also paste or drop one into the prompt', () => (q.image ? moreFile : file).click())),
     box, file, moreFile), imageEditor(q, file)];
 }

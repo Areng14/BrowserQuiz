@@ -43,6 +43,7 @@ const NAMES = {
   // the teacher's sidebar
   results: 'ChartColumn',
   recent: 'History', // quizzes given lately
+  braces: 'Braces', // a random value, in the quiz maker
   quizzes: 'FileText',
   classes: 'Users',
   teachers: 'Shield',
