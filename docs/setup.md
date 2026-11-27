@@ -30,7 +30,7 @@ The code runner comes in two kinds:
 | `standard` (the default) | Java, Python, JavaScript, TypeScript | about 150 MB |
 | `full` | those, and C, C++, C#, Go, Rust | about 700 MB |
 
-To switch, set `RUNNER_LANGS=full` (or `standard`) in `.env` and run the setup script again. On Railway, add the variable `RUNNER_LANGS=full` to the `runner` service and redeploy it. The quiz maker only offers the languages the runner has, and a quiz that needs another one says so when you save it.
+The setup script asks which one the first time. To change it later, run `./setup.sh --languages` (on Windows, `setup.cmd -Languages`). On Railway, add the variable `RUNNER_LANGS=full` to the `runner` service and redeploy it. The quiz maker only offers the languages the runner has, and a quiz that needs another one says so when you save it.
 
 ## Setting up accounts
 

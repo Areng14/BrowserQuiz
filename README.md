@@ -92,8 +92,8 @@ Code questions run in one of two code runners:
 | Standard (the default) | Java, Python, JavaScript, TypeScript | about 150 MB |
 | Full | those, and C, C++, C#, Go, Rust | about 700 MB |
 
-For the full one, set `RUNNER_LANGS=full` in `.env` and run the setup script again. On Railway, add
-`RUNNER_LANGS=full` to the `runner` service's variables.
+The setup script asks which one the first time. To change it later, run `./setup.sh --languages`. On
+Railway, add `RUNNER_LANGS=full` to the `runner` service's variables.
 
 ## Docs
 
