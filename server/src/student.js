@@ -401,7 +401,7 @@ module.exports = function studentRoutes(r) {
     const { a, run, quiz } = ctx;
     if (run.status !== 'open' && a.status !== 'active' && a.status !== 'submitted') return json(res, 200, { status: null });
     const student = q('SELECT bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ?').get(a.studentId);
-    json(res, 200, { status: a.status, run: runInfo(run, quiz, a.studentId), name: student ? student.name : '' });
+    json(res, 200, { status: a.status, run: runInfo(run, quiz, a.studentId), name: student ? student.name : '', paused: !!run.paused_at || undefined });
   });
 
   // Typeahead: only names matching what was typed come back, never the whole roster.

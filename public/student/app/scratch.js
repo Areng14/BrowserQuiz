@@ -21,14 +21,21 @@ function loadScratch() {
   } catch (e) { /* nothing saved */ }
 }
 let scratchTimer = 0;
+function writeScratch() {
+  scratchTimer = 0;
+  try { localStorage.setItem(scratchKey(), JSON.stringify(S.scratch)); } catch (e) { /* kept for this page */ }
+}
 function saveScratch() {
   S.scratchVer = (S.scratchVer || 0) + 1;
   if (cfg.watch) return; // the student's, shown to a teacher: not theirs to keep
   clearTimeout(scratchTimer);
-  scratchTimer = setTimeout(() => { try { localStorage.setItem(scratchKey(), JSON.stringify(S.scratch)); } catch (e) { /* kept for this page */ } }, 400);
+  scratchTimer = setTimeout(writeScratch, 400);
 }
+// Reloaded or closed before that: kept now, as the page goes (as answers.js keeps unsent answers).
+window.addEventListener('pagehide', () => { if (scratchTimer) { clearTimeout(scratchTimer); writeScratch(); } });
 function clearScratch() {
   clearTimeout(scratchTimer);
+  scratchTimer = 0;
   try { localStorage.removeItem(scratchKey()); } catch (e) { /* nothing to clear */ }
 }
 // The scratchpad's left edge drags (or arrow keys) to make it wider or narrower; this browser remembers it.

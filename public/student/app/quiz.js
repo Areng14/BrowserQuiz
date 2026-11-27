@@ -23,6 +23,9 @@ function screenQuiz() {
   if (open) { S.idx = open.start; S.introOpen = false; for (const p of S.parts) if (p.n <= S.locked) S.partsSeen.add(p.n); }
   S.dirOpen = true;
   if (!open) S.introOpen = true; // the first page also shows what's on the quiz and its directions
+  // back after a reload, or Exit then Continue, in this tab: the question they were on, if they still can
+  const back = placeKept();
+  if (back) { S.idx = back.idx; for (const n of back.seen) S.partsSeen.add(n); S.introOpen = false; S.dirOpen = !S.partsSeen.has(partOf(S.idx).n); }
   const timer = h('span', { class: 'timer', role: 'timer', 'aria-label': 'Time left' });
   const save = h('span', { class: 'save-state' }); // not a live region: it flips with every keystroke
   const live = h('div', { class: 'sr-only', 'aria-live': 'polite', 'aria-atomic': 'true' });
@@ -169,7 +172,25 @@ function snakeLock() {
   btn.replaceChildren(left > 0 ? lockIcon(16) : gameIcon(), 'Play snake');
 }
 
+// Where the student is, kept for this tab (sessionStorage) under this attempt's tag, so a reload comes back
+// to it. Not a question in a part that's locked now, nor, with timed parts, one outside the part under way.
+const placeKey = () => 'bq-place:' + (S.tag || '');
+function keepPlace() {
+  if (cfg.preview || cfg.watch || !S.tag) return;
+  try { sessionStorage.setItem(placeKey(), JSON.stringify({ idx: S.idx, seen: [...S.partsSeen] })); } catch (e) { /* this page only */ }
+}
+function placeKept() {
+  if (cfg.preview || cfg.watch || !S.tag) return null;
+  let v = null;
+  try { v = JSON.parse(sessionStorage.getItem(placeKey()) || 'null'); } catch (e) { return null; }
+  if (!v || !Number.isInteger(v.idx) || v.idx < 0 || v.idx >= S.quiz.questions.length || !Array.isArray(v.seen)) return null;
+  const n = partOf(v.idx).n;
+  if (lockOn() && n <= (S.locked || 0)) return null;
+  if (timedNav() && n !== partNow()) return null;
+  return { idx: v.idx, seen: v.seen.filter(Number.isInteger) };
+}
 function renderQuestion() {
+  keepPlace();
   disposeEditor();
   const q = S.quiz.questions[S.idx];
   const total = S.quiz.questions.length;

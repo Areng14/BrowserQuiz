@@ -48,7 +48,7 @@ BQ.app = {
       // not started yet: the rules again (agreeing goes back into lockdown; doing it twice counts as
       // reopening, server /api/ready)
       if (r.status === 'waiting' || r.status === 'admitted') return screenRules();
-      if (r.status === 'active') return screenContinue();
+      if (r.status === 'active') return screenContinue(!!r.paused);
       return screenJoin(null, code); // turned in already: free to join the next quiz
     }).catch(() => screenJoin(null, code));
   },

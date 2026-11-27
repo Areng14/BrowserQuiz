@@ -40,7 +40,7 @@ function mathView(q) {
     box.replaceChildren(input);
   };
   loadMathLive().then((ML) => {
-    const mf = new ML.MathfieldElement({ smartFence: true });
+    const mf = Object.assign(new ML.MathfieldElement(), { smartFence: true }); // an option, not a constructor argument (MathLive ignores those)
     mf.id = id;
     mf.className = 'math-field';
     mf.mathVirtualKeyboardPolicy = 'manual';

@@ -286,7 +286,8 @@ function screenClosed() {
     h('div', {}, h('button', { class: 'btn', type: 'button', text: 'Back to start', onclick: () => { resetState(); screenJoin(); } })))));
 }
 // Page reloaded mid-quiz: one button back in instead of the whole sign-in again.
-function screenContinue() {
+// paused: the teacher has the quiz paused, so no clock is running.
+function screenContinue(paused) {
   if (S.run.hasCode) loadMonaco().catch(() => {});
   const btn = h('button', { class: 'btn primary', type: 'button', text: 'Continue quiz' });
   const msg = h('p', { class: 'error', role: 'alert' });
@@ -295,7 +296,7 @@ function screenContinue() {
     h('p', { class: 'eyebrow', text: S.run.title }),
     h('div', { class: 'heading' },
       h('h1', { text: 'Your quiz is still open' }),
-      h('p', { text: `Signed in as ${S.me.name}. The timer is still running.` })),
+      h('p', { text: `Signed in as ${S.me.name}.${paused ? ' Your teacher has paused the quiz.' : S.run.timeLimitMin ? ' The timer is still running.' : ''}` })),
     btn, msg)));
   btn.focus();
 }

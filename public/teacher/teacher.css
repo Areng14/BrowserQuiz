@@ -412,6 +412,7 @@ input[type="file"].input { padding: 6px 10px; }
   .t-run .t-name { min-width: 0; }
   .t-run .t-name > * { max-width: 100%; }
   .t-run td:nth-child(2) { flex: none; margin-left: auto; }
+  .t-run td:is(:first-child, :nth-child(2)) { align-self: center; } /* a joined name is a 40px button on touch: the status lines up with its words */
   .t-run td.t-clean, .t-run td.t-zero, .t-run .t-row-extra, .t-run td.t-actions.t-only-extra { display: none; }
   .t-run td[data-label] { font-size: 13px; color: var(--ink-2); }
   .t-run td[data-label]::before { content: attr(data-label) ": "; }

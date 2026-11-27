@@ -121,7 +121,7 @@
 
   function calculateScreen(C, ML, state) {
     const id = 'calc-input';
-    const field = new ML.MathfieldElement({ smartFence: true });
+    const field = Object.assign(new ML.MathfieldElement(), { smartFence: true }); // an option, not a constructor argument (MathLive ignores those)
     field.id = id;
     field.className = 'calc-mathfield';
     field.mathVirtualKeyboardPolicy = 'manual';
