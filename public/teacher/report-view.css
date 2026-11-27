@@ -34,7 +34,7 @@
 .r-view .r-student + .r-student { margin-top: 56px; padding-top: 32px; border-top: 2px solid var(--line); }
 .r-view .r-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .r-view .r-eyebrow { margin: 0 0 2px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
-.r-view .r-head h1, .r-view .r-class h1 { margin: 0; font-size: 26px; line-height: 1.2; }
+.r-view .r-head h1, .r-view .r-class h1 { margin: 0; font-size: 22px; line-height: 1.25; }
 .r-view .r-sub { margin: 4px 0 0; color: var(--ink-2); font-size: 14px; }
 .r-view .r-score { text-align: right; }
 .r-view .r-score-big { font-size: 34px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -264,7 +264,7 @@
 .rp-dialog[open] { display: flex; flex-direction: column; }
 .rp-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .rp-head { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
-.rp-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 18px; }
+.rp-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 17px; }
 .rp-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 16px 20px 20px; }
 .rp-controls { display: flex; align-items: center; gap: 10px; }
 .rp-btn, .rp-select { height: 34px; padding: 0 12px; font: 600 14px system-ui, -apple-system, 'Segoe UI', sans-serif; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }

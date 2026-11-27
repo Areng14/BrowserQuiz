@@ -267,7 +267,7 @@ input[type="file"].input { padding: 6px 10px; }
 .t-ask-back { position: fixed; inset: 0; z-index: 90; }
 .t-dialog.t-loose { position: fixed; inset: 0; z-index: 91; height: fit-content; margin: auto; }
 .t-dialog-head { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
-.t-dialog-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 18px; }
+.t-dialog-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 17px; }
 .t-dialog-x { flex: none; width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: var(--ink-2); }
 .btn.small.t-dialog-x { padding: 0; }
 /* two buttons joined into one: the main action, and a second way to do it */
@@ -508,7 +508,7 @@ button.t-joincode:hover { background: var(--soft); }
 .t-gq-st { flex: none; font-size: 14px; font-weight: 500; color: var(--ink-2); }
 .t-gq-st.ok { color: var(--good); font-weight: 600; }
 .t-gq-pane { display: grid; gap: 16px; min-width: 0; }
-.t-gq-pane > h2 { margin: 0; font-size: 18px; }
+.t-gq-pane > h2 { margin: 0; }
 .t-gq-pane > .t-answers { margin: 0; gap: 0; }
 .t-gq-pane > .t-answers > .r-q { margin: 0; }
 .t-gq-grade { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
@@ -616,7 +616,6 @@ th.num .t-sort { flex-direction: row-reverse; }
   .t-set-card .t-mode input { top: calc(50% - 8px); }
   .t-set-card .t-mode-title { flex: 1; min-width: 0; }
 }
-.t-set-card > h2 { font-size: 18px; }
 .t-set-note { max-width: 62ch; color: var(--ink-2); line-height: 1.5; }
 .t-set-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .t-set-grid .field, .t-set-card .t-tip-host { min-width: 0; }
