@@ -505,7 +505,7 @@ module.exports = function studentRoutes(r) {
     const { a, run, quiz } = current(req);
     if (a.status === 'submitted') throw new HttpError(403, 'run_closed');
     if (a.status === 'active') return json(res, 200, { admitted: true });
-    if (run.mode !== 'practice' && !run.corrects) {
+    if (run.mode !== 'practice' && !run.corrects) tx(() => { // one write to disk
       const now = Date.now();
       if (a.readyAt) store.record(a, 'reload', 'reopened the waiting screen', quiz);
       else store.logEvent(a, 'ready', 'info', null);
@@ -520,7 +520,7 @@ module.exports = function studentRoutes(r) {
         store.logEvent(a, 'admit', 'info', 'joined after the start');
       }
       store.save(a);
-    }
+    });
     json(res, 200, { admitted: a.status === 'admitted' });
   });
 
@@ -561,9 +561,11 @@ module.exports = function studentRoutes(r) {
         a.deadline = a.layout.partEnds[a.layout.partEnds.length - 1];
       }
       a.lastBeat = now;
-      store.logEvent(a, 'start', 'info', x !== 1 && a.deadline ? `${x}× time` : null);
-      noteNewNetwork(a, run, quiz, a.pinIp);
-      store.save(a);
+      tx(() => { // one write to disk
+        store.logEvent(a, 'start', 'info', x !== 1 && a.deadline ? `${x}× time` : null);
+        noteNewNetwork(a, run, quiz, a.pinIp);
+        store.save(a);
+      });
     } else if (a.resumeOk) {
       a.resumeOk = false;
       store.logEvent(a, 'resume', 'info', 'let back in by teacher');
@@ -749,15 +751,17 @@ module.exports = function studentRoutes(r) {
     // Timed parts: turning in early (turnInEarly) is for the last part, so no part is skipped
     if (a.status === 'active' && run.mode !== 'practice' && Parts.timed(quiz, a.layout) && Array.isArray(a.layout.partEnds)
       && Parts.over(a, clk + 15000) < a.layout.partEnds.length - 1 && clk < turnInAt(a) - 15000) throw new HttpError(403, 'not_yet');
-    if (a.status === 'active') {
-      const now = Date.now();
-      // events the page couldn't send (offline, or its requests blocked) come with the turn-in
-      if (store.watched(a)) takeLate(a, quiz, body.late, now);
-      storeEdits(a, body.edits, now); // the last few seconds of typing, for the replay
-      // and the time since the last heartbeat, on the question that was on screen then
-      if (a.viewQ && a.viewAt) { if (!a.qTime) a.qTime = {}; a.qTime[a.viewQ] = (a.qTime[a.viewQ] || 0) + Math.min(Math.max(0, now - a.viewAt), 30000); a.viewQ = null; }
-    }
-    submit(a, quiz, body.answers, 'student');
+    tx(() => { // the turn-in and what came with it: one write to disk, as the whole class turns in at once
+      if (a.status === 'active') {
+        const now = Date.now();
+        // events the page couldn't send (offline, or its requests blocked) come with the turn-in
+        if (store.watched(a)) takeLate(a, quiz, body.late, now);
+        storeEdits(a, body.edits, now); // the last few seconds of typing, for the replay
+        // and the time since the last heartbeat, on the question that was on screen then
+        if (a.viewQ && a.viewAt) { if (!a.qTime) a.qTime = {}; a.qTime[a.viewQ] = (a.qTime[a.viewQ] || 0) + Math.min(Math.max(0, now - a.viewAt), 30000); a.viewQ = null; }
+      }
+      submit(a, quiz, body.answers, 'student');
+    });
     json(res, 200, { ok: true });
   });
 };
