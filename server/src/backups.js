@@ -79,12 +79,21 @@ function check(file) {
     if (other) other.close();
   }
 }
-// Put a checked backup file in place for the next start (moving it when it's a temporary upload)
+// Put a checked backup file in place for the next start (moving it when it's a temporary upload). It's set
+// aside before the before-restore backup is made, which can replace it (a before-restore one restored in the
+// same minute has its name) or prune it (the oldest of its kind).
 function stage(file, move) {
   check(file);
-  make('before-restore');
-  if (move) fs.renameSync(file, STAGED);
-  else fs.copyFileSync(file, STAGED);
+  const next = STAGED + '.part';
+  try {
+    if (move) fs.renameSync(file, next);
+    else fs.copyFileSync(file, next);
+    make('before-restore');
+    fs.renameSync(next, STAGED);
+  } catch (e) {
+    fs.rmSync(next, { force: true });
+    throw e;
+  }
 }
 
 // Every 10 minutes: a nightly backup if one is due. Due: none yet, or the last is 20+ hours old and it's night
