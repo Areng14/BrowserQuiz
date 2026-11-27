@@ -262,7 +262,7 @@
 /* Typing replay (replay.js): over the report page or the dashboard, so it carries its own styles */
 .rp-dialog { font: 15px/1.5 var(--font, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif); width: min(900px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); overflow: hidden; }
 .rp-dialog[open] { display: flex; flex-direction: column; }
-.rp-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+.rp-dialog::backdrop { background: rgba(0, 0, 0, 0.45); background: var(--backdrop, rgba(0, 0, 0, 0.45)); } /* app.css's, darker in dark mode */
 .rp-head { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
 .rp-head h2 { flex: 1; min-width: 0; margin: 0; font-size: 17px; }
 .rp-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; padding: 16px 20px 20px; }
