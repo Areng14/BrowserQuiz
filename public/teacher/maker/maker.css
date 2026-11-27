@@ -274,7 +274,7 @@ th .qe-gridcell { font: 600 13px var(--font); }
   .qe-tool, .qe-tools .qe-tool { min-height: 40px; min-width: 40px; } .qe-grip { min-width: 40px; } .qe-add-item, .qe-vopt { min-height: 40px; }
   .qe-head .input, .qe-tools .input.qe-narrow { height: 40px; min-height: 40px; } /* beside small buttons: 40 */
   .qe-choice > .input.t-points, .qe-fields .input.t-points { height: 44px; min-height: 44px; } /* beside a field: 44 */
-  .btn.qe-x { width: 44px; min-height: 44px; }
+  .qe-choice:has(> input.input) > .btn.qe-x, .qe-acc-line > .btn.qe-x { width: 44px; min-height: 44px; } /* beside a one-line field */
 }
 
 .qe-off { color: var(--warn); font-weight: 600; } /* the rubric doesn't add up to the question's points */
