@@ -6,7 +6,7 @@ const { q, tx } = require('./db');
 const store = require('./store');
 const V = require('./vault');
 const P = require('./people');
-const { gradeAttempt, totals } = require('./grade');
+const { gradeAttempt, totals, isRun } = require('./grade');
 const { HttpError, router, json, serveStatic, send, SECURITY, isHttps } = require('./http');
 const studentRoutes = require('./student');
 const teacherRoutes = require('./teacher');
@@ -100,11 +100,16 @@ let sweeps = 0;
 setInterval(() => tx(() => {
   const now = Date.now();
   if (++sweeps % 30 === 0) {
+    // Every turned-in attempt in memory (reports and grades load old ones too): each run's quiz is looked up
+    // once, and a quiz with nothing graded by running code can't have grading pending or failed.
+    const quizzes = new Map(); // run id -> its quiz
     for (const a of store.attempts.values()) {
       if (a.status !== 'submitted' || a.archived) continue;
-      const quiz = quizOf(q('SELECT quiz_id FROM runs WHERE id = ?').get(a.runId));
-      const t = quiz && a.result && totals(a.result, quiz, a.answers, a.layout);
-      if (quiz && (!a.result || t.failed || t.pending)) gradeAttempt(a, quiz).catch(() => {});
+      if (!quizzes.has(a.runId)) quizzes.set(a.runId, quizOf(q('SELECT quiz_id FROM runs WHERE id = ?').get(a.runId)));
+      const quiz = quizzes.get(a.runId);
+      if (!quiz) continue;
+      const t = a.result && quiz.questions.some(isRun) ? totals(a.result, quiz, a.answers, a.layout) : null;
+      if (!a.result || (t && (t.failed || t.pending))) gradeAttempt(a, quiz).catch(() => {});
     }
   }
   for (const a of store.attempts.values()) {
