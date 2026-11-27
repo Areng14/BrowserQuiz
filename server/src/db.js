@@ -170,8 +170,24 @@ function q(sql) {
   if (!s) { s = db.prepare(sql); cache.set(sql, s); }
   return s;
 }
-// Inside another transaction it joins that one: SQLite can't nest them.
+// Inside another transaction it joins that one: SQLite can't nest them. Directly inside txGroup's work it's a
+// savepoint instead, so it still takes back only its own writes when it throws, as it does on its own.
+let groupDepth = -1; // in txGroup's work: how many tx() calls deep (-1: not in it)
 function tx(fn) {
+  if (groupDepth === 0) {
+    groupDepth++;
+    db.exec('SAVEPOINT tx');
+    try {
+      const r = fn();
+      db.exec('RELEASE tx');
+      return r;
+    } catch (e) {
+      if (db.isTransaction) { db.exec('ROLLBACK TO tx'); db.exec('RELEASE tx'); }
+      throw e;
+    } finally {
+      groupDepth--;
+    }
+  }
   if (db.isTransaction) return fn();
   db.exec('BEGIN');
   try {
@@ -184,4 +200,49 @@ function tx(fn) {
   }
 }
 
-module.exports = { db, q, tx, DATA_DIR };
+// Writes that come in together go to disk together. Every commit waits for the disk (synchronous = FULL), and
+// with heartbeats from a thousand students that waiting was most of what the server did: each one's own
+// commit. txGroup(fn) runs fn at the end of this turn of the event loop, in one transaction with every other
+// fn that came in during it, and settles once that transaction is committed, so nobody hears back before
+// their writes are on disk. Inside fn everything works as it does on its own: a tx() takes back only its own
+// writes if it throws, and a write outside one is kept even when fn throws afterwards.
+const grouped = [];
+function txGroup(fn) {
+  return new Promise((resolve, reject) => {
+    if (!grouped.length) setImmediate(commitGroup);
+    grouped.push({ fn, resolve, reject });
+  });
+}
+// (if BEGIN itself fails, each write commits on its own, as without groups)
+const begin = () => { try { db.exec('BEGIN'); return true; } catch (e) { return false; } };
+const settle = (done) => { for (const d of done) if (d.failed) d.w.reject(d.error); else d.w.resolve(d.value); };
+function commitGroup() {
+  const work = grouped.splice(0);
+  let done = []; // { w, value } or { w, failed, error }: what each caller hears once it's committed
+  let open = begin();
+  for (const w of work) {
+    const d = { w };
+    groupDepth = 0;
+    try { d.value = w.fn(); } catch (e) { d.failed = true; d.error = e; } finally { groupDepth = -1; }
+    done.push(d);
+    // An error that ended the whole transaction (SQLite takes it all back on a full disk, say): what came
+    // before it wasn't written either, so those callers hear so too; the rest go on in a new transaction.
+    if (open && !db.isTransaction) {
+      for (const p of done) if (!p.failed) Object.assign(p, { failed: true, error: new Error('The write to disk failed.') });
+      settle(done);
+      done = [];
+      open = begin();
+    }
+  }
+  if (open) {
+    try {
+      db.exec('COMMIT');
+    } catch (e) {
+      try { db.exec('ROLLBACK'); } catch (e2) { /* already gone */ }
+      for (const d of done) if (!d.failed) Object.assign(d, { failed: true, error: e });
+    }
+  }
+  settle(done);
+}
+
+module.exports = { db, q, tx, txGroup, DATA_DIR };

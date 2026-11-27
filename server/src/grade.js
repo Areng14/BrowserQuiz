@@ -222,11 +222,14 @@ async function gradeAttempt(a, quiz, again) {
       res.code[qq.id] = prev[qq.id] && prev[qq.id].status === 'done' ? prev[qq.id] : { status: 'pending', max: qq.points - rubricMax(qq) };
     }
     store.save(a);
-    for (const qq of codeQs) {
+    // All the code questions at once, so an attempt's runner jobs queue together and a class's attempts come
+    // back graded in the order they were turned in (one at a time, everyone's last question waited behind the
+    // whole class's first). Settled together, so a grading counts as under way until every one is back.
+    const graded = await Promise.allSettled(codeQs.map(async (qq) => {
       // a regrade replaced the result, or dropped this answer's: the regrade's own pass grades them
       const cur = res.code[qq.id];
       if (a.result !== res) return;
-      if (!cur || cur.status === 'done') continue;
+      if (!cur || cur.status === 'done') return;
       const max = cur.max;
       let out;
       try {
@@ -238,10 +241,12 @@ async function gradeAttempt(a, quiz, again) {
       } catch (e) {
         out = { status: 'error', score: 0, max, message: e.message };
       }
-      if (a.result !== res || !res.code[qq.id]) continue;
+      if (a.result !== res || !res.code[qq.id]) return;
       res.code[qq.id] = out;
       store.save(a);
-    }
+    }));
+    const failed = graded.find((g) => g.status === 'rejected');
+    if (failed) throw failed.reason;
   } finally {
     running.delete(a.id);
     if (queued.has(a.id)) {

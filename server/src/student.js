@@ -2,7 +2,7 @@
 // Student API. Every response looks the same whatever the integrity state: the server never tells
 // a student about strikes or invalidation.
 const crypto = require('node:crypto');
-const { q, tx } = require('./db');
+const { q, tx, txGroup } = require('./db');
 const store = require('./store');
 const P = require('./people');
 const H = require('./harness');
@@ -602,69 +602,72 @@ module.exports = function studentRoutes(r) {
 
   r.post('/api/beat', async (req, res) => {
     const body = await readJson(req, 1024 * 1024);
-    const { a, run, quiz } = current(req);
-    const now = Date.now();
-    let live = {};
-    let held = false; // answers that came while the quiz is paused: the page keeps them for after
-    const inQuiz = a.status === 'active';
-    if (inQuiz && !allow(a.id, now)) {
-      // Over the budget: answered the same, nothing stored.
-      live = W.isWatched(a.runId, now) ? { beatMs: W.FAST_BEAT_MS } : {};
-    } else if (store.watched(a)) tx(() => { // in the quiz, or waiting for its start in lockdown
-      // what it stores (late events, the mouse trail, typing, the attempt) is one write to disk, not one each
-      takeLate(a, quiz, body.late, now);
-      if (a.beatLost) store.logEvent(a, 'reconnect', 'info', Math.round((now - a.lastBeat) / 1000) + 's offline');
-      a.lastBeat = now;
-      a.beatLost = false;
-      if (body.focused === false || body.visible === false) {
-        if (!a.away) store.record(a, 'unfocused-beat', body.visible === false ? 'tab hidden' : 'window not focused', quiz);
-      } else {
-        store.back(a, now);
-      }
-      if (inQuiz) {
-      // Mouse samples: [x, y, ms since the last one], and a 4th 1 for a click.
-      const pts = (Array.isArray(body.mouse) ? body.mouse.slice(0, 400) : []).filter((p) => Array.isArray(p) && (p.length === 3 || p.length === 4) && p.every(Number.isFinite))
-        .map((p) => [Math.max(0, Math.min(1000, p[0] | 0)), Math.max(0, Math.min(1000, p[1] | 0)), Math.max(0, Math.min(60000, p[2] | 0)), p[3] ? 1 : 0]);
-      // Stored for exams' reports; practice isn't monitored (watching it uses memory, watch.js).
-      if (pts.length && !a.practice) {
-        q('INSERT INTO mouse (attempt_id, t, points) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(pts.map((p) => p.slice(0, 3))));
-        // Keep the newest MOUSE_ROWS per attempt (the report shows the last 60), pruned every 50 rows.
-        const n = (mouseRows.get(a.id) || 0) + 1;
-        mouseRows.set(a.id, n);
-        if (n % 50 === 0) q('DELETE FROM mouse WHERE attempt_id = ? AND rowid NOT IN (SELECT rowid FROM mouse WHERE attempt_id = ? ORDER BY rowid DESC LIMIT ?)').run(a.id, a.id, MOUSE_ROWS);
-      }
-      live = W.beat(a, body, pts, now); // for a teacher watching live (watch.js)
-      // What they're doing, for the live table (teacher/common.js activity): an answer changed or code was typed,
-      // or just any mouse or key at all. In memory only.
-      if (body.answers || (Array.isArray(body.edits) && body.edits.length)) a.workedAt = now;
-      const idle = Number(body.idleMs);
-      if (Number.isFinite(idle)) a.activeAt = now - Math.min(Math.max(0, idle), 3600000);
-      storeEdits(a, body.edits, now);
-      // Time on each question: the stretch since the last heartbeat goes to the question that was on
-      // screen then, if the quiz had focus. Gaps (offline, asleep) count 30s at most.
-      const order = a.layout && Array.isArray(a.layout.order) ? a.layout.order : [];
-      const v = body.view && typeof body.view === 'object' ? body.view : null;
-      const onQ = v && typeof v.q === 'string' && !v.review && !v.dir && !v.intro && !v.paused && order.includes(v.q) ? v.q : null;
-      if (a.viewQ && a.viewAt && body.focused !== false && body.visible !== false) {
-        if (!a.qTime) a.qTime = {};
-        a.qTime[a.viewQ] = (a.qTime[a.viewQ] || 0) + Math.min(Math.max(0, now - a.viewAt), 30000);
-      }
-      a.viewQ = onQ;
-      a.viewAt = now;
-      // autosave stops at time's up (only the final submit gets the grace, for its trip over the network),
-      // and while the quiz is paused, once answers already on their way have come in
-      const clk = Pause.clock(a, a.pausedAt, now);
-      if (body.answers && !Pause.taking(a.pausedAt, now)) held = true;
-      else if (body.answers && !(a.deadline && clk > a.deadline)) { a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers), clk); a.answersAt = now; }
-      }
-      store.save(a);
-    });
-    // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
-    const notice = a.status !== 'submitted' ? store.notices.get(run.id) : null; // the teacher's message to everyone
-    const note = a.status !== 'submitted' ? store.notes.get(a.id) : null; // and to this student
-    // paused: when their clock stopped (the page shows the time left then, and hides the questions)
-    const paused = a.status === 'active' ? Pause.since(a, a.pausedAt) : 0;
-    json(res, 200, { ok: true, now, deadline: a.deadline || null, partEnds: partEndsOut(quiz, a), done: a.status === 'submitted', ...(paused ? { paused } : {}), ...(held ? { held } : {}), ...(notice ? { notice } : {}), ...(note ? { note } : {}), ...live });
+    // with the heartbeats that came in at the same time: their writes go to disk together (db.js txGroup)
+    json(res, 200, await txGroup(() => {
+      const { a, run, quiz } = current(req);
+      const now = Date.now();
+      let live = {};
+      let held = false; // answers that came while the quiz is paused: the page keeps them for after
+      const inQuiz = a.status === 'active';
+      if (inQuiz && !allow(a.id, now)) {
+        // Over the budget: answered the same, nothing stored.
+        live = W.isWatched(a.runId, now) ? { beatMs: W.FAST_BEAT_MS } : {};
+      } else if (store.watched(a)) tx(() => { // in the quiz, or waiting for its start in lockdown
+        // what it stores (late events, the mouse trail, typing, the attempt) is one write to disk, not one each
+        takeLate(a, quiz, body.late, now);
+        if (a.beatLost) store.logEvent(a, 'reconnect', 'info', Math.round((now - a.lastBeat) / 1000) + 's offline');
+        a.lastBeat = now;
+        a.beatLost = false;
+        if (body.focused === false || body.visible === false) {
+          if (!a.away) store.record(a, 'unfocused-beat', body.visible === false ? 'tab hidden' : 'window not focused', quiz);
+        } else {
+          store.back(a, now);
+        }
+        if (inQuiz) {
+        // Mouse samples: [x, y, ms since the last one], and a 4th 1 for a click.
+        const pts = (Array.isArray(body.mouse) ? body.mouse.slice(0, 400) : []).filter((p) => Array.isArray(p) && (p.length === 3 || p.length === 4) && p.every(Number.isFinite))
+          .map((p) => [Math.max(0, Math.min(1000, p[0] | 0)), Math.max(0, Math.min(1000, p[1] | 0)), Math.max(0, Math.min(60000, p[2] | 0)), p[3] ? 1 : 0]);
+        // Stored for exams' reports; practice isn't monitored (watching it uses memory, watch.js).
+        if (pts.length && !a.practice) {
+          q('INSERT INTO mouse (attempt_id, t, points) VALUES (?, ?, ?)').run(a.id, now, JSON.stringify(pts.map((p) => p.slice(0, 3))));
+          // Keep the newest MOUSE_ROWS per attempt (the report shows the last 60), pruned every 50 rows.
+          const n = (mouseRows.get(a.id) || 0) + 1;
+          mouseRows.set(a.id, n);
+          if (n % 50 === 0) q('DELETE FROM mouse WHERE attempt_id = ? AND rowid NOT IN (SELECT rowid FROM mouse WHERE attempt_id = ? ORDER BY rowid DESC LIMIT ?)').run(a.id, a.id, MOUSE_ROWS);
+        }
+        live = W.beat(a, body, pts, now); // for a teacher watching live (watch.js)
+        // What they're doing, for the live table (teacher/common.js activity): an answer changed or code was typed,
+        // or just any mouse or key at all. In memory only.
+        if (body.answers || (Array.isArray(body.edits) && body.edits.length)) a.workedAt = now;
+        const idle = Number(body.idleMs);
+        if (Number.isFinite(idle)) a.activeAt = now - Math.min(Math.max(0, idle), 3600000);
+        storeEdits(a, body.edits, now);
+        // Time on each question: the stretch since the last heartbeat goes to the question that was on
+        // screen then, if the quiz had focus. Gaps (offline, asleep) count 30s at most.
+        const order = a.layout && Array.isArray(a.layout.order) ? a.layout.order : [];
+        const v = body.view && typeof body.view === 'object' ? body.view : null;
+        const onQ = v && typeof v.q === 'string' && !v.review && !v.dir && !v.intro && !v.paused && order.includes(v.q) ? v.q : null;
+        if (a.viewQ && a.viewAt && body.focused !== false && body.visible !== false) {
+          if (!a.qTime) a.qTime = {};
+          a.qTime[a.viewQ] = (a.qTime[a.viewQ] || 0) + Math.min(Math.max(0, now - a.viewAt), 30000);
+        }
+        a.viewQ = onQ;
+        a.viewAt = now;
+        // autosave stops at time's up (only the final submit gets the grace, for its trip over the network),
+        // and while the quiz is paused, once answers already on their way have come in
+        const clk = Pause.clock(a, a.pausedAt, now);
+        if (body.answers && !Pause.taking(a.pausedAt, now)) held = true;
+        else if (body.answers && !(a.deadline && clk > a.deadline)) { a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers), clk); a.answersAt = now; }
+        }
+        store.save(a);
+      });
+      // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
+      const notice = a.status !== 'submitted' ? store.notices.get(run.id) : null; // the teacher's message to everyone
+      const note = a.status !== 'submitted' ? store.notes.get(a.id) : null; // and to this student
+      // paused: when their clock stopped (the page shows the time left then, and hides the questions)
+      const paused = a.status === 'active' ? Pause.since(a, a.pausedAt) : 0;
+      return { ok: true, now, deadline: a.deadline || null, partEnds: partEndsOut(quiz, a), done: a.status === 'submitted', ...(paused ? { paused } : {}), ...(held ? { held } : {}), ...(notice ? { notice } : {}), ...(note ? { note } : {}), ...live };
+    }));
   });
 
   r.post('/api/run', async (req, res) => {
