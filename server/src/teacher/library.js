@@ -3,7 +3,8 @@
 // signing in (sessions, sign-in limits, known devices).
 
 const { isRun } = require('../grade');
-const { runnerConfigured, checkOutputs, checkReferences } = require('../coderun');
+const { runnerConfigured, checkOutputs, checkReferences, runnerLanguages, missingLanguages } = require('../coderun');
+const T = require('../../../public/teacher/types.js');
 const { QuizError, markdownImages } = require('../quizfile');
 const { json, HttpError, newToken, sha256, setCookie, cookies } = require('../http');
 const { q, tx } = require('../db');
@@ -19,10 +20,18 @@ const { SESSION_MS, TCH, parseCsv } = require('./common');
 async function checkQuiz(quiz) {
   const hasRefs = quiz.questions.some((qq) => isRun(qq) && Object.keys(qq.reference || {}).length);
   const outputs = quiz.questions.filter((qq) => qq.type === 'output');
-  if (!hasRefs && !outputs.length) return;
+  if (!quiz.questions.some((qq) => isRun(qq) || qq.type === 'output')) return;
   if (!runnerConfigured()) {
     if (hasRefs || outputs.some((qq) => qq.answer == null)) throw new QuizError('This quiz has code to run, but the code runner is not set up.');
     return;
+  }
+  // The standard runner has Java, Python, JavaScript and TypeScript: a question in another language says so
+  const have = await runnerLanguages();
+  const short = quiz.questions.map((qq, i) => [i, missingLanguages(have, qq)]).filter(([, m]) => m.length);
+  if (short.length) {
+    const names = (ls) => ls.map((l) => T.LANG_NAMES[l]).join(', ');
+    throw new QuizError(`This server's code runner has ${names(have)}. ${short.slice(0, 5).map(([i, m]) => `Question ${i + 1} needs ${names(m)}.`).join(' ')}`
+      + ' To run the others, switch to the full runner (docs/setup.md, "Languages").');
   }
   if (outputs.length) await checkOutputs(quiz);
   if (hasRefs) await checkReferences(quiz);

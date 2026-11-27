@@ -8,7 +8,7 @@ const P = require('./people');
 const H = require('./harness');
 const T = require('../../public/teacher/types.js');
 const W = require('./watch');
-const { runSamples } = require('./coderun');
+const { runSamples, studentLanguages } = require('./coderun');
 const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } = require('./grade');
 const { fillTemplate, calculatorOf } = require('./quizfile');
 const C = require('./corrections');
@@ -264,7 +264,7 @@ function publicQuiz(quiz, layout) {
       if (qq.type === 'graph') Object.assign(pub, { window: qq.window, step: qq.step, tools: qq.tools, shade: qq.shapes.some((sh) => sh.side) || undefined });
       if (qq.type === 'code') {
         pub.mode = qq.mode;
-        pub.languages = qq.languages;
+        pub.languages = studentLanguages(qq); // with "any language", the ones this server's runner has
         if (qq.ban) pub.ban = qq.ban; // a rule, so students see it
         if (qq.noRun) pub.noRun = true;
         // The question's own classes, written out in each language: theirs to use, not to write.
@@ -671,7 +671,7 @@ module.exports = function studentRoutes(r) {
     const qq = store.quizFor(quiz, a.layout).questions.find((x) => x.id === body.questionId && isRun(x)); // one of theirs
     // Fill-in-the-blank: the server fills its own template; students only send the blanks.
     if (qq && qq.type === 'fill') body.code = Array.isArray(body.blanks) ? fillTemplate(qq.code, body.blanks.map((b) => String(b || '').slice(0, 500))) : null;
-    if (!qq || !qq.languages.includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
+    if (!qq || !(qq.type === 'fill' ? qq.languages : studentLanguages(qq)).includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
     if (qq.noRun) throw new HttpError(403, 'run_off'); // this question is written without running
     const who = `${a.runId}:${a.studentId}`;
     if (runsGoing.has(who)) throw new HttpError(429, 'too_many');

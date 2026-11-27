@@ -41,8 +41,9 @@ A self-hosted quiz and exam app for CS and math classes.
 - **Trace tables.** Each variable's value, step by step.
 - **Fill in the blanks.** Blanks inside code.
 - **Written answers.** Free response with a rubric, graded by hand or with AI.
-- **Code.** A method or a class in Java, Python, JavaScript, TypeScript, C, C++, C#, Go or Rust, graded by
-  hidden tests. Sample tests, speed tests, custom classes, banned methods and a no-run mode.
+- **Code.** A method or a class in Java, Python, JavaScript, TypeScript, C, C++, C#, Go or Rust
+  ([which runner](#which-runner)), graded by hidden tests. Sample tests, speed tests, custom classes, banned
+  methods and a no-run mode.
 
 Any question can share material, a code block or an image with others, and every question gets its own
 points. Prompts can show diagrams and graphs, in the student's light or dark colors.
@@ -64,7 +65,7 @@ The details are in [docs/security.md](docs/security.md).
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/fMUAh_?referralCode=dP9ijG&utm_medium=integration&utm_source=button&utm_campaign=generic)
 
-Pick a password (10+ characters) when it asks, wait about 10 minutes for the first build, then open the
+Pick a password (10+ characters) when it asks, wait a few minutes for the first build, then open the
 `app` service's address and sign in at `/teacher` as `admin`. More in
 [docs/setup.md](docs/setup.md#hosting-on-railway).
 
@@ -81,6 +82,18 @@ Run the setup script: double-click `setup.cmd` on Windows, or on Mac and Linux:
 ```
 
 It prints the address to open. Sign in at `/teacher` as `admin`, with the password it gave you.
+
+### Which runner
+
+Code questions run in one of two code runners:
+
+| Runner | Languages | Download |
+| --- | --- | --- |
+| Standard (the default) | Java, Python, JavaScript, TypeScript | about 150 MB |
+| Full | those, and C, C++, C#, Go, Rust | about 700 MB |
+
+For the full one, set `RUNNER_LANGS=full` in `.env` and run the setup script again. On Railway, add
+`RUNNER_LANGS=full` to the `runner` service's variables.
 
 ## Docs
 

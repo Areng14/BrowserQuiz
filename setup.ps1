@@ -1,7 +1,8 @@
 # BrowserQuiz setup for Windows. Makes .env (asks for a teacher password, generates the other
-# secrets), picks a free port, then builds and starts everything. Safe to run again.
-# Easiest: double-click setup.cmd. Or: powershell -ExecutionPolicy Bypass -File setup.ps1 [-NoBuild]
-param([switch]$NoBuild)
+# secrets), picks a free port, then downloads and starts everything. Safe to run again (it updates).
+# Easiest: double-click setup.cmd. Or: powershell -ExecutionPolicy Bypass -File setup.ps1 [-Build | -NoBuild]
+#   -Build: build the images here instead of downloading them. -NoBuild: start with the images already here.
+param([switch]$Build, [switch]$NoBuild)
 Set-Location -LiteralPath $PSScriptRoot
 
 function New-RandomString([int]$Length, [string]$Chars) {
@@ -64,6 +65,8 @@ if ($pw.Length -lt 10) {
 # Too short means the app never started with it, so no roster depends on it yet.
 if ((Get-EnvValue 'ID_PEPPER').Length -lt 12) { Set-EnvValue 'ID_PEPPER' (New-Secret) }
 if ((Get-EnvValue 'RUNNER_TOKEN').Length -lt 16) { Set-EnvValue 'RUNNER_TOKEN' (New-Secret) }
+# The code runner's languages: standard (Java, Python, JavaScript, TypeScript) unless .env says full
+if (@('standard', 'full') -notcontains (Get-EnvValue 'RUNNER_LANGS')) { Set-EnvValue 'RUNNER_LANGS' 'standard' }
 
 function Save-Env {
   # Plain UTF-8 (no BOM) with Unix line endings, which docker compose reads cleanly.
@@ -109,7 +112,15 @@ try {
   if ($cfg) { $ip = @($cfg.IPv4Address)[0].IPAddress }
 } catch { }
 if ($ip) { $env:HOST_LAN_IP = $ip }
-if ($NoBuild) { docker compose up -d } else { docker compose up -d --build }
+if ($Build) { docker compose up -d --build }
+elseif ($NoBuild) { docker compose up -d }
+else {
+  Write-Host "Downloading BrowserQuiz (the $(Get-EnvValue 'RUNNER_LANGS') code runner)..."
+  # A network that blocks the download: up builds what's missing here instead (10+ minutes the first time)
+  docker compose pull --ignore-pull-failures app runner
+  if ($LASTEXITCODE -ne 0) { Write-Host "Couldn't download the images: building them here instead." }
+  docker compose up -d
+}
 if ($LASTEXITCODE -ne 0) { Write-Host 'docker compose failed (see above).'; exit 1 }
 
 Write-Host -NoNewline 'Waiting for BrowserQuiz to start'

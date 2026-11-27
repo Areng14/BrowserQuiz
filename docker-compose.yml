@@ -1,12 +1,14 @@
 # BrowserQuiz: self-host anywhere with Docker.
 #
 #   cp .env.example .env      # then fill in the secrets
-#   docker compose up -d --build
+#   docker compose pull && docker compose up -d
 #
-# Plain HTTP on port 8080 (good for trying it out). For a real class, put it behind HTTPS:
-#   set DOMAIN in .env, then: docker compose --profile https up -d --build
+# pull downloads the ready-made images (where it can't, up builds them here instead). Plain HTTP on port 8080
+# (good for trying it out). For a real class, put it behind HTTPS:
+#   set DOMAIN in .env, then: docker compose --profile https up -d
 services:
   app:
+    image: ghcr.io/areng14/browserquiz-app:latest
     build:
       context: .
       dockerfile: server/Dockerfile
@@ -41,8 +43,13 @@ services:
     depends_on: [runner]
 
   # Student code runs here. Its network is internal: no internet, it can only answer the app.
+  # RUNNER_LANGS: standard (Java, Python, JavaScript, TypeScript) or full (all nine languages, 5x the size)
   runner:
-    build: ./runner
+    image: ghcr.io/areng14/browserquiz-runner:${RUNNER_LANGS:-standard}
+    build:
+      context: ./runner
+      args:
+        RUNNER_LANGS: ${RUNNER_LANGS:-standard}
     restart: unless-stopped
     environment:
       RUNNER_TOKEN: ${RUNNER_TOKEN:?set RUNNER_TOKEN in .env}

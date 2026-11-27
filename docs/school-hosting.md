@@ -59,7 +59,7 @@ TRUST_PROXY=1
 Then start it with HTTPS:
 
 ```bash
-docker compose --profile https up -d --build
+docker compose --profile https up -d
 ```
 
 ### Certificate example
@@ -130,7 +130,7 @@ Optional, for locked-down exams. SEB has to be installed on the student devices,
 
 | Task | How |
 | --- | --- |
-| Update | `git pull && docker compose up -d --build`, when no quiz is running |
+| Update | `git pull && docker compose pull && docker compose --profile https up -d`, when no quiz is running |
 | Logs | `docker compose logs -f app` |
 | Back up | `docker compose stop app && docker compose cp app:/data ./backup-$(date +%F) && docker compose start app` |
 | Restore | Under [Updates, backups and logs](setup.md#updates-backups-and-logs) in setup.md |

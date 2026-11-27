@@ -1,7 +1,7 @@
 'use strict';
 // Grading: multiple choice and text right away, code questions through the runner in the background.
 const store = require('./store');
-const { gradeCode } = require('./coderun');
+const { gradeCode, studentLanguages } = require('./coderun');
 const H = require('./harness');
 const { normOutput, normBlank, normCell, fillTemplate } = require('./quizfile');
 
@@ -75,7 +75,7 @@ function cleanAnswers(quiz, layout, answers) {
     else if (qq.type === 'text' && typeof v === 'string') out[qq.id] = v.slice(0, 500);
     else if (qq.type === 'math' && typeof v === 'string') out[qq.id] = v.slice(0, 1000);
     else if (qq.type === 'graph' && Array.isArray(v)) { const sh = cleanShapes(qq, v); if (sh.length) out[qq.id] = sh; }
-    else if (qq.type === 'code' && v && typeof v === 'object' && qq.languages.includes(v.language) && typeof v.code === 'string') {
+    else if (qq.type === 'code' && v && typeof v === 'object' && studentLanguages(qq).includes(v.language) && typeof v.code === 'string') {
       out[qq.id] = { language: v.language, code: v.code.slice(0, 50000) };
     } else if ((qq.type === 'output' || qq.type === 'essay') && typeof v === 'string') {
       out[qq.id] = v.slice(0, qq.type === 'essay' ? 50000 : 5000);

@@ -13,13 +13,24 @@ git clone https://github.com/Areng14/BrowserQuiz.git && cd BrowserQuiz
 
 On Windows, double-click `setup.cmd` instead of running `./setup.sh`.
 
-The setup script will ask you for an admin password (or make one up for you), create the other secrets in `.env`, pick a free port, start everything and print the address to open. You can run it again at any time since it keeps everything that is already set.
+The setup script will ask you for an admin password (or make one up for you), create the other secrets in `.env`, pick a free port, download BrowserQuiz, start it and print the address to open. You can run it again at any time since it keeps everything that is already set. If the download is blocked, it builds BrowserQuiz on your computer instead, which takes 10 minutes or more the first time.
 
 If students cannot reach it, open the port the script printed in the server's firewall. Default is 8080.
 
 **Requirements.** Docker Compose v2 (the `docker compose` command) and Linux 5.13 or newer, which any current Linux and Docker Desktop already have. The code runner checks this when it starts. If something is missing, code questions will not run but everything else still works, and `docker compose logs runner` will tell you why.
 
-**Doing it by hand.** Copy `.env.example` to `.env`, fill in the three secrets, then run `docker compose up -d --build`.
+**Doing it by hand.** Copy `.env.example` to `.env`, fill in the three secrets, then run `docker compose pull && docker compose up -d`.
+
+## Languages
+
+The code runner comes in two kinds:
+
+| `RUNNER_LANGS` | Languages | Download |
+| --- | --- | --- |
+| `standard` (the default) | Java, Python, JavaScript, TypeScript | about 150 MB |
+| `full` | those, and C, C++, C#, Go, Rust | about 700 MB |
+
+To switch, set `RUNNER_LANGS=full` (or `standard`) in `.env` and run the setup script again. On Railway, add the variable `RUNNER_LANGS=full` to the `runner` service and redeploy it. The quiz maker only offers the languages the runner has, and a quiz that needs another one says so when you save it.
 
 ## Setting up accounts
 
@@ -47,7 +58,7 @@ Plain `http://` is fine for trying it out, but for real classes HTTPS is recomme
 If you have a domain pointed at the server and ports 80 and 443 open to the internet:
 
 1. In `.env`, set `DOMAIN=quiz.yourschool.org`, `APP_BIND=127.0.0.1` and `TRUST_PROXY=1`.
-2. Run `docker compose --profile https up -d --build`.
+2. Run `docker compose --profile https up -d`.
 
 The certificate is set up and renewed automatically. If the server can only be reached from the school network it cannot get a certificate this way, so use your school's own certificate instead. How to do that is in [school-hosting.md](school-hosting.md#https).
 
@@ -107,7 +118,7 @@ How to make and give quizzes is in [onboarding.md](onboarding.md). Here are some
 
 | Task | How |
 | --- | --- |
-| Update | `git pull && docker compose up -d --build`, when no quiz is running |
+| Update | `git pull && ./setup.sh`, when no quiz is running |
 | Logs | `docker compose logs -f app` |
 | Back up | `docker compose stop app && docker compose cp app:/data ./backup-$(date +%F) && docker compose start app` |
 | Wipe everything | `docker compose down -v` (deletes all the data) |
@@ -133,7 +144,7 @@ If you do not want to install anything, you can [deploy it on Railway](https://r
 
 1. Sign in to Railway.
 2. Pick an admin password with 10 or more characters.
-3. Wait about 10 minutes for the first build.
+3. Wait a few minutes for the first build.
 4. Open the `app` service's address (a `.up.railway.app` link, with HTTPS) and sign in at `/teacher` as `admin`.
 
 Your copy gets its own secrets that nobody else has. When this repo changes, Railway shows **Update available**, and nothing changes until you apply it. Stay on the Hobby plan instead of the Free one, since Free puts the app to sleep and after every restart teachers have to sign in again before their quizzes work.
@@ -149,7 +160,7 @@ If a fix cannot wait, put `[deploy now]` in the commit message.
 
 | Service | Settings |
 | --- | --- |
-| `runner` | Root directory `/runner`. No public domain. Variables: `RUNNER_TOKEN=${{shared.RUNNER_TOKEN}}`, `PORT=8080`. |
+| `runner` | Root directory `/runner`. No public domain. Variables: `RUNNER_TOKEN=${{shared.RUNNER_TOKEN}}`, `PORT=8080`, and `RUNNER_LANGS=full` for all nine languages ([Languages](#languages)). |
 | `app` | A volume at `/data`, health check `/healthz`, your domain on port 8080. Variables: `RAILWAY_DOCKERFILE_PATH=server/Dockerfile`, `ID_PEPPER` and `RUNNER_TOKEN` as `${{shared.…}}` references, `RUNNER_URL=http://${{runner.RAILWAY_PRIVATE_DOMAIN}}:8080`, `TRUST_PROXY=1`, `PORT=8080`. |
 
 Put the two secrets in the project's **shared variables**. If you left the admin password out, the one-time code is in the app's deploy logs. Student code still cannot reach the internet here, since the sandbox blocks it.
@@ -161,14 +172,13 @@ Put the two secrets in the project's **shared variables**. If you left the admin
 | Students cannot reach it | Open the port in the server's firewall, and make sure their devices are on a network that can reach the server. |
 | Code questions do not run | `docker compose logs runner` says what is missing, which is usually a Linux older than 5.13. |
 | Quizzes say "your teacher needs to sign in" | The server restarted. The teacher signs in again and students can keep going. |
-| The build fails with certificate errors | Your network checks HTTPS traffic, which is common at schools. Build with your network's certificate (below). |
+| The download or build fails with certificate errors | Your network checks HTTPS traffic, which is common at schools. Build with your network's certificate (below). |
 
 To build with your network's certificate (just that one certificate, not a whole bundle):
 
 ```bash
-docker build --build-arg EXTRA_CA="$(cat /path/to/ca.crt)" -f server/Dockerfile -t browserquiz-app .
-docker build --build-arg EXTRA_CA="$(cat /path/to/ca.crt)" -t browserquiz-runner runner
-docker compose up -d --no-build
+docker compose build --build-arg EXTRA_CA="$(cat /path/to/ca.crt)"
+docker compose up -d
 ```
 
 ## Repository layout

@@ -366,6 +366,11 @@ CC_FLAGS = {
             "-fno-inline", "-fno-builtin", "-fno-tree-loop-distribute-patterns", "-fno-ipa-icf", "-fno-ipa-cp", "-ffunction-sections"],
 }
 LANGS = ("java", "python", "javascript", "typescript", "c", "cpp", "csharp", "go", "rust")
+# The image's kind (Dockerfile): the standard runner has Java, Python, JavaScript and TypeScript only.
+KIND = os.environ.get("RUNNER_LANGS", "full")
+STANDARD = ("java", "python", "javascript", "typescript")
+# The languages that ran at start (language_test): what /health says, and the only ones a job may use.
+AVAILABLE = list(LANGS)
 CS = "/opt/bq/cs"  # csc, the reference assemblies and the runtime config (Dockerfile)
 CS_FLAGS = ["-nologo", "-noconfig", "-nostdlib", "@" + CS + "/refs.rsp", "-langversion:latest", "-nullable:disable", "-optimize+",
             "-debug:portable", "-warn:0", "-target:exe", "-out:main.dll"]
@@ -736,6 +741,8 @@ def run_job(slot, req):
     mem_mb = max(64, min(512, int(req.get("memoryMb") or 256)))
     if lang not in LANGS or not isinstance(files, dict) or not files or len(files) > 20:
         return {"status": "error", "message": "bad job"}
+    if lang not in AVAILABLE:
+        return {"status": "unavailable", "message": f"{lang} isn't on this runner"}
     sources = req.get("sources")
     include = req.get("include")
     scan = req.get("scan")
@@ -877,7 +884,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            return self._send(200, {"ok": True, "landlock": ABI, "slots": SLOTS})
+            return self._send(200, {"ok": True, "landlock": ABI, "slots": SLOTS, "kind": KIND, "languages": AVAILABLE})
         self._send(404, {"error": "not_found"})
 
     def do_POST(self):
@@ -941,8 +948,10 @@ def self_test():
 
 
 def language_test():
-    """The other languages, run once at start. A problem here is reported, not fatal: Java and Python still work."""
+    """The other languages, run once at start. A problem here is reported, not fatal: Java and Python still work.
+    -> (notes, the languages that work). The standard runner doesn't have C, C++, C#, Go or Rust to try."""
     notes = []
+    ok = ["java", "python"]
     probes = [
         ("javascript", {"main.js": "console.log('ok' + (1 + 1))"}, "main.js", None),
         ("typescript", {"main.ts": "const n: number = 2;\nconsole.log('ok' + n)"}, "main.ts", None),
@@ -953,6 +962,8 @@ def language_test():
         ("csharp", {"main.cs": "System.Console.WriteLine(\"ok\" + (1 + 1));"}, "main", ["main.cs"]),
     ]
     for lang, files, main, sources in probes:
+        if KIND == "standard" and lang not in STANDARD:
+            continue
         need = {"javascript": "node", "typescript": "node", "c": "gcc", "cpp": "g++", "go": None, "rust": "rustc", "csharp": "dotnet"}[lang]
         if (need and not shutil.which(need)) or (lang == "go" and not os.path.exists(os.path.join(GO, "importcfg"))):
             notes.append(f"{lang}: not installed")
@@ -965,7 +976,9 @@ def language_test():
         res = run_job(0, req)
         if "ok2" not in res.get("stdout", ""):
             notes.append(f"{lang}: self-test failed: {json.dumps(res)[:400]}")
-    return notes
+        else:
+            ok.append(lang)
+    return notes, [l for l in LANGS if l in ok]
 
 
 if __name__ == "__main__":
@@ -990,12 +1003,14 @@ if __name__ == "__main__":
             while True:
                 signal.pause()
         sys.exit(1)
-    for note in language_test():
+    notes, works = language_test()
+    for note in notes:
         print("runner: warning:", note, flush=True)
+    AVAILABLE[:] = works
     extras = [f"landlock ABI {ABI}", "network blocked by seccomp" + (" and landlock" if ABI >= 4 else "")]
     if ABI >= 6:
         extras.append("signal scoping on")
-    print(f"runner: sandbox ok ({', '.join(extras)}), {SLOTS} slots, listening on :{PORT}", flush=True)
+    print(f"runner: sandbox ok ({', '.join(extras)}), {KIND}: {', '.join(AVAILABLE)}, {SLOTS} slots, listening on :{PORT}", flush=True)
     # Listen on IPv6 and IPv4 both: Railway's private network can be IPv6-only.
     class DualStackServer(ThreadingHTTPServer):
         address_family = socket.AF_INET6

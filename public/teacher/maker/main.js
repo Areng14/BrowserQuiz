@@ -29,6 +29,9 @@ async function showQuizEditor(id, preset) {
   if (ed.preset) ed.quiz = ed.preset.quiz;
   if (!ed.quiz) ed.quiz = { format: 1, title: '', timeLimitMin: 20, language: 'java', shuffleQuestions: true, shuffleChoices: true, questions: [] };
   ed.quiz.questions.forEach(withUi);
+  // The languages this server's code runner has (null: not known), for the code questions' language menu
+  ed.runnerLangs = null;
+  api('/api/t/runner').then((r) => { ed.runnerLangs = r.languages; }).catch(() => {});
   // Section dividers: here each sits at a place in the list (before question number at+1), so moving a question
   // across one moves it into that section. Saved as the id of the question each starts at (collect).
   ed.quiz.sections = (ed.quiz.sections || []).map((sec) => Object.assign({ at: ed.quiz.questions.findIndex((q) => q.id === sec.before), title: sec.title || '', directions: sec.directions || '', timeLimitMin: sec.timeLimitMin || 0 }, sec.calculator ? { calculator: sec.calculator } : {}))

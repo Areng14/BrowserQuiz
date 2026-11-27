@@ -207,8 +207,14 @@ function solutionEditor(q) {
     renderPane();
   };
   function drawTabs() {
+    // only the languages this server's runner has; the rest are a note on how to get them
+    const have = ed.runnerLangs;
+    const left = Object.keys(LANGS).filter((l) => !langs.includes(l));
+    const more = have ? left.filter((l) => !have.includes(l)) : [];
     const [plus, menu] = moreMenu('Add a language', 'qe-addlang', () => [
-      ...Object.keys(LANGS).filter((l) => !langs.includes(l)).map((l) => ({ text: LANGS[l], onclick: () => addLang(l) })),
+      ...left.filter((l) => !more.includes(l)).map((l) => ({ text: LANGS[l], onclick: () => addLang(l) })),
+      more.length ? { text: 'More languages…', onclick: () => window.BQAsk.notice({ title: 'More languages',
+        text: `This server's code runner has ${have.map((l) => LANGS[l]).join(', ')}. For ${more.map((l) => LANGS[l]).join(', ')}, whoever runs the server switches to the full runner (RUNNER_LANGS=full, in docs/setup.md under Languages).` }) } : null,
       { text: q.languagesAny ? 'Only these languages' : 'Any language', tip: q.languagesAny ? 'Students answer in one of these.' : 'Students pick any language that can run it.',
         onclick: () => { q.languagesAny = !q.languagesAny; q.languages = q.languagesAny ? Object.keys(LANGS) : langs.slice(); touch(q); renderPane(); } }]);
     plus.replaceChildren(icon(ICONS.plus, 16));

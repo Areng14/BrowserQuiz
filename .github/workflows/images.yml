@@ -1,0 +1,121 @@
+# Ready-made images, so an install downloads instead of building (setup.sh, docker compose pull): the app,
+# and the code runner in its two kinds (standard: Java, Python, JavaScript and TypeScript; full: all nine
+# languages), each for Intel and ARM computers, at ghcr.io/<owner>/browserquiz-app and -runner.
+# Nightly, and by hand (Actions, Images, Run workflow). An image is only built when its own files changed
+# (its tag is a hash of them). Not on every push: with Railway's "Wait for CI", deploys would wait for it.
+name: Images
+on:
+  schedule:
+    - cron: '17 7 * * *'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: images
+  cancel-in-progress: false
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      todo: ${{ steps.plan.outputs.todo }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Which images are out of date
+        id: plan
+        run: |
+          owner=$(echo "$GITHUB_REPOSITORY_OWNER" | tr 'A-Z' 'a-z')
+          # The files each image is built from: the same files, the same tag
+          app=$(git ls-tree -r HEAD server public scripts package.json package-lock.json docs/quiz-format.md examples/ap-csa-unit4/quiz.json | sha256sum | cut -c1-16)
+          runner=$(git ls-tree -r HEAD runner | sha256sum | cut -c1-16)
+          todo='[]'
+          add() { # image, kind, hash, the tag that says which kind
+            if docker buildx imagetools inspect "ghcr.io/$owner/browserquiz-$1:$4" >/dev/null 2>&1; then echo "$1 $2: up to date ($4)"; return; fi
+            echo "$1 $2: to build ($4)"
+            todo=$(echo "$todo" | jq -c --arg i "$1" --arg k "$2" --arg h "$3" --arg t "$4" '. + [{image: $i, kind: $k, hash: $h, tag: $t}]')
+          }
+          add app app "$app" "src-$app"
+          add runner standard "$runner" "standard-src-$runner"
+          add runner full "$runner" "full-src-$runner"
+          echo "todo=$todo" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.todo != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        item: ${{ fromJSON(needs.plan.outputs.todo) }}
+        arch: [amd64, arm64]
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Name
+        id: name
+        run: echo "image=ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr 'A-Z' 'a-z')/browserquiz-${{ matrix.item.image }}" >> "$GITHUB_OUTPUT"
+      - name: Build and push, by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.item.image == 'app' && '.' || 'runner' }}
+          file: ${{ matrix.item.image == 'app' && 'server/Dockerfile' || 'runner/Dockerfile' }}
+          build-args: RUNNER_LANGS=${{ matrix.item.kind == 'full' && 'full' || 'standard' }}
+          platforms: linux/${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=image,name=${{ steps.name.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+      - name: Keep the digest
+        run: |
+          mkdir -p /tmp/digests
+          echo "${{ steps.build.outputs.digest }}" > "/tmp/digests/${{ matrix.arch }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.item.image }}-${{ matrix.item.kind }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          retention-days: 1
+
+  # Both computers' builds under one name: latest (the app), standard and full (the runner)
+  tag:
+    needs: [plan, build]
+    if: needs.plan.outputs.todo != '[]'
+    strategy:
+      matrix:
+        item: ${{ fromJSON(needs.plan.outputs.todo) }}
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digests-${{ matrix.item.image }}-${{ matrix.item.kind }}-*
+          path: /tmp/digests
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Tag
+        run: |
+          image=ghcr.io/$(echo "$GITHUB_REPOSITORY_OWNER" | tr 'A-Z' 'a-z')/browserquiz-${{ matrix.item.image }}
+          name=${{ matrix.item.image == 'app' && 'latest' || matrix.item.kind }}
+          docker buildx imagetools create -t "$image:$name" -t "$image:${{ matrix.item.tag }}" $(for f in /tmp/digests/*; do printf '%s@%s ' "$image" "$(cat "$f")"; done)
+          docker buildx imagetools inspect "$image:$name"

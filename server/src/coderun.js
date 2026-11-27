@@ -2,6 +2,7 @@
 // Talks to the sandboxed runner: Run (sample tests), grading (hidden tests), and checking
 // a quiz's reference solutions at upload time.
 const H = require('./harness');
+const T = require('../../public/teacher/types.js');
 const { checkValue, QuizError, normOutput, putVars } = require('./quizfile');
 const { autoRubric } = require('./rubric');
 const B = require('./bans');
@@ -27,6 +28,40 @@ async function withSlot(fn, urgent) {
 }
 
 function runnerConfigured() { return !!process.env.RUNNER_URL; }
+
+// The languages the runner has (its /health: the standard runner has Java, Python, JavaScript and
+// TypeScript), asked at most once a minute. null: not known (no runner, or it didn't answer). A runner
+// from before it said is taken to have them all.
+let langs = { at: 0, list: null };
+async function runnerLanguages() {
+  const url = (process.env.RUNNER_URL || '').replace(/\/$/, '');
+  if (!url) return null;
+  if (Date.now() - langs.at < (langs.list ? 60000 : 5000)) return langs.list;
+  let list = null;
+  try {
+    const res = await fetch(url + '/health', { signal: AbortSignal.timeout(1500) });
+    const j = res.ok ? await res.json() : null;
+    if (j) list = Array.isArray(j.languages) ? T.LANGS.filter((l) => j.languages.includes(l)) : T.LANGS.slice();
+  } catch (e) { /* not known */ }
+  langs = { at: Date.now(), list };
+  return list;
+}
+// What runnerLanguages last said, without asking (for code that can't wait): null when not known yet
+const knownLanguages = () => { if (Date.now() - langs.at > (langs.list ? 60000 : 5000)) runnerLanguages(); return langs.list; };
+// asked once at start, so the first students to load a quiz already get the answer
+if (process.env.RUNNER_URL) setTimeout(() => runnerLanguages(), 1000).unref();
+// The languages students may answer a code question in: with "any language", the ones the runner has
+function studentLanguages(qq) {
+  const have = qq.languagesAny && knownLanguages();
+  return have && qq.languages.some((l) => have.includes(l)) ? qq.languages.filter((l) => have.includes(l)) : qq.languages;
+}
+// The languages a question needs the runner to have, that it doesn't: [] when it has them (or isn't known)
+function missingLanguages(have, qq) {
+  if (!have) return [];
+  const need = qq.type === 'output' || (qq.type === 'fill' && qq.run) ? [qq.language]
+    : qq.type === 'code' ? [...(qq.languagesAny ? [] : qq.languages), ...Object.keys(qq.reference || {})] : [];
+  return [...new Set(need)].filter((l) => l && !have.includes(l));
+}
 
 async function runnerHealthy() {
   const url = (process.env.RUNNER_URL || '').replace(/\/$/, '');
@@ -252,6 +287,7 @@ async function checkOutputs(quiz) {
       const label = row ? `Question ${i + 1}, random values row ${r + 1}` : `Question ${i + 1}`;
       if (row && q.answer == null) { problems.push(`Question ${i + 1}: with random values, give the answer as {{name}} and put each row's in the row.`); break; }
       const res = await callRunner(H.buildSnippetJob(v.language, v.code), 5000, 256);
+      if (res.status === 'unavailable') { problems.push(`${label}: this server's code runner doesn't have ${T.LANG_NAMES[v.language]}.`); break; }
       const err = String(res.stderr || res.stdout || '').replace(/\/jobs\/(?:\d+\/)?[^/\s]+\//g, '').trim().slice(0, 400);
       if (res.status === 'compile_error') { problems.push(`${label}: the code doesn't compile: ${err}`); continue; }
       if (res.status === 'timeout') { problems.push(`${label}: the code ran out of time.`); continue; }
@@ -266,4 +302,4 @@ async function checkOutputs(quiz) {
   if (problems.length) throw new QuizError('The output check failed:\n- ' + problems.slice(0, 20).join('\n- '));
 }
 
-module.exports = { runSamples, gradeCode, checkReferences, checkSolutions, checkOutputs, runJob, runnerConfigured, runnerHealthy };
+module.exports = { runSamples, gradeCode, checkReferences, checkSolutions, checkOutputs, runJob, runnerConfigured, runnerHealthy, runnerLanguages, knownLanguages, missingLanguages, studentLanguages };

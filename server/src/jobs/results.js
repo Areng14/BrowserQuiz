@@ -243,6 +243,7 @@ function readResults(q, lang, tests, res, marker) {
     return { status: 'compile_error', message };
   }
   if (res.status === 'error') return { status: 'error', message: 'The code runner had a problem. Try again in a moment.' };
+  if (res.status === 'unavailable') return { status: 'error', message: `This server's code runner doesn't have ${T.LANG_NAMES[lang] || lang}.` };
   const { records, printed } = splitOutput(res.stdout, marker);
   // The ban check's facts: the runner's, read from the compiled code (null: it couldn't read it), or in Java
   // and Python the harness's, written first, before any student code ran.

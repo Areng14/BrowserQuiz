@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # BrowserQuiz setup for Mac and Linux. Makes .env (asks for a teacher password, generates the
-# other secrets), picks a free port, then builds and starts everything. Safe to run again.
+# other secrets), picks a free port, then downloads and starts everything. Safe to run again (it updates).
 #   ./setup.sh             set up and start
-#   ./setup.sh --no-build  start without rebuilding the images
+#   ./setup.sh --build     build the images here instead of downloading them
+#   ./setup.sh --no-build  start with the images already here
 set -euo pipefail
 cd "$(dirname "$0")"
 
-build=--build
-[ "${1:-}" = "--no-build" ] && build=
+get_images=pull
+[ "${1:-}" = "--build" ] && get_images=build
+[ "${1:-}" = "--no-build" ] && get_images=
 
 rand() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom | head -c "${1:-32}" || true; }
 made_up_password() {
@@ -57,6 +59,8 @@ pepper=$(get ID_PEPPER)
 [ ${#pepper} -ge 12 ] || put ID_PEPPER "$(rand 32)"
 token=$(get RUNNER_TOKEN)
 [ ${#token} -ge 16 ] || put RUNNER_TOKEN "$(rand 32)"
+# The code runner's languages: standard (Java, Python, JavaScript, TypeScript) unless .env says full
+case "$(get RUNNER_LANGS)" in standard|full) ;; *) put RUNNER_LANGS standard ;; esac
 
 # ---------- port ----------
 port=$(get APP_PORT)
@@ -76,6 +80,14 @@ fi
 # This computer's address on the network: the app shows it as where students join, instead of localhost
 ip=$( (hostname -I 2>/dev/null || ipconfig getifaddr en0 2>/dev/null || true) | awk '{print $1}')
 export HOST_LAN_IP="$ip"
+build=
+if [ "$get_images" = pull ]; then
+  echo "Downloading BrowserQuiz (the $(get RUNNER_LANGS) code runner)..."
+  # A network that blocks the download: up builds what's missing here instead (10+ minutes the first time)
+  docker compose pull --ignore-pull-failures app runner || echo "Couldn't download the images: building them here instead."
+elif [ "$get_images" = build ]; then
+  build=--build
+fi
 docker compose up -d $build
 
 printf 'Waiting for BrowserQuiz to start'

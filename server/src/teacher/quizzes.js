@@ -9,7 +9,7 @@ const Rekey = require('../rekey');
 const { gradeAttempt, isRun, cleanAnswers, gradeAuto } = require('../grade');
 const { writeZip } = require('../zip');
 const { publicQuiz } = require('../student');
-const { runSamples, gradeCode, checkSolutions, runJob, runnerConfigured } = require('../coderun');
+const { runSamples, gradeCode, checkSolutions, runJob, runnerConfigured, runnerLanguages } = require('../coderun');
 const { findGaps } = require('../mutants');
 const { audit, requireTeacher } = require('./common');
 const { checkQuiz, getQuizRow, imagePaths, parseQuizJson, previewLayout, questionPrompt, quizError, quizPrompt, quizSource, retireQuiz, saveQuiz, staleRuns } = require('./library');
@@ -149,6 +149,11 @@ module.exports = function quizRoutes(r) {
     } finally { busy.delete(me.id); }
   });
   checkRoute('/api/t/check-code', new Set(), async (qq) => ({ results: await checkSolutions(qq) }));
+  // The languages code questions can be in here (the standard runner's four, or all of them): null when not known
+  r.get('/api/t/runner', async (req, res) => {
+    requireTeacher(req);
+    json(res, 200, { languages: await runnerLanguages() });
+  });
   // A search the teacher has moved on from (they've asked again) skips the jobs it hasn't started.
   const asked = new Map();
   checkRoute('/api/t/check-tests', new Set(), async (qq, me) => {
