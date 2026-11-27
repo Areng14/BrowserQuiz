@@ -3,7 +3,8 @@
 // new version and every run keeps the version it was given with (teacher/library.js saveQuiz), so a fixed
 // answer never reached the runs that had the wrong one. This carries over only what grades: the right
 // choices, accepted answers, expected output, trace values, blanks, and a code question's hidden tests
-// and reference. What students saw (prompts, choices, code, examples) stays as it was. Questions added,
+// and reference, and random values only the answer uses. What students saw (prompts, choices, code, examples,
+// the values in them) stays as it was. Questions added,
 // removed or changed to another type are left out, and so is a code question whose method or class
 // changed (new tests wouldn't fit the code students wrote).
 
@@ -59,6 +60,18 @@ function codeKey(oldQ, newQ) {
   };
 }
 
+// Random values (vars): a row's values that students saw (named in the prompt, code, choices...) must stay
+// the same; the ones only the answer uses carry over with it. null: they can't.
+function withVars(oldQ, newQ, key) {
+  if (!key || (!oldQ.vars && !newQ.vars)) return key;
+  if (!Array.isArray(oldQ.vars) || !Array.isArray(newQ.vars) || oldQ.vars.length !== newQ.vars.length) return null;
+  const shown = Object.assign({}, oldQ);
+  for (const k of Object.keys(key).concat('vars')) delete shown[k];
+  const names = new Set([...JSON.stringify(shown).matchAll(/\{\{(\w+)\}\}/g)].map((m) => m[1]));
+  if (oldQ.vars.some((row, i) => [...names].some((n) => !same(row[n], newQ.vars[i][n])))) return null;
+  return Object.assign({}, key, { vars: newQ.vars });
+}
+
 // The old version with the new version's answers: { quiz, changed: [question ids] }.
 function merge(oldQuiz, newQuiz) {
   const byId = new Map(newQuiz.questions.map((qq) => [qq.id, qq]));
@@ -66,7 +79,7 @@ function merge(oldQuiz, newQuiz) {
   const questions = oldQuiz.questions.map((oq) => {
     const nq = byId.get(oq.id);
     if (!nq || nq.type !== oq.type) return oq;
-    const key = keyOf(oq, nq);
+    const key = withVars(oq, nq, keyOf(oq, nq));
     if (!key || Object.keys(key).every((k) => same(oq[k], key[k]))) return oq;
     changed.push(oq.id);
     const out = Object.assign({}, oq, key);
