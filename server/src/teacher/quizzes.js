@@ -101,7 +101,7 @@ module.exports = function quizRoutes(r) {
           const att = store.getAttempt(a.id);
           // code answers whose tests changed run again; the rest is scored from the new answers
           if (att.result && att.result.code) for (const qid of m.changed) delete att.result.code[qid];
-          gradeAttempt(att, quiz).catch((e) => console.error('regrading failed', att.id, e));
+          gradeAttempt(att, quiz, true).catch((e) => console.error('regrading failed', att.id, e));
           regraded++;
         }
       }

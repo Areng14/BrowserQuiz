@@ -175,7 +175,7 @@ module.exports = function attemptRoutes(r) {
         const manual = a.result && a.result.manual;
         a.result = manual ? { manual } : null; // keep the teacher's rubric marks and overrides
         store.save(a);
-        gradeAttempt(a, quiz).catch(() => {});
+        gradeAttempt(a, quiz, true).catch(() => {});
       }
     } else if (p.action === 'grade') {
       // Rubric checkboxes and a points override for one question.
