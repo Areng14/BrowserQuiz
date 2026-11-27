@@ -9,20 +9,22 @@ const B = require('./bans');
 
 const MAX_CONCURRENT = Math.max(1, Number(process.env.RUNNER_CONCURRENCY) || 4);
 let active = 0;
+const runs = [];
 const waiting = [];
 const later = [];
 
 // Urgent: a student's Run, which they sit waiting for, goes ahead of grading (that can wait), so a flood of
-// submissions never keeps a classmate's Run waiting for more than one job. 'low': the quiz maker's search
-// for tests that miss a mistake, after everything else.
+// submissions never keeps a classmate's Run waiting for more than one job. Runs go in the order they came,
+// so a class clicking Run at once doesn't leave the first to click waiting for all the rest. 'low': the quiz
+// maker's search for tests that miss a mistake, after everything else.
 async function withSlot(fn, urgent) {
-  if (active >= MAX_CONCURRENT) await new Promise((resolve) => (urgent === 'low' ? later.push(resolve) : urgent ? waiting.unshift(resolve) : waiting.push(resolve)));
+  if (active >= MAX_CONCURRENT) await new Promise((resolve) => (urgent === 'low' ? later : urgent ? runs : waiting).push(resolve));
   active++;
   try {
     return await fn();
   } finally {
     active--;
-    const next = waiting.shift() || later.shift();
+    const next = runs.shift() || waiting.shift() || later.shift();
     if (next) next();
   }
 }
