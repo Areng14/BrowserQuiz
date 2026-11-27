@@ -3,7 +3,8 @@
 import { BQ, KIND, LANG_NAMES, S, api, cfg } from './state.js';
 import { errorText, h } from './dom.js';
 import { markIcon } from './theme.js';
-import { colorize, editorTheme, loadMonaco } from './monaco.js';
+import { editorTheme, loadMonaco } from './monaco.js';
+import { colorize } from './syntax.js';
 import { codeAnswer, serializeAnswers, setAnswer } from './answers.js';
 import { renderQuestion } from './quiz.js';
 import { mdOpts, metaRow, notTabbable, prompt, sharedBlock } from './marks.js';

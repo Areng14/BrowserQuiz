@@ -1,9 +1,9 @@
-// Monaco, the code editor (bundled, same origin), loaded when a quiz has code.
+// Monaco, the code editor (bundled, same origin), loaded when a quiz has a code question. Code that's only
+// shown is colored by syntax.js instead.
 
 import { MONACO_V, cfg } from './state.js';
 import { h } from './dom.js';
 import { isDark } from './theme.js';
-import { addHighlight, marksIn, rangeAt } from './marks.js';
 
 // ---------- Monaco (bundled, same origin) ----------
 let monacoPromise = null;
@@ -50,33 +50,4 @@ function loadMonaco() {
   return monacoPromise;
 }
 
-// Syntax-highlight every tagged <code> in scope (prompts, choices, examples, results).
-function colorize(scope) {
-  const els = scope ? [...scope.querySelectorAll('code[data-lang]:not([data-colored])')] : [];
-  if (!els.length) return;
-  loadMonaco().then((m) => {
-    els.forEach((code) => {
-      if (code.hasAttribute('data-colored') || !code.isConnected) return;
-      code.setAttribute('data-colored', '');
-      const inlineCode = !code.closest('pre');
-      const inFill = !!code.closest('.fill-code'); // pieces of code between blanks: stay inline, keep line breaks
-      // Coloring rewrites the element from its plain text (the colorizer only reads one text node), so
-      // keep the source, and put any highlights back afterwards.
-      const hl = marksIn(code);
-      if (code.dataset.src == null) code.dataset.src = code.textContent;
-      code.textContent = code.dataset.src;
-      const endsWithNewline = /\n$/.test(code.textContent);
-      m.editor.colorizeElement(code, { theme: editorTheme() }).then(() => {
-        if (inlineCode || inFill) {
-          // keep inline code inline: unwrap the colorizer's block wrapper (and, for inline code, line breaks)
-          code.querySelectorAll('div').forEach((d) => d.replaceWith(...d.childNodes));
-          if (inlineCode) code.querySelectorAll('br').forEach((b) => b.remove());
-          else if (!endsWithNewline && code.lastChild && code.lastChild.nodeName === 'BR') code.lastChild.remove();
-        }
-        for (const [a, b, st] of hl) addHighlight(rangeAt(code, a, b), true, st);
-      }).catch(() => {});
-    });
-  }).catch(() => {});
-}
-
-export { colorize, editorTheme, loadMonaco };
+export { editorTheme, loadMonaco };

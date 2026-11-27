@@ -2,7 +2,7 @@
 
 import { S, THEME_KEY, root } from './state.js';
 import { h } from './dom.js';
-import { colorize, editorTheme } from './monaco.js';
+import { editorTheme } from './monaco.js';
 import { renderQuestion } from './quiz.js';
 
 // ---------- light / dark ----------
@@ -59,14 +59,8 @@ function themeButton() {
 function onThemeChange() {
   if (root) root.querySelectorAll('.theme-btn').forEach(paintThemeButton);
   if (window.monaco) window.monaco.editor.setTheme(editorTheme());
-  // Colored code keeps the old theme's color classes, which point at the wrong colors after a switch.
-  // Redraw it: the question on screen, or any other colored blocks.
-  if (S && S.kept) for (const n of S.kept.values()) n.querySelectorAll('code[data-colored]').forEach((c) => c.removeAttribute('data-colored'));
+  // the question on screen again, for what's drawn in the theme's colors (code is colored by CSS)
   if (S && S.el && S.quiz && !S.done) renderQuestion();
-  else if (root) {
-    root.querySelectorAll('code[data-colored]').forEach((c) => { c.textContent = c.textContent; c.removeAttribute('data-colored'); });
-    colorize(root);
-  }
 }
 darkQuery.addEventListener('change', onThemeChange);
 new MutationObserver(onThemeChange).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });

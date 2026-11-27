@@ -293,8 +293,9 @@ function runInfoBase(run, quiz) {
     // the questions once the quiz starts.
     questionCount: store.perStudent(quiz).count, // with pools, what each student gets
     points: store.perStudent(quiz).points,
-    // the page loads the code editor ahead (3 MB) only when a question shows code: not for math or graphs
-    hasCode: quiz.questions.some((qq) => !['single', 'multi', 'text', 'math', 'graph'].includes(qq.type)),
+    // the page loads the code editor ahead (3 MB) only for a code question: code that's only shown is
+    // colored without it (syntax.js)
+    hasCode: quiz.questions.some((qq) => qq.type === 'code'),
     practice: run.mode === 'practice',
     seb: !!run.seb_key, // SEB keeps the window locked full screen itself
     sebQuit: !!run.seb_config, // our settings: opening seb-quit.html closes SEB

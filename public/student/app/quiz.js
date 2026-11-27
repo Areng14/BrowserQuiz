@@ -3,7 +3,7 @@
 import { BQ, S, cfg, root } from './state.js';
 import { h, mount, toast } from './dom.js';
 import { icon, themeButton } from './theme.js';
-import { colorize } from './monaco.js';
+import { colorize } from './syntax.js';
 import { buildParts, isAnswered, lockIcon, mmss, partLeft, partNow, partOf, pausedView, timedNav } from './answers.js';
 import { directionsView, renderScratch, scratchGrip, toggleScratch } from './scratch.js';
 import { highlightBar, sharedBlock } from './marks.js';
