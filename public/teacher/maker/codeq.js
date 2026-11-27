@@ -9,7 +9,7 @@ import { moreMenu } from '../dash/cells.js';
 import { ed } from './state.js';
 import { BLANK, LANGS, parseClassTests, parseMethodTests, sigText } from './formats.js';
 import { readCode, refLangsOf, starterCode } from './model.js';
-import { codeKeys, insert } from './editing.js';
+import { codeKeys, grow, insert } from './editing.js';
 import { area, check, touch } from './core.js';
 import { colorIn, colored } from './colors.js';
 import { disagreements, fillFromTests, openTypes, readSolutions } from './infer.js';
@@ -135,7 +135,7 @@ function testsParts(q, src, compile, drawn) {
   const textBtn = h('button', { class: 'btn small', type: 'button' });
   const drawTests = () => {
     textBtn.textContent = u.testsAsText ? 'Edit as a table' : 'Edit as text';
-    if (u.testsAsText) testsBody.replaceChildren(textMode());
+    if (u.testsAsText) { testsBody.replaceChildren(textMode()); testsBody.querySelectorAll('textarea').forEach(grow); } // sized to the tests (once on the page: grow waits for that)
     else { grid.draw(); testsBody.replaceChildren(grid.node); }
   };
   textBtn.addEventListener('click', () => { u.testsAsText = !u.testsAsText; drawTests(); checks.schedule(); });
@@ -187,6 +187,7 @@ function solutionEditor(q) {
   const pick = (l) => {
     u.refTab = l;
     for (const [k, p] of Object.entries(panels)) p.el.hidden = k !== l;
+    grow(panels[l].ta); // a hidden box has no height to read, so it's sized when it shows
     drawTabs();
     parts.drawSummary();
     parts.showCompile();
