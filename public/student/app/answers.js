@@ -4,7 +4,7 @@ import { ERRORS, PARTS, S, api, cfg } from './state.js';
 import { announce, h, toast } from './dom.js';
 import { icon } from './theme.js';
 import { screenJoin } from './entry.js';
-import { lockOn, renderQuestion } from './quiz.js';
+import { lockOn, renderQuestion, toTop } from './quiz.js';
 import { toggleScratch } from './scratch.js';
 import { renderSheet } from './nav.js';
 import { endQuiz, leaveQuiz, showNotice, signedOut } from './overlays.js';
@@ -185,7 +185,7 @@ function setPaused(at) {
   }
   renderQuestion();
   if (S.tickTimer) S.tickTimer(); // the clock says Paused, or runs, now rather than at its next tick
-  S.el.main.scrollTop = 0;
+  toTop();
   if (!cfg.watch) {
     const head = document.getElementById('q-heading');
     if (head && !S.el.wrap.querySelector('.modal-backdrop')) head.focus({ preventScroll: true });
@@ -221,7 +221,7 @@ async function partTimeUp(done) {
   S.idx = next.start;
   S.dirOpen = true;
   renderQuestion();
-  S.el.main.scrollTop = 0;
+  toTop();
   const head = document.getElementById('q-heading');
   if (head) head.focus({ preventScroll: true });
 }
@@ -232,15 +232,20 @@ async function partTimeUp(done) {
 // another computer since). Cleared once saved, and on turn-in.
 const unsentKey = () => 'bq-unsent:' + [S.run && (S.run.id || S.run.code || S.run.title), S.me && S.me.name, S.tag || ''].join(':');
 let unsentTimer = 0;
+function writeUnsent() {
+  unsentTimer = 0;
+  try { localStorage.setItem(unsentKey(), JSON.stringify({ at: Date.now() + (S.skew || 0), answers: serializeAnswers() })); } catch (e) { /* kept on the server only */ }
+}
 function keepUnsent() {
   if (cfg.preview || cfg.watch || cfg.demo || !S.monitor) return;
   clearTimeout(unsentTimer);
-  unsentTimer = setTimeout(() => {
-    try { localStorage.setItem(unsentKey(), JSON.stringify({ at: Date.now() + (S.skew || 0), answers: serializeAnswers() })); } catch (e) { /* kept on the server only */ }
-  }, 300);
+  unsentTimer = setTimeout(writeUnsent, 300);
 }
+// Reloaded or closed before that: kept now, as the page goes.
+window.addEventListener('pagehide', () => { if (unsentTimer) { clearTimeout(unsentTimer); writeUnsent(); } });
 function clearUnsent() {
   clearTimeout(unsentTimer);
+  unsentTimer = 0;
   try { localStorage.removeItem(unsentKey()); } catch (e) { /* nothing kept */ }
 }
 function takeUnsent(savedAt) {
