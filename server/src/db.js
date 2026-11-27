@@ -170,7 +170,9 @@ function q(sql) {
   if (!s) { s = db.prepare(sql); cache.set(sql, s); }
   return s;
 }
+// Inside another transaction it joins that one: SQLite can't nest them.
 function tx(fn) {
+  if (db.isTransaction) return fn();
   db.exec('BEGIN');
   try {
     const r = fn();

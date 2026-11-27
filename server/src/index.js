@@ -108,25 +108,31 @@ setInterval(() => tx(() => {
       if (!quizzes.has(a.runId)) quizzes.set(a.runId, quizOf(q('SELECT quiz_id FROM runs WHERE id = ?').get(a.runId)));
       const quiz = quizzes.get(a.runId);
       if (!quiz) continue;
-      const t = a.result && quiz.questions.some(isRun) ? totals(a.result, quiz, a.answers, a.layout) : null;
-      if (!a.result || (t && (t.failed || t.pending))) gradeAttempt(a, quiz).catch(() => {});
+      try {
+        const t = a.result && quiz.questions.some(isRun) ? totals(a.result, quiz, a.answers, a.layout) : null;
+        if (!a.result || (t && (t.failed || t.pending))) gradeAttempt(a, quiz).catch(() => {});
+      } catch (e) { console.error('sweep', a.id, e); }
     }
   }
+  // each student on their own: one that fails doesn't take the rest of the class's writes back with it
   for (const a of store.attempts.values()) {
     if (a.status !== 'active' || a.archived) continue;
-    const run = q('SELECT quiz_id, mode, paused_at FROM runs WHERE id = ?').get(a.runId);
-    if (!run) continue;
-    const quiz = quizOf(run);
-    if (!quiz) continue;
-    a.practice = run.mode === 'practice';
-    a.pausedAt = run.paused_at || 0; // paused: nothing runs out (pause.js), and a lost connection doesn't count (store.record)
-    if (a.lastBeat && now - a.lastBeat > 10000 && !a.beatLost && !a.practice) {
-      a.beatLost = true;
-      store.record(a, 'heartbeat-lost', Math.round((now - a.lastBeat) / 1000) + 's silent', quiz);
-    }
-    if (a.deadline && !a.pausedAt && now > a.deadline + 30000) studentRoutes.submit(a, quiz, null, 'time ran out');
+    try { sweepOne(a, now); } catch (e) { console.error('sweep', a.id, e); }
   }
 }), 2000).unref();
+function sweepOne(a, now) {
+  const run = q('SELECT quiz_id, mode, paused_at FROM runs WHERE id = ?').get(a.runId);
+  if (!run) return;
+  const quiz = quizOf(run);
+  if (!quiz) return;
+  a.practice = run.mode === 'practice';
+  a.pausedAt = run.paused_at || 0; // paused: nothing runs out (pause.js), and a lost connection doesn't count (store.record)
+  if (a.lastBeat && now - a.lastBeat > 10000 && !a.beatLost && !a.practice) {
+    a.beatLost = true;
+    store.record(a, 'heartbeat-lost', Math.round((now - a.lastBeat) / 1000) + 's silent', quiz);
+  }
+  if (a.deadline && !a.pausedAt && now > a.deadline + 30000) studentRoutes.submit(a, quiz, null, 'time ran out');
+}
 
 // Results stored before quiz encryption kept the hidden tests' inputs and expected values: drop them.
 for (const row of q(`SELECT id, result FROM attempts WHERE result LIKE '%"expected"%'`).all()) {
