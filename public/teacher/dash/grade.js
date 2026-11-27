@@ -69,7 +69,7 @@ async function showGrade(runId, qid, opts) {
     back,
     h('div', { class: 't-gq-bar' },
       h('h1', { text: 'Grade' }),
-      h('div', { class: 't-gq-qnav' }, prevQ, h('span', { class: 't-gq-pick' }, pickQ, icon(ICONS.chevron, 16)), nextQ),
+      h('div', { class: 't-gq-qnav' }, prevQ, h('span', { class: 't-gq-pick' }, pickQ), nextQ),
       h('span', { class: 't-muted', text: `${done} of ${students.length} graded` }),
       h('label', { class: 't-check t-gq-hide', for: 'gq-hide' }, hide, h('span', { text: 'Hide names' }))),
     h('div', { class: 't-gq' }, list, pane))));

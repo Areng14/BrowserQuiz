@@ -44,7 +44,7 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .t-badge { font-size: 13px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .t-side-foot { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 12px 0 0; border-top: 1px solid var(--line); }
 /* the account menu: the teacher's name with a chevron, the width the theme button leaves */
-.btn.t-menu-btn.t-menu-named { flex: 0 1 auto; min-width: 0; max-width: 240px; width: auto; justify-content: space-between; gap: 6px; padding: 0 10px; font-weight: 600; }
+.btn.t-menu-btn.t-menu-named { flex: 0 1 auto; min-width: 0; max-width: 240px; width: auto; justify-content: space-between; gap: 6px; padding: 0 12px 0 10px; font-weight: 600; }
 .t-side-foot .btn.t-menu-named { flex: 1 1 auto; max-width: none; } /* fills the sidebar's footer row */
 .t-menu-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .t-menu-named svg { flex: none; color: var(--ink-2); }
@@ -135,14 +135,14 @@ html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--in
 .pick-wrap { position: relative; container-type: inline-size; }
 @container (max-width: 560px) { .pick-meta > span + span { display: none; } } /* the date goes first */
 @container (max-width: 380px) { .pick-meta { display: none; } }
-.pick { display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer; }
+.pick { display: flex; align-items: center; gap: 12px; padding-right: 12px; text-align: left; cursor: pointer; } /* its chevron 12px in, like a select's */
 .pick:disabled { cursor: default; color: var(--ink-2); }
 .pick-face { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 16px; }
 .pick-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pick-meta { flex: none; display: flex; gap: 16px; font-size: 14px; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .pick-meta > span { min-width: 92px; text-align: right; }
 .pick-meta > span + span { min-width: 128px; }
-.pick-caret { flex: none; width: 7px; height: 7px; margin: 0 2px 3px; border: solid var(--ink-2); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.pick-caret { flex: none; width: 16px; height: 16px; background: var(--chev) center / 16px no-repeat; } /* the dropdowns' chevron (app.css) */
 .pick-list {
   position: absolute; z-index: 30; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none;
   max-height: 320px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
@@ -496,8 +496,7 @@ button.t-joincode:hover { background: var(--soft); }
 .t-gq-qnav { display: flex; align-items: center; gap: 8px; min-width: 0; }
 /* the cap is on the box the arrow is placed in, so a long question's select can't end short of its arrow */
 .t-gq-pick { position: relative; display: inline-flex; min-width: 0; max-width: 460px; }
-.input.t-gq-select { width: auto; min-width: 0; padding: 0 44px 0 12px; appearance: none; -webkit-appearance: none; cursor: pointer; text-overflow: ellipsis; }
-.t-gq-pick > svg { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--ink-2); pointer-events: none; }
+.input.t-gq-select { width: auto; min-width: 0; text-overflow: ellipsis; }
 .t-gq-hide { margin-left: auto; }
 .t-gq { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 24px; align-items: start; }
 .t-gq-list { margin: 0; padding: 6px; list-style: none; display: grid; gap: 2px; border: 1px solid var(--line); border-radius: 8px; position: sticky; top: 16px; max-height: calc(100vh / var(--zoom, 1) - 32px); overflow: auto; }

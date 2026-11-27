@@ -2,6 +2,7 @@
 :root {
   color-scheme: light;
   --bg: #ffffff; --soft: #f4f5f8; --ink: #16181d; --ink-2: #5b6170; --line: #d9dce3;
+  --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235b6170' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   --good: #1b7f45; --warn: #9a5b00; --bad: #c0352d; --accent: #2257d6;
   --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
 }
