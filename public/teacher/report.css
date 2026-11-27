@@ -10,7 +10,7 @@
 html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
 .r-bar { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 16px; background: var(--soft); border-bottom: 1px solid var(--line); }
 /* the bar's controls: one height, one font, one radius */
-.r-btn, .r-jump { height: 38px; font: inherit; font-size: 15px; border-radius: 6px; }
+.r-btn, .r-jump { height: 40px; font: inherit; font-size: 15px; border-radius: 6px; }
 .r-btn { font-weight: 600; padding: 0 16px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
 .r-btn:disabled { opacity: 0.5; cursor: default; }
 .r-jump { max-width: 100%; padding: 0 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
@@ -38,4 +38,4 @@ main { max-width: 920px; margin: 0 auto; padding: 28px 16px 64px; }
   .r-chips a { color: inherit; }
   @page { margin: 14mm 12mm; }
 }
-@media (pointer: coarse) { .r-jump { font-size: 16px; } }
+@media (pointer: coarse) { .r-jump { font-size: 16px; } .r-btn, .r-jump { height: 44px; } }

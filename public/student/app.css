@@ -327,7 +327,7 @@ select.input:not([multiple]), select.select {
 .qview.intro .part-title { margin: 0; }
 .meta-right { display: inline-flex; align-items: center; gap: 12px; white-space: nowrap; }
 .mark-btn {
-  display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; font: 600 13px var(--font); color: var(--ink-2); white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 12px; font: 600 14px var(--font); color: var(--ink-2); white-space: nowrap; /* a small button */
   background: none; border: 1px solid var(--line); border-radius: 6px; cursor: pointer;
 }
 .mark-btn:hover { color: var(--ink); background: var(--soft); }
@@ -535,6 +535,7 @@ select.input:not([multiple]), select.select {
   .theme-btn, .icon-btn { width: 40px; height: 40px; }
   .sheet-dot { min-width: 40px; height: 40px; }
   .link-btn, .mark-btn, .trace-cell { min-height: 40px; }
+  .calc-area input { height: 40px; } /* beside Find, a small button */
 }
 /* Headings take focus on a new screen for screen readers; they don't need a ring for it. */
 h1[tabindex="-1"]:focus { outline: none; }

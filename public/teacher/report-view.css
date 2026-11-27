@@ -221,7 +221,7 @@
 /* Similar code (class report) */
 
 /* Diff and Show buttons: one small size everywhere */
-.r-view .r-diff-btn { height: 32px; padding: 0 12px; font: 600 13px system-ui, sans-serif; color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.r-view .r-diff-btn { height: 34px; padding: 0 12px; font: 600 14px system-ui, sans-serif; color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; white-space: nowrap; }
 .r-view .r-diff-btn:hover { background: var(--soft); }
 /* Similar code and Same wrong answers: one list of pairs each, set like the tables above them. Names on the
    left, what they share on the right, Show at the end of every row in the same place. */
