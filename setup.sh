@@ -203,6 +203,9 @@ fi
 # This computer's address on the network: the app shows it as where students join, instead of localhost
 ip=$( (hostname -I 2>/dev/null || ipconfig getifaddr en0 2>/dev/null || true) | awk '{print $1}')
 export HOST_LAN_IP="$ip"
+# the commit, for a build here (the Server page compares it with GitHub's newest)
+BQ_REVISION=$(git rev-parse HEAD 2>/dev/null || true)
+export BQ_REVISION
 build=
 if [ "$get_images" = pull ]; then
   echo "${B}Downloading BrowserQuiz...${R}"
@@ -240,6 +243,8 @@ echo "${G}${TICK}${R} ${B}BrowserQuiz is running${R}"
 echo
 line "Teacher" "http://localhost:$port/teacher"
 line "Students" "http://$ip:$port"
+running=$(docker compose exec -T app printenv BQ_REVISION 2>/dev/null | cut -c1-7 || true)
+[ -n "$running" ] && line "Version" "$running"
 [ -n "$new_password" ] && line "Password" "$new_password  ${D}(saved in .env)${R}"
 line "Languages" "$([ "$(get RUNNER_LANGS)" = full ] && echo "all nine" || echo "Java, Python, JavaScript, TypeScript")  ${D}(change: ./setup.sh --languages)${R}"
 if echo "$runner" | grep -q "sandbox ok"; then

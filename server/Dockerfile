@@ -13,7 +13,9 @@ COPY scripts ./scripts
 RUN node scripts/build-monaco.mjs
 
 FROM node:22-bookworm-slim
-ENV NODE_ENV=production DATA_DIR=/data PORT=8080
+# The commit this is (the admin's Server page compares it with GitHub's newest)
+ARG REVISION=""
+ENV NODE_ENV=production DATA_DIR=/data PORT=8080 BQ_REVISION=$REVISION
 WORKDIR /app
 COPY server ./server
 COPY public ./public

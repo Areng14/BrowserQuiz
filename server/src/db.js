@@ -6,7 +6,14 @@ const { DatabaseSync } = require('node:sqlite');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
 fs.mkdirSync(DATA_DIR, { recursive: true });
-const db = new DatabaseSync(path.join(DATA_DIR, 'browserquiz.db'));
+const MAIN = path.join(DATA_DIR, 'browserquiz.db');
+// A backup the admin restored (backups.js stage): it replaces the database before it's opened.
+if (fs.existsSync(path.join(DATA_DIR, 'restore.db'))) {
+  for (const ext of ['', '-wal', '-shm']) fs.rmSync(MAIN + ext, { force: true });
+  fs.renameSync(path.join(DATA_DIR, 'restore.db'), MAIN);
+  console.log('Restored a backup.');
+}
+const db = new DatabaseSync(MAIN);
 
 db.exec(`
 PRAGMA journal_mode = WAL;

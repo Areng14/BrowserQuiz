@@ -75,7 +75,9 @@ jobs:
         with:
           context: ${{ matrix.item.image == 'app' && '.' || 'runner' }}
           file: ${{ matrix.item.image == 'app' && 'server/Dockerfile' || 'runner/Dockerfile' }}
-          build-args: RUNNER_LANGS=${{ matrix.item.kind == 'full' && 'full' || 'standard' }}
+          build-args: |
+            RUNNER_LANGS=${{ matrix.item.kind == 'full' && 'full' || 'standard' }}
+            REVISION=${{ github.sha }}
           platforms: linux/${{ matrix.arch }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}

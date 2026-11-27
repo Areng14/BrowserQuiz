@@ -9,6 +9,7 @@ const { q } = require('../db');
 const { runnerConfigured, runnerHealthy } = require('../coderun');
 const PK = require('../passkeys');
 const { TCH, audit, dropQuizzes, requireAdmin, requireTeacher } = require('./common');
+const { version } = require('../version');
 const { TDEV, acctFails, devMisses, devSig, knownDevice, loginBucket, startSession } = require('./library');
 const { quizDefaults } = require('./settings');
 
@@ -78,7 +79,7 @@ module.exports = function authRoutes(r) {
   r.get('/api/t/me', async (req, res) => {
     const me = requireTeacher(req, { setup: true });
     json(res, 200, {
-      ok: true, runner: runnerConfigured(), runnerOk: runnerConfigured() ? await runnerHealthy() : false,
+      ok: true, runner: runnerConfigured(), runnerOk: runnerConfigured() ? await runnerHealthy() : false, version: version || null,
       teacher: {
         username: me.username, name: me.name, role: me.role, mustChange: !!me.must_change,
         passwordFromEnv: me.role === 'admin' && V.adminPasswordFromEnv(),

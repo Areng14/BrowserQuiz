@@ -59,12 +59,7 @@ async function handle(req, res) {
   // quiz the teacher paused: a fire drill leaves the laptops closed). A deploy restarts the server, so the
   // deploy check (.github/workflows/deploy-gate.yml) waits for this to say false. Just yes or no: nothing
   // about who or which quiz.
-  if (p === '/healthz/busy') {
-    const n = q(`SELECT COUNT(*) AS n FROM attempts a JOIN runs r ON r.id = a.run_id
-      WHERE r.status = 'open' AND r.mode != 'practice' AND a.archived = 0 AND a.status IN ('waiting', 'admitted', 'active')
-      AND (a.last_beat > ? OR (r.paused_at IS NOT NULL AND a.status = 'active'))`).get(Date.now() - 90000).n;
-    return json(res, 200, { busy: n > 0 });
-  }
+  if (p === '/healthz/busy') return json(res, 200, { busy: require('./backups').quizInProgress() });
   if (p.startsWith('/asset/')) {
     const rel = decodeURIComponent(p.slice('/asset/'.length));
     if (!/^assets\/[A-Za-z0-9 _.\-/]+$/.test(rel) || rel.includes('..')) throw new HttpError(404, 'not_found');
@@ -151,6 +146,7 @@ function resume(ownerId) {
   }
 }
 resume(null);
+require('./backups').nightly();
 // A teacher signing in: whatever of theirs is still in the clear gets sealed, and their quizzes carry on.
 V.onUnlock((id) => {
   P.sealPeople(id);

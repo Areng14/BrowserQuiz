@@ -2,7 +2,7 @@
 
 import { showQuizEditor } from '../maker/main.js';
 import { dash } from './state.js';
-import { ICONS, accountMenu, actionsHead, api, ask, date, ghLink, h, heads, icon, iconButton, mount, pendingCode, plural, post, labeled, sortableTable, themeButton, tip } from './core.js';
+import { ICONS, accountMenu, actionsHead, api, ask, date, h, heads, icon, iconButton, mount, pendingCode, plural, post, labeled, siteFoot, sortableTable, themeButton, tip } from './core.js';
 import { showRecoveryCode, teachersSection } from './account.js';
 import { settingsTab } from './settings.js';
 import { showRoster } from './roster.js';
@@ -12,6 +12,7 @@ import { showGrade } from './grade.js';
 import { lockdownFields } from './modes.js';
 import { picker } from './picker.js';
 import { gradesTab } from './grades.js';
+import { serverTab } from './server.js';
 
 // ---------- dashboard: a sidebar of tabs, each with its own address (#give, #run/<id>, ...) ----------
 const TABS = [
@@ -22,6 +23,7 @@ const TABS = [
   { id: 'classes', label: 'Classes', icon: 'classes' },
   // in the menu under the teacher's name (core.js accountMenu), not the sidebar
   { id: 'teachers', label: 'Teachers', icon: 'teachers', admin: true, menu: true },
+  { id: 'server', label: 'Server', icon: 'settings', admin: true, menu: true },
   { id: 'settings', label: 'Settings', icon: 'settings', menu: true },
 ];
 // Open quizzes: one goes straight to its live page, two or more to a list of them (#open).
@@ -55,7 +57,7 @@ async function route() {
   // a recovery code not saved yet stays on screen, even after a reload (account.js showRecoveryCode)
   const code = pendingCode();
   if (code) { if (!dash.who) { try { dash.who = (await api('/api/t/me')).teacher; } catch (e) { /* shown anyway */ } } showRecoveryCode(code.code, code.again); return; }
-  if (!dash.who) { try { dash.who = (await api('/api/t/me')).teacher; } catch (e) { return; } } // signs in first if needed
+  if (!dash.who) { try { const me = await api('/api/t/me'); dash.who = me.teacher; dash.version = me.version; } catch (e) { return; } } // signs in first if needed
   const [a, b, c] = location.hash.slice(1).split('/');
   const id = b ? decodeURIComponent(b) : null;
   if (a === 'run' && id) showRun(id);
@@ -84,7 +86,7 @@ function shell(active, ...content) {
         t.id === 'open' && dash.live > 1 ? h('span', { class: 't-badge', title: `${dash.live} open`, 'aria-label': `${dash.live} open`, text: String(dash.live) }) : null))),
       h('div', { class: 't-side-foot' }, accountMenu(), themeButton())),
     h('main', { class: 't-main' }, ...content),
-    h('footer', { class: 't-foot' }, ghLink())); // at the bottom of the page, or after it when it's long
+    h('footer', { class: 't-foot' }, siteFoot())); // at the bottom of the page, or after it when it's long
 }
 
 async function showHome(next) {
@@ -97,10 +99,11 @@ async function showHome(next) {
   try { [data, me] = await Promise.all([api('/api/t/overview'), api('/api/t/me').catch(() => null)]); } catch (e) { if (e.message !== 'login') mount(h('p', { class: 't-error', text: e.message })); return; }
   if (seq !== dash.navSeq) return;
   dash.who = me && me.teacher;
-  if (dash.tab === 'teachers' && !(dash.who && dash.who.role === 'admin')) { showHome('give'); return; }
+  if (me && me.version) dash.version = me.version;
+  if ((dash.tab === 'teachers' || dash.tab === 'server') && !(dash.who && dash.who.role === 'admin')) { showHome('give'); return; }
   noteRuns(data.runs);
   if (dash.tab === 'open' && dash.live < 2) { if (dash.live) { history.replaceState(null, '', '#run/' + encodeURIComponent(dash.openRuns[0].id)); showRun(dash.openRuns[0].id); } else showHome('give'); return; }
-  const page = { open: openTab, give: giveTab, grades: gradesTab, recent: recentTab, quizzes: quizzesTab, classes: classesTab, teachers: teachersSection, settings: settingsTab }[dash.tab](data, me);
+  const page = { open: openTab, give: giveTab, grades: gradesTab, recent: recentTab, quizzes: quizzesTab, classes: classesTab, teachers: teachersSection, server: serverTab, settings: settingsTab }[dash.tab](data, me);
   const y = same ? window.scrollY : 0;
   mount(shell(dash.tab, page));
   window.scrollTo(0, y);

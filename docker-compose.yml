@@ -12,6 +12,8 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
+      args:
+        REVISION: ${BQ_REVISION:-}
     restart: unless-stopped
     environment:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}

@@ -118,21 +118,13 @@ How to make and give quizzes is in [onboarding.md](onboarding.md). Here are some
 
 | Task | How |
 | --- | --- |
-| Update | `git pull && ./setup.sh`, when no quiz is running |
+| Update | `git pull && ./setup.sh`, when no quiz is running. On Railway, apply **Update available** on your project. The Server page says when there's a newer version. |
 | Logs | `docker compose logs -f app` |
-| Back up | `docker compose stop app && docker compose cp app:/data ./backup-$(date +%F) && docker compose start app` |
 | Wipe everything | `docker compose down -v` (deletes all the data) |
 
-To restore a backup:
+Everything (quizzes, classes and results) is stored in one database in the `bq-data` volume, and it backs itself up every night around 2:00 (never during a quiz), keeping the last 7. On the **Server** page (the menu under your name, admin only) you can back up now, download a backup, and restore one from the list or from a downloaded file. A restore keeps a copy of what it replaced, then restarts the server.
 
-```bash
-docker compose stop app
-docker compose cp ./backup-2026-11-20/. app:/data
-docker compose run --rm --no-deps --user root --entrypoint chown app -R node:node /data
-docker compose start app
-```
-
-- Everything (quizzes, classes and results) is stored in one database in the `bq-data` volume. Back it up between classes.
+- The nightly backups sit on the same disk as the data, so download one now and then and keep it somewhere else. To copy them all off without signing in: `docker compose cp app:/data/backups ./backups`
 - **Never change `ID_PEPPER`** in `.env` once classes are added. Student IDs are scrambled with it, so changing it means no student can sign in.
 - Backups made before quiz encryption was added still have readable copies of quizzes.
 

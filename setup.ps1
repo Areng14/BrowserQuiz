@@ -186,6 +186,8 @@ try {
   if ($cfg) { $ip = @($cfg.IPv4Address)[0].IPAddress }
 } catch { }
 if ($ip) { $env:HOST_LAN_IP = $ip }
+# the commit, for a build here (the Server page compares it with GitHub's newest)
+try { $env:BQ_REVISION = (git rev-parse HEAD 2>$null) } catch { }
 if ($mode -eq 'pull') {
   Write-Host 'Downloading BrowserQuiz...' -ForegroundColor White
   # A network that blocks the download: up builds what's missing here instead (10+ minutes the first time)
@@ -230,6 +232,8 @@ Write-Host 'BrowserQuiz is running' -ForegroundColor White
 Write-Host ''
 Write-Line 'Teacher' "http://localhost:$port/teacher"
 Write-Line 'Students' "http://${ip}:$port"
+$running = "$(docker compose exec -T app printenv BQ_REVISION 2>$null)".Trim()
+if ($running) { Write-Line 'Version' $running.Substring(0, [Math]::Min(7, $running.Length)) }
 if ($newPassword) { Write-Line 'Password' $newPassword '(saved in .env)' }
 Write-Line 'Languages' $(if ((Get-EnvValue 'RUNNER_LANGS') -eq 'full') { 'all nine' } else { 'Java, Python, JavaScript, TypeScript' }) '(change: setup.cmd -Languages)'
 if (($runnerLog -join "`n") -match 'sandbox ok') {

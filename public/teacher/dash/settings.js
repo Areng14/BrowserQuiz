@@ -67,7 +67,7 @@ function youCard(s) {
 }
 
 function passwordCard(onSignedOut) {
-  if (dash.who && dash.who.passwordFromEnv) return card('set-pw', 'Password', note("Admin's password is ADMIN_PASSWORD in the server's .env file. Change it there and restart."));
+  if (dash.who && dash.who.passwordFromEnv) return card('set-pw', 'Password', note("It's ADMIN_PASSWORD in the server's .env file."));
   // whose password this is, hidden, so a password manager saves the new one under the right name
   const account = h('input', { type: 'text', autocomplete: 'username', value: dash.who ? dash.who.username : '', readonly: true, hidden: true, tabindex: '-1', 'aria-hidden': 'true' });
   const cur = h('input', { class: 'input', type: 'password', id: 'set-pw-cur', autocomplete: 'current-password' });
@@ -106,7 +106,6 @@ function recoveryCard() {
     try { showRecoveryCode((await post('/api/t/settings/recovery-code', { password })).recoveryCode, true); } catch (ex) { if (ex.message !== 'login') msg.textContent = ex.message; btn.disabled = false; }
   });
   return card('set-rc', 'Recovery code',
-    note('If you forget your password, an admin resets it and your recovery code opens your quizzes again. Making a new code stops the old one from working.'),
     h('div', {}, btn), msg);
 }
 
@@ -130,7 +129,6 @@ function defaultsCard(s) {
   const msg = status();
   const save = h('button', { class: 'btn primary', type: 'submit', text: 'Save defaults' });
   const form = h('form', { class: 't-set-card', 'aria-labelledby': 'set-qd' }, h('h2', { id: 'set-qd', text: 'Quiz defaults' }),
-    note('Give a quiz starts with these. You can still change them each time.'),
     lock.nodes, h('div', { class: 't-row t-set-foot' }, save, msg));
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -153,7 +151,6 @@ async function aiCard() {
   }, 'set-ai');
   keys.draw(false);
   return card('set-ai', 'AI grading key',
-    note("Grade with AI uses your own key when you add one. Without it, it uses the school's key if the server has one, or you copy and paste the prompt."),
     keys.el);
 }
 

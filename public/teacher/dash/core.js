@@ -125,6 +125,7 @@ function accountMenu() {
   return moreMenu(`Account, ${dash.who.name}`, 'account', [
     { text: 'Settings', onclick: () => { location.hash = '#settings'; } },
     dash.who.role === 'admin' ? { text: 'Teachers', onclick: () => { location.hash = '#teachers'; } } : null,
+    dash.who.role === 'admin' ? { text: 'Server', onclick: () => { location.hash = '#server'; } } : null,
     { text: 'Sign out', onclick: async () => { await post('/api/t/logout'); dash.who = null; forgetCode(); showLogin(); } },
   ], null, { text: dash.who.name });
 }
@@ -163,6 +164,8 @@ function ghMark() {
   return s;
 }
 const ghLink = () => h('a', { class: 't-gh', href: 'https://github.com/Areng14/BrowserQuiz', target: '_blank', rel: 'noopener' }, ghMark(), 'GitHub');
+// The page's foot once signed in: the project, and the version this server runs (the admin's Server page says more)
+const siteFoot = () => [ghLink(), dash.version ? h('span', { class: 't-version', text: `Version ${dash.version}` }) : null];
 const actionsHead = () => h('th', {}, h('span', { class: 'sr-only', text: 'Actions' }));
 // Column headers; the ones named in nums sit right, over their right-aligned numbers.
 const heads = (names, nums = []) => names.map((x) => h('th', { class: nums.includes(x) ? 'num' : null, text: x }));
@@ -244,4 +247,4 @@ function iconButton(btn, name, text, more) {
 // Filled pause and play marks (the paused quiz's banner)
 function glyph(kind, size = 16) { return icon(kind, size, { fill: 'currentColor', stroke: 'none' }); }
 
-export { EVENT_TIP, ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, day, forgetCode, ghLink, keepCode, pendingCode, setTheme, themeChoice, timeZone, glyph, h, heads, icon, iconButton, labeled, mmss, mount, plural, post, root, scoreText, sortHeads, sortRows, sortableTable, themeButton, tip };
+export { EVENT_TIP, ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, day, forgetCode, ghLink, glyph, h, heads, icon, iconButton, keepCode, labeled, mmss, mount, pendingCode, plural, post, root, scoreText, setTheme, siteFoot, sortableTable, sortHeads, sortRows, themeButton, themeChoice, timeZone, tip };

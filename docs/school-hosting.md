@@ -132,10 +132,9 @@ Optional, for locked-down exams. SEB has to be installed on the student devices,
 | --- | --- |
 | Update | `git pull && docker compose pull && docker compose --profile https up -d`, when no quiz is running |
 | Logs | `docker compose logs -f app` |
-| Back up | `docker compose stop app && docker compose cp app:/data ./backup-$(date +%F) && docker compose start app` |
-| Restore | Under [Updates, backups and logs](setup.md#updates-backups-and-logs) in setup.md |
+| Back up and restore | On the Server page, in the menu under the admin's name ([more](setup.md#updates-backups-and-logs)) |
 
-- Everything lives in one SQLite database in the `bq-data` volume. Back it up between terms, or let your VM backups cover it.
+- Everything lives in one SQLite database in the `bq-data` volume. It backs itself up every night and keeps the last 7 there; download one between terms, or let your VM backups cover it.
 - Keep a copy of `.env` somewhere safe. Without its `ID_PEPPER`, no student can sign in again.
 - Quizzes and student data are encrypted with each teacher's key, so a backup doesn't expose them.
 
