@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const net = require('node:net');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const zlib = require('node:zlib');
+const { promisify } = require('node:util');
 
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 
@@ -180,6 +182,31 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
 };
+// Text goes gzipped to browsers that take it, about a quarter of the bytes (Monaco's 3.1 MB is 0.8 MB): a
+// class loading the quiz at once shares the school's wifi. Each file is compressed once, off the main
+// thread, and kept while its size and time stay the same. Caddy leaves a response that's already encoded alone.
+const GZIP = new Set(['.html', '.js', '.css', '.json', '.svg', '.ttf']);
+const gzipAsync = promisify(zlib.gzip);
+const gzipped = new Map(); // file -> { tag, body: Promise<Buffer> }
+function gzipOf(file, tag) {
+  let e = gzipped.get(file);
+  if (!e || e.tag !== tag) {
+    e = { tag, body: fs.promises.readFile(file).then((b) => gzipAsync(b, { level: 9 })) };
+    gzipped.set(file, e);
+    e.body.catch(() => { if (gzipped.get(file) === e) gzipped.delete(file); }); // tried again next time
+  }
+  return e.body;
+}
+function takesGzip(req) {
+  for (const part of String(req.headers['accept-encoding'] || '').toLowerCase().split(',')) {
+    const [name, ...params] = part.split(';').map((s) => s.trim());
+    if (name !== 'gzip') continue;
+    const qv = params.find((p) => p.startsWith('q='));
+    return !qv || Number(qv.slice(2)) > 0;
+  }
+  return false;
+}
+
 // Every file is checked with the server on each load (no-cache) and comes back as a tiny 304 while it's
 // unchanged (ETag: its size and time). Bundles like Monaco keep one URL across versions, so a long cache
 // left browsers on an old one after a deploy (a new language with no colors).
@@ -194,20 +221,30 @@ function serveStatic(req, res, rootDir, rel) {
   const type = MIME[ext];
   if (!type) return false;
   const etag = `W/"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"`;
+  const vary = GZIP.has(ext) ? { Vary: 'Accept-Encoding' } : {};
   if (String(req.headers['if-none-match'] || '').split(/\s*,\s*/).includes(etag)) {
-    res.writeHead(304, Object.assign({}, SECURITY, { 'Cache-Control': 'no-cache', ETag: etag }));
+    res.writeHead(304, Object.assign({}, SECURITY, { 'Cache-Control': 'no-cache', ETag: etag }, vary));
     res.end();
     return true;
   }
-  const headers = { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': 'no-cache', ETag: etag };
+  const headers = Object.assign({ 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': 'no-cache', ETag: etag }, vary);
   if (ext === '.html') headers['Content-Security-Policy'] = PAGE_CSP;
   // The one page that goes in a frame: the student's screen inside the teacher's Watch page, same origin only.
   if (file.endsWith(path.join(path.sep, 'teacher', 'watch-frame.html'))) {
     headers['Content-Security-Policy'] = PAGE_CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'");
     headers['X-Frame-Options'] = 'SAMEORIGIN';
   }
-  res.writeHead(200, Object.assign({}, SECURITY, headers));
-  fs.createReadStream(file).pipe(res);
+  const plain = () => {
+    res.writeHead(200, Object.assign({}, SECURITY, headers));
+    fs.createReadStream(file).pipe(res);
+  };
+  if (!GZIP.has(ext) || req.method !== 'GET' || !takesGzip(req)) { plain(); return true; }
+  gzipOf(file, etag).catch(() => null).then((body) => {
+    if (res.destroyed) return;
+    if (!body) return plain(); // couldn't compress it: as it is
+    res.writeHead(200, Object.assign({}, SECURITY, headers, { 'Content-Encoding': 'gzip', 'Content-Length': body.length }));
+    res.end(body);
+  }).catch(() => res.destroy());
   return true;
 }
 

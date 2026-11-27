@@ -2,7 +2,7 @@
 // Student API. Every response looks the same whatever the integrity state: the server never tells
 // a student about strikes or invalidation.
 const crypto = require('node:crypto');
-const { q } = require('./db');
+const { q, tx } = require('./db');
 const store = require('./store');
 const P = require('./people');
 const H = require('./harness');
@@ -505,7 +505,7 @@ module.exports = function studentRoutes(r) {
     const { a, run, quiz } = current(req);
     if (a.status === 'submitted') throw new HttpError(403, 'run_closed');
     if (a.status === 'active') return json(res, 200, { admitted: true });
-    if (run.mode !== 'practice' && !run.corrects) {
+    if (run.mode !== 'practice' && !run.corrects) tx(() => { // one write to disk
       const now = Date.now();
       if (a.readyAt) store.record(a, 'reload', 'reopened the waiting screen', quiz);
       else store.logEvent(a, 'ready', 'info', null);
@@ -520,7 +520,7 @@ module.exports = function studentRoutes(r) {
         store.logEvent(a, 'admit', 'info', 'joined after the start');
       }
       store.save(a);
-    }
+    });
     json(res, 200, { admitted: a.status === 'admitted' });
   });
 
@@ -561,9 +561,11 @@ module.exports = function studentRoutes(r) {
         a.deadline = a.layout.partEnds[a.layout.partEnds.length - 1];
       }
       a.lastBeat = now;
-      store.logEvent(a, 'start', 'info', x !== 1 && a.deadline ? `${x}× time` : null);
-      noteNewNetwork(a, run, quiz, a.pinIp);
-      store.save(a);
+      tx(() => { // one write to disk
+        store.logEvent(a, 'start', 'info', x !== 1 && a.deadline ? `${x}× time` : null);
+        noteNewNetwork(a, run, quiz, a.pinIp);
+        store.save(a);
+      });
     } else if (a.resumeOk) {
       a.resumeOk = false;
       store.logEvent(a, 'resume', 'info', 'let back in by teacher');
@@ -593,7 +595,7 @@ module.exports = function studentRoutes(r) {
     if (store.watched(a) && Object.hasOwn(store.CLIENT_EVENTS, body.type)
       && (store.CLIENT_EVENTS[body.type] === 'violation' || allow(a.id, Date.now()))) {
       const detail = eventDetail(a, quiz, body.type, body.detail);
-      if (detail !== null) store.record(a, body.type, detail, quiz);
+      if (detail !== null) tx(() => store.record(a, body.type, detail, quiz)); // the event and the attempt: one write to disk
     }
     json(res, 200, { ok: true });
   });
@@ -608,7 +610,8 @@ module.exports = function studentRoutes(r) {
     if (inQuiz && !allow(a.id, now)) {
       // Over the budget: answered the same, nothing stored.
       live = W.isWatched(a.runId, now) ? { beatMs: W.FAST_BEAT_MS } : {};
-    } else if (store.watched(a)) { // in the quiz, or waiting for its start in lockdown
+    } else if (store.watched(a)) tx(() => { // in the quiz, or waiting for its start in lockdown
+      // what it stores (late events, the mouse trail, typing, the attempt) is one write to disk, not one each
       takeLate(a, quiz, body.late, now);
       if (a.beatLost) store.logEvent(a, 'reconnect', 'info', Math.round((now - a.lastBeat) / 1000) + 's offline');
       a.lastBeat = now;
@@ -655,7 +658,7 @@ module.exports = function studentRoutes(r) {
       else if (body.answers && !(a.deadline && clk > a.deadline)) { a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers), clk); a.answersAt = now; }
       }
       store.save(a);
-    }
+    });
     // done: the attempt was turned in elsewhere (the teacher ended it). Integrity never shows here.
     const notice = a.status !== 'submitted' ? store.notices.get(run.id) : null; // the teacher's message to everyone
     const note = a.status !== 'submitted' ? store.notes.get(a.id) : null; // and to this student
@@ -748,15 +751,17 @@ module.exports = function studentRoutes(r) {
     // Timed parts: turning in early (turnInEarly) is for the last part, so no part is skipped
     if (a.status === 'active' && run.mode !== 'practice' && Parts.timed(quiz, a.layout) && Array.isArray(a.layout.partEnds)
       && Parts.over(a, clk + 15000) < a.layout.partEnds.length - 1 && clk < turnInAt(a) - 15000) throw new HttpError(403, 'not_yet');
-    if (a.status === 'active') {
-      const now = Date.now();
-      // events the page couldn't send (offline, or its requests blocked) come with the turn-in
-      if (store.watched(a)) takeLate(a, quiz, body.late, now);
-      storeEdits(a, body.edits, now); // the last few seconds of typing, for the replay
-      // and the time since the last heartbeat, on the question that was on screen then
-      if (a.viewQ && a.viewAt) { if (!a.qTime) a.qTime = {}; a.qTime[a.viewQ] = (a.qTime[a.viewQ] || 0) + Math.min(Math.max(0, now - a.viewAt), 30000); a.viewQ = null; }
-    }
-    submit(a, quiz, body.answers, 'student');
+    tx(() => { // the turn-in and what came with it: one write to disk, as the whole class turns in at once
+      if (a.status === 'active') {
+        const now = Date.now();
+        // events the page couldn't send (offline, or its requests blocked) come with the turn-in
+        if (store.watched(a)) takeLate(a, quiz, body.late, now);
+        storeEdits(a, body.edits, now); // the last few seconds of typing, for the replay
+        // and the time since the last heartbeat, on the question that was on screen then
+        if (a.viewQ && a.viewAt) { if (!a.qTime) a.qTime = {}; a.qTime[a.viewQ] = (a.qTime[a.viewQ] || 0) + Math.min(Math.max(0, now - a.viewAt), 30000); a.viewQ = null; }
+      }
+      submit(a, quiz, body.answers, 'student');
+    });
     json(res, 200, { ok: true });
   });
 };

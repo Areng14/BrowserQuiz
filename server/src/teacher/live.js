@@ -62,12 +62,14 @@ module.exports = function liveRoutes(r) {
       JOIN roster_students ON roster_students.id = attempts.student_id
       WHERE attempts.run_id = ? AND attempts.archived = 0 AND attempts.status = 'submitted' ORDER BY name`).all(run.id);
     const attempts = rows.map((x) => store.getAttempt(x.id));
+    // the questions each student got (with pools, some of them), worked out once per student
+    const given = new Map(attempts.map((a) => [a, new Set(store.quizFor(quiz, a.layout).questions.map((x) => x.id))]));
     const questions = [];
     quiz.questions.forEach((qq, i) => {
       let total = 0;
       let toGrade = 0;
       for (const a of attempts) {
-        if (!a.result || !store.quizFor(quiz, a.layout).questions.some((x) => x.id === qq.id)) continue;
+        if (!a.result || !given.get(a).has(qq.id)) continue;
         total++;
         if (questionScore(qq, a.result, a.answers).review) toGrade++;
       }

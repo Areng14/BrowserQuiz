@@ -32,7 +32,7 @@ jobs:
         run: |
           owner=$(echo "$GITHUB_REPOSITORY_OWNER" | tr 'A-Z' 'a-z')
           # The files each image is built from: the same files, the same tag
-          app=$(git ls-tree -r HEAD server public scripts package.json package-lock.json docs/quiz-format.md examples/ap-csa-unit4/quiz.json | sha256sum | cut -c1-16)
+          app=$(git ls-tree -r HEAD server public scripts package.json package-lock.json docs/quiz-format.md examples/sample-exam/quiz.json | sha256sum | cut -c1-16)
           runner=$(git ls-tree -r HEAD runner | sha256sum | cut -c1-16)
           todo='[]'
           add() { # image, kind, hash, the tag that says which kind

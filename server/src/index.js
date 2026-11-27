@@ -2,11 +2,11 @@
 // BrowserQuiz server: student app + teacher dashboard + API. Zero dependencies, Node 22+.
 const http = require('node:http');
 const path = require('node:path');
-const { q } = require('./db');
+const { q, tx } = require('./db');
 const store = require('./store');
 const V = require('./vault');
 const P = require('./people');
-const { gradeAttempt, totals } = require('./grade');
+const { gradeAttempt, totals, isRun } = require('./grade');
 const { HttpError, router, json, serveStatic, send, SECURITY, isHttps } = require('./http');
 const studentRoutes = require('./student');
 const teacherRoutes = require('./teacher');
@@ -77,6 +77,10 @@ async function handle(req, res) {
 }
 
 const server = http.createServer((req, res) => {
+  // The whole request within a minute (Node's requestTimeout, kept here so the admin's restore from a file,
+  // a big upload, can take longer: teacher/server.js longUpload)
+  const deadline = setTimeout(() => { if (!req.complete && !req.longUpload) req.socket.destroy(); }, 60000);
+  req.on('close', () => clearTimeout(deadline)); // all of it arrived (or the connection's gone)
   Promise.resolve().then(() => handle(req, res)).catch((e) => {
     if (res.headersSent) { res.destroy(); return; }
     if (e instanceof HttpError) {
@@ -88,38 +92,51 @@ const server = http.createServer((req, res) => {
   });
 });
 server.headersTimeout = 20000;
-server.requestTimeout = 60000;
+server.requestTimeout = 0; // above, per request
 
 // Sweeper: flag lost heartbeats, submit time-up attempts with their autosaved answers, and every
 // minute retry grading that failed (usually the runner was down) or never started (the quiz was locked
 // until its teacher signed in after a restart). Locked quizzes are skipped until then.
 const quizOf = (run) => { try { return run && store.getQuiz(run.quiz_id); } catch (e) { return null; } };
 let sweeps = 0;
-setInterval(() => {
+// One transaction a sweep: when time runs out for a whole class at once, turning everyone in is one write
+// to disk instead of a few for each student.
+setInterval(() => tx(() => {
   const now = Date.now();
   if (++sweeps % 30 === 0) {
+    // Every turned-in attempt in memory (reports and grades load old ones too): each run's quiz is looked up
+    // once, and a quiz with nothing graded by running code can't have grading pending or failed.
+    const quizzes = new Map(); // run id -> its quiz
     for (const a of store.attempts.values()) {
       if (a.status !== 'submitted' || a.archived) continue;
-      const quiz = quizOf(q('SELECT quiz_id FROM runs WHERE id = ?').get(a.runId));
-      const t = quiz && a.result && totals(a.result, quiz, a.answers, a.layout);
-      if (quiz && (!a.result || t.failed || t.pending)) gradeAttempt(a, quiz).catch(() => {});
+      if (!quizzes.has(a.runId)) quizzes.set(a.runId, quizOf(q('SELECT quiz_id FROM runs WHERE id = ?').get(a.runId)));
+      const quiz = quizzes.get(a.runId);
+      if (!quiz) continue;
+      try {
+        const t = a.result && quiz.questions.some(isRun) ? totals(a.result, quiz, a.answers, a.layout) : null;
+        if (!a.result || (t && (t.failed || t.pending))) gradeAttempt(a, quiz).catch(() => {});
+      } catch (e) { console.error('sweep', a.id, e); }
     }
   }
+  // each student on their own: one that fails doesn't take the rest of the class's writes back with it
   for (const a of store.attempts.values()) {
     if (a.status !== 'active' || a.archived) continue;
-    const run = q('SELECT quiz_id, mode, paused_at FROM runs WHERE id = ?').get(a.runId);
-    if (!run) continue;
-    const quiz = quizOf(run);
-    if (!quiz) continue;
-    a.practice = run.mode === 'practice';
-    a.pausedAt = run.paused_at || 0; // paused: nothing runs out (pause.js), and a lost connection doesn't count (store.record)
-    if (a.lastBeat && now - a.lastBeat > 10000 && !a.beatLost && !a.practice) {
-      a.beatLost = true;
-      store.record(a, 'heartbeat-lost', Math.round((now - a.lastBeat) / 1000) + 's silent', quiz);
-    }
-    if (a.deadline && !a.pausedAt && now > a.deadline + 30000) studentRoutes.submit(a, quiz, null, 'time ran out');
+    try { sweepOne(a, now); } catch (e) { console.error('sweep', a.id, e); }
   }
-}, 2000).unref();
+}), 2000).unref();
+function sweepOne(a, now) {
+  const run = q('SELECT quiz_id, mode, paused_at FROM runs WHERE id = ?').get(a.runId);
+  if (!run) return;
+  const quiz = quizOf(run);
+  if (!quiz) return;
+  a.practice = run.mode === 'practice';
+  a.pausedAt = run.paused_at || 0; // paused: nothing runs out (pause.js), and a lost connection doesn't count (store.record)
+  if (a.lastBeat && now - a.lastBeat > 10000 && !a.beatLost && !a.practice) {
+    a.beatLost = true;
+    store.record(a, 'heartbeat-lost', Math.round((now - a.lastBeat) / 1000) + 's silent', quiz);
+  }
+  if (a.deadline && !a.pausedAt && now > a.deadline + 30000) studentRoutes.submit(a, quiz, null, 'time ran out');
+}
 
 // Results stored before quiz encryption kept the hidden tests' inputs and expected values: drop them.
 for (const row of q(`SELECT id, result FROM attempts WHERE result LIKE '%"expected"%'`).all()) {

@@ -21,10 +21,12 @@ const TABLES = ['quizzes', 'rosters', 'runs', 'attempts', 'teachers'];
 
 // Students in a quiz right now: signed in and sending heartbeats, or in a quiz the teacher paused. (A deploy,
 // a restore and a nightly backup all wait for this to be false.)
-function quizInProgress() {
+// practice: count practice and corrections runs too (a restore would throw their students' work away;
+// an update's restart only drops them for a moment)
+function quizInProgress(practice) {
   return q(`SELECT COUNT(*) AS n FROM attempts a JOIN runs r ON r.id = a.run_id
-    WHERE r.status = 'open' AND r.mode != 'practice' AND a.archived = 0 AND a.status IN ('waiting', 'admitted', 'active')
-    AND (a.last_beat > ? OR (r.paused_at IS NOT NULL AND a.status = 'active'))`).get(Date.now() - 90000).n > 0;
+    WHERE r.status = 'open' AND (? OR r.mode != 'practice') AND a.archived = 0 AND a.status IN ('waiting', 'admitted', 'active')
+    AND (a.last_beat > ? OR (r.paused_at IS NOT NULL AND a.status = 'active'))`).get(practice ? 1 : 0, Date.now() - 90000).n > 0;
 }
 
 // -> [{ name, kind, at, bytes }], newest first
@@ -50,13 +52,21 @@ function prune() {
     if (seen[b.kind] > KEEP[b.kind]) fs.rmSync(path.join(DIR, b.name), { force: true });
   }
 }
-// kind: nightly, manual or before-restore -> its name
+// kind: nightly, manual or before-restore -> its name. Written under another name first, so one that fails
+// (a full disk) leaves no empty file in the list.
 function make(kind) {
   fs.mkdirSync(DIR, { recursive: true, mode: 0o700 });
   const name = `browserquiz-${new Date().toISOString().slice(0, 16).replace('T', '-').replace(':', '')}-${kind}.db`;
   const file = path.join(DIR, name);
-  fs.rmSync(file, { force: true }); // two in the same minute: the newer one
-  db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);
+  const part = file + '.part';
+  fs.rmSync(part, { force: true });
+  try {
+    db.exec(`VACUUM INTO '${part.replace(/'/g, "''")}'`);
+    fs.renameSync(part, file); // two in the same minute: the newer one
+  } catch (e) {
+    fs.rmSync(part, { force: true });
+    throw e;
+  }
   prune();
   return name;
 }
@@ -79,12 +89,21 @@ function check(file) {
     if (other) other.close();
   }
 }
-// Put a checked backup file in place for the next start (moving it when it's a temporary upload)
+// Put a checked backup file in place for the next start (moving it when it's a temporary upload). It's set
+// aside before the before-restore backup is made, which can replace it (a before-restore one restored in the
+// same minute has its name) or prune it (the oldest of its kind).
 function stage(file, move) {
   check(file);
-  make('before-restore');
-  if (move) fs.renameSync(file, STAGED);
-  else fs.copyFileSync(file, STAGED);
+  const next = STAGED + '.part';
+  try {
+    if (move) fs.renameSync(file, next);
+    else fs.copyFileSync(file, next);
+    make('before-restore');
+    fs.renameSync(next, STAGED);
+  } catch (e) {
+    fs.rmSync(next, { force: true });
+    throw e;
+  }
 }
 
 // Every 10 minutes: a nightly backup if one is due. Due: none yet, or the last is 20+ hours old and it's night

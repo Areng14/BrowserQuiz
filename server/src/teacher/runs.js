@@ -224,10 +224,13 @@ module.exports = function runRoutes(r) {
     const run = getRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     if (p.action === 'close') {
-      q("UPDATE runs SET status = 'closed', closed_at = ?, paused_at = NULL WHERE id = ?").run(Date.now(), run.id);
-      for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'active'").all(run.id)) {
-        submit(store.getAttempt(row.id), quiz, null, 'quiz closed');
-      }
+      // one write to disk for the whole class, not a few for each student
+      tx(() => {
+        q("UPDATE runs SET status = 'closed', closed_at = ?, paused_at = NULL WHERE id = ?").run(Date.now(), run.id);
+        for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'active'").all(run.id)) {
+          submit(store.getAttempt(row.id), quiz, null, 'quiz closed');
+        }
+      });
     } else if (p.action === 'open') {
       // its corrections have shown the right answers: reopened, the exam could be taken with them
       if (run.had_corrections || q('SELECT 1 FROM runs WHERE corrects = ? AND owner_id = ?').get(run.id, me.id)) throw new HttpError(409, 'has_corrections', "This quiz has corrections, so it can't reopen.");
@@ -237,14 +240,16 @@ module.exports = function runRoutes(r) {
       // after that keeps waiting. Without a list (an API caller), everyone waiting.
       const body = await readJson(req, 64 * 1024);
       const only = Array.isArray(body.ids) ? new Set(body.ids.filter((x) => typeof x === 'string').slice(0, 2000)) : null;
-      for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'waiting'").all(run.id)) {
-        if (only && !only.has(row.id)) continue;
-        const a = store.getAttempt(row.id);
-        a.status = 'admitted';
-        a.admittedAt = Date.now(); // the moment the teacher started them (student.js /api/start)
-        store.logEvent(a, 'admit', 'info', null);
-        store.save(a);
-      }
+      tx(() => {
+        for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'waiting'").all(run.id)) {
+          if (only && !only.has(row.id)) continue;
+          const a = store.getAttempt(row.id);
+          a.status = 'admitted';
+          a.admittedAt = Date.now(); // the moment the teacher started them (student.js /api/start)
+          store.logEvent(a, 'admit', 'info', null);
+          store.save(a);
+        }
+      });
     } else if (p.action === 'message') {
       const body = await readJson(req, 8192);
       const text = String(body.text || '').trim().slice(0, 500);
@@ -288,7 +293,9 @@ module.exports = function runRoutes(r) {
       const body = await readJson(req, 1024);
       const mins = Math.round(Number(body.minutes));
       if (!(mins >= 1 && mins <= 120)) throw new HttpError(400, 'bad_request');
-      for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'active'").all(run.id)) addTime(store.getAttempt(row.id), mins, run);
+      tx(() => {
+        for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'active'").all(run.id)) addTime(store.getAttempt(row.id), mins, run);
+      });
     } else if (p.action === 'regrade-failed') {
       for (const row of q("SELECT id FROM attempts WHERE run_id = ? AND archived = 0 AND status = 'submitted'").all(run.id)) {
         const a = store.getAttempt(row.id);

@@ -205,33 +205,50 @@ function totals(result, quiz, answers, layout) {
 }
 
 const running = new Set();
-async function gradeAttempt(a, quiz) {
-  if (running.has(a.id)) return;
+// A regrade asked for while a grading is under way (the teacher's Regrade, or a fixed key) runs once that
+// one ends, with the newest quiz it was asked with: queue it with again = true. Other callers (the sweep's
+// retries) just leave the one under way to finish.
+const queued = new Map(); // attempt id -> quiz
+async function gradeAttempt(a, quiz, again) {
+  if (running.has(a.id)) { if (again) queued.set(a.id, quiz); return; }
   running.add(a.id);
   try {
     const auto = gradeAuto(quiz, a.layout, a.answers);
     const prev = a.result && a.result.code ? a.result.code : {};
-    a.result = { auto, code: {}, manual: (a.result && a.result.manual) || {} };
+    const res = { auto, code: {}, manual: (a.result && a.result.manual) || {} };
+    a.result = res;
     const codeQs = store.quizFor(quiz, a.layout).questions.filter(isRun);
     for (const qq of codeQs) {
-      a.result.code[qq.id] = prev[qq.id] && prev[qq.id].status === 'done' ? prev[qq.id] : { status: 'pending', max: qq.points - rubricMax(qq) };
+      res.code[qq.id] = prev[qq.id] && prev[qq.id].status === 'done' ? prev[qq.id] : { status: 'pending', max: qq.points - rubricMax(qq) };
     }
     store.save(a);
     for (const qq of codeQs) {
-      if (a.result.code[qq.id].status === 'done') continue;
+      // a regrade replaced the result, or dropped this answer's: the regrade's own pass grades them
+      const cur = res.code[qq.id];
+      if (a.result !== res) return;
+      if (!cur || cur.status === 'done') continue;
+      const max = cur.max;
+      let out;
       try {
         // Blank or untouched starter code: nothing to run.
         const ans = a.answers[qq.id];
-        if (!codeAnswered(qq, ans)) a.result.code[qq.id] = { status: 'done', score: 0, max: a.result.code[qq.id].max, note: 'No answer', tests: [] };
-        else if (qq.type === 'fill') a.result.code[qq.id] = await gradeCode(qq, { language: qq.language, code: fillTemplate(qq.code, ans) });
-        else a.result.code[qq.id] = await gradeCode(qq, ans);
+        if (!codeAnswered(qq, ans)) out = { status: 'done', score: 0, max, note: 'No answer', tests: [] };
+        else if (qq.type === 'fill') out = await gradeCode(qq, { language: qq.language, code: fillTemplate(qq.code, ans) });
+        else out = await gradeCode(qq, ans);
       } catch (e) {
-        a.result.code[qq.id] = { status: 'error', score: 0, max: a.result.code[qq.id].max, message: e.message };
+        out = { status: 'error', score: 0, max, message: e.message };
       }
+      if (a.result !== res || !res.code[qq.id]) continue;
+      res.code[qq.id] = out;
       store.save(a);
     }
   } finally {
     running.delete(a.id);
+    if (queued.has(a.id)) {
+      const next = queued.get(a.id);
+      queued.delete(a.id);
+      gradeAttempt(a, next, true).catch((e) => console.error('grading failed', a.id, e));
+    }
   }
 }
 
