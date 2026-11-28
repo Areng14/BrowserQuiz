@@ -13,6 +13,25 @@ MAX_RUNS = 100  # a code question's most hidden tests (server/src/quizfile.js)
 # first run.
 BUDGET_S = 10
 
+# What runner.py tries at start (each_test), per language: (files, main, sources). Each run prints "ok" and its
+# number, and " seen" if it finds the file an earlier run left.
+_C = ('#include <stdio.h>\nint main(int argc, char** argv) { FILE* f = fopen("left", "r"); printf("ok%s%s\\n", argv[1], f ? " seen" : "");'
+      ' fclose(fopen("left", "w")); return 0; }\n')
+PROBES = {
+    "java": ({"Main.java": "public class Main { public static void main(String[] a) throws Exception {\n"
+                           "    java.io.File f = new java.io.File(\"left\");\n"
+                           "    System.out.println(\"ok\" + a[0] + (f.exists() ? \" seen\" : \"\"));\n"
+                           "    f.createNewFile();\n} }\n"}, "Main", None),
+    "c": ({"main.c": _C}, "main", ["main.c"]),
+    "cpp": ({"main.cpp": _C}, "main", ["main.cpp"]),
+    "go": ({"main.go": 'package main\nimport ("fmt"; "os")\nfunc main() { _, err := os.Stat("left"); s := ""; if err == nil { s = " seen" }\n'
+                       '    fmt.Printf("ok%s%s\\n", os.Args[1], s); os.WriteFile("left", nil, 0o600) }\n'}, "main", ["main.go"]),
+    "rust": ({"main.rs": 'fn main() { let a: Vec<String> = std::env::args().collect(); let s = if std::path::Path::new("left").exists() { " seen" } else { "" };\n'
+                         '    println!("ok{}{}", a[1], s); let _ = std::fs::write("left", ""); }\n'}, "main", ["main.rs"]),
+    "csharp": ({"main.cs": 'var s = System.IO.File.Exists("left") ? " seen" : "";\nSystem.Console.WriteLine("ok" + args[0] + s);\n'
+                           'System.IO.File.WriteAllText("left", "");\n'}, "main", ["main.cs"]),
+}
+
 
 def copy_build(src, dst, uid):
     """The build's files and folders into dst (made already), owned by uid. Only regular files and folders: a
