@@ -39,6 +39,8 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import each
+
 TOKEN = os.environ.get("RUNNER_TOKEN", "")
 JOBS = os.environ.get("JOBS_DIR", "/jobs")
 SLOTS = max(1, int(os.environ.get("RUNNER_SLOTS", "4")))
@@ -381,6 +383,10 @@ DOTNET_ENV = {"DOTNET_EnableDiagnostics": "0", "DOTNET_EnableWriteXorExecute": "
 GO = "/opt/bq/go"  # the standard library, compiled when the image was built (Dockerfile)
 # The linker by its full path: with a bare name, Rust's process spawning (rustc changes PATH for the linker)
 # takes a route that needs socketpair, which the sandbox denies.
+# The languages whose jobs can ask to be built once and run each (each.py). The ones that did it at start
+# (language_test): what /health says, and the only ones a job's "runs" is taken for.
+EACH_LANGS = ("java",)
+EACH = list(EACH_LANGS)
 RUST_FLAGS = ["--edition", "2021", "-C", "opt-level=1", "-C", "debuginfo=0", "-C", "linker=/usr/bin/cc", "--color", "never", "-A", "warnings"]
 
 
@@ -733,7 +739,24 @@ def rust_code_only(src):
     return "".join(out)
 
 
+def each_job(slot, uid, job, env, runs, started, step):
+    """A job's "runs" (each.py), from the build in job: step(run dir, its env, k) is run k's run_step, in a copy of
+    the build of its own, which goes when it's done."""
+    def one(k):
+        run = tempfile.mkdtemp(prefix="run-", dir=os.path.join(JOBS, str(slot)))
+        try:
+            os.chown(run, uid, uid)
+            each.copy_build(job, run, uid)
+            st, code, out, err, ms = step(run, dict(env, HOME=run, TMPDIR=run), k)
+            return {"status": st, "stdout": out, "stderr": err, "exitCode": code, "ms": ms}
+        finally:
+            kill_uid(uid)
+            shutil.rmtree(run, ignore_errors=True)
+    return {"status": "ok", "runs": each.run_each(runs, started, one), "ms": int((time.monotonic() - started) * 1000)}
+
+
 def run_job(slot, req):
+    started = time.monotonic()
     uid = UID_BASE + slot
     lang = req.get("language")
     files = req.get("files") or {}
@@ -752,6 +775,12 @@ def run_job(slot, req):
     entry = req.get("entry")
     if entry is not None and (not isinstance(entry, str) or not entry.isidentifier()):
         return {"status": "error", "message": "bad job"}
+    # Build once, run each (each.py). In another language it's left out, as a runner from before it would.
+    runs = req.get("runs")
+    if runs is not None and (type(runs) is not int or not 1 <= runs <= each.MAX_RUNS):
+        return {"status": "error", "message": "bad job"}
+    if lang not in EACH:
+        runs = None
     if lang in ("c", "cpp", "go", "rust", "csharp"):
         if sources is None:
             sources = sorted(n for n in files if n.endswith({"c": ".c", "cpp": ".cpp", "go": ".go", "rust": ".rs", "csharp": ".cs"}[lang]))
@@ -796,6 +825,9 @@ def run_job(slot, req):
                 return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                         "exitCode": code, "ms": ms}
             argv = [shutil.which("java"), f"-Xmx{mem_mb}m"] + JAVA_RUN_FLAGS + ["-cp", ".", req.get("main") or "BQMain"]
+            if runs:  # run k: the test's number after the class's name
+                return each_job(slot, uid, job, env, runs, started, lambda run, renv, k: run_step(
+                    argv + [str(k)], uid, run, cpu_s, wall_s, mem_mb + 1536, 256, renv, tools=["java"]))
             st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1536, 256, env, tools=["java"])
         elif lang in ("c", "cpp"):
             # Each source to its own object, then linked: the ban check reads the student's object.
@@ -884,7 +916,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            return self._send(200, {"ok": True, "landlock": ABI, "slots": SLOTS, "kind": KIND, "languages": AVAILABLE})
+            return self._send(200, {"ok": True, "landlock": ABI, "slots": SLOTS, "kind": KIND, "languages": AVAILABLE, "runs": EACH})
         self._send(404, {"error": "not_found"})
 
     def do_POST(self):
@@ -981,6 +1013,26 @@ def language_test():
     return notes, [l for l in LANGS if l in ok]
 
 
+def each_test(works):
+    """Build once, run each (each.py), tried at start: each run gets its number, and a copy of the build of its
+    own (a file run 0 leaves, run 1 doesn't see). -> (notes, the languages it works in)."""
+    probes = {"java": ({"Main.java": "public class Main { public static void main(String[] a) throws Exception {\n"
+                                     "    java.io.File f = new java.io.File(\"left\");\n"
+                                     "    System.out.println(\"ok\" + a[0] + (f.exists() ? \" seen\" : \"\"));\n"
+                                     "    f.createNewFile();\n} }\n"}, "Main")}
+    notes, ok = [], []
+    for lang in EACH_LANGS:
+        if lang not in works:
+            continue
+        files, main = probes[lang]
+        res = run_job(0, {"language": lang, "files": files, "main": main, "timeMs": 3000, "runs": 2})
+        if [r.get("stdout", "").strip() for r in res.get("runs") or []] != ["ok0", "ok1"]:
+            notes.append(f"{lang}: build once, run each: self-test failed: {json.dumps(res)[:400]}")
+        else:
+            ok.append(lang)
+    return notes, ok
+
+
 if __name__ == "__main__":
     os.makedirs(JOBS, exist_ok=True)
     os.chmod(JOBS, 0o711)
@@ -1007,9 +1059,15 @@ if __name__ == "__main__":
     for note in notes:
         print("runner: warning:", note, flush=True)
     AVAILABLE[:] = works
+    notes, works = each_test(works)
+    for note in notes:
+        print("runner: warning:", note, flush=True)
+    EACH[:] = works
     extras = [f"landlock ABI {ABI}", "network blocked by seccomp" + (" and landlock" if ABI >= 4 else "")]
     if ABI >= 6:
         extras.append("signal scoping on")
+    if EACH:
+        extras.append("built once and run each: " + ", ".join(EACH))
     print(f"runner: sandbox ok ({', '.join(extras)}), {KIND}: {', '.join(AVAILABLE)}, {SLOTS} slots, listening on :{PORT}", flush=True)
     # Listen on IPv6 and IPv4 both: Railway's private network can be IPv6-only.
     class DualStackServer(ThreadingHTTPServer):

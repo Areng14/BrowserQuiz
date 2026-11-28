@@ -49,7 +49,7 @@ RUN if [ "$RUNNER_LANGS" = full ]; then \
         "$(ls /usr/lib/dotnet/shared/Microsoft.NETCore.App/ | head -1)" > /opt/bq/cs/main.runtimeconfig.json \
    && DOTNET_CLI_TELEMETRY_OPTOUT=1 dotnet exec /opt/bq/cs/csc.dll -nologo -noconfig -nostdlib @/opt/bq/cs/refs.rsp -langversion:latest -nullable:enable \
         -optimize+ -target:exe -out:/opt/bq/cs/bqscan.dll /opt/bq/cs/src/bqscan.cs && chmod -R a+rX /opt/bq/cs; fi
-COPY runner.py /runner/runner.py
+COPY runner.py each.py /runner/
 ENV JOBS_DIR=/jobs PORT=8080 PYTHONDONTWRITEBYTECODE=1 RUNNER_LANGS=$RUNNER_LANGS
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s CMD python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=4)"
