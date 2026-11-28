@@ -134,13 +134,18 @@ const PY_ESCAPE_MODULES = ['builtins', 'importlib', 'pickle', '_pickle', 'marsha
   // a different door. None has a use in a solution, so banning the module is enough (like importlib above).
   'timeit', 'cProfile', 'profile', 'code', 'codeop', 'runpy', 'pdb', 'bdb', 'pydoc', 'pkgutil', 'xmlrpc',
   // Start another Python, whose code is a string the scan can't read, or run a .pth file's lines.
-  'subprocess', 'pty', 'site'];
+  'subprocess', 'pty', 'site',
+  // Work out a type hint written as a string, which can be any code (def f(x: "sorted(a)")).
+  'annotationlib'];
+// Parts of modules with honest uses that do the same: logging.config looks a dotted name up from a string.
+const PY_ESCAPE_SUBMODULES = ['logging.config'];
 const PY_ESCAPE_ATTRS = ['__dict__', '__getattribute__', '__getattr__', '__globals__', '__builtins__', '__self__', '__subclasses__', '__code__', '__closure__',
   '__class__', '__bases__', '__base__', '__mro__', '__func__', '__reduce__', '__reduce_ex__', '_getframe', 'f_locals', 'f_globals', 'f_back', 'f_builtins',
   'tb_frame', 'gi_frame', 'cr_frame', 'modules'];
-// operator's, which call a method by its name, and os's that start another program (another Python, with its
-// code in a string)
-const PY_ESCAPE_HELPERS = ['methodcaller', 'attrgetter', 'system', 'popen', 'posix_spawn', 'posix_spawnp', 'execv', 'execve', 'execvp', 'execvpe',
+// operator's, which call a method by its name; typing's that work out a type hint written as a string, and
+// string.Formatter's get_field, which looks an attribute up from one; and os's that start another program
+// (another Python, with its code in a string)
+const PY_ESCAPE_HELPERS = ['methodcaller', 'attrgetter', 'get_type_hints', 'ForwardRef', 'evaluate_forward_ref', 'get_field', 'system', 'popen', 'posix_spawn', 'posix_spawnp', 'execv', 'execve', 'execvp', 'execvpe',
   'execl', 'execle', 'execlp', 'execlpe', 'spawnv', 'spawnve', 'spawnvp', 'spawnvpe', 'spawnl', 'spawnle', 'spawnlp', 'spawnlpe'];
 const topModule = (i) => i.split('.')[0];
 
@@ -166,6 +171,7 @@ function pythonHits(entries, facts, D) {
   }
   for (const n of PY_ESCAPE_NAMES) if (names.has(n)) hits.push(n);
   for (const m of PY_ESCAPE_MODULES) if (imports.some((i) => topModule(i) === m)) hits.push(m);
+  for (const m of PY_ESCAPE_SUBMODULES) if (imports.some((i) => i === m || i.startsWith(m + '.'))) hits.push(m);
   for (const t of PY_ESCAPE_ATTRS) if (attrs.has(t)) hits.push(t);
   for (const t of PY_ESCAPE_HELPERS) if (attrs.has(t) || imports.some((i) => i.endsWith('.' + t))) hits.push(t);
   // A module that isn't Python's own can only be one the code wrote while it ran: what it does isn't checked.
