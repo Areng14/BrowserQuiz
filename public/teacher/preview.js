@@ -13,7 +13,8 @@
     try { data = await res.json(); } catch (e) { /* no body */ }
     if (!res.ok) {
       const err = new Error('preview');
-      err.code = res.status === 401 ? 'teacher_login' : (data && data.error) || 'network';
+      // 404: the quiz was deleted, or edited (a save makes a new copy), since this tab opened
+      err.code = res.status === 401 ? 'teacher_login' : res.status === 404 ? 'preview_gone' : (data && data.error) || 'network';
       throw err;
     }
     return data;
