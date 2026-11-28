@@ -28,10 +28,12 @@
 // cmath.*, a Java class its subclasses in java.util ("HashMap" catches LinkedHashMap), and a C math
 // function its float and long double versions. Go and C# names match whatever their case.
 // A question with any ban also bans the usual ways around one: reflection and friends in Java and C#
-// (and dynamic, expression trees, DllImport), eval, exec, getattr, __import__, importlib, pickle and friends
-// in Python, dlsym and friends in C and C++ (and in C++ inline asm, reopening namespace std, #line and
-// unusual #includes), vm, workers, child_process, the inspector and process.binding in JavaScript,
-// reflect, unsafe, templates and go:linkname in Go, unsafe, include!, #[path] and file modules in Rust.
+// (and dynamic, expression trees, DllImport, a class made from its name), eval, exec, getattr, __import__,
+// importlib, pickle and friends in Python, dlsym and friends in C and C++ (and #define, and gcc's __builtin_
+// names for banned functions; in C++ inline asm, reopening namespace std, #line and unusual #includes),
+// vm, workers, child_process, the inspector and process.binding in JavaScript, reflect, unsafe, templates
+// and go:linkname in Go, unsafe, include!, #[path], file modules and functions or macros named like a type
+// in Rust (sourceUse has the ones only the source shows).
 
 const T = require('../../public/teacher/types.js');
 
@@ -196,6 +198,7 @@ function rsHarnessNames() {
   }
   return RS_HARNESS;
 }
+const RS_PRIMITIVE = /^\s*(?:[&*[(]|(?:[iu](?:8|16|32|64|128|size)|f32|f64|bool|char|str)\b)/;
 const MIR_WORDS = new Set(['drop', 'discriminant', 'assert', 'switchInt', 'move', 'copy', 'deinit', 'retag', 'assume', 'copy_nonoverlapping', 'const',
   'return', 'resume', 'unreachable', 'goto', 'bb', 'debug', 'let', 'mut', 'scope', 'in', 'as', 'for', 'fn', 'dyn', 'impl', 'unwind', 'continue', 'terminate',
   'cleanup', 'otherwise', 'true', 'false']);
@@ -316,7 +319,8 @@ function rustFacts(text, ctx) {
         if ((mm = /^<impl (.*)>$/.exec(sg))) {
           const h = rsType(mm[1]);
           idents.push(...h);
-          if (lib === null) lib = !local.has(h[h.length - 1]);
+          // (only the library has methods of its own on a slice or a primitive, whatever they name: <impl [i32]>)
+          if (lib === null) lib = RS_PRIMITIVE.test(mm[1]) || !local.has(h[h.length - 1]);
         } else if ((mm = /^<(.*) as (.*)>$/.exec(sg))) {
           const h = rsType(mm[1]);
           const t = rsType(mm[2]);
@@ -326,7 +330,7 @@ function rustFacts(text, ctx) {
       }
       if (!idents.length) continue;
       if (idents.some((x) => x === 'std' || x === 'core' || x === 'alloc')) lib = true;
-      if (lib === null) lib = !local.has(idents[0]);
+      if (lib === null) lib = RS_PRIMITIVE.test(idents[0]) || !local.has(idents[0]);
       if (segs.length === 1 && (!call || MIR_WORDS.has(idents[0]) || /^[A-Z]/.test(idents[0]) || /^_\d/.test(idents[0]))) continue; // MIR's own words
       if (lib) uses.push({ name: idents[idents.length - 1], quals: idents.slice(0, -1) });
     }
@@ -382,6 +386,8 @@ function cppHits(entries, facts, D) {
     const o = owner.split('::');
     if ((o[0] === 'bq' && o.length > 1) || owner === 'main' || given.has(o[0])) continue; // the tests' code, the given classes'
     const t = target.split('::');
+    // glibc's other names for a C function, as in C (cHits): __strcpy_chk, __isoc23_strtol
+    if (t.length === 1) t[0] = t[0].replace(/^__isoc\d+_/, '').replace(/^__(\w+)_chk$/, '$1');
     if (kind === 'U' || CPP_LIB.includes(t[0])) uses.push(t);
   }
   const nameIs = (a) => {
@@ -446,9 +452,10 @@ const CS_KIN = { sort: ['sort', 'orderby', 'orderbydescending', 'order', 'orderd
 const CS_CLASS_KIN = { math: ['math', 'mathf', 'int16', 'int32', 'int64', 'int128', 'uint16', 'uint32', 'uint64', 'uint128', 'byte', 'sbyte',
   'double', 'single', 'decimal', 'half', 'biginteger'], array: ['array', 'memoryextensions'] };
 const CS_ESCAPE_NS = /^(System\.Reflection|System\.Linq\.Expressions|Microsoft\.CSharp|System\.Dynamic|System\.Runtime\.Loader)(\.|$)/;
+// (ObjectHandle: what Activator.CreateInstance gives for a class named in a string)
 const CS_ESCAPE_TYPES = ['System.Runtime.InteropServices.NativeLibrary', 'System.Runtime.CompilerServices.UnsafeAccessorAttribute',
-  'System.Runtime.CompilerServices.UnsafeAccessorTypeAttribute'];
-const CS_ESCAPE_MEMBERS = /^(System\.Type::(GetType|GetMethods?|GetMembers?|InvokeMember|GetPropert(y|ies)|GetFields?|GetConstructors?|GetInterfaces?|GetNestedTypes?|MakeGenericType|GetEvents?|FindMembers|GetDefaultMembers)|System\.Delegate::CreateDelegate|System\.Runtime\.InteropServices\.Marshal::GetDelegateForFunctionPointer)$/;
+  'System.Runtime.CompilerServices.UnsafeAccessorTypeAttribute', 'System.Runtime.Remoting.ObjectHandle'];
+const CS_ESCAPE_MEMBERS = /^(System\.Type::(GetType|GetMethods?|GetMembers?|InvokeMember|GetPropert(y|ies)|GetFields?|GetConstructors?|GetInterfaces?|GetNestedTypes?|MakeGenericType|GetEvents?|FindMembers|GetDefaultMembers)|System\.Delegate::CreateDelegate|System\.Runtime\.InteropServices\.Marshal::GetDelegateForFunctionPointer|System\.AppDomain::CreateInstance\w*)$/;
 const CS_COMPILER = ['System.Reflection.DefaultMemberAttribute']; // what the compiler itself puts there (an indexer's)
 function csHits(entries, facts) {
   const split = (full) => {
@@ -545,13 +552,164 @@ function timingIntrusions(lang, facts) {
 // The languages bans work in (all of them now).
 const BAN_LANGS = T.LANGS.filter(T.hasBans);
 
-// C and C++ with bans: the student's own macro can carry a banned call into the test code that calls their
-// function, where the check doesn't count it (#define smallest(x) ...). So with bans on, #define and #undef
-// aren't allowed in those answers (%: is #, spelled as a digraph).
-function macroUse(ban, lang, code) {
-  if (!(lang === 'c' || lang === 'cpp') || !bansFor(ban, lang).length) return [];
-  const src = require('./rubric').stripCode(code, lang);
-  return /^[ \t]*(#|%:)[ \t]*(define|undef)\b/m.test(src) ? ['#define'] : [];
+// ---------- what only the source says (C, C++ and Rust) ----------
+// With bans on, what the compiled code can't show. In C and C++: the student's own macro can carry a banned call
+// into the test code that calls their function, where the check doesn't count it (#define smallest(x) ...), so
+// #define and #undef aren't allowed (%: is #, spelled as a digraph); gcc's own name for a library function is
+// compiled in place, leaving nothing to see (__builtin_abs); and in C++, code of theirs put in the library's
+// namespace or the tests' (bq) passes for the library's or the tests' own, so that isn't allowed however it's
+// written (with attributes: namespace [[x]] bq, struct alignas(8) std::hash<K>). In Rust: the facts know the
+// student's own names but not what kind of thing each one is (rustFacts), so a function, constant, static or
+// macro named like a type or trait (fn Ord, macro_rules! Vec) would pass the library's of that name off as
+// theirs; those aren't allowed. Each comes back as what it is, like the rest of bannedUse's.
+function sourceUse(ban, lang, code) {
+  const entries = bansFor(ban, lang);
+  if (!entries.length) return [];
+  if (lang === 'rust') {
+    // the runner's own reading of their names (runner.py rust_facts), kept to the kinds that aren't types
+    const named = [...rsCodeOnly(code).matchAll(/\b(struct|enum|trait|type|union|mod|fn|const|static)\s+(?:r#)?([A-Za-z_]\w*)|\bmacro_rules\s*!\s*([A-Za-z_]\w*)/g)]
+      .filter((m) => !m[1] || ['fn', 'const', 'static'].includes(m[1])).map((m) => m[2] || m[3]);
+    return [...new Set(named.filter((n) => /^[A-Z]/.test(n) && /[a-z]/.test(n)))].map((n) => 'the name ' + n);
+  }
+  if (lang !== 'c' && lang !== 'cpp') return [];
+  const src = ccCodeOnly(code, lang);
+  const hits = [];
+  if (/^[ \t\f\v]*(?:#|%:)[ \t\f\v]*(?:define|undef)\b/m.test(src)) hits.push('#define');
+  const kin = lang === 'c' ? C_KIN : CPP_KIN;
+  const builtins = [...src.matchAll(/\b__builtin_(\w+)/g)].map((m) => m[1].replace(/^__(\w+)_chk$/, '$1'));
+  for (const entry of entries) {
+    const name = entry.split('.').pop();
+    if (builtins.some((b) => (lower(name) === 'sort' ? isSort(b) : fl(kin[name] || [name]).includes(b)))) hits.push(shown(entry, lang));
+  }
+  if (lang === 'cpp') {
+    // the runner's checks (runner.py cpp_source_facts), on the code with its attributes taken out
+    const text = noAttributes(src);
+    const ns = 'std|bq|__gnu_cxx|__cxxabiv1';
+    for (const m of text.matchAll(/\b(\w+)?\s*\bnamespace\s*(\w+)/g)) if (m[1] !== 'using' && ns.split('|').includes(m[2])) hits.push('own code in namespace ' + m[2]);
+    for (const m of text.matchAll(new RegExp(`\\b(?:struct|class|union)\\s+(?:::\\s*)?(${ns})\\s*::`, 'g'))) hits.push('own code in namespace ' + m[1]);
+    const special = new RegExp(`\\btemplate\\s*<\\s*>\\s*[^;{}()]*?(?<![\\w:])(?:::\\s*)?(${ns})\\s*::\\s*(?:\\w+\\s*(?:<[^;{}()]*>)?\\s*::\\s*)*`
+      + '(?:\\w+|operator\\s*[^\\s(]+)\\s*(?:<[^;{}()]*>)?\\s*\\(', 'g');
+    for (const m of text.matchAll(special)) hits.push('own code in namespace ' + m[1]);
+  }
+  return [...new Set(hits)];
 }
 
-module.exports = { macroUse, normalizeBans, bansFor, bannedUse, runnerFacts, timingIntrusions, shown, jsKnows, BAN_LANGS, LIST_QUALIFIED };
+// C or C++ source as the compiler reads it: lines that end in a backslash joined, comments one space, string
+// and character literals emptied (raw strings too, which gcc has in C as well), and in C++ a number's digit
+// separators part of the number (1'000). Newlines are kept, so what's left is where a directive could be.
+function ccCodeOnly(code, lang) {
+  const s = String(code || '').replace(/\\\r?\n/g, '');
+  const n = s.length;
+  const num = lang === 'cpp' ? /\.?\d(?:[eEpP][+-]|[\w.]|'(?=\w))*/y : /\.?\d(?:[eEpP][+-]|[\w.])*/y;
+  const word = /[A-Za-z_$][\w$]*/y;
+  let out = '';
+  let i = 0;
+  while (i < n) {
+    const c = s[i];
+    if (c === '/' && s[i + 1] === '/') {
+      while (i < n && s[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '/' && s[i + 1] === '*') {
+      const end = s.indexOf('*/', i + 2);
+      const stop = end < 0 ? n : end + 2;
+      out += ' ' + s.slice(i, stop).replace(/[^\n]/g, '');
+      i = stop;
+      continue;
+    }
+    num.lastIndex = i;
+    word.lastIndex = i;
+    let m;
+    if ((m = num.exec(s)) || (m = word.exec(s))) {
+      i += m[0].length;
+      out += m[0];
+      const raw = /^(?:u8|u|U|L)?R$/.test(m[0]) && s[i] === '"' ? /([^ ()\\\t\v\f\n]{0,16})\(/y : null;
+      if (raw) {
+        raw.lastIndex = i + 1;
+        const d = raw.exec(s);
+        if (d) {
+          const end = s.indexOf(')' + d[1] + '"', raw.lastIndex);
+          const stop = end < 0 ? n : end + d[1].length + 2;
+          out += '""' + s.slice(i, stop).replace(/[^\n]/g, '');
+          i = stop;
+        }
+      }
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      let j = i + 1;
+      while (j < n && s[j] !== c && s[j] !== '\n') j += s[j] === '\\' ? 2 : 1;
+      out += c + c;
+      i = Math.min(n, j + 1);
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
+
+// C++ with its attributes taken out: [[...]], __attribute__((...)), alignas(...), __declspec(...).
+function noAttributes(s) {
+  const re = /\[\[|\b(?:__attribute__|__attribute|alignas|_Alignas|__declspec)\s*\(/g;
+  let out = '';
+  let at = 0;
+  let m;
+  while ((m = re.exec(s))) {
+    const open = m[0][0] === '[' ? '[' : '(';
+    const close = open === '[' ? ']' : ')';
+    let j = open === '[' ? m.index : m.index + m[0].length - 1;
+    for (let d = 0; j < s.length; j++) {
+      if (s[j] === open) d++;
+      else if (s[j] === close && --d === 0) break;
+    }
+    out += s.slice(at, m.index) + ' ';
+    at = j + 1;
+    re.lastIndex = at;
+  }
+  return out + s.slice(at);
+}
+
+// Rust source with comments (nested ones too) and string, byte string, raw string and char literals emptied; a
+// lifetime ('a) stays. The same as the runner's (runner.py rust_code_only).
+function rsCodeOnly(code) {
+  const s = String(code || '');
+  const n = s.length;
+  let out = '';
+  let i = 0;
+  while (i < n) {
+    const c = s[i];
+    const after = i > 0 && /\w/.test(s[i - 1]);
+    let m;
+    if (s.startsWith('//', i)) {
+      const j = s.indexOf('\n', i);
+      i = j < 0 ? n : j;
+    } else if (s.startsWith('/*', i)) {
+      let depth = 1;
+      let j = i + 2;
+      while (j < n && depth) {
+        if (s.startsWith('/*', j)) { depth++; j += 2; } else if (s.startsWith('*/', j)) { depth--; j += 2; } else j++;
+      }
+      out += ' ';
+      i = j;
+    } else if ((c === 'r' || c === 'b') && !after && (m = /^(?:br|r)(#*)"/.exec(s.slice(i, i + 300)))) {
+      const end = s.indexOf('"' + m[1], i + m[0].length);
+      i = end < 0 ? n : end + 1 + m[1].length;
+      out += '""';
+    } else if (c === '"' || (c === 'b' && s[i + 1] === '"' && !after)) {
+      let j = i + (c === 'b' ? 2 : 1);
+      while (j < n && s[j] !== '"') j += s[j] === '\\' ? 2 : 1;
+      i = j + 1;
+      out += '""';
+    } else if (c === "'" && (m = /^'(?:\\(?:u\{[0-9a-fA-F]{1,6}\}|x[0-9a-fA-F]{2}|.)|[^\\'\n])'/.exec(s.slice(i, i + 16)))) {
+      out += "' '";
+      i += m[0].length;
+    } else {
+      out += c;
+      i++;
+    }
+  }
+  return out;
+}
+
+module.exports = { sourceUse, normalizeBans, bansFor, bannedUse, runnerFacts, timingIntrusions, shown, jsKnows, BAN_LANGS, LIST_QUALIFIED };

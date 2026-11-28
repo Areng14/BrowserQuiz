@@ -200,7 +200,7 @@ async function runSamples(q, lang, code) {
   const banned = B.bansFor(q.ban, lang).length > 0;
   if (!q.tests.sample.length && !banned) return { status: 'ok', tests: [], stdout: '' };
   const r = await runTests(q, lang, code, q.tests.sample, { urgent: true });
-  const used = r.status === 'ok' || r.status === 'compile_error' ? [...B.bannedUse(q.ban, lang, r.scan, q.types), ...B.macroUse(q.ban, lang, code)] : [];
+  const used = r.status === 'ok' || r.status === 'compile_error' ? [...new Set([...B.bannedUse(q.ban, lang, r.scan, q.types), ...B.sourceUse(q.ban, lang, code)])] : [];
   if (used.length) return { status: 'banned', banned: used, message: `Uses ${used.join(', ')}.` };
   return H.studentView(q, lang, q.tests.sample, r);
 }
@@ -213,7 +213,7 @@ async function gradeCode(q, answer) {
   }
   const r = await runTests(q, answer.language, answer.code, tests, { perTest: true });
   // Using a banned method scores 0, whatever the tests say (they still run, for the teacher to see).
-  const used = [...B.bannedUse(q.ban, answer.language, r.scan, q.types), ...B.macroUse(q.ban, answer.language, answer.code)];
+  const used = [...new Set([...B.bannedUse(q.ban, answer.language, r.scan, q.types), ...B.sourceUse(q.ban, answer.language, answer.code)])];
   const banned = used.length ? { banned: used, note: `Not allowed: ${used.join(', ')}` } : null;
   if (r.status === 'compile_error') {
     // That message came from a build with a hidden test in it, and code can get a test's input into its
@@ -260,7 +260,7 @@ async function checkReferences(quiz) {
         const tests = q.tests[kind];
         if (!tests.length) continue;
         const r = await runTests(q, lang, code, tests);
-        const used = r.status === 'ok' ? [...B.bannedUse(q.ban, lang, r.scan, q.types), ...B.macroUse(q.ban, lang, code)] : [];
+        const used = r.status === 'ok' ? [...new Set([...B.bannedUse(q.ban, lang, r.scan, q.types), ...B.sourceUse(q.ban, lang, code)])] : [];
         if (used.length) { problems.push(`${q.id} (${lang}): the reference solution uses ${used.join(', ')}, which "ban" doesn't allow.`); break; }
         if (r.status !== 'ok') {
           problems.push(`${q.id} (${lang}): the reference solution ${r.status === 'compile_error' ? "doesn't compile" : "couldn't run"}: ${String(r.message || '').slice(0, 300)}`);
@@ -313,7 +313,7 @@ async function checkSolutions(q) {
     if (!code.trim()) continue;
     const r = await runTests(q, lang, code, tests);
     if (r.status !== 'ok') { out[lang] = { status: r.status === 'compile_error' ? 'compile_error' : 'error', message: String(r.message || '').slice(0, 1000) }; continue; }
-    const banned = [...B.bannedUse(q.ban, lang, r.scan, q.types), ...B.macroUse(q.ban, lang, code)];
+    const banned = [...new Set([...B.bannedUse(q.ban, lang, r.scan, q.types), ...B.sourceUse(q.ban, lang, code)])];
     out[lang] = {
       status: 'ok',
       banned,

@@ -624,11 +624,13 @@ A few entries also cover close relatives:
 
 A question with any ban also bans the ways around one: reflection in Java; `eval`, `exec`,
 `getattr`, `__import__`, `importlib`, `pickle` and friends in Python; `dlsym` and friends in C and C++,
-and in C++ inline `asm`, adding to `namespace std`, `#line` and `#include` of anything but a standard
-header; `vm`, workers, `child_process`, the inspector and `process.binding` in JavaScript (each would
-give the code a fresh set of builtins); `reflect`, `unsafe`, templates and `go:linkname` in Go;
-reflection, `dynamic`, expression trees and `DllImport` in C#; `unsafe`, `include!`, `#[path]` and a
-module from another file in Rust. In C, C++, C#, JavaScript and
+gcc's own name for a banned function (`__builtin_abs`), and in C++ inline `asm`, adding to
+`namespace std`, `#line` and `#include` of anything but a standard header; `vm`, workers,
+`child_process`, the inspector and `process.binding` in JavaScript (each would give the code a fresh set
+of builtins); `reflect`, `unsafe`, templates and `go:linkname` in Go; reflection, `dynamic`, expression
+trees, `DllImport` and making a class from its name (`Activator`, `AppDomain`) in C#; `unsafe`,
+`include!`, `#[path]`, a module from another file, and a function, constant, static or macro named like a
+type (`fn Ord`) in Rust. In C, C++, C#, JavaScript and
 TypeScript, `support` code counts as the student's, so keep banned names out of it. The reference solutions must keep to the bans, or the upload is refused.
 In C and C++, a question with bans doesn't allow `#define` or `#undef` in answers: a macro could carry a
 banned call into the code that tests theirs.
