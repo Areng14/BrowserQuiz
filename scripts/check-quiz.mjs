@@ -101,7 +101,7 @@ for (const q of quiz.questions) {
 const count = (t) => quiz.questions.filter((q) => q.type === t).length;
 const total = quiz.questions.reduce((s, q) => s + q.points, 0);
 console.log(`${quiz.title}: ${quiz.questions.length} questions, ${total} points${quiz.timeLimitMin ? `, ${quiz.timeLimitMin} min` : ', no time limit'}`);
-console.log(`  ${['single', 'multi', 'text', 'code', 'output', 'trace', 'fill', 'essay'].filter((t) => count(t)).map((t) => `${t} ${count(t)}`).join(', ')}, images ${parsed.assets.size}`);
+console.log(`  ${['single', 'multi', 'text', 'math', 'graph', 'code', 'output', 'trace', 'fill', 'essay'].filter((t) => count(t)).map((t) => `${t} ${count(t)}`).join(', ')}, images ${parsed.assets.size}`);
 for (const q of quiz.questions) {
   if (q.type !== 'code') continue;
   const what = q.mode === 'class' ? `class ${q.class.name}` : `method ${q.signature.name}`;
