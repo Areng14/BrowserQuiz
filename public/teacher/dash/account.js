@@ -7,6 +7,8 @@ import { moreMenu } from './cells.js';
 
 // ---------- sign in ----------
 function showLogin() {
+  if (dash.parked && dash.parked.login.isConnected) return; // already asking
+  dash.parked = null;
   const user = h('input', { class: 'input', id: 'user', autocomplete: 'username', autocapitalize: 'none', spellcheck: 'false' });
   const pw = h('input', { class: 'input', type: 'password', id: 'pw', autocomplete: 'current-password' });
   const msg = h('p', { class: 't-error', role: 'alert' });
@@ -22,10 +24,38 @@ function showLogin() {
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     btn.disabled = true; msg.textContent = '';
-    try { const r = await post('/api/t/login', { username: user.value.trim(), password: pw.value }); dash.justTyped = { pw: pw.value, at: Date.now() }; if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else route(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
+    try { const r = await post('/api/t/login', { username: user.value.trim(), password: pw.value }); dash.justTyped = { pw: pw.value, at: Date.now() }; if (r && r.recoveryCode) showRecoveryCode(r.recoveryCode); else signedIn(); } catch (ex) { msg.textContent = ex.message === 'bad_password' ? 'Wrong password.' : ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message; btn.disabled = false; pw.select(); }
   });
-  mount(h('main', { class: 't-login-page' }, form, h('p', { class: 't-login-foot' }, ghLink())));
+  const page = h('main', { class: 't-login-page' }, form, h('p', { class: 't-login-foot' }, ghLink()));
+  // Unsaved work on screen (a quiz being written, a class being edited) when the session ends: a restart,
+  // the 12 hours, signing out in another tab. It stays, hidden, under the sign-in and comes back after it.
+  const root = document.getElementById('t-app');
+  if (dash.leaveGuard && dash.who) {
+    dash.parked = { nodes: [...root.children], guard: dash.leaveGuard, title: document.title, at: location.hash, who: dash.who.username, login: page };
+    for (const n of dash.parked.nodes) n.hidden = true;
+    root.append(page);
+    document.title = 'Teacher sign in - BrowserQuiz';
+  } else mount(page);
   user.focus();
+}
+// After signing in (password or passkey): the work set aside above comes back if it's the same teacher;
+// otherwise it's their dashboard, as it was.
+async function signedIn() {
+  const work = dash.parked;
+  dash.parked = null;
+  dash.who = null;
+  if (work) {
+    try { dash.who = (await api('/api/t/me')).teacher; } catch (e) { return; }
+    if (dash.who.username === work.who && !dash.who.mustChange && location.hash === work.at) {
+      work.login.remove();
+      for (const n of work.nodes) n.hidden = false;
+      dash.leaveGuard = work.guard;
+      document.title = work.title;
+      return;
+    }
+    dash.leaveGuard = null; // someone else's: not theirs to keep
+  }
+  route();
 }
 
 // A teacher on a temporary password picks their own before anything else (first). Later, it's changed in
@@ -113,7 +143,7 @@ async function passkeySignIn(btn, msg) {
     try {
       await post('/api/t/passkeys/login', Object.assign(signed(cred), { userHandle: cred.response.userHandle ? b64e(cred.response.userHandle) : null, prf: prfOut(cred) }));
     } catch (e) { if (e.code === 'unknown_passkey') forget(o.rpId, b64e(cred.rawId)); throw e; }
-    route();
+    signedIn();
   } catch (ex) {
     msg.textContent = ex.message === 'too_many' ? 'Too many tries. Wait a minute.' : ex.message;
   } finally { btn.disabled = false; }

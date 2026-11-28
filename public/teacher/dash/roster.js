@@ -42,7 +42,7 @@ async function showRoster(id) {
       if (id) await post(`/api/t/rosters/${encodeURIComponent(id)}/edit`, { name: name.value, add: add.value, remove: [...removing], time: timeChanges });
       else await post('/api/t/rosters', { name: name.value, text: add.value });
       showHome('classes');
-    } catch (e) { msg.textContent = e.message; save.disabled = false; }
+    } catch (e) { if (e.message !== 'login') msg.textContent = e.message; save.disabled = false; }
   });
   // Pasted students, a new name or extra time aren't dropped without asking: Cancel, the sidebar, Back, reload
   const changed = () => name.value !== roster.name || !!add.value.trim() || removing.size > 0

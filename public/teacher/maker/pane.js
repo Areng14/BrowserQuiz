@@ -177,7 +177,7 @@ function settingsPane() {
     try {
       const r = await post('/api/t/quizzes/normalize', { json: pasteArea.value });
       showQuizEditor(ed.currentId, { quiz: r.quiz, missing: r.missingImages });
-    } catch (e) { pasteMsg.textContent = e.message; }
+    } catch (e) { if (e.message !== 'login') pasteMsg.textContent = e.message; }
   });
   const langSel = h('select', { class: 'input' }, Object.entries(Object.assign({}, LANGS, { none: 'None' })).map(([v, t]) => h('option', { value: v, text: t, selected: ed.quiz.language === v })));
   langSel.addEventListener('change', () => { ed.quiz.language = langSel.value; touch(); });
