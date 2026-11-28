@@ -174,6 +174,8 @@ function save(a) {
 }
 function forget(id) { attempts.delete(id); }
 
+// A question as the teacher knows it in logs, Q1, Q2, ... by its place in the quiz (its id can be anything)
+const qNumber = (quiz, qq) => `Q${quiz.questions.findIndex((x) => x.id === qq.id) + 1}`;
 function logEvent(a, type, severity, detail) {
   if (a.eventCount === null) a.eventCount = q('SELECT COUNT(*) AS n FROM events WHERE attempt_id = ?').get(a.id).n;
   // Violations are kept past the cap (spam can't push evidence out), up to a much higher one for disk.
@@ -359,6 +361,6 @@ function perStudent(quiz) {
 
 module.exports = {
   watched,
-  notices, notes, getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, back, awayNow, logEvent, makeLayout, quizFor, perStudent, attempts,
+  notices, notes, getQuiz, getAsset, listAssets, storedResult, getAttempt, attemptByToken, save, forget, record, back, awayNow, logEvent, qNumber, makeLayout, quizFor, perStudent, attempts,
   CLIENT_EVENTS, SERVER_EVENTS, quizCache,
 };
