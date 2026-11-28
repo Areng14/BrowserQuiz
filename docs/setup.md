@@ -1,23 +1,29 @@
 # Setting up BrowserQuiz
 
-This guide goes over installing BrowserQuiz, setting up accounts and keeping the server running. If you are a teacher looking for how to use it in class, read [onboarding.md](onboarding.md) instead. How BrowserQuiz keeps everything safe is in [security.md](security.md).
+Teaching with it rather than installing it? Read [onboarding.md](onboarding.md) instead. How BrowserQuiz protects quizzes and student data is in [security.md](security.md).
 
 ## Installing BrowserQuiz
 
-To run BrowserQuiz you need a computer with Docker. This can be your own computer with Docker Desktop, or a small Linux server. 2 GB of RAM is enough for a class, but 4 GB is recommended. If you are putting it on a school server, follow [school-hosting.md](school-hosting.md) instead.
+Putting it on a school server? Follow [school-hosting.md](school-hosting.md) instead.
 
-```bash
-git clone https://github.com/Areng14/BrowserQuiz.git && cd BrowserQuiz
-./setup.sh
-```
+You need a computer with Docker: your own computer with Docker Desktop, or a small Linux server. 2 GB of RAM is enough for a class, and 4 GB is recommended.
 
-On Windows, double-click `setup.cmd` instead of running `./setup.sh`.
+1. Get BrowserQuiz and run the setup script:
 
-The setup script checks your computer first, then asks for an admin password (or makes one up for you) and what students write code in ([Languages](#languages)). It creates the other secrets in `.env`, picks a free port, downloads BrowserQuiz, starts it and prints the address to open. You can run it again at any time since it keeps everything that is already set. If the download is blocked, it builds BrowserQuiz on your computer instead, which takes 10 minutes or more the first time.
+   ```bash
+   git clone https://github.com/Areng14/BrowserQuiz.git && cd BrowserQuiz
+   ./setup.sh
+   ```
 
-If students cannot reach it, open the port the script printed in the server's firewall. Default is 8080.
+   On Windows, double-click `setup.cmd` instead of running `./setup.sh`.
+2. Type an admin password, or press Enter to have it make one up.
+3. Pick what students write code in ([Languages](#languages)).
+4. Open the address it prints.
+5. If students cannot reach it, open that port in the server's firewall. The default is 8080.
 
-**Requirements.** Docker Compose v2 (the `docker compose` command) and Linux 5.13 or newer on a 64-bit processor, which any current Linux and Docker Desktop already have. The setup script checks these first, with the memory, the free disk on a Linux server and whether it can download, and stops before downloading anything if it can't go on. With an older Linux, code questions will not run but everything else still works, and `docker compose logs runner` will tell you why.
+The script checks your computer first. It creates the other secrets in `.env`, picks a free port, downloads BrowserQuiz and starts it. You can run it again at any time: it keeps everything that is already set. If the download is blocked, it builds BrowserQuiz on your computer instead, which takes 10 minutes or more the first time.
+
+**Requirements.** Docker Compose v2 (the `docker compose` command) and Linux 5.13 or newer on a 64-bit processor. Any current Linux and Docker Desktop already have them. The setup script checks these first, along with the memory, the free disk on a Linux server and whether it can download. If it can't go on, it stops before downloading anything. On an older Linux, code questions will not run but everything else works, and `docker compose logs runner` says why.
 
 **Doing it by hand.** Copy `.env.example` to `.env`, fill in the three secrets, then run `docker compose pull && docker compose up -d`.
 
@@ -30,9 +36,9 @@ The code runner comes in two kinds:
 | `standard` (the default) | Java, Python, JavaScript, TypeScript | about 150 MB |
 | `full` | those, and C, C++, C#, Go, Rust | about 700 MB |
 
-The setup script asks which one the first time. To change it later, run `./setup.sh --languages` (on Windows, `setup.cmd -Languages`). On Railway, add the variable `RUNNER_LANGS=full` to the `runner` service and redeploy it. The quiz maker only offers the languages the runner has, and a quiz that needs another one says so when you save it.
+The setup script asks which one the first time. To change it later, run `./setup.sh --languages` (on Windows, `setup.cmd -Languages`). On Railway, add the variable `RUNNER_LANGS=full` to the `runner` service and redeploy it. The quiz maker only offers the languages the runner has. A quiz that needs another one says so when you save it.
 
-**Several classes writing code at once.** The app itself keeps up with a couple of thousand students; grading code is what takes time. Every hidden test is a run of the student's code (a Java run takes about a second), and the runner does a few at a time. Grading still finishes on its own, just later, and a student's Run examples always goes ahead of grading.
+**Several classes writing code at once.** The app itself keeps up with a couple of thousand students. Grading code is what takes time. Every hidden test is a run of the student's code (a Java run takes about a second), and the runner does a few at a time. When it falls behind, grading still finishes on its own, only later. A student's **Run examples** always goes ahead of grading.
 
 | Variable | Service | Default | |
 | --- | --- | --- | --- |
@@ -44,21 +50,27 @@ For a few classes coding at the same time, 8 CPUs and 8 slots grade about four t
 
 ## Setting up accounts
 
-**Admin.** The first account is admin. Sign in at `/teacher` with the username `admin` and the password from the setup script. You will then pick your own username and password and get a recovery code. Save the recovery code somewhere safe since it is the only way back into your quizzes if you forget your password. After this, `admin` will no longer work as a username.
+**Admin.** The first account is admin.
 
-- If you do not want a password in `.env`, leave `ADMIN_PASSWORD` empty. The server will print a one-time code to its log (`docker compose logs app`) that you can sign in with instead.
-- If you forget the admin password, set `ADMIN_RESET` in `.env` to any new word and restart the server. The log will show a new one-time code, and your recovery code will get your quizzes back.
+1. Sign in at `/teacher` with the username `admin` and the password from the setup script.
+2. Pick your own username and password.
+3. Save the recovery code it gives you somewhere safe. It is the only way back into your quizzes if you forget your password.
 
-**Teachers.** Admin adds teachers from **Teachers**, in the menu under their name. Each teacher gets a temporary password to pass on, and they pick their own the first time they sign in.
+After this, `admin` no longer works as a username.
+
+- To keep the password out of `.env`, leave `ADMIN_PASSWORD` empty. The server then prints a one-time code to its log (`docker compose logs app`). Sign in with that instead.
+- Forgot the admin password? Set `ADMIN_RESET` in `.env` to any new word and restart the server. The log shows a new one-time code, and your recovery code gets your quizzes back.
+
+**Teachers.** To add a teacher, open **Teachers** from the menu under your name. Each teacher gets a temporary password. Pass it on. They pick their own the first time they sign in.
 
 - **Reset password** gives the teacher a new temporary password and signs them out.
 - **Disable** stops the teacher from signing in, but keeps their quizzes and results.
 
-**Passkeys.** Teachers can sign in with a fingerprint, face or PIN instead of a password in **Settings**, under **Passkeys**. Passkeys need HTTPS, and a passkey from iCloud Keychain, Google Password Manager or most security keys. If a passkey cannot unlock quizzes, it will be turned away when it is added.
+**Passkeys.** Teachers add them in **Settings**, under **Passkeys**, to sign in with a fingerprint, face or PIN instead of a password. Passkeys need HTTPS, and a passkey from iCloud Keychain, Google Password Manager or most security keys. A passkey that cannot unlock quizzes is turned away when it is added.
 
 ## HTTPS and where to host it
 
-Plain `http://` is fine for trying it out, but for real classes HTTPS is recommended:
+Plain `http://` is fine for trying it out. For real classes, HTTPS is recommended:
 
 - Passwords and student IDs are encrypted when they are sent.
 - Passkeys work.
@@ -70,13 +82,13 @@ If you have a domain pointed at the server and ports 80 and 443 open to the inte
 1. In `.env`, set `DOMAIN=quiz.yourschool.org`, `APP_BIND=127.0.0.1` and `TRUST_PROXY=1`.
 2. Run `docker compose --profile https up -d`.
 
-The certificate is set up and renewed automatically. If the server can only be reached from the school network it cannot get a certificate this way, so use your school's own certificate instead. How to do that is in [school-hosting.md](school-hosting.md#https).
+The certificate is set up and renewed automatically. A server that can only be reached from the school network cannot get a certificate this way. Use your school's own certificate instead, as shown in [school-hosting.md](school-hosting.md#https).
 
 **Where to host it.**
 
 - **A rented server off campus.** Works from anywhere, and nobody at school has to run anything.
 - **A school server.** Follow [school-hosting.md](school-hosting.md).
-- **Railway.** Read [Hosting on Railway](#hosting-on-railway) below.
+- **Railway.** See [Hosting on Railway](#hosting-on-railway) below.
 
 The teacher's **Only students on my current network** option matches the school's public address on an off-campus server, and any private address (10.x, 192.168.x) on a school server.
 
@@ -85,27 +97,29 @@ The teacher's **Only students on my current network** option matches the school'
 [Safe Exam Browser](https://safeexambrowser.org) (SEB) is a free browser that locks down the whole computer during an exam. It is optional. Respondus LockDown Browser only works inside an LMS like Canvas, so BrowserQuiz cannot use it.
 
 1. Install SEB on the student computers. This needs an administrator.
-2. Open the dashboard at the address students use, since that is where SEB will open the quiz.
+2. Open the dashboard at the address students use. That is where SEB will open the quiz.
 3. On **Give a quiz**, pick **Safe Exam Browser** and start it.
-4. Students join with the code like normal and click **Open Safe Exam Browser**. If SEB is not installed, the page links to its download. The quiz's page also has the SEB link and the `.seb` file if you want to post or hand them out.
+4. Students join with the code as usual and click **Open Safe Exam Browser**. If SEB is not installed, the page links to its download.
+
+The quiz's page also has the SEB link and the `.seb` file, if you want to post or hand them out.
 
 **Things to know.**
 
 - **Sound.** SEB mutes the computer while the quiz is open. If a student uses a screen reader, turn off **Mute the computer's sound** when you start the quiz.
-- **Leaving the window.** Since there is nothing else to switch to in SEB, the quiz losing focus (SEB's own toolbar, a notification) never counts against a student, and there is no **Exit** button. Time away still shows on the live page.
-- **Quitting.** After turning in, **Quit Safe Exam Browser** closes it. If a student gets stuck, they can quit with the **SEB quit password** on the quiz's page (hover over it to see it). This counts as leaving the quiz.
-- **iPads.** Install **SafeExamBrowser** from the App Store (iPadOS 12 or later). Students join in Safari and tap **Open Safe Exam Browser**, and the iPad stays locked until they turn in.
+- **Leaving the window.** There is nothing else to switch to in SEB, so the quiz losing focus (SEB's own toolbar, a notification) never counts against a student, and there is no **Exit** button. Time away still shows on the live page.
+- **Quitting.** After turning in, **Quit Safe Exam Browser** closes it. A stuck student can quit with the **SEB quit password** on the quiz's page (hover over it to see it). This counts as leaving the quiz.
+- **iPads.** Install **SafeExamBrowser** from the App Store (iPadOS 12 or later). Students join in Safari and tap **Open Safe Exam Browser**. The iPad stays locked until they turn in.
 - **Phones.** Phones can take practice quizzes, but not exams.
-- **Your own SEB settings.** If you made your own settings in SEB Config Tool, open **Use my own .seb file** and paste its Config Key. It is on the Exam tab, with sending the Browser Exam Key and Config Key turned on. If you change those settings the key changes too, so start the quiz again with the new key.
+- **Your own SEB settings.** If you made your own settings in SEB Config Tool, open **Use my own .seb file** and paste its Config Key. The key is on the Exam tab, with sending the Browser Exam Key and Config Key turned on. Changing those settings changes the key, so start the quiz again with the new key.
 
 ## AI grading
 
-After a quiz, written answers and rubric items that cannot be checked automatically wait for the teacher. **Grade with AI** (on the quiz's live page, or on one student) grades them like you would. It ticks the rubric items it thinks are met, or gives points if there is no rubric, with a reason for each one. Every AI grade is labeled, and you can change any of them.
+After a quiz, written answers and rubric items that cannot be checked automatically wait for the teacher. **Grade with AI** (on the quiz's live page, or on one student) grades them. It ticks the rubric items it thinks are met, or gives points if there is no rubric, with a reason for each one. Every AI grade is labeled, and you can change any of them.
 
 There are two ways to use it:
 
 - **Any AI chat, no setup.** Copy the prompt into ChatGPT, Claude, Gemini or similar, then paste the CSV it gives back into BrowserQuiz. Any rows it cannot use (like a typo in an ID) are listed and left for you.
-- **With an API key.** On the dialog's **API key** tab, paste a key from [Anthropic](https://console.anthropic.com/settings/keys), [OpenAI](https://platform.openai.com/api-keys) or [Google](https://aistudio.google.com/apikey). The AI will then grade in the background, and you can see its progress on the live page. It costs a few cents an answer, billed to that key. The key is stored encrypted, only used for your quizzes, and never shown again (only its last 4 characters).
+- **With an API key.** On the dialog's **API key** tab, paste a key from [Anthropic](https://console.anthropic.com/settings/keys), [OpenAI](https://platform.openai.com/api-keys) or [Google](https://aistudio.google.com/apikey). The AI then grades in the background, and the live page shows its progress. It costs a few cents an answer, billed to that key. The key is stored encrypted, only used for your quizzes, and never shown again (only its last 4 characters).
 
 **One key for every teacher.** Set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY` in `.env` and restart. If a teacher adds their own key, theirs is used instead.
 
@@ -115,14 +129,14 @@ There are two ways to use it:
 
 ## Quizzes, classes and corrections
 
-How to make and give quizzes is in [onboarding.md](onboarding.md). Here are some extra details:
+For making and giving quizzes, see [onboarding.md](onboarding.md).
 
 - **Quiz files.** A `.quiz` file is a zip of a folder with `quiz.json` and an optional `assets/` folder for images. The format is in [quiz-format.md](quiz-format.md).
 - **Trying the example.** Zip `examples/sample-exam` and upload it, then upload `examples/roster-demo.csv` as a class (Ava Martinez, ID 204511).
-- **Checking a quiz before uploading.** `node scripts/check-quiz.mjs examples/sample-exam --run` checks the quiz and runs its reference solutions.
+- **Checking a quiz before uploading.** Run `node scripts/check-quiz.mjs examples/sample-exam --run`. It checks the quiz and runs its reference solutions.
 - **AI coding assistants.** Assistants working in this repo follow `AGENTS.md`. They write the quiz, run the reference solutions and pack the `.quiz` for you.
 - **Extra time.** 1.25×, 1.5× or 2× applies from the next quiz the student starts.
-- **Corrections.** By default a fixed answer earns back 50% of the points it lost, on top of the exam score. The CSV adds `exam_score`, `earned_back` and `with_corrections`. An invalidated exam stays at 0, and students never see their total. Answers that are still waiting to be graded are not in corrections, so grade those first.
+- **Corrections.** By default a fixed answer earns back 50% of the points it lost, on top of the exam score. The CSV adds `exam_score`, `earned_back` and `with_corrections`. An invalidated exam stays at 0, and students never see their total. Answers still waiting to be graded are not in corrections, so grade those first.
 
 ## Updates, backups and logs
 
@@ -132,9 +146,9 @@ How to make and give quizzes is in [onboarding.md](onboarding.md). Here are some
 | Logs | `docker compose logs -f app` |
 | Wipe everything | `docker compose down -v` (deletes all the data) |
 
-Everything (quizzes, classes and results) is stored in one database in the `bq-data` volume, and it backs itself up every night around 2:00 (never during a quiz), keeping the last 7. On the **Server** page (the menu under your name, admin only) you can back up now, download a backup, and restore one from the list or from a downloaded file. A restore keeps a copy of what it replaced, then restarts the server.
+Everything (quizzes, classes and results) is stored in one database in the `bq-data` volume. It backs itself up every night around 2:00 (never during a quiz) and keeps the last 7. On the **Server** page (admin only, in the menu under your name) you can back up now, download a backup, and restore one from the list or from a downloaded file. A restore keeps a copy of what it replaced, then restarts the server.
 
-- The nightly backups sit on the same disk as the data, so download one now and then and keep it somewhere else. To copy them all off without signing in: `docker compose cp app:/data/backups ./backups`
+- The nightly backups sit on the same disk as the data. Download one now and then and keep it somewhere else. To copy them all off without signing in: `docker compose cp app:/data/backups ./backups`
 - **Never change `ID_PEPPER`** in `.env` once classes are added. Student IDs are scrambled with it, so changing it means no student can sign in.
 - Backups made before quiz encryption was added still have readable copies of quizzes.
 
@@ -142,14 +156,14 @@ Everything (quizzes, classes and results) is stored in one database in the `bq-d
 
 ## Hosting on Railway
 
-If you do not want to install anything, you can [deploy it on Railway](https://railway.com/deploy/fMUAh_?referralCode=dP9ijG&utm_medium=integration&utm_source=button&utm_campaign=generic). New accounts get a 30-day trial, and after that the Hobby plan is about $5 a month.
+To skip installing anything, [deploy it on Railway](https://railway.com/deploy/fMUAh_?referralCode=dP9ijG&utm_medium=integration&utm_source=button&utm_campaign=generic). New accounts get a 30-day trial. After that, the Hobby plan is about $5 a month.
 
 1. Sign in to Railway.
 2. Pick an admin password with 10 or more characters.
 3. Wait a few minutes for the first build.
 4. Open the `app` service's address (a `.up.railway.app` link, with HTTPS) and sign in at `/teacher` as `admin`.
 
-Your copy gets its own secrets that nobody else has. When this repo changes, Railway shows **Update available**, and nothing changes until you apply it. Stay on the Hobby plan instead of the Free one, since Free puts the app to sleep and after every restart teachers have to sign in again before their quizzes work.
+Your copy gets its own secrets that nobody else has. When this repo changes, Railway shows **Update available**. Nothing changes until you apply it. Stay on the Hobby plan, not the Free one: Free puts the app to sleep, and after every restart teachers have to sign in again before their quizzes work.
 
 **Holding updates while a quiz is running.** An update restarts the server, which drops every student for about half a minute. To make updates wait until nobody is in an exam:
 
@@ -176,7 +190,7 @@ Put the two secrets in the project's **shared variables**. If you left the admin
 | Quizzes say "your teacher needs to sign in" | The server restarted. The teacher signs in again and students can keep going. |
 | The download or build fails with certificate errors | Your network checks HTTPS traffic, which is common at schools. Build with your network's certificate (below). |
 
-To build with your network's certificate (just that one certificate, not a whole bundle):
+To build with your network's certificate (only that one certificate, not a whole bundle):
 
 ```bash
 docker compose build --build-arg EXTRA_CA="$(cat /path/to/ca.crt)"
