@@ -309,18 +309,50 @@ def job_bytes(job):
     return total
 
 
+def _drain(fd, keep, limit, box):
+    """Reads a step's output pipe to its end: box["data"] is the first keep bytes, and box["over"] is set once
+    more than limit came in all. It reads on past that (and drops it), so the program never blocks on a write."""
+    data = bytearray()
+    total = 0
+    try:
+        while True:
+            b = os.read(fd, 65536)
+            if not b:
+                break
+            total += len(b)
+            if len(data) < keep:
+                data += b[:keep - len(data)]
+            if total > limit:
+                box["over"] = True
+    except OSError:
+        pass
+    box["data"] = bytes(data)
+
+
 def run_step(argv, uid, job, cpu_s, wall_s, mem_mb, nproc, env, fsize=FILE_CAP, tools=(), run_file=None, cap=OUT_CAP):
-    out = tempfile.TemporaryFile(dir=OUT_DIR)
-    err = tempfile.TemporaryFile(dir=OUT_DIR)
+    # Output goes through pipes the runner reads, never a file the job holds. The harness writes its result
+    # lines (and in Java and Python the ban check's facts) before any student code runs, tagged with the run's
+    # marker: in a file, the code could read the marker back, write over those lines, or cut the file short
+    # and write its own. A pipe can only be written to the end of. The limit on how much it may print is
+    # counted here, as RLIMIT_FSIZE only counts files.
     ruleset = prepare_landlock(build_rules(job, tools, run_file))
+    out_r, out_w = os.pipe()
+    err_r, err_w = os.pipe()
+    got = ({}, {})
+    readers = [threading.Thread(target=_drain, args=(fd, keep, fsize, box), daemon=True)
+               for fd, keep, box in ((out_r, cap, got[0]), (err_r, OUT_CAP, got[1]))]
     t0 = time.time()
     status = "ok"
     try:
         try:
-            p = subprocess.Popen(argv, cwd=job, stdin=subprocess.DEVNULL, stdout=out, stderr=err, env=env, close_fds=True,
+            p = subprocess.Popen(argv, cwd=job, stdin=subprocess.DEVNULL, stdout=out_w, stderr=err_w, env=env, close_fds=True,
                                  preexec_fn=make_preexec(uid, ruleset, cpu_s, mem_mb, nproc, fsize))
         finally:
             os.close(ruleset)
+            os.close(out_w)
+            os.close(err_w)
+        for r in readers:
+            r.start()
         # Wait, and keep an eye on how much the job writes: one that fills its disk would starve the others.
         code = None
         while code is None:
@@ -330,22 +362,33 @@ def run_step(argv, uid, job, cpu_s, wall_s, mem_mb, nproc, env, fsize=FILE_CAP, 
                 used = job_bytes(job)
                 if used is None or used > DISK_CAP:
                     status = "disk_limit"
+                elif got[0].get("over") or got[1].get("over"):
+                    status = "output_limit"
                 elif time.time() - t0 > wall_s:
                     status = "timeout"
                 else:
                     continue
                 kill_uid(uid)
                 code = p.wait()
+        ms = int((time.time() - t0) * 1000)
+        # The output ends when everything holding the pipes has gone: a process the program left behind goes too.
+        for r in readers:
+            r.join(1)
+        if any(r.is_alive() for r in readers):
+            kill_uid(uid)
+            for r in readers:
+                r.join(5)
+        if (got[0].get("over") or got[1].get("over")) and status == "ok":
+            status = "output_limit"
         if code in (-signal.SIGXCPU, -signal.SIGKILL) and status == "ok":
             status = "timeout"
         if code == -signal.SIGXFSZ and status == "ok":
             status = "output_limit"
-        out.seek(0)
-        err.seek(0)
-        return status, code, out.read(cap).decode("utf-8", "replace"), err.read(OUT_CAP).decode("utf-8", "replace"), int((time.time() - t0) * 1000)
+        return status, code, got[0].get("data", b"").decode("utf-8", "replace"), got[1].get("data", b"").decode("utf-8", "replace"), ms
     finally:
-        out.close()
-        err.close()
+        if not any(r.is_alive() for r in readers):
+            os.close(out_r)
+            os.close(err_r)
 
 
 JAVA_RUN_FLAGS = ["-XX:ActiveProcessorCount=1", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-XX:CICompilerCount=1",

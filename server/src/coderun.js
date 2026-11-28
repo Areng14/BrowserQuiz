@@ -159,6 +159,14 @@ async function runEach(q, lang, code, tests) {
   return before ? null : parts;
 }
 
+// In Java and Python the ban check's facts are the harness's first line, written before any student code runs.
+// A run that got tests right without them (the code got rid of that line somehow) fails the check: it doesn't
+// pass it. (With no test right the score is 0 anyway, and a program that crashed at the start says nothing.)
+function closedFacts(q, lang, r) {
+  if (r.status !== 'ok' || r.scan || !(lang === 'java' || lang === 'python') || !B.bansFor(q.ban, lang).length) return r;
+  return r.tests.some((t) => t.pass) ? { ...r, scan: { fail: true } } : r;
+}
+
 // One job for all tests (Run, reference checks), or for grading each test in a process of its own (so a hang
 // only costs one test): built once where the runner can (runEach), else one job per test.
 async function runTests(q, lang, code, tests, opts) {
@@ -166,7 +174,7 @@ async function runTests(q, lang, code, tests, opts) {
   if (!perTest) {
     const { marker, job } = H.buildJob(q, lang, code, tests);
     const res = await callRunner(job, Math.min(10000, q.limits.timeMs * tests.length), q.limits.memoryMb, opts && opts.urgent);
-    return H.readResults(q, lang, tests, res, marker);
+    return closedFacts(q, lang, H.readResults(q, lang, tests, res, marker));
   }
   await runnerLanguages();
   const parts = (tests.length && EACH_LANGS.includes(lang) && langs.each.includes(lang) && await runEach(q, lang, code, tests))
@@ -184,7 +192,7 @@ async function runTests(q, lang, code, tests, opts) {
   if (broken) return broken;
   // (JavaScript's are what each test's run tripped: all of them count)
   const scan = isJsLang(lang) ? { hits: [...new Set(parts.flatMap((p) => (p.scan && p.scan.hits) || []))] } : (parts.find((p) => p.scan) || {}).scan || null;
-  return { status: 'ok', scan, tests: parts.map((p) => (p.status === 'ok' ? p.tests[0] : { pass: false, error: p.message || 'Run failed' })) };
+  return closedFacts(q, lang, { status: 'ok', scan, tests: parts.map((p) => (p.status === 'ok' ? p.tests[0] : { pass: false, error: p.message || 'Run failed' })) });
 }
 
 // A question with bans but no sample tests still needs a run to get the facts: an empty one does.
