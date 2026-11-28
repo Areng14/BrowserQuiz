@@ -59,9 +59,10 @@ async function route() {
   if (code) { if (!dash.who) { try { dash.who = (await api('/api/t/me')).teacher; } catch (e) { /* shown anyway */ } } showRecoveryCode(code.code, code.again); return; }
   if (!dash.who) { try { const me = await api('/api/t/me'); dash.who = me.teacher; dash.version = me.version; } catch (e) { return; } } // signs in first if needed
   const [a, b, c] = location.hash.slice(1).split('/');
-  const id = b ? decodeURIComponent(b) : null;
+  const dec = (s) => { try { return decodeURIComponent(s); } catch (e) { return s; } }; // a mangled link: not found, not a blank page
+  const id = b ? dec(b) : null;
   if (a === 'run' && id) showRun(id);
-  else if (a === 'grade' && id) showGrade(id, c ? decodeURIComponent(c) : null);
+  else if (a === 'grade' && id) showGrade(id, c ? dec(c) : null);
   else if (a === 'class') showRoster(id === 'new' ? null : id);
   else if (a === 'quiz') openQuiz(id === 'new' ? null : id);
   else if (a === 'grades' && id !== 'all') { dash.gradesFor = id; showHome('grades'); } // #grades/<class>

@@ -10,7 +10,11 @@ async function showRoster(id) {
   const seq = ++dash.navSeq;
   let roster = { name: '', students: [] };
   if (id) {
-    try { roster = await api(`/api/t/rosters/${encodeURIComponent(id)}`); } catch (e) { return; }
+    try { roster = await api(`/api/t/rosters/${encodeURIComponent(id)}`); } catch (e) {
+      // deleted, or an old link: say so in Classes instead of a blank page
+      if (e.message !== 'login' && seq === dash.navSeq) mount(shell('classes', h('section', { class: 't-section' }, h('p', { class: 't-error', text: e.message }))));
+      return;
+    }
   }
   const removing = new Set();
   const timeChanges = {}; // roster student id -> 1 | 1.25 | 1.5 | 2: extra time on every timed quiz

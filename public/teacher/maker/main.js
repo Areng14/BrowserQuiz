@@ -3,7 +3,7 @@
 // opens it.
 
 import { ICONS, api, bar, h, icon, iconButton, labeled, mount } from '../dash/core.js';
-import { guard } from '../dash/home.js';
+import { guard, shell } from '../dash/home.js';
 import { ed } from './state.js';
 import { TYPES } from './formats.js';
 import { withUi } from './model.js';
@@ -22,7 +22,11 @@ async function showQuizEditor(id, preset) {
   ed.newAssets = {}; // assets/<name> -> base64, added here and sent on save
   if (ed.id) {
     let src;
-    try { src = await api(`/api/t/quizzes/${encodeURIComponent(ed.id)}/source`); } catch (e) { return; }
+    try { src = await api(`/api/t/quizzes/${encodeURIComponent(ed.id)}/source`); } catch (e) {
+      // deleted, or an old link: say so in Quizzes instead of a blank page (unless another page was asked for since)
+      if (e.message !== 'login' && location.hash === `#quiz/${encodeURIComponent(id)}`) mount(shell('quizzes', h('section', { class: 't-section' }, h('p', { class: 't-error', text: e.message }))));
+      return;
+    }
     ed.quiz = src.quiz;
     ed.existingAssets = new Set(src.assets);
   }

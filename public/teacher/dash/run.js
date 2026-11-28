@@ -141,9 +141,14 @@ async function showRun(runId) {
     act(`/api/t/attempts/${id}/end`);
   }
 
+  // false: the run isn't there (deleted, here or in another tab, or an old link), and the page says so
   async function refresh() {
     let data;
-    try { data = await api(`/api/t/runs/${runId}/live`); } catch (e) { return; }
+    try { data = await api(`/api/t/runs/${runId}/live`); } catch (e) {
+      if (!['not_found', 'bad_request'].includes(e.code) || !tbody.isConnected) return true;
+      mount(shell('recent', h('section', { class: 't-section' }, h('p', { class: 't-error', text: e.message }))));
+      return false;
+    }
     const run = data.run;
     lastRun = run;
     const scores = run.status !== 'open' || (run.practice && data.students.some((x) => x.attempt && x.attempt.status === 'submitted'));
@@ -540,7 +545,7 @@ async function showRun(runId) {
         h('thead', {}, liveHead),
         tbody)),
       detail)));
-  await refresh();
+  if ((await refresh()) === false) return;
   dash.pollTimer = setInterval(refresh, 2000);
   dash.tickTimer = setInterval(tick, 1000);
 }
