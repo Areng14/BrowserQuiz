@@ -122,6 +122,15 @@ function sealPeople(owner, from, to) {
   return n;
 }
 
+// A name as the typeahead compares it: students type "Ramirez", "Zoe" or "Nguyen" for Ramírez, Zoë and
+// Nguyễn, and "OBrien" or a tablet's curled apostrophe for O'Brien. Accents, apostrophes, hyphens and
+// case don't count.
+const LETTERS = { 'ø': 'o', 'đ': 'd', 'ł': 'l', 'æ': 'ae', 'œ': 'oe', 'ß': 'ss', 'ı': 'i', 'þ': 'th', 'ð': 'd' };
+function foldName(s) {
+  return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[øđłæœßıþð]/g, (c) => LETTERS[c])
+    .replace(/['`\u00b4\u2018\u2019\u02bc]/g, '').replace(/[-\u2010-\u2015]/g, ' ').replace(/\s+/g, ' ');
+}
+
 module.exports = {
-  SEALED_LAYOUT, isSealed, ownerOfRun, ownerOfRoster, sealName, sealField, openField, tryField, sealEvent, openEvent, sealEdits, openEdits, sealPeople,
+  foldName, SEALED_LAYOUT, isSealed, ownerOfRun, ownerOfRoster, sealName, sealField, openField, tryField, sealEvent, openEvent, sealEdits, openEdits, sealPeople,
 };

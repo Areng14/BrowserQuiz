@@ -341,15 +341,6 @@ function submit(a, quiz, answers, why) {
   gradeAttempt(a, quiz).catch((e) => console.error('grading failed', a.id, e));
 }
 
-// A name as the typeahead compares it: students type "Ramirez", "Zoe" or "Nguyen" for Ramírez, Zoë and
-// Nguyễn, and "OBrien" or a tablet's curled apostrophe for O'Brien. Accents, apostrophes, hyphens and
-// case don't count.
-const LETTERS = { 'ø': 'o', 'đ': 'd', 'ł': 'l', 'æ': 'ae', 'œ': 'oe', 'ß': 'ss', 'ı': 'i', 'þ': 'th', 'ð': 'd' };
-function foldName(s) {
-  return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[øđłæœßıþð]/g, (c) => LETTERS[c])
-    .replace(/['`\u00b4\u2018\u2019\u02bc]/g, '').replace(/[-\u2010-\u2015]/g, ' ').replace(/\s+/g, ' ');
-}
-
 // Heartbeats and events draw on one budget per attempt: 20 at once, 4 more a second. The quiz page
 // sends a heartbeat every 1 to 15 seconds and a few events; past the budget a request still answers the
 // same but nothing is stored, so a script can't fill the disk. Idle budgets are swept.
@@ -422,10 +413,10 @@ module.exports = function studentRoutes(r) {
     if (!nameLookups(run.id + ' ' + addressKey(clientIp(req)))) throw new HttpError(429, 'too_many');
     // The start of a first or last name, 3 letters or more (or a whole short one, like "Bo"): enough to find
     // your own name, while someone with the code can't list the class two letters at a time.
-    const term = foldName(String(body.q || '').slice(0, 60)).trim();
+    const term = P.foldName(String(body.q || '').slice(0, 60)).trim();
     if (!term) return json(res, 200, { matches: [] });
     const fits = (name) => {
-      const n = ' ' + foldName(name) + ' ';
+      const n = ' ' + P.foldName(name) + ' ';
       return term.length >= 3 ? n.includes(' ' + term) : n.includes(' ' + term + ' ');
     };
     const rows = q('SELECT id, bq_name(name, id, roster_id) AS name FROM roster_students WHERE roster_id = ? AND removed = 0 ORDER BY name').all(run.roster_id).filter((x) => fits(x.name)).slice(0, 5);
