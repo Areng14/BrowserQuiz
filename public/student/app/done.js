@@ -93,8 +93,9 @@ function screenDone(kind) {
   if (S.run && S.run.practice && !cfg.preview) {
     const retry = !S.run.corrections; // corrections: once, then the answers
     const again = h('button', { class: 'btn', type: 'button', text: 'Try again' });
+    const msg = h('p', { class: 'error', role: 'alert' });
     again.addEventListener('click', async () => {
-      again.disabled = true;
+      again.disabled = true; msg.textContent = '';
       try {
         await api.practiceRetry();
         const run = S.run;
@@ -103,10 +104,10 @@ function screenDone(kind) {
         S.run = run;
         S.me = me;
         screenPractice();
-      } catch (e) { again.disabled = false; }
+      } catch (e) { msg.textContent = errorText(e); again.disabled = false; }
     });
     const see = h('a', { class: 'btn primary', href: '/teacher/report.html?practice=1', target: '_blank', rel: 'noopener', text: 'See answers' });
-    screen.querySelector('.panel').append(h('div', { class: 'row-actions' }, see, retry ? again : null));
+    screen.querySelector('.panel').append(h('div', { class: 'row-actions' }, see, retry ? again : null), retry ? msg : null);
   }
   if (quitSeb) {
     screen.querySelector('.panel').append(h('div', {}, h('a', { class: 'btn primary', href: '/seb-quit.html', text: 'Quit Safe Exam Browser' })));
