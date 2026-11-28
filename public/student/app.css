@@ -199,8 +199,9 @@ select.input:not([multiple]), select.select {
 /* screen marks (screenmark.js): canvases laid over the lines */
 .quiz.marked .qbar, .quiz.marked .qnav, .quiz.marked .choice { position: relative; }
 .bq-sm-div { position: relative; border-top: 1px solid var(--line); }
-canvas.bq-sm { position: absolute; display: block; pointer-events: none; }
-@media print { canvas.bq-sm { display: none; } }
+/* screen marks (screenmark.js): images over the edges, from a ::before so the marked elements' children stay as they were */
+.quiz.marked :is(.qbar, .qnav, .choice, .bq-sm-div)::before { content: ''; position: absolute; pointer-events: none; left: var(--sm-in, 0px); right: var(--sm-in, 0px); top: calc(-1 * var(--sm-bwt, 0px)); bottom: calc(-1 * var(--sm-bwb, 0px)); background: var(--sm-t, none) top / 100% var(--sm-th, 1px) no-repeat, var(--sm-b, none) bottom / 100% var(--sm-th, 1px) no-repeat; }
+@media print { .quiz.marked :is(.qbar, .qnav, .choice, .bq-sm-div)::before { display: none; } }
 .qbar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
 .qbar-side { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .qbar-end { justify-content: flex-end; }

@@ -30,44 +30,50 @@ function pattern(code) {
 }
 const rgb = (css) => (String(css).match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3).map(Number);
 
-function paint(canvas, pat, base, offset) {
-  const dpr = window.devicePixelRatio || 1;
-  const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
-  if (canvas.width !== w) canvas.width = w;
-  if (canvas.height !== h) canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  const img = ctx.createImageData(w, h), px = img.data, n = pat.length;
+// A line's marks as an image, w by h CSS pixels at the screen's own pixel size, kept for reuse (the screen
+// redraws on every change under the question, and most of the time nothing about the lines has changed).
+const made = new Map();
+function image(w, h, base, offset) {
+  const dpr = window.devicePixelRatio || 1, W = Math.max(1, Math.round(w * dpr)), H = Math.max(1, Math.round(h * dpr));
+  const key = [W, H, base.join(','), offset, dpr, S.mark].join('|');
+  if (made.has(key)) return made.get(key);
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d'), img = ctx.createImageData(W, H), px = img.data, pat = S.markPattern, n = pat.length;
   const at = (k) => pat[((k % n) + n) % n];
   const sm = (t) => 0.5 - 0.5 * Math.cos(Math.PI * t);
-  for (let x = 0; x < w; x++) {
+  for (let x = 0; x < W; x++) {
     const u = ((x + 0.5) / dpr + offset) / HALF, i = Math.floor(u), f = u - i;
     let v = at(i);
     if (f < RAMP / 2) v = at(i - 1) + (at(i) - at(i - 1)) * sm((f + RAMP / 2) / RAMP);
     else if (f > 1 - RAMP / 2) v = at(i) + (at(i + 1) - at(i)) * sm((f - 1 + RAMP / 2) / RAMP);
-    const c = base.map((ch) => Math.max(0, Math.min(255, Math.round(ch + (v * STEP) / 2))));
-    for (let y = 0; y < h; y++) { const j = (y * w + x) * 4; px[j] = c[0]; px[j + 1] = c[1]; px[j + 2] = c[2]; px[j + 3] = 255; }
+    const col = base.map((ch) => Math.max(0, Math.min(255, Math.round(ch + (v * STEP) / 2))));
+    for (let y = 0; y < H; y++) { const j = (y * W + x) * 4; px[j] = col[0]; px[j + 1] = col[1]; px[j + 2] = col[2]; px[j + 3] = 255; }
   }
   ctx.putImageData(img, 0, 0);
+  const url = `url("${c.toDataURL('image/png')}")`;
+  if (made.size > 64) made.clear();
+  made.set(key, url);
+  return url;
 }
 
-// One line: a canvas laid over an edge of el. side: 'top' or 'bottom'; inset: px kept clear at each end
-// (rounded corners); thick: px (2 on the header and footer, so the line carries more).
-function line(el, side, inset, thick, offset) {
-  let c = el.querySelector(`:scope > canvas.bq-sm-${side}`);
-  if (!c) {
-    c = document.createElement('canvas');
-    c.className = 'bq-sm bq-sm-' + side;
-    c.setAttribute('aria-hidden', 'true');
-    el.append(c);
+// An element's marked edges, drawn by its ::before (app.css) from these images, so the element's own
+// children stay as they were (the footer lays out its first and last child). edges: { top, bottom }, each a
+// pattern offset or absent; thick: px (2 on the header, footer and question line, so they carry more);
+// inset: px kept clear at each end (rounded corners).
+function mark(el, edges, thick, inset) {
+  const cs = getComputedStyle(el), w = el.clientWidth - 2 * inset;
+  el.style.setProperty('--sm-th', thick + 'px');
+  el.style.setProperty('--sm-in', inset + 'px');
+  for (const [side, img, bw] of [['top', '--sm-t', '--sm-bwt'], ['bottom', '--sm-b', '--sm-bwb']]) {
+    const Side = side === 'top' ? 'Top' : 'Bottom';
+    el.style.setProperty(bw, (parseFloat(cs[`border${Side}Width`]) || 0) + 'px'); // over the border, and into the box when thicker
+    if (edges[side] == null || w < 1) { el.style.setProperty(img, 'none'); continue; }
+    // the two tones: the line's colour and STEP further from the background (lighter in dark mode, darker in light)
+    const line0 = rgb(cs[`border${Side}Color`]);
+    const away = 0.299 * line0[0] + 0.587 * line0[1] + 0.114 * line0[2] < 128 ? 1 : -1, base = line0.map((c) => c + (away * STEP) / 2);
+    el.style.setProperty(img, image(w, thick, base, edges[side]));
   }
-  const bw = parseFloat(getComputedStyle(el)[side === 'top' ? 'borderTopWidth' : 'borderBottomWidth']) || 0;
-  // a canvas keeps its own width unless it's given one (left and right alone don't stretch it)
-  Object.assign(c.style, { left: inset + 'px', width: `calc(100% - ${2 * inset}px)`, height: thick + 'px', top: '', bottom: '' });
-  c.style[side] = -bw + 'px'; // over the border, and into the box when thicker than it
-  // the two tones: the line's colour and STEP further from the background (lighter in dark mode, darker in light)
-  const line0 = rgb(getComputedStyle(el)[side === 'top' ? 'borderTopColor' : 'borderBottomColor']);
-  const away = 0.299 * line0[0] + 0.587 * line0[1] + 0.114 * line0[2] < 128 ? 1 : -1, base = line0.map((c) => c + (away * STEP) / 2);
-  paint(c, S.markPattern, base, offset);
 }
 
 // The line between a question and its answers: after the question's text (and picture), when an answer
@@ -83,19 +89,15 @@ function draw() {
   if (!S.mark || !S.el || !S.el.wrap.isConnected) return;
   S.markPattern = S.markPattern || pattern(S.mark);
   const bar = S.el.wrap.querySelector('.qbar'), nav = S.el.nav;
-  if (bar) line(bar, 'bottom', 0, 2, 0);
-  if (nav) line(nav, 'top', 0, 2, 191);
+  if (bar) mark(bar, { bottom: 0 }, 2, 0);
+  if (nav) mark(nav, { top: 191 }, 2, 0);
   divider();
   const div = S.el.main.querySelector('.bq-sm-div');
-  if (div) line(div, 'top', 0, 2, 283);
+  if (div) mark(div, { top: 283 }, 2, 0);
   // answer boxes: not one that's picked (its edge is the accent colour then)
   S.el.main.querySelectorAll('.choice').forEach((box, k) => {
     const picked = !!box.querySelector('input:checked');
-    box.querySelectorAll(':scope > canvas.bq-sm').forEach((c) => { c.hidden = picked; });
-    if (picked) return;
-    const r = parseFloat(getComputedStyle(box).borderTopLeftRadius) || 0;
-    line(box, 'top', r, 1, 37 + k * 53);
-    line(box, 'bottom', r, 1, 89 + k * 53);
+    mark(box, picked ? {} : { top: 37 + k * 53, bottom: 89 + k * 53 }, 1, parseFloat(getComputedStyle(box).borderTopLeftRadius) || 0);
   });
 }
 let queued = false;
