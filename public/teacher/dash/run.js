@@ -238,7 +238,7 @@ async function showRun(runId) {
     failedBox.replaceChildren(failed ? h('p', { class: 't-error' }, `Code grading failed for ${plural(failed, 'student')}. `,
       h('button', { class: 'btn small', type: 'button', text: 'Retry now', onclick: () => act(`/api/t/runs/${runId}/regrade-failed`) })) : '');
     const order = (s) => (s.attempt ? (s.attempt.integrity === 'invalidated' || s.attempt.leftAgain ? 0 : s.attempt.status === 'waiting' ? 1 : 2) : 3);
-    // the teacher's sort (a column header), else flagged first, then waiting, then everyone else
+    // the teacher's sort (a column header); it opens on Status: flagged first, then waiting, then everyone else
     const rows = sortRows(data.students.slice().sort((x, y) => order(x) - order(y) || x.name.localeCompare(y.name)), dash.liveSort, LIVE_SORT, (s) => s.name);
     const focusKey = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.key : null;
     // not while a menu is open, or a row's tip is being read (a redraw would take it away)

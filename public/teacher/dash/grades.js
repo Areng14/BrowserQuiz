@@ -16,6 +16,7 @@ function showAt(id) {
   dash.here = location.hash;
 }
 const pct = (p) => (p == null ? '—' : `${Math.round(p)}%`);
+const BY_NAME = { by: 'name', dir: 1 }; // how the gradebook opens: students A to Z
 
 function gradesTab(data) {
   if (!data.rosters.length) return h('section', { class: 't-section' }, h('h1', { text: 'Grades' }), h('p', { class: 't-muted' }, 'Add a ', h('a', { href: '#classes', text: 'class' }), ' first.'));
@@ -65,8 +66,8 @@ function gradebook(g) {
   const sortBtn = (by, text, label, cls) => {
     const btn = h('button', { class: `t-sort${cls ? ' ' + cls : ''}`, type: 'button', 'aria-label': label || null }, h('span', { text }));
     btn.addEventListener('click', () => {
-      const s = dash.gradesSort;
-      dash.gradesSort = !s || s.by !== by ? { by, dir: 1 } : s.dir > 0 ? { by, dir: -1 } : null;
+      const s = dash.gradesSort || BY_NAME;
+      dash.gradesSort = s.by !== by ? { by, dir: 1 } : { by, dir: -s.dir };
       arrange();
     });
     sorters.push({ by, btn });
@@ -114,9 +115,9 @@ function gradebook(g) {
   const tbody = table.tBodies[0];
   const rows = g.students.map((s, i) => ({ s, tr: tbody.rows[i] }));
   function arrange() {
-    let sort = dash.gradesSort;
-    const qi = sort ? g.quizzes.findIndex((q) => q.runId === sort.by) : -1;
-    if (sort && sort.by !== 'name' && sort.by !== 'avg' && qi < 0) sort = null; // a quiz this class didn't take
+    let sort = dash.gradesSort || BY_NAME;
+    const qi = g.quizzes.findIndex((q) => q.runId === sort.by);
+    if (sort.by !== 'name' && sort.by !== 'avg' && qi < 0) sort = BY_NAME; // a quiz this class didn't take
     const key = !sort ? null : sort.by === 'name' ? (r) => r.s.name : sort.by === 'avg' ? (r) => r.s.avg : (r) => (r.s.cells[qi].p == null ? null : r.s.cells[qi].p);
     tbody.append(...sortRows(rows, sort, sort ? { [sort.by]: key } : {}, (r) => r.s.name).map((r) => r.tr));
     for (const { by, btn } of sorters) {
@@ -124,7 +125,7 @@ function gradebook(g) {
       const th = btn.closest('th') || btn.parentElement.closest('th');
       th.classList.toggle('t-sorted', on);
       if (on) th.setAttribute('aria-sort', sort.dir > 0 ? 'ascending' : 'descending'); else th.removeAttribute('aria-sort');
-      const arrow = icon(on && sort.dir < 0 ? ICONS.down : ICONS.up, 14);
+      const arrow = icon(!on ? ICONS.sort : sort.dir < 0 ? ICONS.down : ICONS.up, 14);
       arrow.classList.add('t-sort-arrow');
       const old = btn.querySelector('.t-sort-arrow');
       if (old) old.replaceWith(arrow); else btn.append(arrow);

@@ -178,14 +178,15 @@ const actionsHead = () => h('th', {}, h('span', { class: 'sr-only', text: 'Actio
 const heads = (names, nums = []) => names.map((x) => h('th', { class: nums.includes(x) ? 'num' : null, text: x }));
 // A few words on a term a teacher may not know: tip(host, control, text, side) (tip.js, shared with Watch).
 const tip = window.BQTip;
-// Click to sort: up, then down, then back to the list's own order. sort: { by, dir } or null; onSort(next).
-// tipsFor: a few words on what a column means, by its name.
+// Click a column to sort by it, going up; click it again to flip it. A list opens sorted by the column its
+// rows already come in, so one column always shows its arrow and there is no hidden third order.
+// sort: { by, dir }; onSort(next). tipsFor: a few words on what a column means, by its name.
 function sortHeads(names, nums, sort, onSort, tipsFor = {}) {
   return names.map((x) => {
     const on = sort && sort.by === x;
-    const arrow = icon(on && sort.dir < 0 ? ICONS.down : ICONS.up, 14);
+    const arrow = icon(!on ? ICONS.sort : sort.dir < 0 ? ICONS.down : ICONS.up, 14); // ↕ on the others, shown on hover
     arrow.classList.add('t-sort-arrow');
-    const btn = h('button', { class: 't-sort', type: 'button', onclick: () => onSort(!on ? { by: x, dir: 1 } : sort.dir > 0 ? { by: x, dir: -1 } : null) }, x, arrow);
+    const btn = h('button', { class: 't-sort', type: 'button', onclick: () => onSort(on ? { by: x, dir: -sort.dir } : { by: x, dir: 1 }) }, x, arrow);
     const th = h('th', { class: (nums.includes(x) ? 'num ' : '') + (on ? 't-sorted' : ''), 'aria-sort': on ? (sort.dir > 0 ? 'ascending' : 'descending') : null }, btn);
     return tipsFor[x] ? tip(th, btn, tipsFor[x]) : th;
   });
@@ -202,13 +203,13 @@ function sortRows(rows, sort, keys, name) {
   });
 }
 // A list that doesn't redraw by itself (Results, Teachers): sorts its rows where they are, by each
-// cell's data-sort, or its text.
-function sortableTable(table, nums = []) {
+// cell's data-sort, or its text. first: the column (and way) its rows come in, shown as sorted from the start.
+function sortableTable(table, nums = [], first = null) {
   const thead = table.querySelector('thead tr');
   const names = [...thead.children].map((th) => th.textContent).filter((t) => t && t !== 'Actions');
   const body = table.querySelector('tbody');
   const original = [...body.children];
-  let sort = null;
+  let sort = first && names.includes(first.by) ? first : null;
   const cellKey = (tr, i) => { const td = tr.children[i]; if (!td) return null; const v = td.dataset.sort != null ? td.dataset.sort : td.textContent.trim(); return v === '' ? null : /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v.toLowerCase(); };
   const draw = () => {
     const keys = Object.fromEntries(names.map((n, i) => [n, (tr) => cellKey(tr, i)]));

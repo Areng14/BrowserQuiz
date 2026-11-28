@@ -61,7 +61,7 @@ async function aiDialog(runId, attemptId, done) {
       h('td', { class: 'num', 'data-sort': String(x.of ? x.got / x.of : 0) }, h('b', { text: `${x.got}/${x.of}` }))));
     const problems = r.skipped;
     preview.replaceChildren(...[
-      rows.length ? h('div', { class: 't-ai-table' }, sortableTable(h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Student' }), h('th', { text: 'Question' }), h('th', { class: 'num', text: "AI's grade" }))), h('tbody', {}, rows)), ["AI's grade"])) : null,
+      rows.length ? h('div', { class: 't-ai-table' }, sortableTable(h('table', {}, h('thead', {}, h('tr', {}, h('th', { text: 'Student' }), h('th', { text: 'Question' }), h('th', { class: 'num', text: "AI's grade" }))), h('tbody', {}, rows)), ["AI's grade"], { by: 'Student', dir: 1 })) : null,
       problems.length ? h('div', { class: 't-ai-warn', role: 'note' }, h('b', { text: r.found ? 'Left for you' : "Couldn't read that" }),
         h('ul', {}, problems.map((x) => h('li', { text: x })))) : null,
     ].filter(Boolean)); // replaceChildren would print a null

@@ -526,7 +526,7 @@ button.t-joincode:hover { background: var(--soft); }
   .t-gq-hide { margin-left: 0; }
 }
 /* Sortable column headers: the whole header is the button; an arrow on the sorted one, faint on hover */
-.t-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+.t-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; vertical-align: top; } /* top, not baseline: a number column's arrow comes first and would set the baseline */
 th.num .t-sort { flex-direction: row-reverse; }
 .t-sort-arrow { opacity: 0; flex: none; }
 .t-sort:hover .t-sort-arrow, .t-sort:focus-visible .t-sort-arrow { opacity: 0.45; }

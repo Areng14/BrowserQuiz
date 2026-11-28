@@ -275,7 +275,7 @@ function teachersSection() {
         h('td', { class: 't-actions' }, x.role === 'admin' ? null : moreMenu(`More for ${x.name}`, `teacher:${x.id}`, [
           { text: 'Reset password', onclick: () => act(x, 'reset') },
           { text: x.disabled ? 'Enable' : 'Disable', danger: !x.disabled, onclick: () => act(x, x.disabled ? 'enable' : 'disable') },
-        ])))))), ['Quizzes', 'Classes'])));
+        ])))))), ['Quizzes', 'Classes'], { by: 'Name', dir: 1 })));
   }
   const form = h('form', { class: 't-row t-add' }, // apart from the list, like adding a quiz or a class
     h('label', { class: 'field', for: 'teacher-name' }, h('span', { class: 'field-label', text: 'Name' }), name),

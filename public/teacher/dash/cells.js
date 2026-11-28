@@ -178,12 +178,13 @@ function progressCell(a) {
 // doesn't redraw while one is open (menuOpen), so it stays put; onClose catches it up.
 dash.menuOpen = false;
 dash.quizFind = ''; // the Quizzes tab's search, kept while it redraws
-dash.liveSort = null; // the live table's column sort: { by, dir }
+dash.liveSort = { by: 'Status', dir: 1 }; // the live table's column sort: { by, dir }. Status first: flagged, then waiting, then the rest
 const STATUS_RANK = { waiting: 1, admitted: 2, active: 3, submitted: 4 };
 const INTEGRITY_RANK = { invalidated: 0, restored: 1, clean: 2 };
 const LIVE_SORT = {
   Student: (s) => s.name,
-  Status: (s) => (s.attempt ? STATUS_RANK[s.attempt.status] || 0 : null),
+  // flagged first (invalidated, or left again after being let back in), then by where they are: waiting, admitted, taking it, turned in
+  Status: (s) => (s.attempt ? (s.attempt.integrity === 'invalidated' || s.attempt.leftAgain ? 0 : 10) + (STATUS_RANK[s.attempt.status] || 0) : null),
   Integrity: (s) => (s.attempt ? INTEGRITY_RANK[s.attempt.integrity] ?? 3 : null),
   Strikes: (s) => (s.attempt ? s.attempt.strikes : null),
   Progress: (s) => (s.attempt && s.attempt.total ? s.attempt.answered / s.attempt.total : null),

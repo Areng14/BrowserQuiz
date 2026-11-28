@@ -32,20 +32,22 @@
     for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : String(kid));
     return el;
   }
-  // A list sorts by any column with a heading, as the dashboard's do: a click goes up, then down, then back.
+  // A list sorts by any column with a heading, as the dashboard's do: a click sorts by it going up, and again
+  // flips it. first: the column its rows come in ({ i, dir }), shown as sorted from the start.
   // Cells sort by their data-sort, or their text: numbers as numbers, nothing (an empty data-sort) last.
-  function sortable(table) {
+  function sortable(table, first = null) {
     const head = table.tHead.rows[0];
     const body = table.tBodies[0];
     const original = [...body.rows];
-    let sort = null;
+    let sort = first;
     const key = (tr, i) => {
       const td = tr.cells[i];
       const v = td.dataset.sort != null ? td.dataset.sort : td.textContent.trim();
       return v === '' ? null : /^-?\d+(\.\d+)?$/.test(v) ? Number(v) : v.toLowerCase();
     };
-    const arrow = (down) => {
-      const a = window.BQIcons ? window.BQIcons.svg(down ? 'down' : 'up', 13) : h('span', { text: down ? '↓' : '↑', 'aria-hidden': 'true' });
+    // kind: 'up', 'down', or 'sort' (↕, a column not sorted now)
+    const arrow = (kind) => {
+      const a = window.BQIcons ? window.BQIcons.svg(kind, 13) : h('span', { text: { up: '↑', down: '↓', sort: '↕' }[kind], 'aria-hidden': 'true' });
       a.classList.add('r-sort-arrow');
       return a;
     };
@@ -63,16 +65,17 @@
         const on = !!sort && sort.i === k;
         th.classList.toggle('r-sorted', on);
         if (on) th.setAttribute('aria-sort', sort.dir > 0 ? 'ascending' : 'descending'); else th.removeAttribute('aria-sort');
-        btn.querySelector('.r-sort-arrow').replaceWith(arrow(on && sort.dir < 0));
+        btn.querySelector('.r-sort-arrow').replaceWith(arrow(!on ? 'sort' : sort.dir < 0 ? 'down' : 'up'));
       });
     }
     [...head.cells].forEach((th, i) => {
       const text = th.textContent.trim();
       if (!text) return; // the bars' column
-      const btn = h('button', { class: 'r-sort', type: 'button' }, h('span', { text }), arrow(false));
-      btn.addEventListener('click', () => { sort = !sort || sort.i !== i ? { i, dir: 1 } : sort.dir > 0 ? { i, dir: -1 } : null; draw(); });
+      const btn = h('button', { class: 'r-sort', type: 'button' }, h('span', { text }), arrow('sort'));
+      btn.addEventListener('click', () => { sort = !sort || sort.i !== i ? { i, dir: 1 } : { i, dir: -sort.dir }; draw(); });
       th.replaceChildren(btn);
     });
+    if (sort) draw();
     return table;
   }
   const fmtPts = (n) => String(Math.round(n * 100) / 100);
@@ -477,7 +480,7 @@
             h('td', {}, h('a', { href: `#s${si}`, text: s.name })),
             h('td', { class: 'num', 'data-sort': s.score == null || !s.max ? '' : String(s.score / s.max), text: s.score == null ? '–' : `${fmtPts(s.score)} / ${fmtPts(s.max)}` }),
             h('td', { class: 'r-bar-cell' }, bar(p), h('span', { class: 'r-bar-pct', text: s.score == null ? '' : `${p}%` })));
-        })))),
+        }))), { i: 0, dir: 1 }),
       h('h2', { text: 'Questions' }),
       sortable(h('table', { class: 'r-table' },
         h('thead', {}, h('tr', {}, h('th', { text: '#' }), h('th', { text: 'Question' }), h('th', { class: 'num', text: 'Average' }), h('th', { text: '' }))),
@@ -489,7 +492,7 @@
               q.pool ? h('span', { class: 'r-qpool', text: ` ${q.given} of ${students.length} students` }) : null),
             h('td', { class: 'num', 'data-sort': q.avg == null || !q.max ? '' : String(q.avg / q.max), text: q.avg == null ? 'Not graded' : `${fmtPts(q.avg)} / ${fmtPts(q.max)}` }),
             h('td', { class: 'r-bar-cell' }, bar(p), h('span', { class: 'r-bar-pct', text: q.avg == null ? '' : `${p}%` })));
-        })))));
+        }))), { i: 0, dir: 1 }));
   }
 
   // ---------- syntax colors ----------
@@ -617,7 +620,7 @@
         h('tbody', {}, p.same.map((x) => h('tr', {},
           h('td', { class: 'num', text: String(x.n) }),
           h('td', {}, x.choices ? x.choices.map((c, i) => [i ? ', ' : '', inline(c, quiz.language)]) : x.math ? mathEl(x.text, true) : h('code', { text: x.text })),
-          h('td', { class: 'num', 'data-sort': String(x.of), text: x.of > 2 ? `${x.of} students` : 'Only these two' })))))),
+          h('td', { class: 'num', 'data-sort': String(x.of), text: x.of > 2 ? `${x.of} students` : 'Only these two' }))))), { i: 0, dir: 1 }),
     ]));
     return pairSection('r-same-wrong', 'Same wrong answers', rows,
       "Pairs of students who gave identical wrong answers on choice, short answer and output questions. Wrong answers that few others gave rank a pair higher.");

@@ -18,6 +18,7 @@ const NAMES = {
   minus: 'Minus', // not graded yet
   up: 'ArrowUp', // sorted up
   down: 'ArrowDown', // sorted down
+  sort: 'ArrowUpDown', // a column you can sort by, not sorted now
   back: 'ArrowLeft',
   chevron: 'ChevronDown', // opens a menu or a list
   chevronUp: 'ChevronUp',

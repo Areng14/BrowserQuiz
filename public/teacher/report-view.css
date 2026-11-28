@@ -179,7 +179,7 @@
 .r-view .r-table th { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--ink-2); }
 .r-view .r-table .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* a heading sorts its column (report-view.js sortable): its arrow shows on hover, and stays once sorted */
-.r-view .r-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; cursor: pointer; }
+.r-view .r-sort { display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; cursor: pointer; vertical-align: top; }
 .r-view th.num .r-sort { flex-direction: row-reverse; }
 .r-view .r-sort-arrow { flex: none; opacity: 0; }
 .r-view .r-sort:hover .r-sort-arrow, .r-view .r-sort:focus-visible .r-sort-arrow { opacity: 0.45; }

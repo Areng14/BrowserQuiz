@@ -121,7 +121,7 @@ const runsTable = (runs) => h('div', { class: 't-table-wrap' }, sortableTable(h(
     // like every list: the rest, and Delete in red, under ⋯
     h('td', { class: 't-actions' }, moreMenu(`More for ${r.code}`, `run:${r.id}`, [
       h('a', { href: `/teacher/report.html?run=${encodeURIComponent(r.id)}`, target: '_blank', rel: 'noopener', text: 'Class report' }),
-      { text: 'Delete', danger: true, onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?`, r.status === 'open' ? "It's still open: anyone taking it gets signed out." : null) }])))))), ['Joined']));
+      { text: 'Delete', danger: true, onclick: () => remove(`/api/t/runs/${r.id}/delete`, `Delete ${r.code} and all its results?`, r.status === 'open' ? "It's still open: anyone taking it gets signed out." : null) }])))))), ['Joined'], { by: 'Started', dir: -1 }));
 
 // Start a quiz: what, who, and how it's locked down. (Open ones are under the Open tab.)
 function giveTab(data, me) {
@@ -253,7 +253,7 @@ function quizzesTab(data) {
               try { openQuiz((await post(`/api/t/quizzes/${encodeURIComponent(x.id)}/duplicate`)).id); } catch (e) { if (e.message !== 'login') quizMsg.textContent = e.message; }
             } },
             linkBtn('Download', `/api/t/quizzes/${encodeURIComponent(x.id)}/download`),
-            { text: 'Delete', danger: true, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}?`, 'Past results stay.') }])))))))) : null,
+            { text: 'Delete', danger: true, onclick: () => remove(`/api/t/quizzes/${x.id}/delete`, `Delete ${x.title}?`, 'Past results stay.') }])))))), [], { by: 'Added', dir: -1 })) : null,
     h('div', { class: 't-row t-add' }, tip(h('label', { class: 'field', for: 'quiz-file' }, h('span', { class: 'field-label', text: 'Upload a .quiz or quiz.json' }), quizFile), quizFile,
       "Upload a quiz file: a .quiz downloaded from a quiz's ⋯ menu, or a quiz.json an AI wrote from Copy AI prompt."), quizBtn),
     h('details', { class: 't-paste' }, (() => {
@@ -288,7 +288,7 @@ function classesTab(data) {
         h('td', { class: 't-actions' },
           iconButton(h('button', { class: 'btn small', type: 'button', 'aria-label': `Edit ${x.name}`, onclick: () => showRoster(x.id) }), 'pencil', 'Edit'),
           moreMenu(`More for ${x.name}`, `class:${x.id}`, [
-            { text: 'Delete', danger: true, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}?`, 'Past results stay.') }])))))))) : null,
+            { text: 'Delete', danger: true, onclick: () => remove(`/api/t/rosters/${x.id}/delete`, `Delete ${x.name}?`, 'Past results stay.') }])))))), [], { by: 'Class', dir: 1 })) : null,
     h('div', { class: 't-row t-add' },
       h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
       tip(h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile), rosterFile,

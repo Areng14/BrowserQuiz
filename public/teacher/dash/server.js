@@ -69,7 +69,7 @@ function backups(s) {
         h('td', { class: 'num', 'data-label': 'Size', 'data-sort': String(b.bytes), text: size(b.bytes) }),
         h('td', { class: 't-actions' }, moreMenu(`More for the backup of ${date(b.at)}`, `backup:${b.name}`, [
           download(b),
-          { text: 'Restore', danger: true, onclick: () => restore(b) }])))))), ['Size'])));
+          { text: 'Restore', danger: true, onclick: () => restore(b) }])))))), ['Size'], { by: 'Made', dir: -1 })));
   };
   const restarting = () => { now.disabled = true; fromFile.disabled = true; waitForRestart(say); };
   async function restore(b) {

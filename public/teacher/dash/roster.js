@@ -38,7 +38,7 @@ async function showRoster(id) {
       time.addEventListener('change', () => { timeChanges[st.id] = Number(time.value); timeCell.dataset.sort = time.value; });
       row.append(h('td', { text: st.name }), timeCell, h('td', { class: 't-actions' }, btn));
       return row;
-    }))))) : null;
+    }))), [], { by: 'Student', dir: 1 })) : null;
   save.addEventListener('click', async () => {
     save.disabled = true;
     msg.textContent = '';
