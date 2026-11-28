@@ -5,7 +5,7 @@ BrowserQuiz runs on one server on your school's own network, and it's free. The 
 ## Requirements
 
 - **A Linux server or VM:** Ubuntu 22.04 or newer, or Debian 12, with Docker (Quick Install sets it up).
-- **Size:** 2 CPU cores, 4 GB of RAM and about 15 GB of disk for a class of about 30.
+- **Size:** 2 CPU cores, 4 GB of RAM and about 15 GB of disk. That's plenty for several classes at once: the app itself keeps up with a couple of thousand students. What takes longer with more classes is grading code questions, so if several classes write code at the same time, 4 to 8 cores grade it sooner ([runner slots](setup.md#languages)).
 - **Up during school hours.** The server needs to be on during school hours so it can administer exams. After a restart, each teacher has to sign in again before their quizzes work.
 - **Internet only to install and update.** During a quiz it only talks to the students' devices and the teacher's browser. If a teacher adds an AI grading key, it also calls that AI provider. The student code runner only runs in a separate box with no internet.
 
