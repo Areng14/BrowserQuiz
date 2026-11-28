@@ -40,11 +40,15 @@ function javaMain(q, tests, marker, scanFile, givenFile) {
     }
     L.push('    }');
   });
-  // The marker stays a local, and this file (source and class) is gone before student code runs.
+  // The marker stays a local, and this file (source and class) is gone before student code runs. Given a
+  // test's number (the runner's "runs": built once, each test in a process of its own), only that test runs,
+  // and the ban check's facts come with the first. The number is read without naming a class: the student's
+  // classes are in this package, and one of theirs could be called Integer.
   L.push('', '    public static void main(String[] args) {', `        String m = ${javaStr(marker)};`, '        BQJ.begin();',
-    '        new java.io.File("BQMain.java").delete();', '        new java.io.File("BQMain.class").delete();');
-  if (scanFile) L.push(`        BQJ.scan(m, ${javaStr(scanFile)}, ${givenFile ? javaStr(givenFile) : 'null'});`);
-  tests.forEach((_, i) => L.push(`        try { t${i}(m); } catch (Throwable e) { BQJ.fail(m, ${i}, e); }`));
+    '        new java.io.File("BQMain.java").delete();', '        new java.io.File("BQMain.class").delete();',
+    '        int only = -1;', '        if (args.length > 0) { only = 0; for (char c : args[0].toCharArray()) only = only * 10 + (c - \'0\'); }');
+  if (scanFile) L.push(`        if (only <= 0) BQJ.scan(m, ${javaStr(scanFile)}, ${givenFile ? javaStr(givenFile) : 'null'});`);
+  tests.forEach((_, i) => L.push(`        if (only < 0 || only == ${i}) { try { t${i}(m); } catch (Throwable e) { BQJ.fail(m, ${i}, e); } }`));
   L.push('        System.out.flush();', '    }', '}', '');
   return L.join('\n');
 }

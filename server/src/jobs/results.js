@@ -235,7 +235,8 @@ function cleanCs(text, q) {
 }
 
 // res = runner response. Returns { status, message?, tests: [{ pass, got?, gotSteps?, error? }], printed }
-function readResults(q, lang, tests, res, marker) {
+// at: the number the program gave tests[0] (one run of a job built with more tests: coderun.js, runEach).
+function readResults(q, lang, tests, res, marker, at = 0) {
   if (res.status === 'compile_error') {
     const raw = res.stderr || res.stdout;
     const message = isC(lang) ? cleanCc(raw, lang, q) : lang === 'go' ? cleanGo(raw, q) : lang === 'rust' ? cleanRust(raw, q)
@@ -258,7 +259,7 @@ function readResults(q, lang, tests, res, marker) {
   const stopped = res.status === 'timeout' ? 'Ran out of time' : res.status === 'output_limit' ? 'Printed too much output' : res.status === 'disk_limit' ? 'Wrote too much to disk'
     : lang === 'csharp' && /Stack overflow/.test(res.stderr || '') ? 'Stack overflow: recursion too deep' : 'Stopped before finishing';
   const results = tests.map((t, i) => {
-    const mine = records.filter((r) => r.i === i);
+    const mine = records.filter((r) => r.i === at + i);
     const final = mine.find((r) => r.s === undefined && r.ok !== undefined);
     if (!final) return { pass: false, error: t.speed && res.status === 'timeout' ? 'Too slow: ran out of time' : stopped };
     if (!final.ok) return { pass: false, error: final.err || 'Crashed' };
