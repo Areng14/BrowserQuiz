@@ -21,7 +21,11 @@ module.exports = function rosterRoutes(r) {
       ({ students, problems } = parseRosterText(body.text));
       if (!students.length && !problems.length) problems.push('Add at least one student.');
     } else {
-      const rows = parseCsv(body.csv || '');
+      // Excel's "CSV" has semicolons where a comma is the decimal mark (much of Europe), and its "Unicode
+      // Text" has tabs: whichever the header row has most of
+      const head = String(body.csv || '').split(/[\r\n]/, 1)[0];
+      const sep = [';', '\t'].reduce((a, c) => (head.split(c).length > head.split(a).length ? c : a), ',');
+      const rows = parseCsv(body.csv || '', sep);
       if (rows.length < 2) return json(res, 400, { error: 'bad_roster', message: 'The CSV needs a header row and at least one student.' });
       const header = rows[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'));
       const ni = header.indexOf('name');
