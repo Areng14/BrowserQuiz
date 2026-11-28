@@ -202,6 +202,7 @@ function parseRosterText(text) {
 function parseRosterRows(rows) {
   const students = [];
   const problems = [];
+  const seen = new Map(); // student ID: its line
   let cols = null;
   if (rows.length) {
     const head = rows[0][0].map((c) => c.toLowerCase());
@@ -240,8 +241,10 @@ function parseRosterRows(rows) {
     }
     name = String(name || '').trim().slice(0, 80);
     sid = String(sid || '').trim().slice(0, 40);
+    // Two students with one ID could each sign in as the other: a typo, or a line pasted twice
     if (!name || !sid) problems.push(`Line ${i + 1} needs a name and a student ID.`);
-    else students.push({ name, sid, timeX });
+    else if (seen.has(sid)) problems.push(`Line ${i + 1} has the same student ID as line ${seen.get(sid) + 1}.`);
+    else { seen.set(sid, i); students.push({ name, sid, timeX }); }
   }
   return { students, problems };
 }

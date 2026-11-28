@@ -60,8 +60,13 @@ module.exports = function rosterRoutes(r) {
     const body = await readJson(req, 2 * 1024 * 1024);
     const roster = getRoster(me, p.id);
     const { students, problems } = parseRosterText(body.add || '');
-    if (problems.length) return json(res, 400, { error: 'bad_roster', message: problems.slice(0, 5).join(' ') });
     const remove = Array.isArray(body.remove) ? body.remove.map(String) : [];
+    // An ID already in the class (and staying in it): two students with one ID could sign in as each other
+    if (students.length) {
+      const taken = new Set(q('SELECT id, sid_hash FROM roster_students WHERE roster_id = ? AND removed = 0').all(roster.id).filter((x) => !remove.includes(x.id)).map((x) => x.sid_hash));
+      for (const s of students) if (taken.has(hashSid(s.sid))) problems.push(`${s.name}: that student ID is already in this class.`);
+    }
+    if (problems.length) return json(res, 400, { error: 'bad_roster', message: problems.slice(0, 5).join(' ') });
     // the same cap as a new class
     const has = q('SELECT COUNT(*) AS n FROM roster_students WHERE roster_id = ? AND removed = 0').get(roster.id).n;
     const going = remove.filter((sid) => q('SELECT 1 FROM roster_students WHERE id = ? AND roster_id = ? AND removed = 0').get(sid, roster.id)).length;
