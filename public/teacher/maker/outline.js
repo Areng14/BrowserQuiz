@@ -51,8 +51,9 @@ function answerOf(q) {
     return t.columns.some(Boolean) ? ['Table', [joined(t.columns.filter(Boolean).map(mono), ', '), `, ${plural(t.rows.length, 'row')}`]] : null;
   }
   if (q.type === 'fill') {
-    const list = q._ui.blanks.map((b) => b.trim()).filter(Boolean);
-    return list.length ? ['Blanks', joined(list.map(mono), ', ')] : null;
+    // a blank's accepted answers are one per line: "+= or = total +", not run together
+    const list = q._ui.blanks.map((b) => b.split('\n').map((x) => x.trim()).filter(Boolean)).filter((alts) => alts.length);
+    return list.length ? ['Blanks', joined(list.map((alts) => joined(alts.map(mono), ' or ')), ', ')] : null;
   }
   if (q.type === 'code') {
     let n = 0;
