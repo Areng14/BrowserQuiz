@@ -11,6 +11,7 @@ const ALPHA = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // Crockford's base 32, as the
 const MASK = [1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0];
 const HALF = 4; // CSS pixels per half cell
 const STEP = 22; // the difference between the two tones, out of 255 (less doesn't survive blur or a dark room)
+const BOX_DARK = 12; // on an answer box's edges in dark mode, where thin bright flecks stand out (the lines above carry the read)
 const RAMP = 0.6; // how much of a half cell blends into the next
 
 function crc7(bits) { // x^7 + x^3 + 1
@@ -33,9 +34,9 @@ const rgb = (css) => (String(css).match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3).map
 // A line's marks as an image, w by h CSS pixels at the screen's own pixel size, kept for reuse (the screen
 // redraws on every change under the question, and most of the time nothing about the lines has changed).
 const made = new Map();
-function image(w, h, base, offset) {
+function image(w, h, base, offset, step) {
   const dpr = window.devicePixelRatio || 1, W = Math.max(1, Math.round(w * dpr)), H = Math.max(1, Math.round(h * dpr));
-  const key = [W, H, base.join(','), offset, dpr, S.mark].join('|');
+  const key = [W, H, base.join(','), offset, step, dpr, S.mark].join('|');
   if (made.has(key)) return made.get(key);
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
@@ -47,7 +48,7 @@ function image(w, h, base, offset) {
     let v = at(i);
     if (f < RAMP / 2) v = at(i - 1) + (at(i) - at(i - 1)) * sm((f + RAMP / 2) / RAMP);
     else if (f > 1 - RAMP / 2) v = at(i) + (at(i + 1) - at(i)) * sm((f - 1 + RAMP / 2) / RAMP);
-    const col = base.map((ch) => Math.max(0, Math.min(255, Math.round(ch + (v * STEP) / 2))));
+    const col = base.map((ch) => Math.max(0, Math.min(255, Math.round(ch + (v * step) / 2))));
     for (let y = 0; y < H; y++) { const j = (y * W + x) * 4; px[j] = col[0]; px[j + 1] = col[1]; px[j + 2] = col[2]; px[j + 3] = 255; }
   }
   ctx.putImageData(img, 0, 0);
@@ -60,8 +61,8 @@ function image(w, h, base, offset) {
 // An element's marked edges, drawn by its ::before (app.css) from these images, so the element's own
 // children stay as they were (the footer lays out its first and last child). edges: { top, bottom }, each a
 // pattern offset or absent; thick: px (2 on the header, footer and question line, so they carry more);
-// inset: px kept clear at each end (rounded corners).
-function mark(el, edges, thick, inset) {
+// inset: px kept clear at each end (rounded corners); box: an answer box (softer in dark mode).
+function mark(el, edges, thick, inset, box) {
   const cs = getComputedStyle(el), w = el.clientWidth - 2 * inset;
   el.style.setProperty('--sm-th', thick + 'px');
   el.style.setProperty('--sm-in', inset + 'px');
@@ -71,8 +72,8 @@ function mark(el, edges, thick, inset) {
     if (edges[side] == null || w < 1) { el.style.setProperty(img, 'none'); continue; }
     // the two tones: the line's colour and STEP further from the background (lighter in dark mode, darker in light)
     const line0 = rgb(cs[`border${Side}Color`]);
-    const away = 0.299 * line0[0] + 0.587 * line0[1] + 0.114 * line0[2] < 128 ? 1 : -1, base = line0.map((c) => c + (away * STEP) / 2);
-    el.style.setProperty(img, image(w, thick, base, edges[side]));
+    const away = 0.299 * line0[0] + 0.587 * line0[1] + 0.114 * line0[2] < 128 ? 1 : -1, step = box && away > 0 ? BOX_DARK : STEP;
+    el.style.setProperty(img, image(w, thick, line0.map((c) => c + (away * step) / 2), edges[side], step));
   }
 }
 
@@ -97,7 +98,7 @@ function draw() {
   // answer boxes: not one that's picked (its edge is the accent colour then)
   S.el.main.querySelectorAll('.choice').forEach((box, k) => {
     const picked = !!box.querySelector('input:checked');
-    mark(box, picked ? {} : { top: 37 + k * 53, bottom: 89 + k * 53 }, 1, parseFloat(getComputedStyle(box).borderTopLeftRadius) || 0);
+    mark(box, picked ? {} : { top: 37 + k * 53, bottom: 89 + k * 53 }, 1, parseFloat(getComputedStyle(box).borderTopLeftRadius) || 0, true);
   });
 }
 let queued = false;
