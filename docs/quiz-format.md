@@ -6,7 +6,7 @@ at the root (or inside one top-level folder) and an optional `assets/` folder of
 math and graph answers, counting each row of random values.
 
 <!-- not-in-prompt -->
-Check a quiz before uploading. `--run` also runs the reference solutions, which needs
+Check a quiz before you upload it. `--run` also runs the reference solutions, which needs
 `python3`, plus a JDK for Java, gcc/g++ for C and C++, `go` and `rustc` for those (JavaScript and TypeScript run on Node; C# is only checked on upload):
 
 ```bash
@@ -19,8 +19,8 @@ Upload the folder zipped, or pack it first:
 node scripts/pack-quiz.mjs path/to/folder out.quiz
 ```
 
-`examples/sample-exam/quiz.json` uses most features. Teachers can also build quizzes in the
-dashboard (New quiz) and check how one looks with Preview. Both save this same format.
+`examples/sample-exam/quiz.json` uses most features. You can also build a quiz in the
+dashboard (New quiz) and check how it looks with Preview. Both save this same format.
 <!-- /not-in-prompt -->
 
 ## Quiz settings
@@ -499,7 +499,7 @@ Java and Python can do everything here. The others:
 - A C# stack overflow stops the run, so the examples after it say so too.
 
 The upload check says which of these a question runs into. With `"languages": "any"` it doesn't: the
-languages that can't run the question are just left out (a map leaves out C, a speed test leaves the languages that have one and a reference). References are
+languages that can't run the question are left out (a map leaves out C, a speed test leaves the languages that have one and a reference). References are
 optional per language there; tests' expected values come from the ones you give.
 
 ### Test cases
