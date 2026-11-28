@@ -1,8 +1,9 @@
 // Screen marks (server marks.js): this attempt's code, painted faintly into the quiz screen's lines (the
 // header's bottom line, the footer's top line, a line between the question and its answers, and each answer
-// box's top and bottom edges), so a photo of
-// the screen shows whose it was. A line repeats the code in two tones of its own colour that blend into each
-// other, so it still reads as a plain line. The dashboard's Trace a photo reads it back (teacher/trace).
+// box's top and bottom edges), so a photo of the screen shows whose it was. A line repeats the code in two
+// tones that blend into each other, so it still reads as a plain line: the line's own colour and one a little
+// further from the page's background, so the line never fades into it. The dashboard's Trace a photo reads
+// it back (teacher/trace).
 import { S } from './state.js';
 
 const ALPHA = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // Crockford's base 32, as the server makes them
@@ -63,7 +64,9 @@ function line(el, side, inset, thick, offset) {
   // a canvas keeps its own width unless it's given one (left and right alone don't stretch it)
   Object.assign(c.style, { left: inset + 'px', width: `calc(100% - ${2 * inset}px)`, height: thick + 'px', top: '', bottom: '' });
   c.style[side] = -bw + 'px'; // over the border, and into the box when thicker than it
-  const base = rgb(getComputedStyle(el)[side === 'top' ? 'borderTopColor' : 'borderBottomColor']);
+  // the two tones: the line's colour and STEP further from the background (lighter in dark mode, darker in light)
+  const line0 = rgb(getComputedStyle(el)[side === 'top' ? 'borderTopColor' : 'borderBottomColor']);
+  const away = 0.299 * line0[0] + 0.587 * line0[1] + 0.114 * line0[2] < 128 ? 1 : -1, base = line0.map((c) => c + (away * STEP) / 2);
   paint(c, S.markPattern, base, offset);
 }
 
