@@ -8,6 +8,7 @@
 #   stores   attributes it sets on modules it imported (sys.stdout = ..., time.perf_counter = ...)
 import ast
 import symtable
+import tokenize
 
 SAFE_DECORATORS = {"staticmethod", "classmethod", "property"}
 TYPE_NAMES = {"list", "dict", "set", "tuple", "frozenset", "type", "List", "Dict", "Set", "Tuple", "Optional", "Union", "Any"}
@@ -16,7 +17,10 @@ FUNCTION_SCOPES = {"function", "annotation", "type alias", "type parameters", "T
 
 def scan(path):
     try:
-        with open(path, encoding="utf-8") as f:
+        # Read it the way CPython's importer does: honor the BOM and a "# coding:" cookie (PEP 263), so the
+        # scanner sees exactly the source that runs. Reading plain UTF-8 instead let a coding cookie (utf-7,
+        # unicode_escape) or a leading BOM hide a banned call in what looked like a comment to the scanner.
+        with tokenize.open(path) as f:
             src = f.read()
         tree = ast.parse(src, path)
         table = symtable.symtable(src, path, "exec")
