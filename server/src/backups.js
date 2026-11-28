@@ -84,7 +84,8 @@ function check(file) {
     if (TABLES.some((t) => !have.has(t))) throw new Error("That isn't a BrowserQuiz backup.");
     if (other.prepare('PRAGMA quick_check').get().quick_check !== 'ok') throw new Error('That backup is damaged.');
   } catch (e) {
-    throw new Error(/backup/.test(e.message) ? e.message : "That isn't a BrowserQuiz backup.");
+    // It's a database (the header says so) that can't be read through: cut short or damaged on the way
+    throw new Error(/backup/.test(e.message) ? e.message : 'That backup is damaged.');
   } finally {
     if (other) other.close();
   }
