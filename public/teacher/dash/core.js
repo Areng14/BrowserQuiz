@@ -89,6 +89,8 @@ const day = (t) => when(t, 'toLocaleDateString', { month: 'short', day: 'numeric
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const mmss = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
 
+// Answers the server gives without words of its own: a quiz, class or run deleted in another tab, an old link
+const PLAIN = { not_found: 'Not found. It may have been deleted.', bad_request: "That didn't work. Reload the page and try again.", run_closed: 'This quiz is closed.' };
 async function api(path, opts) {
   const res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
   let data = null;
@@ -96,7 +98,7 @@ async function api(path, opts) {
   if (res.status === 401 && data && data.error === 'login') { showLogin(); throw new Error('login'); }
   if (res.status === 403 && data && data.error === 'must_change') { showSetPassword(true); throw new Error('login'); }
   if (!res.ok) {
-    const err = new Error((data && data.message) || (data && data.error) || `Request failed (${res.status})`);
+    const err = new Error((data && data.message) || (data && (PLAIN[data.error] || data.error)) || `Request failed (${res.status})`);
     err.code = data && data.error;
     throw err;
   }
