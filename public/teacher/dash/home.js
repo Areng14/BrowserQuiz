@@ -209,6 +209,7 @@ function quizzesTab(data) {
   quizBtn.addEventListener('click', async () => {
     const f = quizFile.files[0];
     if (!f) { quizMsg.textContent = 'Pick a .quiz file first.'; return; }
+    if (f.size > 25 * 1024 * 1024) { quizMsg.textContent = 'The .quiz file is bigger than 25 MB.'; return; } // the server's limit, before reading it all in
     quizBtn.disabled = true; quizBtn.textContent = 'Checking…'; quizMsg.textContent = '';
     try { await api('/api/t/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() }); showHome(); } catch (e) { quizMsg.textContent = e.message; quizBtn.disabled = false; quizBtn.textContent = 'Upload .quiz'; }
   });
