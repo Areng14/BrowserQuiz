@@ -33,19 +33,21 @@ function runnerConfigured() { return !!process.env.RUNNER_URL; }
 
 // The languages the runner has (its /health: the standard runner has Java, Python, JavaScript and
 // TypeScript), asked at most once a minute. null: not known (no runner, or it didn't answer). A runner
-// from before it said is taken to have them all.
-let langs = { at: 0, list: null };
+// from before it said is taken to have them all. each: the ones it builds once and runs each in ("runs").
+let langs = { at: 0, list: null, each: [] };
 async function runnerLanguages() {
   const url = (process.env.RUNNER_URL || '').replace(/\/$/, '');
   if (!url) return null;
   if (Date.now() - langs.at < (langs.list ? 60000 : 5000)) return langs.list;
   let list = null;
+  let each = langs.each; // (a runner that doesn't answer once keeps what it said: a job finds out anyway, runEach)
   try {
     const res = await fetch(url + '/health', { signal: AbortSignal.timeout(1500) });
     const j = res.ok ? await res.json() : null;
     if (j) list = Array.isArray(j.languages) ? T.LANGS.filter((l) => j.languages.includes(l)) : T.LANGS.slice();
+    if (j) each = Array.isArray(j.runs) ? j.runs : [];
   } catch (e) { /* not known */ }
-  langs = { at: Date.now(), list };
+  langs = { at: Date.now(), list, each };
   return list;
 }
 // What runnerLanguages last said, without asking (for code that can't wait): null when not known yet
@@ -101,7 +103,59 @@ async function callRunner(job, timeMs, memoryMb, urgent, stale) {
 const isJsLang = (lang) => lang === 'javascript' || lang === 'typescript';
 const job0Scans = (q, lang) => B.bansFor(q.ban, lang).length > 0 && ['c', 'cpp', 'go', 'csharp', 'rust'].includes(lang);
 
-// One job for all tests (Run, reference checks) or one job per test (grading, so a hang only costs one test).
+// Build once, run each (the runner's "runs", runner/each.py): the languages whose harness runs only the test
+// it's given the number of. A build holds at most EACH_MAX tests (the runner's most runs), and as many as keep
+// the generated test file to EACH_MAIN bytes (javac's constants for one class) and the job to EACH_JOB.
+const EACH_LANGS = ['java'];
+const EACH_FILE = { java: 'BQMain.java' };
+const EACH_MAX = 100;
+const EACH_MAIN = 100 * 1024;
+const EACH_JOB = 300 * 1024;
+const jobBytes = (job) => Object.values(job.files).reduce((s, f) => s + Buffer.byteLength(f), 0);
+
+// Every test in one build, then each run in a process of its own from it, with the time and memory a job's one
+// run has: one part per test, just as one job per test gives them. Tests the runner had no time left for
+// ("skipped") go again, in a build of their own. null: the runner doesn't build once after all (one from before,
+// which ran the program as a whole and said nothing of runs), so it's one job per test.
+async function runEach(q, lang, code, tests) {
+  const parts = new Array(tests.length);
+  let todo = tests.map((_, i) => i);
+  for (let first = true; todo.length; first = false) {
+    let n = Math.min(todo.length, EACH_MAX);
+    let built = H.buildJob(q, lang, code, todo.slice(0, n).map((i) => tests[i]), { scan: first });
+    while (n > 1 && (Buffer.byteLength(built.job.files[EACH_FILE[lang]] || '') > EACH_MAIN || jobBytes(built.job) > EACH_JOB)) {
+      n = Math.ceil(n / 2);
+      built = H.buildJob(q, lang, code, todo.slice(0, n).map((i) => tests[i]), { scan: first });
+    }
+    const ids = todo.slice(0, n);
+    const list = ids.map((i) => tests[i]);
+    const { marker, job } = built;
+    const res = await callRunner({ ...job, runs: n }, q.limits.timeMs, q.limits.memoryMb);
+    if (!Array.isArray(res.runs)) {
+      if (!['compile_error', 'error', 'unavailable'].includes(res.status)) return null;
+      const r = H.readResults(q, lang, list, res, marker); // didn't compile, or the job broke: for all of them
+      for (const i of todo) parts[i] = r;
+      return parts;
+    }
+    const left = [];
+    res.runs.slice(0, n).forEach((run, k) => {
+      if (!run || run.status === 'skipped') { left.push(ids[k]); return; }
+      // In the compiled languages the ban check's facts are the runner's, read once: with the first test.
+      parts[ids[k]] = H.readResults(q, lang, [list[k]], first && k === 0 && res.scan !== undefined ? { ...run, scan: res.scan } : run, marker, k);
+    });
+    if (res.runs.length < n) left.push(...ids.slice(res.runs.length));
+    if (left.length === ids.length) { // nothing ran: a broken job, graded again later
+      const r = H.readResults(q, lang, list, { status: 'error' }, marker);
+      for (const i of todo) parts[i] = r;
+      return parts;
+    }
+    todo = [...left, ...todo.slice(n)];
+  }
+  return parts;
+}
+
+// One job for all tests (Run, reference checks), or for grading each test in a process of its own (so a hang
+// only costs one test): built once where the runner can (runEach), else one job per test.
 async function runTests(q, lang, code, tests, opts) {
   const perTest = opts && opts.perTest;
   if (!perTest) {
@@ -109,12 +163,14 @@ async function runTests(q, lang, code, tests, opts) {
     const res = await callRunner(job, Math.min(10000, q.limits.timeMs * tests.length), q.limits.memoryMb, opts && opts.urgent);
     return H.readResults(q, lang, tests, res, marker);
   }
-  // In the compiled languages the ban check's facts are the runner's, read once: with the first test.
-  const parts = await Promise.all(tests.map(async (t, k) => {
-    const { marker, job } = H.buildJob(q, lang, code, [t], { scan: k === 0 });
-    const res = await callRunner(job, q.limits.timeMs, q.limits.memoryMb);
-    return H.readResults(q, lang, [t], res, marker);
-  }));
+  await runnerLanguages();
+  const parts = (EACH_LANGS.includes(lang) && langs.each.includes(lang) && await runEach(q, lang, code, tests))
+    // In the compiled languages the ban check's facts are the runner's, read once: with the first test.
+    || await Promise.all(tests.map(async (t, k) => {
+      const { marker, job } = H.buildJob(q, lang, code, [t], { scan: k === 0 });
+      const res = await callRunner(job, q.limits.timeMs, q.limits.memoryMb);
+      return H.readResults(q, lang, [t], res, marker);
+    }));
   const compile = parts.find((p) => p.status === 'compile_error');
   if (compile) return compile;
   // A job that broke (the runner busy, a compile out of time) says nothing about the code: the whole answer
