@@ -1,7 +1,8 @@
 'use strict';
 // Loads and validates a .quiz upload: a zip with quiz.json at the root and images under assets/.
 // Everything that reaches the database has passed through here.
-const { readZip } = require('./zip');
+const { readZip, MAX_UNPACKED } = require('./zip');
+const { textOf } = require('./quiztext');
 const R = require('./rubric');
 const B = require('./bans');
 const T = require('../../public/teacher/types.js');
@@ -45,7 +46,11 @@ function loadQuizFile(buf) {
   if (!Buffer.isBuffer(buf) || buf.length === 0) fail('The upload was empty.');
   if (buf.length > LIMITS.uploadBytes) fail('The .quiz file is bigger than 25 MB.');
   let files;
-  try { files = readZip(buf); } catch (e) { fail("That isn't a .quiz file. Pick a .quiz from BrowserQuiz, or a quiz.json."); }
+  try { files = readZip(buf); } catch (e) {
+    if (e.code === 'too_big') fail(`The .quiz is too big: over ${MAX_UNPACKED / 1024 / 1024} MB once unzipped.`);
+    if (e.code === 'too_many') fail(`The .quiz has more than ${LIMITS.files} files.`);
+    fail("That isn't a .quiz file. Pick a .quiz from BrowserQuiz, or a quiz.json.");
+  }
   for (const name of [...files.keys()]) {
     if (name.startsWith('__MACOSX/') || /(^|\/)(\.DS_Store|Thumbs\.db|desktop\.ini)$/i.test(name)) files.delete(name);
     else if (name.startsWith('/') || name.split('/').some((s) => s === '..' || s === '')) fail(`Bad file name in the zip: ${name}`);
@@ -59,7 +64,7 @@ function loadQuizFile(buf) {
     prefix = hits[0].slice(0, -'quiz.json'.length);
   }
   let raw;
-  try { raw = JSON.parse(files.get(prefix + 'quiz.json').toString('utf8').replace(/^﻿/, '')); } catch (e) { fail('quiz.json is not valid JSON: ' + e.message); }
+  try { raw = JSON.parse(textOf(files.get(prefix + 'quiz.json'))); } catch (e) { fail('quiz.json is not valid JSON: ' + e.message); }
 
   const assets = new Map();
   for (const [name, data] of files) {

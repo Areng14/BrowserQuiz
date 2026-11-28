@@ -179,8 +179,8 @@ function questionPrompt() {
     .replace('{{EXAMPLE}}', () => JSON.stringify(sample, null, 2));
 }
 // A pasted or uploaded quiz.json (no zip). Images it names must come from somewhere else.
-function parseQuizJson(buf) {
-  try { return JSON.parse(buf.toString('utf8').replace(/^\uFEFF/, '')); } catch (e) { throw new QuizError('quiz.json is not valid JSON: ' + e.message); }
+function parseQuizJson(text) {
+  try { return JSON.parse(String(text).replace(/^\uFEFF/, '')); } catch (e) { throw new QuizError('quiz.json is not valid JSON: ' + e.message); }
 }
 const imagePaths = (raw) => new Set([...[...(Array.isArray(raw && raw.questions) ? raw.questions : []), ...(Array.isArray(raw && raw.shared) ? raw.shared : [])]
   .map((qq) => (qq && qq.image != null ? String(qq.image).replace(/^\.?\//, '') : null)).filter(Boolean), ...markdownImages(raw)]);
