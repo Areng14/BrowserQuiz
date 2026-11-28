@@ -10,8 +10,11 @@ const { totals } = require('../grade');
 const C = require('../corrections');
 const { getRoster, requireTeacher } = require('./common');
 
-const pct = (score, max) => Math.round((score / max) * 1000) / 10;
-const mean = (xs) => (xs.length ? Math.round((xs.reduce((s, x) => s + x, 0) / xs.length) * 10) / 10 : null);
+// Exact here: the page rounds them once to a whole percent, as the quiz's own page and report do (rounding
+// to 45.5 first made 45.45% show as 46% here and 45% there), and the CSV rounds them to one decimal.
+const pct = (score, max) => (score / max) * 100;
+const mean = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null);
+const tenths = (x) => (x == null ? x : Math.round(x * 10) / 10);
 
 // One student's cell for one quiz. k: 'score' (p, and was: before corrections), 'invalid' (counts as 0),
 // 'review' (waiting for the teacher), 'grading' (code still running), 'none' (didn't take it).
@@ -81,8 +84,8 @@ module.exports = function gradeRoutes(r) {
     const esc = (v) => { let s = v == null ? '' : String(v); if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     const TEXT = { review: 'Needs grading', grading: 'Grading' };
     const lines = [['Student', ...g.quizzes.map((x) => `${x.title} (${day.format(new Date(x.at))})`), 'Average'].map(esc).join(',')];
-    for (const s of g.students) lines.push([s.name, ...s.cells.map((x) => (x.p != null ? x.p : TEXT[x.k] || '')), s.avg].map(esc).join(','));
-    lines.push(['Class average', ...g.quizzes.map((x) => x.avg), g.avg].map(esc).join(','));
+    for (const s of g.students) lines.push([s.name, ...s.cells.map((x) => (x.p != null ? tenths(x.p) : TEXT[x.k] || '')), tenths(s.avg)].map(esc).join(','));
+    lines.push(['Class average', ...g.quizzes.map((x) => tenths(x.avg)), tenths(g.avg)].map(esc).join(','));
     send(res, 200, lines.join('\n') + '\n', {
       'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store',
       'Content-Disposition': `attachment; filename="${g.roster.name.replace(/[^\w -]/g, '').slice(0, 60) || 'class'} grades.csv"`,
