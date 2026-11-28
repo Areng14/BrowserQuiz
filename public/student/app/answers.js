@@ -20,6 +20,7 @@ function onBeat(res, info) {
     S.deadline = res.deadline;
   }
   if (res && res.partEnds) S.partEnds = res.partEnds; // added time moves the parts along too
+  if (res && res.parts) takeParts(res.parts);
   if (res && res.done && !S.submitting) return endQuiz('mine'); // the teacher ended this student's quiz
   if (res && (res.paused || 0) !== (S.pausedAt || 0)) setPaused(res.paused || 0);
   if (res && res.held && S.monitor) S.monitor.answersDirty = true; // not taken while paused: they go after
@@ -148,6 +149,28 @@ function buildParts(questions) {
   return parts;
 }
 const partOf = (i) => S.parts.find((p) => i >= p.start && i <= p.end);
+
+// With locked parts, a later part's questions come only as it opens (part-done, or a heartbeat for a page
+// that was offline then): until then the page has each one's place (later: true, its type and points).
+function takeParts(p) {
+  if (!p || !S.quiz) return;
+  let here = false;
+  for (const q of p.questions || []) {
+    const i = S.quiz.questions.findIndex((x) => x.id === q.id);
+    if (i < 0 || !S.quiz.questions[i].later) continue;
+    S.quiz.questions[i] = q;
+    if (i === S.idx) here = true;
+  }
+  if (p.shared) S.quiz.shared = Object.assign({}, S.quiz.shared, p.shared);
+  if (p.sections) { S.quiz.sections = p.sections; S.parts = buildParts(S.quiz.questions); } // with their directions now
+  if (here && S.el && !S.reviewOpen) renderQuestion();
+}
+// The part being worked on (or one before it) that the page has only the places of
+function missingPart() {
+  if (!S.quiz || !S.parts || !S.quiz.lockParts) return false;
+  const upTo = timedParts() ? partNow() : (S.locked || 0) + 1;
+  return S.quiz.questions.some((q, i) => q.later && partOf(i) && partOf(i).n <= upTo);
+}
 const rangeOf = (p) => (p.start === p.end ? `Question ${p.start + 1}` : `Questions ${p.start + 1}-${p.end + 1}`);
 
 // Timed parts: each part has its own clock, one after another (S.partEnds, on the server's clock). The
@@ -211,6 +234,7 @@ async function partTimeUp(done) {
   try {
     const r = await api.partDone(done, serializeAnswers());
     S.locked = Math.max(S.locked || 0, r.locked || done);
+    takeParts(r.parts);
     if (S.monitor) S.monitor.answersDirty = false;
   } catch (e) {
     S.locked = Math.max(S.locked || 0, done); // offline: the server locks it on time anyway
@@ -259,4 +283,4 @@ function takeUnsent(savedAt) {
   return null;
 }
 
-export { buildParts, clearUnsent, codeAnswer, isAnswered, lockIcon, mmss, nextPartRow, onBeat, onBeatError, partLeft, partNow, partOf, partTimeUp, partsFor, pausedView, rangeOf, restoreAnswers, serializeAnswers, serverNow, setAnswer, setPaused, takeUnsent, timedNav, timedParts };
+export { buildParts, clearUnsent, missingPart, takeParts, codeAnswer, isAnswered, lockIcon, mmss, nextPartRow, onBeat, onBeatError, partLeft, partNow, partOf, partTimeUp, partsFor, pausedView, rangeOf, restoreAnswers, serializeAnswers, serverNow, setAnswer, setPaused, takeUnsent, timedNav, timedParts };

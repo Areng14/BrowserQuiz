@@ -3,6 +3,7 @@
 ## What reaches the student's browser
 
 - **What students get.** Only the questions, the sample tests and the starter code. Answers, explanations, hidden tests, reference solutions and rubrics never reach their browser.
+- **Locked and timed parts.** A part's questions, images and directions reach the browser only when that part opens. Until then the browser has each question's type and points, to lay the parts out.
 - **Practice review.** In practice mode, the review after turning in shows answers, explanations and reference solutions, but still no hidden tests or rubrics. If you already gave a quiz as practice, the dashboard asks before you give it as a graded quiz.
 - **Images.** A quiz's images only load once the student has started, and only the ones their quiz shows. An image that is only in an answer key stays on the server.
 - **Hidden tests.** The sandbox only gets the student's code and the inputs. The expected outputs stay on the server and are compared there, and saved results do not keep them either.

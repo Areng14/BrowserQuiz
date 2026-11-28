@@ -4,7 +4,7 @@ import { BQ, CODE_ALPHABET, ERRORS, PARTS, S, api, cfg, resetState } from './sta
 import { demoHint, enterFullscreen, errorText, exitFullscreen, h, keysHeld, mount, plural, toast } from './dom.js';
 import { icon, isDark, svgEl, themeButton } from './theme.js';
 import { loadMonaco } from './monaco.js';
-import { onBeat, onBeatError, partsFor, restoreAnswers, serializeAnswers, takeUnsent } from './answers.js';
+import { missingPart, onBeat, onBeatError, partsFor, restoreAnswers, serializeAnswers, takeUnsent } from './answers.js';
 import { screenQuiz } from './quiz.js';
 import { loadScratch } from './scratch.js';
 import { loadMarks, marksIn, mdOpts } from './marks.js';
@@ -499,6 +499,7 @@ function makeMonitor(fsOk) {
     getAnswers: serializeAnswers,
     holdAnswers: () => !!S.pausedAt, // the server doesn't take them while the quiz is paused
     getView: currentView,
+    wantsParts: missingPart,
     onFullscreenLost: showFsOverlay,
     onFullscreenBack: hideFsOverlay,
     // In Safe Exam Browser with our settings nothing else can be in front, so coming back from SEB's own

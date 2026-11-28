@@ -229,7 +229,8 @@ function renderQuestion() {
   S.el.next.textContent = S.dirOpen ? 'Continue' : last ? 'Review' : 'Next';
   S.el.next.className = 'btn' + (last && !S.dirOpen ? ' primary' : '');
   const views = { code: codeView, output: outputView, trace: traceView, fill: fillView, essay: essayView, math: mathView, graph: graphView };
-  let view = S.dirOpen ? directionsView(partOf(S.idx)) : (views[q.type] || basicView)(q);
+  // a part that opened while the page was offline: its questions come with the next heartbeat (answers.js takeParts)
+  let view = S.dirOpen ? directionsView(partOf(S.idx)) : q.later ? h('div', { class: 'qview' }, h('p', { class: 'muted', role: 'status', text: 'Loading this part…' })) : (views[q.type] || basicView)(q);
   // Corrections: a "What went wrong?" box under the answer (in a code question's left column)
   if (!S.dirOpen && S.quiz.corrections && S.quiz.corrections.why && S.quiz.corrections.fix[q.id]) (view.querySelector('.code-left') || view).append(whyBox(q));
   // Shared material sits beside the question (above it on narrow screens). Code questions put it in

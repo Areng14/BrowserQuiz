@@ -5,12 +5,11 @@ const crypto = require('node:crypto');
 const { q, tx, txGroup } = require('./db');
 const store = require('./store');
 const P = require('./people');
-const H = require('./harness');
 const T = require('../../public/teacher/types.js');
 const W = require('./watch');
 const { runSamples, studentLanguages } = require('./coderun');
 const { cleanAnswers, gradeAttempt, totals, studentReport, reportQuiz, isRun } = require('./grade');
-const { fillTemplate, calculatorOf } = require('./quizfile');
+const { fillTemplate } = require('./quizfile');
 const C = require('./corrections');
 const Parts = require('./parts');
 const Pause = require('./pause');
@@ -220,66 +219,17 @@ function current(req, { mustBeOpen = true } = {}) {
   return { a, run, quiz: store.getQuiz(run.quiz_id) };
 }
 
-function publicQuiz(quiz, layout) {
-  const byId = new Map(store.quizFor(quiz, layout).questions.map((qq) => [qq.id, qq])); // with their random values
-  const used = new Set(layout.order.flatMap((id) => [].concat(byId.get(id).shared || []))); // shared material their questions use
-  const calcs = calculatorOf(quiz); // the calculator each question has (its own, its part's or the quiz's)
-  return {
-    title: quiz.title,
-    timeLimitMin: quiz.timeLimitMin,
-    language: quiz.language,
-    directions: quiz.directions,
-    sections: sectionStarts(quiz, layout),
-    lockParts: locks(quiz, layout) || undefined,
-    turnInEarly: quiz.turnInEarly || undefined,
-    calculator: quiz.calculator || undefined,
-    // corrections: how each went on the exam (or that it's a new one from its pool), and the "What went wrong?" box
-    corrections: layout.fix ? { why: !!layout.why, fix: Object.fromEntries(Object.entries(layout.fix).map(([id, f]) => [id, { points: f.old, max: f.max, fresh: !!f.fresh }])) } : undefined,
-    shared: Object.fromEntries((quiz.shared || []).filter((m) => used.has(m.id)).map((m) => [m.id, { title: m.title, text: m.text, image: m.image || null, imageAlt: m.imageAlt || '' }])),
-    questions: layout.order.map((id) => {
-      const qq = byId.get(id);
-      const pub = { id, type: qq.type, prompt: qq.prompt, points: qq.points };
-      if (calcs.get(id)) pub.calculator = calcs.get(id);
-      if (qq.name) pub.name = qq.name;
-      if (qq.partialCredit) pub.partialCredit = true;
-      if (qq.shared) pub.shared = qq.shared;
-      if (qq.image) { pub.image = qq.image; pub.imageAlt = qq.imageAlt || ''; }
-      if (qq.choices) pub.choices = layout.perms[id].map((i) => qq.choices[i]); // positions only
-      // New types: what's needed to show the question, never the answers.
-      if (qq.type === 'output') Object.assign(pub, { code: qq.code, codeLang: qq.language });
-      if (qq.type === 'trace') {
-        Object.assign(pub, {
-          code: qq.code, codeLang: qq.language, columns: qq.columns,
-          cells: qq.rows.map((r, ri) => r.map((v, ci) => (qq.given.some((g) => g[0] === ri && g[1] === ci) ? v : null))),
-        });
-      }
-      if (qq.type === 'fill') {
-        Object.assign(pub, { code: qq.code, codeLang: qq.language, blanks: qq.answer.length, run: !!qq.run && !qq.noRun });
-        if (qq.run) {
-          pub.samples = qq.tests.sample.map((t) => ({ call: { [qq.language]: H.callText(qq, t, qq.language) }, expected: { [qq.language]: H.expectedText(qq, t, qq.language) } }));
-        }
-      }
-      if (qq.type === 'essay') pub.codeLang = qq.language || null;
-      // a graph: the grid and the drawing tools, and whether shading is one of them (never the answer)
-      if (qq.type === 'graph') Object.assign(pub, { window: qq.window, step: qq.step, tools: qq.tools, shade: qq.shapes.some((sh) => sh.side) || undefined });
-      if (qq.type === 'code') {
-        pub.mode = qq.mode;
-        pub.languages = studentLanguages(qq); // with "any language", the ones this server's runner has
-        if (qq.ban) pub.ban = qq.ban; // a rule, so students see it
-        if (qq.noRun) pub.noRun = true;
-        // The question's own classes, written out in each language: theirs to use, not to write.
-        if (qq.types) pub.given = Object.fromEntries(qq.languages.map((l) => [l, T.classSource(qq.types, l, true)]));
-        pub.starter = Object.fromEntries(qq.languages.map((l) => [l, H.starterCode(qq, l)]));
-        pub.samples = qq.tests.sample.map((t) => ({
-          call: Object.fromEntries(qq.languages.map((l) => [l, H.callText(qq, t, l)])),
-          expected: Object.fromEntries(qq.languages.map((l) => [l, H.expectedText(qq, t, l)])),
-        }));
-      }
-      return pub;
-    }),
-  };
+const { publicQuiz } = require('./studentquiz');
+// With locked parts, the questions this student's page may have: their part is open (studentquiz.js). A few
+// seconds early, as part-done is: a page's clock can run a little ahead.
+const openFor = (quiz, a) => Parts.openIds(quiz, a, Pause.clock(a, a.pausedAt) + 5000);
+// The open parts' questions in full, for a page that has a part's place but not its questions yet
+function openParts(quiz, a) {
+  const open = openFor(quiz, a);
+  if (!open) return undefined;
+  const pq = publicQuiz(quiz, a.layout, open);
+  return { questions: pq.questions.filter((x) => !x.later), shared: pq.shared, sections: pq.sections };
 }
-
 const { sectionStarts, locks, partsOf, keepLocked } = Parts;
 
 function runInfo(run, quiz, studentId) {
@@ -579,7 +529,7 @@ module.exports = function studentRoutes(r) {
       a.beatLost = false;
     }
     // Saved answers go back in the student's own positional order.
-    const pq = publicQuiz(quiz, a.layout);
+    const pq = publicQuiz(quiz, a.layout, openFor(quiz, a));
     if (pq.timeLimitMin && !run.corrects) pq.timeLimitMin = myLimit(quiz, a.studentId); // their own, with extra time
     // tag: tells this attempt from an earlier one (a reset, practice again), for what the browser keeps
     if (Parts.timed(quiz, a.layout)) keepLocked(quiz, a, {}, Pause.clock(a, a.pausedAt, now)); // parts whose time ran out while they were away
@@ -668,7 +618,9 @@ module.exports = function studentRoutes(r) {
       const note = a.status !== 'submitted' ? store.notes.get(a.id) : null; // and to this student
       // paused: when their clock stopped (the page shows the time left then, and hides the questions)
       const paused = a.status === 'active' ? Pause.since(a, a.pausedAt) : 0;
-      return { ok: true, now, deadline: a.deadline || null, partEnds: partEndsOut(quiz, a), done: a.status === 'submitted', ...(paused ? { paused } : {}), ...(held ? { held } : {}), ...(notice ? { notice } : {}), ...(note ? { note } : {}), ...live };
+      // a page that has the part it's on only as places (offline as it opened): its questions now
+      const parts = body.wantParts && a.status === 'active' ? openParts(quiz, a) : undefined;
+      return { ok: true, now, deadline: a.deadline || null, partEnds: partEndsOut(quiz, a), done: a.status === 'submitted', ...(paused ? { paused } : {}), ...(held ? { held } : {}), ...(notice ? { notice } : {}), ...(note ? { note } : {}), ...(parts ? { parts } : {}), ...live };
     }));
   });
 
@@ -677,7 +629,8 @@ module.exports = function studentRoutes(r) {
     const { a, quiz } = current(req);
     if (a.status !== 'active') throw new HttpError(403, 'run_closed');
     if (!runLimit(`${a.runId}:${a.studentId}`)) throw new HttpError(429, 'too_many'); // per student, so practice retries don't reset it
-    const qq = store.quizFor(quiz, a.layout).questions.find((x) => x.id === body.questionId && isRun(x)); // one of theirs
+    const open = openFor(quiz, a);
+    const qq = store.quizFor(quiz, a.layout).questions.find((x) => x.id === body.questionId && isRun(x) && (!open || open.has(x.id))); // one of theirs, in an open part
     // Fill-in-the-blank: the server fills its own template; students only send the blanks.
     if (qq && qq.type === 'fill') body.code = Array.isArray(body.blanks) ? fillTemplate(qq.code, body.blanks.map((b) => String(b || '').slice(0, 500))) : null;
     if (!qq || !(qq.type === 'fill' ? qq.languages : studentLanguages(qq)).includes(body.language) || typeof body.code !== 'string') throw new HttpError(400, 'bad_request');
@@ -742,7 +695,7 @@ module.exports = function studentRoutes(r) {
     if (body.answers && !pastDeadline(a, clk) && Pause.taking(a.pausedAt)) { a.answers = keepLocked(quiz, a, cleanAnswers(quiz, a.layout, body.answers), clk); a.answersAt = Date.now(); }
     a.layout.locked = Math.max(a.layout.locked || 0, n);
     store.save(a);
-    json(res, 200, { locked: a.layout.locked });
+    json(res, 200, { locked: a.layout.locked, parts: openParts(quiz, a) });
   });
 
   r.post('/api/submit', async (req, res) => {
@@ -780,8 +733,11 @@ module.exports.hashSid = hashSid;
 const shownAssets = new WeakMap();
 function seesAsset(a, run, quiz, rel) {
   if (a.status !== 'active' && a.status !== 'submitted') return false;
+  const open = openFor(quiz, a);
+  const k = open ? open.size : -1; // a part that opens adds its images
   let shown = shownAssets.get(a);
-  if (!shown) { shown = JSON.stringify(publicQuiz(quiz, a.layout)); shownAssets.set(a, shown); }
+  if (!shown || shown.k !== k) { shown = { k, text: JSON.stringify(publicQuiz(quiz, a.layout, open)) }; shownAssets.set(a, shown); }
+  shown = shown.text;
   if (shown.includes(rel)) return true;
   if (!a.practice || a.status !== 'submitted') return false;
   return JSON.stringify([reportQuiz(quiz, run.quiz_id, a.layout), studentReport(quiz, a, '', { forStudent: true })]).includes(rel);

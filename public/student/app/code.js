@@ -5,7 +5,7 @@ import { errorText, h } from './dom.js';
 import { markIcon } from './theme.js';
 import { editorTheme, loadMonaco } from './monaco.js';
 import { colorize } from './syntax.js';
-import { codeAnswer, serializeAnswers, setAnswer } from './answers.js';
+import { codeAnswer, serializeAnswers, setAnswer, takeParts } from './answers.js';
 import { renderQuestion } from './quiz.js';
 import { mdOpts, metaRow, notTabbable, prompt, sharedBlock } from './marks.js';
 import { leaveHint, tabOut } from './views.js';
@@ -155,7 +155,8 @@ function confirmFinishParts(n, then) {
   const move = h('button', { class: 'btn primary', type: 'button', text: 'Move on', onclick: async () => {
     move.disabled = true;
     try {
-      S.locked = cfg.preview ? n : (await api.partDone(n, serializeAnswers())).locked;
+      if (cfg.preview) S.locked = n;
+      else { const r = await api.partDone(n, serializeAnswers()); S.locked = r.locked; takeParts(r.parts); }
       if (S.monitor) S.monitor.answersDirty = false;
     } catch (e) {
       msg.textContent = errorText(e);

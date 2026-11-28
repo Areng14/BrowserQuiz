@@ -75,6 +75,16 @@ function keepLocked(quiz, a, next, now = Date.now()) {
   return next;
 }
 
+// With locked parts, the questions whose part is open: the one being worked on (by its clock, or the one after
+// the last finished) and those before it. A later part's questions only go to the page as it opens
+// (studentquiz.js). null: all of them.
+function openIds(quiz, a, now) {
+  if (!locks(quiz, a.layout)) return null;
+  const { part, count } = partsOf(quiz, a.layout);
+  const upTo = Math.min(count, timed(quiz, a.layout) && Array.isArray(a.layout.partEnds) ? running(a, now) : (a.layout.locked || 0) + 1);
+  return new Set([...part].filter(([, n]) => n <= upTo).map(([id]) => id));
+}
+
 // For the teacher's live table: each part's size and how many are answered, and the one they're on.
 function liveParts(quiz, a, now) {
   if (!timed(quiz, a.layout) || !Array.isArray(a.layout.partEnds)) return undefined;
@@ -89,4 +99,4 @@ function liveParts(quiz, a, now) {
   return { sizes, answered, on, ends: a.layout.partEnds };
 }
 
-module.exports = { sectionStarts, locks, timed, partsOf, partEnds, over, running, keepLocked, liveParts, GRACE_MS };
+module.exports = { sectionStarts, locks, timed, partsOf, partEnds, over, running, keepLocked, openIds, liveParts, GRACE_MS };
