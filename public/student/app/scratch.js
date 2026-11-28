@@ -23,7 +23,7 @@ function loadScratch() {
 let scratchTimer = 0;
 function writeScratch() {
   scratchTimer = 0;
-  try { localStorage.setItem(scratchKey(), JSON.stringify(S.scratch)); } catch (e) { /* kept for this page */ }
+  try { localStorage.setItem(scratchKey(), JSON.stringify(Object.assign({}, S.scratch, { at: Date.now() }))); } catch (e) { /* kept for this page */ }
 }
 function saveScratch() {
   S.scratchVer = (S.scratchVer || 0) + 1;

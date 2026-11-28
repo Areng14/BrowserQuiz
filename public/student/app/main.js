@@ -10,6 +10,7 @@ import { disposeEditor } from './quiz.js';
 import { screenContinue } from './overlays.js';
 import { startPreview, startWatch } from './done.js';
 import { watchView } from './watch.js';
+import { sweepKept } from './answers.js';
 
 // ---------- lifecycle ----------
 // What /api/resume says this browser is in: the screen to go back to.
@@ -39,6 +40,7 @@ BQ.app = {
     resetState();
     if (cfg.watch) { startWatch(); return; }
     if (cfg.preview) { startPreview(); return; }
+    sweepKept();
     if (!api.resume) { screenJoin(); return; }
     let code = null;
     try {

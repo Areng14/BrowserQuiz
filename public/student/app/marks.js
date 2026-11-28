@@ -18,7 +18,7 @@ function loadMarks() {
   } catch (e) { /* nothing saved */ }
 }
 function saveMarks() {
-  try { localStorage.setItem(marksKey(), JSON.stringify(S.marks)); } catch (e) { /* kept for this page only */ }
+  try { localStorage.setItem(marksKey(), JSON.stringify(Object.assign({}, S.marks, { at: Date.now() }))); } catch (e) { /* kept for this page only */ }
 }
 function clearMarks() {
   try { localStorage.removeItem(marksKey()); } catch (e) { /* nothing to clear */ }

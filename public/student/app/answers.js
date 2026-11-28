@@ -275,6 +275,24 @@ function clearUnsent() {
   unsentTimer = 0;
   try { localStorage.removeItem(unsentKey()); } catch (e) { /* nothing kept */ }
 }
+// What a quiz leaves in this browser (unsent answers, marks, the scratchpad) goes once nothing has touched it
+// for a day: a laptop that died offline in a lab doesn't keep a student's answers for the next one. Ones from
+// before they carried a time get one now.
+const KEPT = /^bq-(unsent|marks|scratch):/;
+function sweepKept() {
+  try {
+    const old = Date.now() - 24 * 3600000;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k || !KEPT.test(k)) continue;
+      let v = null;
+      try { v = JSON.parse(localStorage.getItem(k)); } catch (e) { /* not readable: goes */ }
+      if (!v || typeof v !== 'object') localStorage.removeItem(k);
+      else if (!v.at) localStorage.setItem(k, JSON.stringify(Object.assign(v, { at: Date.now() })));
+      else if (v.at < old) localStorage.removeItem(k);
+    }
+  } catch (e) { /* storage off: nothing kept */ }
+}
 function takeUnsent(savedAt) {
   try {
     const v = JSON.parse(localStorage.getItem(unsentKey()) || 'null');
@@ -283,4 +301,4 @@ function takeUnsent(savedAt) {
   return null;
 }
 
-export { buildParts, clearUnsent, missingPart, takeParts, codeAnswer, isAnswered, lockIcon, mmss, nextPartRow, onBeat, onBeatError, partLeft, partNow, partOf, partTimeUp, partsFor, pausedView, rangeOf, restoreAnswers, serializeAnswers, serverNow, setAnswer, setPaused, takeUnsent, timedNav, timedParts };
+export { buildParts, clearUnsent, sweepKept, missingPart, takeParts, codeAnswer, isAnswered, lockIcon, mmss, nextPartRow, onBeat, onBeatError, partLeft, partNow, partOf, partTimeUp, partsFor, pausedView, rangeOf, restoreAnswers, serializeAnswers, serverNow, setAnswer, setPaused, takeUnsent, timedNav, timedParts };
