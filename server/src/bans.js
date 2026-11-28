@@ -127,7 +127,10 @@ const PY_KIN = { sort: ['sort', 'sorted'], sorted: ['sort', 'sorted'] };
 const PY_KIN_MODULES = { sort: ['heapq', 'bisect'], sorted: ['heapq', 'bisect'] };
 const MODULE_KIN = { math: ['math', 'cmath'] };
 const PY_ESCAPE_NAMES = ['eval', 'exec', 'compile', 'getattr', 'delattr', '__import__', 'globals', 'locals', 'vars', 'breakpoint', '__builtins__'];
-const PY_ESCAPE_MODULES = ['builtins', 'importlib', 'pickle', '_pickle', 'marshal', 'shelve', 'copyreg', 'ctypes', 'types', 'inspect', 'gc', '__main__', 'solution'];
+const PY_ESCAPE_MODULES = ['builtins', 'importlib', 'pickle', '_pickle', 'marshal', 'shelve', 'copyreg', 'ctypes', 'types', 'inspect', 'gc', '__main__', 'solution',
+  // Run a code string, or look a name up from one: the same ways around a ban as eval/exec/getattr, just by
+  // a different door. None has a use in a solution, so banning the module is enough (like importlib above).
+  'timeit', 'cProfile', 'profile', 'code', 'codeop', 'runpy', 'pdb', 'bdb', 'pydoc', 'pkgutil', 'xmlrpc'];
 const PY_ESCAPE_ATTRS = ['__dict__', '__getattribute__', '__getattr__', '__globals__', '__builtins__', '__self__', '__subclasses__', '__code__', '__closure__',
   '__class__', '__bases__', '__base__', '__mro__', '__func__', '__reduce__', '__reduce_ex__', '_getframe', 'f_locals', 'f_globals', 'f_back', 'f_builtins',
   'tb_frame', 'gi_frame', 'cr_frame', 'modules'];
