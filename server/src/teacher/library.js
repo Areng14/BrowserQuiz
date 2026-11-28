@@ -219,10 +219,16 @@ function parseRosterText(text) {
     const tk = cells.findIndex((c) => TIME_CELL.test(c));
     const timeX = tk >= 0 ? parseTimeX(cells[tk]) : 1;
     if (tk >= 0) cells[tk] = '';
-    if (cols) {
+    // A row that doesn't line up with the header ("Lee, Jordan, 1003" under "Name, ID": its ID column has no
+    // number in it, another one does) is read as if there were no header.
+    if (cols && (cols.id < 0 || digits(cells[cols.id] || '') || !cells.some((c) => digits(c)))) {
       name = cols.name >= 0 ? cells[cols.name] : [cells[cols.first], cells[cols.last]].filter(Boolean).join(' ');
       sid = cols.id >= 0 ? cells[cols.id] : '';
     } else {
+      // One cell with the ID at an end and no comma ("Ava Martinez 204511", "204511 Ava Martinez")
+      const filled = cells.filter(Boolean);
+      const split = filled.length === 1 && (/^(.*\D)\s+(\S*\d\S*)$/.exec(filled[0]) || /^(\S*\d\S*)\s+(\D.*)$/.exec(filled[0]));
+      if (split) cells.splice(0, cells.length, split[1], split[2]);
       let idIdx = -1;
       cells.forEach((c, k) => { if (digits(c) && (idIdx < 0 || digits(c) >= digits(cells[idIdx]))) idIdx = k; });
       sid = idIdx >= 0 ? cells[idIdx] : '';
