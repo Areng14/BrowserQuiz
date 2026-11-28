@@ -273,7 +273,7 @@ function classesTab(data) {
     const f = rosterFile.files[0];
     if (!f) { rosterMsg.textContent = 'Pick a CSV file first.'; return; }
     rosterBtn.disabled = true; rosterMsg.textContent = '';
-    try { await post('/api/t/rosters', { name: rosterName.value, csv: await f.text() }); showHome(); } catch (e) { rosterMsg.textContent = e.message; rosterBtn.disabled = false; }
+    try { await post('/api/t/rosters', { name: rosterName.value, csv: await csvText(f) }); showHome(); } catch (e) { rosterMsg.textContent = e.message; rosterBtn.disabled = false; }
   });
   return h('section', { class: 't-section' },
     h('div', { class: 't-head' }, h('h1', { text: 'Classes' }),
@@ -295,6 +295,14 @@ function classesTab(data) {
     rosterMsg);
 }
 
+// A CSV in the encoding it was saved in: UTF-8, UTF-16 (Excel's "Unicode Text"), or else Windows-1252, which
+// Excel's plain "CSV" is on Windows (read as UTF-8, José came out as Jos�).
+async function csvText(f) {
+  const b = new Uint8Array(await f.arrayBuffer());
+  if (b[0] === 0xff && b[1] === 0xfe) return new TextDecoder('utf-16le').decode(b);
+  if (b[0] === 0xfe && b[1] === 0xff) return new TextDecoder('utf-16be').decode(b);
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(b); } catch (e) { return new TextDecoder('windows-1252').decode(b); }
+}
 // The quiz.json in what was pasted: an AI chat's ```json block, or else from its first { to its last }
 // (a chat's whole answer has words around it). null: there's no { in it at all.
 function jsonIn(text) {
