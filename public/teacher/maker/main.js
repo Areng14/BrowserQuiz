@@ -5,6 +5,7 @@
 import { ICONS, api, bar, h, icon, iconButton, labeled, mount } from '../dash/core.js';
 import { guard, shell } from '../dash/home.js';
 import { ed } from './state.js';
+import { dash } from '../dash/state.js';
 import { TYPES } from './formats.js';
 import { withUi } from './model.js';
 import { ALT, MOD } from './editing.js';
@@ -14,6 +15,7 @@ import { addQuestion, closeOpen, select, settingsOpen } from './outline.js';
 import { closeAdd, items, leave, leaveOk, onKey, onUnload, save } from './save.js';
 
 async function showQuizEditor(id, preset) {
+  const seq = ++dash.navSeq; // a page still loading doesn't land on top of the maker, nor the maker on a newer page
   ed.id = id; ed.preset = preset;
   ed.quiz = undefined;
   ed.currentId = ed.id;
@@ -24,9 +26,10 @@ async function showQuizEditor(id, preset) {
     let src;
     try { src = await api(`/api/t/quizzes/${encodeURIComponent(ed.id)}/source`); } catch (e) {
       // deleted, or an old link: say so in Quizzes instead of a blank page (unless another page was asked for since)
-      if (e.message !== 'login' && location.hash === `#quiz/${encodeURIComponent(id)}`) mount(shell('quizzes', h('section', { class: 't-section' }, h('p', { class: 't-error', text: e.message }))));
+      if (e.message !== 'login' && seq === dash.navSeq) mount(shell('quizzes', h('section', { class: 't-section' }, h('p', { class: 't-error', text: e.message }))));
       return;
     }
+    if (seq !== dash.navSeq) return;
     ed.quiz = src.quiz;
     ed.existingAssets = new Set(src.assets);
   }
