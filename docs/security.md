@@ -55,7 +55,7 @@ Your quizzes and your students' data are encrypted with your key. Whoever hosts 
 
 ## Exam lockdown
 
-- **Lockdown.** Exams run in full screen and catch students leaving the quiz. You can lock a quiz to your network, and each attempt stays on the network it started on. For graded exams, use [Safe Exam Browser](setup.md#safe-exam-browser).
+- **Lockdown.** Exams run in full screen and catch students leaving the quiz. You can lock a quiz to your network, and each attempt stays on the network it started on. For big exams, use [Safe Exam Browser](setup.md#safe-exam-browser).
 - **The live page** shows who is where and anything that looks off, with the details. Students never find out whether they were flagged: their screens look the same either way.
 - **While an exam is open,** answers and scores stay hidden, even from you. Reports, replays, CSV and AI grading open once it is closed. **Watch** still shows a student's screen as they see it.
 - **Limits.** No lockdown can stop everything, like a phone under the desk. It blocks the common ways out and records the rest. You still need to walk around the room.

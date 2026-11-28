@@ -82,9 +82,9 @@ If the chat won't take a prompt that long, download it with the button next to *
 
 ## Proctoring the quiz
 
-The live page has one row per student, updated every couple of seconds. To get back to it, click **Open quiz** in the sidebar.
+The live page has one row per student, updated every couple of seconds. To get back to it, click **Open quiz** in the sidebar (**Open quizzes** when more than one is open).
 
-- **The table.** Status, integrity, strikes, progress, time left and score. The progress bar's color shows whether a student is working, reading or idle. Click a column title to sort by it (name, progress and so on).
+- **The table.** Status, integrity, strikes, progress and time left. Scores show once you close an exam, or once someone turns in a practice quiz. The progress bar's color shows whether a student is working, reading or idle. Click a column title to sort by it (name, progress and so on).
 - **Watch.** Shows any student's quiz page, not their whole screen.
 - **Announce.** Pops up a message on everyone's screen. To message one student, use their row's ⋯.
 - **Add time.** For one student, use their row. For everyone, use the quiz's ⋯ menu.
