@@ -70,6 +70,10 @@ module.exports = function rosterRoutes(r) {
     const { students, problems } = parseRosterText(body.add || '');
     if (problems.length) return json(res, 400, { error: 'bad_roster', message: problems.slice(0, 5).join(' ') });
     const remove = Array.isArray(body.remove) ? body.remove.map(String) : [];
+    // the same cap as a new class
+    const has = q('SELECT COUNT(*) AS n FROM roster_students WHERE roster_id = ? AND removed = 0').get(roster.id).n;
+    const going = remove.filter((sid) => q('SELECT 1 FROM roster_students WHERE id = ? AND roster_id = ? AND removed = 0').get(sid, roster.id)).length;
+    if (students.length && has - going + students.length > 500) return json(res, 400, { error: 'bad_roster', message: 'A class can have at most 500 students.' });
     tx(() => {
       const name = String(body.name || '').trim().slice(0, 80);
       if (name) q('UPDATE rosters SET name = ? WHERE id = ?').run(name, roster.id);
