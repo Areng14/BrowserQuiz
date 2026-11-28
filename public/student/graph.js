@@ -495,7 +495,11 @@
       while (box && box !== document.body && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
       const pane = box && box !== document.body ? box : null;
       const top = v.getBoundingClientRect().top - (pane ? pane.getBoundingClientRect().top - pane.scrollTop : -window.scrollY);
-      const room = (pane ? pane.clientHeight : window.innerHeight) - top - 16;
+      const height = pane ? pane.clientHeight : window.innerHeight;
+      let room = height - top - 16;
+      // Below the fold anyway (a graph in the prompt above it, on a narrow screen): as big as fits once
+      // scrolled to, with its tools, instead of the smallest
+      if (room < 260) room = height - (v.getBoundingClientRect().top - el.getBoundingClientRect().top) - 16;
       // beside the question (a wide screen) it can be bigger, up to its column
       const most = el.closest('.gr-split') && window.matchMedia('(min-width: 1100px)').matches ? 560 : 460;
       el.style.maxWidth = `${Math.round(Math.max(260, Math.min(most, room * aspect)))}px`; // the tools above it stay as wide as the grid
