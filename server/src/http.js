@@ -133,10 +133,13 @@ function readBody(req, limit) {
     const chunks = [];
     let n = 0;
     req.on('data', (c) => {
+      const over = n > limit;
       n += c.length;
       if (n > limit) {
-        reject(new HttpError(413, 'too_large'));
-        req.destroy();
+        if (!over) reject(new HttpError(413, 'too_large', `That's too big to send: the most is ${sizeText(limit)}.`));
+        // The rest is read and dropped, so the browser gets that answer instead of a cut connection
+        // ("Failed to fetch"). Far past the limit, it's cut after all.
+        if (n > limit + DRAIN_MAX) req.destroy();
         return;
       }
       chunks.push(c);
@@ -145,6 +148,8 @@ function readBody(req, limit) {
     req.on('error', reject);
   });
 }
+const DRAIN_MAX = 64 * 1024 * 1024;
+const sizeText = (b) => (b >= 1024 * 1024 ? `${Math.floor(b / (1024 * 1024))} MB` : `${Math.max(1, Math.floor(b / 1024))} KB`);
 async function readJson(req, limit) {
   const b = await readBody(req, limit || 256 * 1024);
   if (!b.length) return {};
