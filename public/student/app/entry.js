@@ -20,9 +20,11 @@ function entry(...kids) {
 // code: from the address (?code=), as Safe Exam Browser opens it; joins straight away.
 function screenJoin(err, code) {
   const input = h('input', {
-    id: 'join-code', class: 'input code-input', maxlength: '6', autocomplete: 'off', spellcheck: 'false',
+    id: 'join-code', class: 'input code-input', autocomplete: 'off', spellcheck: 'false',
     autocapitalize: 'characters',
   });
+  // Cut to 6 after the spaces and dashes go, not before: a pasted " K7QX4M" or "K7Q-X4M" keeps its last letter
+  // (a maxlength would cut the paste first).
   input.addEventListener('input', () => {
     const v = input.value.toUpperCase().replace(CODE_ALPHABET, '').slice(0, 6);
     if (v !== input.value) input.value = v;
