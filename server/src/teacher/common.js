@@ -117,7 +117,8 @@ function newJoinCode() {
 }
 
 // Minimal CSV: header row with name and student_id (any order, case-insensitive), quoted fields allowed.
-function parseCsv(text) {
+// sep: what's between fields, a comma unless said.
+function parseCsv(text, sep = ',') {
   const rows = [];
   let row = [];
   let field = '';
@@ -128,7 +129,7 @@ function parseCsv(text) {
     if (quoted) {
       if (c === '"' && s[i + 1] === '"') { field += '"'; i++; } else if (c === '"') quoted = false; else field += c;
     } else if (c === '"') quoted = true;
-    else if (c === ',') { row.push(field); field = ''; } else if (c === '\n' || c === '\r') {
+    else if (c === sep) { row.push(field); field = ''; } else if (c === '\n' || c === '\r') {
       if (c === '\r' && s[i + 1] === '\n') i++;
       row.push(field); rows.push(row); row = []; field = '';
     } else field += c;

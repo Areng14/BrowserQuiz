@@ -107,7 +107,7 @@ function gradeBox(runId, q, s) {
   const pts = h('input', { class: 'input t-points', type: 'number', min: '0', max: String(x.max), step: '0.5', id: 'gq-points',
     value: x.overridePoints != null ? String(x.overridePoints) : (!boxes.length && x.points != null && !x.review ? String(x.points) : '') });
   livePoints(pts, boxes, x);
-  const fb = h('textarea', { class: 'input t-gq-feedback', id: 'gq-feedback', rows: '3', text: s.feedback || '' });
+  const fb = h('textarea', { class: 'input t-gq-feedback', id: 'gq-feedback', rows: '3', maxlength: '2000', text: s.feedback || '' }); // what the server keeps
   fb.value = s.feedback || '';
   const msg = h('span', { class: 't-small t-muted', role: 'status' });
   const save = h('button', { class: 'btn primary', type: 'button', text: 'Save and next' });

@@ -226,7 +226,7 @@ function materialBox(id, list) {
   const title = h('input', { class: 'input qe-group-name qe-group-title', value: m.title || '', placeholder: `Shared material ${(ed.quiz.shared || []).indexOf(m) + 1}`, 'aria-label': 'Shared material title', maxlength: '120' });
   title.addEventListener('input', () => { m.title = title.value; touch(); });
   const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml' });
-  file.addEventListener('change', () => addImage(m, file.files[0]));
+  file.addEventListener('change', () => { addImage(m, file.files[0]); file.value = ''; }); // the same file can be picked again
   const editing = ed.editMaterial === id || (!(m.text || '').trim() && !m.image);
   let body;
   if (editing) {

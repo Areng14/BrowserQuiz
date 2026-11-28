@@ -41,6 +41,7 @@ const ERRORS = {
   no_attempt: 'Signed out. Sign in again.',
   not_admitted: 'Your teacher has to let you in first.',
   teacher_login: 'Sign in on the teacher page first.',
+  preview_gone: 'This quiz was changed or deleted. Preview it again from Quizzes.',
   locked: 'Your teacher needs to sign in to BrowserQuiz first. Try again in a minute.',
   seb_required: 'Open this quiz in Safe Exam Browser. Your teacher has the file that starts it.',
   seb_launch: 'This quiz opens in Safe Exam Browser.',

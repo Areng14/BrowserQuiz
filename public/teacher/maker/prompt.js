@@ -20,7 +20,7 @@ addEventListener('pointercancel', () => { pressing = false; }, true);
 function promptEditor(q) {
   const ta = area(q, q.prompt, (v) => { q.prompt = v; }, { id: 'qe-prompt', rows: 4, spellcheck: 'true' });
   const file = h('input', { type: 'file', hidden: true, accept: 'image/png,image/jpeg,image/gif,image/webp,image/svg+xml' });
-  file.addEventListener('change', () => addImage(q, file.files[0]));
+  file.addEventListener('change', () => { addImage(q, file.files[0]); file.value = ''; }); // the same file can be picked again (after "too big")
   const fence = () => { const s = ta.value.slice(0, ta.selectionStart); wrap(ta, `${s && !s.endsWith('\n') ? '\n' : ''}\`\`\`${ed.quiz.language === 'none' ? '' : ed.quiz.language}\n`, '\n```\n'); };
   // a mousedown that keeps the focus in the prompt, so it doesn't flip to the read view and back
   const tool = (text, title, fn, cls) => h('button', { class: `qe-tool ${cls || ''}`, type: 'button', text, title, onclick: fn, onmousedown: (e) => { if (document.activeElement === ta) e.preventDefault(); } });

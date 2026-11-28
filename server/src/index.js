@@ -1,18 +1,21 @@
 'use strict';
 // BrowserQuiz server: student app + teacher dashboard + API. Zero dependencies, Node 22+.
 const http = require('node:http');
+const fs = require('node:fs');
 const path = require('node:path');
 const { q, tx } = require('./db');
 const store = require('./store');
 const V = require('./vault');
 const P = require('./people');
 const { gradeAttempt, totals, isRun } = require('./grade');
-const { HttpError, router, json, serveStatic, send, SECURITY, isHttps } = require('./http');
+const { HttpError, router, json, serveStatic, send, SECURITY, PAGE_CSP, isHttps } = require('./http');
 const studentRoutes = require('./student');
 const teacherRoutes = require('./teacher');
 
 const PORT = Number(process.env.PORT) || 8080;
 const PUBLIC = path.join(__dirname, '..', '..', 'public');
+// A browser that asks for an address we don't have gets a page in the app's look; anything else, plain words.
+const NOT_FOUND_PAGE = fs.readFileSync(path.join(PUBLIC, '404.html'));
 
 // Config problems: say so once. In a container (node is PID 1) stay parked instead of exiting, or Docker
 // restarts the app forever and repeats the same error. The health check reports it as unhealthy.
@@ -85,6 +88,9 @@ const server = http.createServer((req, res) => {
     if (res.headersSent) { res.destroy(); return; }
     if (e instanceof HttpError) {
       if (req.url.startsWith('/api/')) return json(res, e.status, { error: e.code, message: e.message !== e.code ? e.message : undefined });
+      if (e.status === 404 && req.method === 'GET' && String(req.headers.accept || '').includes('text/html')) {
+        return send(res, 404, NOT_FOUND_PAGE, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Security-Policy': PAGE_CSP, 'Cache-Control': 'no-cache' });
+      }
       return send(res, e.status, e.status === 404 ? 'Not found' : 'Error', { 'Content-Type': 'text/plain; charset=utf-8' });
     }
     console.error(e);

@@ -121,12 +121,12 @@ async function showRun(runId) {
     if (await ask.confirm({ title: `Un-invalidate ${name}?`, ok: 'Un-invalidate' })) act(`/api/t/attempts/${id}/restore`);
   }
   async function invalidate(id, name) {
-    const note = await ask.ask({ title: `Invalidate ${name}?`, text: INVALIDATE, label: 'Reason (optional)', ok: 'Invalidate', danger: true });
+    const note = await ask.ask({ title: `Invalidate ${name}?`, text: INVALIDATE, label: 'Reason (optional)', max: 300, ok: 'Invalidate', danger: true });
     if (note !== null) act(`/api/t/attempts/${id}/invalidate`, { note });
   }
   // A message to one student: it pops up on their screen at their next heartbeat.
   async function messageStudent(id, name) {
-    const text = await ask.ask({ title: `Message ${name}`, label: 'Message', ok: 'Send' });
+    const text = await ask.ask({ title: `Message ${name}`, label: 'Message', max: 500, ok: 'Send' });
     if (text == null || !text.trim()) return;
     act(`/api/t/attempts/${id}/message`, { text });
   }
@@ -141,9 +141,14 @@ async function showRun(runId) {
     act(`/api/t/attempts/${id}/end`);
   }
 
+  // false: the run isn't there (deleted, here or in another tab, or an old link), and the page says so
   async function refresh() {
     let data;
-    try { data = await api(`/api/t/runs/${runId}/live`); } catch (e) { return; }
+    try { data = await api(`/api/t/runs/${runId}/live`); } catch (e) {
+      if (!['not_found', 'bad_request'].includes(e.code) || !tbody.isConnected) return true;
+      mount(shell('recent', h('section', { class: 't-section' }, h('p', { class: 't-error', text: e.message }))));
+      return false;
+    }
     const run = data.run;
     lastRun = run;
     const scores = run.status !== 'open' || (run.practice && data.students.some((x) => x.attempt && x.attempt.status === 'submitted'));
@@ -510,7 +515,7 @@ async function showRun(runId) {
   // A message to everyone taking the quiz: it pops up on their screens at the next heartbeat.
   const msgBtn = labeled(h('button', { class: 'btn', type: 'button' }), 'megaphone', 'Announce');
   msgBtn.addEventListener('click', async () => {
-    const text = await ask.ask({ title: 'Announce', label: 'Announcement', ok: 'Send' });
+    const text = await ask.ask({ title: 'Announce', label: 'Announcement', max: 500, ok: 'Send' }); // what students are shown at most (teacher/runs.js)
     if (text == null || !text.trim()) return;
     try { await post(`/api/t/runs/${runId}/message`, { text }); } catch (e) { alertBox(e.message); }
   });
@@ -540,7 +545,7 @@ async function showRun(runId) {
         h('thead', {}, liveHead),
         tbody)),
       detail)));
-  await refresh();
+  if ((await refresh()) === false) return;
   dash.pollTimer = setInterval(refresh, 2000);
   dash.tickTimer = setInterval(tick, 1000);
 }

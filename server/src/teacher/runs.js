@@ -21,8 +21,8 @@ module.exports = function runRoutes(r) {
   r.post('/api/t/runs', async (req, res) => {
     const me = requireTeacher(req);
     const body = await readJson(req, 4096);
-    if (!q('SELECT 1 FROM quizzes WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.quizId || ''), me.id)) throw new HttpError(400, 'bad_quiz');
-    if (!q('SELECT 1 FROM rosters WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.rosterId || ''), me.id)) throw new HttpError(400, 'bad_roster');
+    if (!q('SELECT 1 FROM quizzes WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.quizId || ''), me.id)) throw new HttpError(400, 'bad_quiz', "That quiz isn't here any more. Reload the page.");
+    if (!q('SELECT 1 FROM rosters WHERE id = ? AND owner_id = ? AND archived = 0').get(String(body.rosterId || ''), me.id)) throw new HttpError(400, 'bad_roster', "That class isn't here any more. Reload the page.");
     // corrections show the right answers when turned in: no exam of the same quiz while they're open
     if (!body.practice && q("SELECT 1 FROM runs WHERE quiz_id = ? AND owner_id = ? AND corrects IS NOT NULL AND status = 'open'").get(String(body.quizId), me.id)) {
       throw new HttpError(409, 'corrections_open', 'Corrections for this quiz are open. Close them first.');

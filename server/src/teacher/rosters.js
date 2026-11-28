@@ -21,7 +21,11 @@ module.exports = function rosterRoutes(r) {
       ({ students, problems } = parseRosterText(body.text));
       if (!students.length && !problems.length) problems.push('Add at least one student.');
     } else {
-      const rows = parseCsv(body.csv || '');
+      // Excel's "CSV" has semicolons where a comma is the decimal mark (much of Europe), and its "Unicode
+      // Text" has tabs: whichever the header row has most of
+      const head = String(body.csv || '').split(/[\r\n]/, 1)[0];
+      const sep = [';', '\t'].reduce((a, c) => (head.split(c).length > head.split(a).length ? c : a), ',');
+      const rows = parseCsv(body.csv || '', sep);
       if (rows.length < 2) return json(res, 400, { error: 'bad_roster', message: 'The CSV needs a header row and at least one student.' });
       const header = rows[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'));
       const ni = header.indexOf('name');
@@ -66,6 +70,10 @@ module.exports = function rosterRoutes(r) {
     const { students, problems } = parseRosterText(body.add || '');
     if (problems.length) return json(res, 400, { error: 'bad_roster', message: problems.slice(0, 5).join(' ') });
     const remove = Array.isArray(body.remove) ? body.remove.map(String) : [];
+    // the same cap as a new class
+    const has = q('SELECT COUNT(*) AS n FROM roster_students WHERE roster_id = ? AND removed = 0').get(roster.id).n;
+    const going = remove.filter((sid) => q('SELECT 1 FROM roster_students WHERE id = ? AND roster_id = ? AND removed = 0').get(sid, roster.id)).length;
+    if (students.length && has - going + students.length > 500) return json(res, 400, { error: 'bad_roster', message: 'A class can have at most 500 students.' });
     tx(() => {
       const name = String(body.name || '').trim().slice(0, 80);
       if (name) q('UPDATE rosters SET name = ? WHERE id = ?').run(name, roster.id);
