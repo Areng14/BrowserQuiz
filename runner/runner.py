@@ -372,8 +372,9 @@ def run_step(argv, uid, job, cpu_s, wall_s, mem_mb, nproc, env, fsize=FILE_CAP, 
                 code = p.wait()
         ms = int((time.time() - t0) * 1000)
         # The output ends when everything holding the pipes has gone: a process the program left behind goes too.
+        end = time.time() + 1
         for r in readers:
-            r.join(1)
+            r.join(max(0, end - time.time()))
         if any(r.is_alive() for r in readers):
             kill_uid(uid)
             for r in readers:
