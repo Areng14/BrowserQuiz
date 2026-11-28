@@ -47,7 +47,7 @@ function codeView(q) {
   const resetBtn = h('button', { class: 'btn small', type: 'button', text: 'Reset', title: 'Start over from the starter code',
     onclick: () => confirmReset(q, ans, host, resetBtn) });
   runBtn.addEventListener('click', () => runCode(q, runBtn, results));
-  runCooldown(runBtn);
+  runSpot(q, runBtn, results);
   // Written without running, like on paper.
   const runCtl = q.noRun ? h('span', { class: 'kbd-hint', text: 'No running on this one' }) : runBtn;
 
@@ -217,14 +217,30 @@ async function runCode(q, btn, results) {
   }
   S.runBusy = false;
   S.runReadyAt = Date.now() + 5000;
-  if (results.isConnected) renderResults(q, results);
+  ranInto(q, results, btn);
+}
+
+// A run can outlast the question's view: the student goes to another question and comes back while it
+// runs. Each view of a question with Run puts its button and results here, and the result goes to
+// whichever is on screen when it comes back.
+const runSpots = new Map();
+function runSpot(q, btn, results) {
+  runSpots.set(q.id, { btn, results });
+  runCooldown(btn);
+}
+function ranInto(q, results, btn, lang) {
+  const now = runSpots.get(q.id);
+  if (now && now.results.isConnected) ({ results, btn } = now);
+  if (results.isConnected) renderResults(q, results, lang);
   runCooldown(btn);
 }
 
-// One cooldown for the whole quiz (the server limits runs per student, not per question).
+// One cooldown for the whole quiz (the server limits runs per student, not per question), and one run
+// at a time: a button drawn while a run is still going waits for it.
 function runCooldown(btn) {
   const tick = (first) => {
     if (!first && !btn.isConnected) return; // the view was closed
+    if (S.runBusy) { btn.disabled = true; btn.textContent = 'Running…'; setTimeout(tick, 250); return; }
     const left = Math.ceil(((S.runReadyAt || 0) - Date.now()) / 1000);
     if (left <= 0) { btn.disabled = false; btn.textContent = 'Run examples'; return; }
     btn.disabled = true;
@@ -292,4 +308,4 @@ function renderResults(q, el, langOverride) {
   colorize(el);
 }
 
-export { codeView, confirmFinishParts, phoneSized, renderResults, runCooldown };
+export { codeView, confirmFinishParts, phoneSized, ranInto, renderResults, runSpot };

@@ -5,7 +5,7 @@ import { KIND, S, api } from './state.js';
 import { errorText, h } from './dom.js';
 import { setAnswer } from './answers.js';
 import { choiceText, isCrossed, kept, metaRow, prompt, setCrossed } from './marks.js';
-import { renderResults, runCooldown } from './code.js';
+import { ranInto, renderResults, runSpot } from './code.js';
 
 function basicView(q) {
   const view = h('div', { class: 'qview' }, metaRow(q, KIND[q.type] || 'Question'), prompt(q));
@@ -209,7 +209,7 @@ function fillView(q) {
     const results = h('div', { class: 'results fill-results', 'aria-live': 'polite' });
     const runBtn = h('button', { class: 'btn small primary', type: 'button', text: 'Run examples' });
     runBtn.addEventListener('click', () => runFill(q, runBtn, results));
-    runCooldown(runBtn);
+    runSpot(q, runBtn, results);
     view.append(h('div', {}, runBtn), results);
     renderResults(q, results, q.codeLang);
   }
@@ -228,8 +228,7 @@ async function runFill(q, btn, results) {
   }
   S.runBusy = false;
   S.runReadyAt = Date.now() + 5000;
-  if (results.isConnected) renderResults(q, results, q.codeLang);
-  runCooldown(btn);
+  ranInto(q, results, btn, q.codeLang);
 }
 
 function essayView(q) {
