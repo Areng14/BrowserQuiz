@@ -114,17 +114,20 @@ fn run_one(i: usize, test: fn(usize)) -> ! {
     std::process::exit(DONE);
 }
 
-// In the parent: each test in a child process, with a time limit.
+// In the parent: each test in a child process, with a time limit. Given a test's number (the runner's "runs":
+// built once, each test in a process of its own), only that test.
 pub fn main(marker: &str, n: usize, test: fn(usize), secs: u64) {
     if let Ok(mut m) = MARKER.lock() { *m = marker.to_string(); }
     let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 {
-        run_one(args[1].parse().unwrap_or(0), test);
+    if args.len() > 2 && args[1] == "-child" {
+        run_one(args[2].parse().unwrap_or(0), test);
     }
+    let only: Option<usize> = args.get(1).and_then(|a| a.parse().ok());
     let _ = std::fs::remove_file("bqmain.rs");
     for i in 0..n {
+        if only.map_or(false, |k| k != i) { continue; }
         let _ = std::io::stdout().flush();
-        let mut child = match Command::new(&args[0]).arg(i.to_string()).stderr(Stdio::piped()).spawn() {
+        let mut child = match Command::new(&args[0]).arg("-child").arg(i.to_string()).stderr(Stdio::piped()).spawn() {
             Ok(c) => c,
             Err(_) => { fail(i, "Couldn't start the test"); continue; }
         };

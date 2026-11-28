@@ -40,11 +40,15 @@ function javaMain(q, tests, marker, scanFile, givenFile) {
     }
     L.push('    }');
   });
-  // The marker stays a local, and this file (source and class) is gone before student code runs.
+  // The marker stays a local, and this file (source and class) is gone before student code runs. Given a
+  // test's number (the runner's "runs": built once, each test in a process of its own), only that test runs,
+  // and the ban check's facts come with the first. The number is read without naming a class: the student's
+  // classes are in this package, and one of theirs could be called Integer.
   L.push('', '    public static void main(String[] args) {', `        String m = ${javaStr(marker)};`, '        BQJ.begin();',
-    '        new java.io.File("BQMain.java").delete();', '        new java.io.File("BQMain.class").delete();');
-  if (scanFile) L.push(`        BQJ.scan(m, ${javaStr(scanFile)}, ${givenFile ? javaStr(givenFile) : 'null'});`);
-  tests.forEach((_, i) => L.push(`        try { t${i}(m); } catch (Throwable e) { BQJ.fail(m, ${i}, e); }`));
+    '        new java.io.File("BQMain.java").delete();', '        new java.io.File("BQMain.class").delete();',
+    '        int only = -1;', '        if (args.length > 0) { only = 0; for (char c : args[0].toCharArray()) only = only * 10 + (c - \'0\'); }');
+  if (scanFile) L.push(`        if (only <= 0) BQJ.scan(m, ${javaStr(scanFile)}, ${givenFile ? javaStr(givenFile) : 'null'});`);
+  tests.forEach((_, i) => L.push(`        if (only < 0 || only == ${i}) { try { t${i}(m); } catch (Throwable e) { BQJ.fail(m, ${i}, e); } }`));
   L.push('        System.out.flush();', '    }', '}', '');
   return L.join('\n');
 }
@@ -219,8 +223,11 @@ function cppMain(q, tests, marker) {
     }
     L.push('}');
   });
-  L.push(`static void (*const tests[])(int) = {${tests.map((_, i) => 't' + i).join(', ') || 'nullptr'}};`, '}  // namespace bq', 'int main() {',
-    `    bq_begin(${cStr(marker).lit});`, '    std::remove("bqmain.cpp");', `    for (int i = 0; i < ${tests.length}; i++) {`, '        std::cout.flush();',
+  // Given a test's number (the runner's "runs": built once, each test in a process of its own), only that test.
+  // (Read without a library call, and with names their macros won't have.)
+  L.push(`static void (*const tests[])(int) = {${tests.map((_, i) => 't' + i).join(', ') || 'nullptr'}};`, '}  // namespace bq', 'int main(int bq_argc, char** bq_argv) {',
+    '    int bq_only = -1;', '    if (bq_argc > 1) { bq_only = 0; for (const char* bq_c = bq_argv[1]; *bq_c; bq_c++) bq_only = bq_only * 10 + (*bq_c - \'0\'); }',
+    `    bq_begin(${cStr(marker).lit});`, '    std::remove("bqmain.cpp");', `    for (int i = 0; i < ${tests.length}; i++) {`, '        if (bq_only >= 0 && i != bq_only) continue;', '        std::cout.flush();',
     `        if (!bq_test_begin(i, ${ALARM(q)})) continue;`, '        try {', '            bq::tests[i](i);', '        } catch (const std::exception& e) {', '            bq::fail(i, e);',
     '        } catch (const char* e) {', '            bq::fail(i, std::string("Threw ") + e);', '        } catch (const std::string& e) {', '            bq::fail(i, "Threw " + e);',
     '        } catch (...) {', '            bq::fail(i, "Threw something that isn\'t an exception");', '        }', '        bq_test_end();', '    }', '    return 0;', '}', '');
@@ -278,8 +285,10 @@ function cMain(q, tests, marker) {
     }
     L.push('    bq_ok(i, &w);', '}');
   });
-  L.push(`static void (*const bq_tests[])(int) = {${tests.map((_, i) => 't' + i).join(', ') || '0'}};`, 'int main(void) {',
-    `    bq_begin(${cStr(marker).lit});`, '    remove("bqmain.c");', `    for (int i = 0; i < ${tests.length}; i++) {`,
+  // Given a test's number (the runner's "runs": built once, each test in a process of its own), only that test.
+  L.push(`static void (*const bq_tests[])(int) = {${tests.map((_, i) => 't' + i).join(', ') || '0'}};`, 'int main(int bq_argc, char** bq_argv) {',
+    '    int bq_only = -1;', '    if (bq_argc > 1) { bq_only = 0; for (const char* bq_c = bq_argv[1]; *bq_c; bq_c++) bq_only = bq_only * 10 + (*bq_c - \'0\'); }',
+    `    bq_begin(${cStr(marker).lit});`, '    remove("bqmain.c");', `    for (int i = 0; i < ${tests.length}; i++) {`, '        if (bq_only >= 0 && i != bq_only) continue;',
     `        if (bq_test_begin(i, ${ALARM(q)})) { bq_tests[i](i); bq_test_end(); }`, '    }', '    return 0;', '}', '');
   return L.join('\n');
 }
@@ -365,7 +374,8 @@ function rsMain(q, tests, marker) {
 }
 
 // C#: BQMain is the entry point (-main:BQMain), so a Main of their own can stay. Tests run in one process; a
-// stack overflow, which .NET can't catch, stops the rest (readResults says so).
+// stack overflow, which .NET can't catch, stops the rest (readResults says so). Given a test's number (the
+// runner's "runs": built once, each test in a process of its own), only that test.
 const CS_USINGS = 'global using System;\nglobal using System.Collections.Generic;\nglobal using System.Linq;\nglobal using System.Text;\n';
 function csMain(q, tests, marker) {
   const D = q.types;
@@ -395,8 +405,8 @@ function csMain(q, tests, marker) {
     L.push('    }');
   });
   L.push('    public static void Main(string[] args) {', `        BQ.Begin(${JSON.stringify(marker)});`, '        try { System.IO.File.Delete("bqmain.cs"); } catch { }',
-    `        var tests = new System.Action<int>[] { ${tests.map((_, i) => 'T' + i).join(', ')} };`,
-    '        for (int i = 0; i < tests.Length; i++) {', '            try { tests[i](i); } catch (System.Exception e) { BQ.Fail(i, e); }', '        }', '        System.Console.Out.Flush();', '    }', '}', '');
+    `        var tests = new System.Action<int>[] { ${tests.map((_, i) => 'T' + i).join(', ')} };`, '        int only = args.Length > 0 ? int.Parse(args[0]) : -1;',
+    '        for (int i = 0; i < tests.Length; i++) {', '            if (only >= 0 && i != only) continue;', '            try { tests[i](i); } catch (System.Exception e) { BQ.Fail(i, e); }', '        }', '        System.Console.Out.Flush();', '    }', '}', '');
   return L.join('\n');
 }
 

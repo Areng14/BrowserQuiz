@@ -39,6 +39,8 @@ import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import each
+
 TOKEN = os.environ.get("RUNNER_TOKEN", "")
 JOBS = os.environ.get("JOBS_DIR", "/jobs")
 SLOTS = max(1, int(os.environ.get("RUNNER_SLOTS", "4")))
@@ -379,6 +381,10 @@ CS_FLAGS = ["-nologo", "-noconfig", "-nostdlib", "@" + CS + "/refs.rsp", "-langv
 DOTNET_ENV = {"DOTNET_EnableDiagnostics": "0", "DOTNET_EnableWriteXorExecute": "0", "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
               "DOTNET_NOLOGO": "1", "DOTNET_gcServer": "0"}
 GO = "/opt/bq/go"  # the standard library, compiled when the image was built (Dockerfile)
+# The languages whose jobs can ask to be built once and run each (each.py). The ones that did it at start
+# (each_test): what /health says, and the only ones a job's "runs" is taken for.
+EACH_LANGS = ("java", "c", "cpp", "csharp", "go", "rust")
+EACH = list(EACH_LANGS)
 # The linker by its full path: with a bare name, Rust's process spawning (rustc changes PATH for the linker)
 # takes a route that needs socketpair, which the sandbox denies.
 RUST_FLAGS = ["--edition", "2021", "-C", "opt-level=1", "-C", "debuginfo=0", "-C", "linker=/usr/bin/cc", "--color", "never", "-A", "warnings"]
@@ -733,7 +739,27 @@ def rust_code_only(src):
     return "".join(out)
 
 
+def each_job(slot, uid, job, env, runs, started, step, scan, facts):
+    """A job's "runs" (each.py), from the build in job: step(run dir, its env, [k]) is run k's run_step, in a copy
+    of the build of its own, which goes when it's done. The ban check's facts, read from the build, once."""
+    def one(k):
+        run = tempfile.mkdtemp(prefix="run-", dir=os.path.join(JOBS, str(slot)))
+        try:
+            os.chown(run, uid, uid)
+            each.copy_build(job, run, uid)
+            st, code, out, err, ms = step(run, dict(env, HOME=run, TMPDIR=run), [str(k)])
+            return {"status": st, "stdout": out, "stderr": err, "exitCode": code, "ms": ms}
+        finally:
+            kill_uid(uid)
+            shutil.rmtree(run, ignore_errors=True)
+    res = {"status": "ok", "runs": each.run_each(runs, started, one), "ms": int((time.monotonic() - started) * 1000)}
+    if scan:
+        res["scan"] = facts
+    return res
+
+
 def run_job(slot, req):
+    started = time.monotonic()
     uid = UID_BASE + slot
     lang = req.get("language")
     files = req.get("files") or {}
@@ -752,6 +778,12 @@ def run_job(slot, req):
     entry = req.get("entry")
     if entry is not None and (not isinstance(entry, str) or not entry.isidentifier()):
         return {"status": "error", "message": "bad job"}
+    # Build once, run each (each.py). In another language it's left out, as a runner from before it would.
+    runs = req.get("runs")
+    if runs is not None and (type(runs) is not int or not 1 <= runs <= each.MAX_RUNS):
+        return {"status": "error", "message": "bad job"}
+    if lang not in EACH:
+        runs = None
     if lang in ("c", "cpp", "go", "rust", "csharp"):
         if sources is None:
             sources = sorted(n for n in files if n.endswith({"c": ".c", "cpp": ".cpp", "go": ".go", "rust": ".rs", "csharp": ".cs"}[lang]))
@@ -796,7 +828,7 @@ def run_job(slot, req):
                 return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                         "exitCode": code, "ms": ms}
             argv = [shutil.which("java"), f"-Xmx{mem_mb}m"] + JAVA_RUN_FLAGS + ["-cp", ".", req.get("main") or "BQMain"]
-            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1536, 256, env, tools=["java"])
+            step = lambda d, e, more: run_step(argv + more, uid, d, cpu_s, wall_s, mem_mb + 1536, 256, e, tools=["java"])  # noqa: E731
         elif lang in ("c", "cpp"):
             # Each source to its own object, then linked: the ban check reads the student's object.
             cc = shutil.which("g++" if lang == "cpp" else "gcc")
@@ -810,8 +842,8 @@ def run_job(slot, req):
                     return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                             "exitCode": code, "ms": ms}
             facts = run_scan(lang, scan, sources, objs, include, files, uid, job, env) if scan else None
-            st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s, mem_mb + 64, SINGLE_NPROC, env,
-                                              run_file=os.path.join(job, "main"))
+            step = lambda d, e, more: run_step([os.path.join(d, "main")] + more, uid, d, cpu_s, wall_s, mem_mb + 64, SINGLE_NPROC, e,  # noqa: E731
+                                               run_file=os.path.join(d, "main"))
         elif lang in ("go", "rust"):
             if lang == "go":
                 steps = [[os.path.join(GO, "tool", "compile"), "-p", "main", "-importcfg", os.path.join(GO, "importcfg"), "-pack", "-o", "main.a"] + sources,
@@ -831,10 +863,9 @@ def run_job(slot, req):
             elif scan:
                 facts = run_scan(lang, scan, sources, None, None, files, uid, job, env)
             # Go reserves ~800 MB of address space before it starts; GOMEMLIMIT keeps its heap to the limit.
-            run_env = dict(env, GOMEMLIMIT=f"{mem_mb}MiB", GOMAXPROCS="2") if lang == "go" else env
-            st, code, out, err, ms = run_step([os.path.join(job, "main")], uid, job, cpu_s, wall_s,
-                                              mem_mb + (1536 if lang == "go" else 128), 64 if lang == "go" else SINGLE_NPROC, run_env,
-                                              run_file=os.path.join(job, "main"))
+            step = lambda d, e, more: run_step(  # noqa: E731
+                [os.path.join(d, "main")] + more, uid, d, cpu_s, wall_s, mem_mb + (1536 if lang == "go" else 128), 64 if lang == "go" else SINGLE_NPROC,
+                dict(e, GOMEMLIMIT=f"{mem_mb}MiB", GOMAXPROCS="2") if lang == "go" else e, run_file=os.path.join(d, "main"))
         elif lang == "csharp":
             argv = [shutil.which("dotnet"), "exec", CS + "/csc.dll"] + CS_FLAGS + (["-main:" + entry] if entry else []) + sources
             cenv = dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(1536 << 20))
@@ -844,15 +875,19 @@ def run_job(slot, req):
                 return {"status": "compile_error" if st == "ok" else "error", "stdout": out, "stderr": err or out,
                         "exitCode": code, "ms": ms}
             facts = run_scan(lang, scan, sources, None, None, files, uid, job, env) if scan else None
-            st, code, out, err, ms = run_step([shutil.which("dotnet"), "exec", "--runtimeconfig", CS + "/main.runtimeconfig.json", "main.dll"],
-                                              uid, job, cpu_s, wall_s, mem_mb + 1792, 64,
-                                              dict(env, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(mem_mb << 20)), tools=["dotnet"])
+            step = lambda d, e, more: run_step(  # noqa: E731
+                [shutil.which("dotnet"), "exec", "--runtimeconfig", CS + "/main.runtimeconfig.json", "main.dll"] + more, uid, d, cpu_s, wall_s,
+                mem_mb + 1792, 64, dict(e, **DOTNET_ENV, DOTNET_GCHeapHardLimit=hex(mem_mb << 20)), tools=["dotnet"])
         elif lang in ("javascript", "typescript"):
             argv = [shutil.which("node"), f"--max-old-space-size={mem_mb}"] + NODE_FLAGS + [req.get("main") or "main.cjs"]
-            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 1024, 64, env, tools=["node"])
+            step = lambda d, e, more: run_step(argv + more, uid, d, cpu_s, wall_s, mem_mb + 1024, 64, e, tools=["node"])  # noqa: E731
         else:
             argv = [shutil.which("python3"), "-E", "-s", "-B", "-X", "utf8", req.get("main") or "main.py"]
-            st, code, out, err, ms = run_step(argv, uid, job, cpu_s, wall_s, mem_mb + 128, SINGLE_NPROC, env, tools=["python3"])
+            step = lambda d, e, more: run_step(argv + more, uid, d, cpu_s, wall_s, mem_mb + 128, SINGLE_NPROC, e, tools=["python3"])  # noqa: E731
+        # step(dir, env, extra arguments): the program's run. Its one run, or its runs (each.py).
+        if runs:
+            return each_job(slot, uid, job, env, runs, started, step, scan, facts)
+        st, code, out, err, ms = step(job, env, [])
         res = {"status": st, "stdout": out, "stderr": err, "exitCode": code, "ms": ms}
         if scan:
             res["scan"] = facts  # None: the scan didn't work, so nothing can be said for the code
@@ -884,7 +919,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            return self._send(200, {"ok": True, "landlock": ABI, "slots": SLOTS, "kind": KIND, "languages": AVAILABLE})
+            return self._send(200, {"ok": True, "landlock": ABI, "slots": SLOTS, "kind": KIND, "languages": AVAILABLE, "runs": EACH})
         self._send(404, {"error": "not_found"})
 
     def do_POST(self):
@@ -981,6 +1016,27 @@ def language_test():
     return notes, [l for l in LANGS if l in ok]
 
 
+def each_test(works):
+    """Build once, run each (each.py), tried at start: each run gets its number, and a copy of the build of its
+    own (a file run 0 leaves, run 1 doesn't see). -> (notes, the languages it works in)."""
+    notes, ok = [], []
+    for lang in EACH_LANGS:
+        if lang not in works:
+            continue
+        files, main, sources = each.PROBES[lang]
+        req = {"language": lang, "files": files, "main": main, "timeMs": 3000, "runs": 2}
+        if sources:
+            req["sources"] = sources
+        if lang == "cpp":
+            req["include"] = "bqpre.hpp"
+        res = run_job(0, req)
+        if [r.get("stdout", "").strip() for r in res.get("runs") or []] != ["ok0", "ok1"]:
+            notes.append(f"{lang}: build once, run each: self-test failed: {json.dumps(res)[:400]}")
+        else:
+            ok.append(lang)
+    return notes, ok
+
+
 if __name__ == "__main__":
     os.makedirs(JOBS, exist_ok=True)
     os.chmod(JOBS, 0o711)
@@ -1007,9 +1063,15 @@ if __name__ == "__main__":
     for note in notes:
         print("runner: warning:", note, flush=True)
     AVAILABLE[:] = works
+    notes, works = each_test(works)
+    for note in notes:
+        print("runner: warning:", note, flush=True)
+    EACH[:] = works
     extras = [f"landlock ABI {ABI}", "network blocked by seccomp" + (" and landlock" if ABI >= 4 else "")]
     if ABI >= 6:
         extras.append("signal scoping on")
+    if EACH:
+        extras.append("built once and run each: " + ", ".join(EACH))
     print(f"runner: sandbox ok ({', '.join(extras)}), {KIND}: {', '.join(AVAILABLE)}, {SLOTS} slots, listening on :{PORT}", flush=True)
     # Listen on IPv6 and IPv4 both: Railway's private network can be IPv6-only.
     class DualStackServer(ThreadingHTTPServer):

@@ -12,7 +12,7 @@
 Student code runs in its own container. With Docker Compose, that container is on a network with no way out to the internet. Wherever it runs, each job:
 
 - runs as its own user, and everything it started is stopped and cleaned up when it is done
-- can only write to its own job folder, so it cannot touch other jobs or the system (Landlock). Only a compiled C, C++, Go or Rust answer can run as a program from that folder, and everything else can only run the language's own tools
+- can only write to its own job folder, so it cannot touch other jobs or the system (Landlock). When grading, each hidden test runs in its own process with a fresh copy of that folder, so one test cannot leave anything behind for the next. Only a compiled C, C++, Go or Rust answer can run as a program from that folder, and everything else can only run the language's own tools
 - cannot open any network connections, so it cannot reach anything (seccomp, plus Landlock on newer kernels)
 - has limits on CPU time, memory, processes, file size, disk use and run time. Each slot writes to its own space (its own tmpfs with Docker Compose), so one job filling up its disk cannot stop the others
 

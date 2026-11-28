@@ -188,18 +188,26 @@ func bqRunOne(i int, tests []func(int)) {
 	tests[i](i)
 }
 
-// In the parent: each test in a child process, with a time limit.
+// In the parent: each test in a child process, with a time limit. Given a test's number (the runner's "runs":
+// built once, each test in a process of its own), only that test.
 func bqMain(marker string, tests []func(int), secs int) {
 	bqMarker = marker
-	if len(os.Args) > 1 {
-		i, _ := strconv.Atoi(os.Args[1])
+	if len(os.Args) > 2 && os.Args[1] == "-child" {
+		i, _ := strconv.Atoi(os.Args[2])
 		bqRunOne(i, tests)
 		return
 	}
+	only := -1
+	if len(os.Args) > 1 {
+		only, _ = strconv.Atoi(os.Args[1])
+	}
 	os.Remove("bqmain.go")
 	for i := range tests {
+		if only >= 0 && i != only {
+			continue
+		}
 		var stderr bytes.Buffer
-		cmd := exec.Command(os.Args[0], strconv.Itoa(i))
+		cmd := exec.Command(os.Args[0], "-child", strconv.Itoa(i))
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = &stderr
 		if err := cmd.Start(); err != nil {
