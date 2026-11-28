@@ -130,11 +130,16 @@ const PY_ESCAPE_NAMES = ['eval', 'exec', 'compile', 'getattr', 'delattr', '__imp
 const PY_ESCAPE_MODULES = ['builtins', 'importlib', 'pickle', '_pickle', 'marshal', 'shelve', 'copyreg', 'ctypes', 'types', 'inspect', 'gc', '__main__', 'solution',
   // Run a code string, or look a name up from one: the same ways around a ban as eval/exec/getattr, just by
   // a different door. None has a use in a solution, so banning the module is enough (like importlib above).
-  'timeit', 'cProfile', 'profile', 'code', 'codeop', 'runpy', 'pdb', 'bdb', 'pydoc', 'pkgutil', 'xmlrpc'];
+  'timeit', 'cProfile', 'profile', 'code', 'codeop', 'runpy', 'pdb', 'bdb', 'pydoc', 'pkgutil', 'xmlrpc',
+  // Start another Python, whose code is a string the scan can't read, or run a .pth file's lines.
+  'subprocess', 'pty', 'site'];
 const PY_ESCAPE_ATTRS = ['__dict__', '__getattribute__', '__getattr__', '__globals__', '__builtins__', '__self__', '__subclasses__', '__code__', '__closure__',
   '__class__', '__bases__', '__base__', '__mro__', '__func__', '__reduce__', '__reduce_ex__', '_getframe', 'f_locals', 'f_globals', 'f_back', 'f_builtins',
   'tb_frame', 'gi_frame', 'cr_frame', 'modules'];
-const PY_ESCAPE_HELPERS = ['methodcaller', 'attrgetter']; // operator's, which call a method by its name
+// operator's, which call a method by its name, and os's that start another program (another Python, with its
+// code in a string)
+const PY_ESCAPE_HELPERS = ['methodcaller', 'attrgetter', 'system', 'popen', 'posix_spawn', 'posix_spawnp', 'execv', 'execve', 'execvp', 'execvpe',
+  'execl', 'execle', 'execlp', 'execlpe', 'spawnv', 'spawnve', 'spawnvp', 'spawnvpe', 'spawnl', 'spawnle', 'spawnlp', 'spawnlpe'];
 const topModule = (i) => i.split('.')[0];
 
 function pythonHits(entries, facts, D) {
@@ -161,6 +166,8 @@ function pythonHits(entries, facts, D) {
   for (const m of PY_ESCAPE_MODULES) if (imports.some((i) => topModule(i) === m)) hits.push(m);
   for (const t of PY_ESCAPE_ATTRS) if (attrs.has(t)) hits.push(t);
   for (const t of PY_ESCAPE_HELPERS) if (attrs.has(t) || imports.some((i) => i.endsWith('.' + t))) hits.push(t);
+  // A module that isn't Python's own can only be one the code wrote while it ran: what it does isn't checked.
+  for (const m of facts.local || []) hits.push(`import ${m}`);
   return [...new Set(hits)];
 }
 

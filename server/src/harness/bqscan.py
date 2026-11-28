@@ -6,9 +6,15 @@
 #   attrs    the attributes it reads (nums.sort, math.sqrt), except its own on self
 #   imports  what it imports: "math", "math.sqrt", "math.*"
 #   stores   attributes it sets on modules it imported (sys.stdout = ..., time.perf_counter = ...)
+#   local    modules it imports that aren't Python's own: nothing else is installed, so one the code wrote
+#            itself while it ran (where the scan can't see what it does)
 import ast
 import symtable
+import sys
 import tokenize
+
+# What the job's folder holds for the code to import, besides its own file
+JOB_MODULES = {"support", "bqtypes"}
 
 SAFE_DECORATORS = {"staticmethod", "classmethod", "property"}
 TYPE_NAMES = {"list", "dict", "set", "tuple", "frozenset", "type", "List", "Dict", "Set", "Tuple", "Optional", "Union", "Any"}
@@ -112,7 +118,8 @@ def _facts(tree, table):
             walk(c)
 
     walk(table)
-    return {"names": sorted(names), "attrs": sorted(attrs), "imports": sorted(imports), "stores": sorted(stores)}
+    local = {i.split(".")[0] for i in imports if i and not i.startswith(".")} - set(sys.stdlib_module_names) - JOB_MODULES
+    return {"names": sorted(names), "attrs": sorted(attrs), "imports": sorted(imports), "stores": sorted(stores), "local": sorted(local)}
 
 
 _cache = {}

@@ -63,7 +63,9 @@ function pyMain(q, tests, marker) {
   const a = (params, v) => `bqh.args(${JSON.stringify(JSON.stringify(v.map((x, j) => pyArg(params[j] ? params[j].type : '', x, q.types))))})`;
   // Everything lives inside _bq(): the marker and the helpers are locals, taken before the student's code
   // is imported, and main.py deletes itself first. The facts for the ban check come before any of it runs.
-  const L = ['import sys', 'import time', 'sys.setrecursionlimit(10000)', '', 'def _bq():', `    M = ${JSON.stringify(marker)}`,
+  // The job's folder goes to the end of the import path: a file the code writes there (heapq.py) can't stand
+  // in for one of Python's own modules, which is the only kind the ban check lets it import.
+  const L = ['import sys', 'import time', 'sys.setrecursionlimit(10000)', 'sys.path.append(sys.path.pop(0))', '', 'def _bq():', `    M = ${JSON.stringify(marker)}`,
     '    import os', '    try:', '        os.remove(__file__)', '    except OSError:', '        pass',
     '    import bqh', '    out = bqh.writer(M, sys.stdout)', '    del M',
     '    ok, timed, step, done, fail, args, clock = bqh.ok, bqh.timed, bqh.step, bqh.done, bqh.fail, bqh.args, time.perf_counter',
