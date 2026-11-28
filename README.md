@@ -4,10 +4,10 @@ A self-hosted quiz and exam app for CS and math classes.
 
 ## Features
 
-- **Code questions.** Questions with a code editor with hints and snippets off.
+- **Code questions.** A code editor, with hints and snippets off.
 - **10 question types.** Multiple choice, select-all, short answer, math, graphing, predict the output,
   trace tables, fill in the blanks, written answers and code.
-- **Quiz maker.** Use the inbuilt quiz editor, or copy a prompt and let an AI do it for you.
+- **Quiz maker.** Write the quiz in the built-in editor, or copy a prompt and have an AI write it.
 - **Random values.** The numbers in a question can change for each student, and each one gets their own
   answer.
 - **Question pools.** Each student gets a random few questions from a pool.
@@ -25,7 +25,7 @@ A self-hosted quiz and exam app for CS and math classes.
 - **Calculator.** Turn on a scientific or graphing calculator for a quiz.
 - **Student tools.** Scratchpad, highlighting, mark for review, cross out choices and dark mode. Works
   with a keyboard and screen readers.
-- **Multiple teachers.** Each teacher only sees their own stuff.
+- **Multiple teachers.** Each teacher only sees their own quizzes, classes and results.
 
 ## Question types
 
@@ -53,8 +53,8 @@ points. Prompts can show diagrams and graphs, in the student's light or dark col
 - Answers and hidden tests never reach students' browsers.
 - Students never find out they got flagged. Their screens look the same either way.
 - Student code runs in its own sandbox on the server, with no internet.
-- Each teacher's quizzes and students' data are encrypted with their own key, so even whoever hosts
-  it can't read them.
+- Each teacher's quizzes and students' data are encrypted with their own key. Whoever hosts it can't
+  read them.
 - Five rounds of security testing.
 
 The details are in [docs/security.md](docs/security.md).
@@ -65,23 +65,25 @@ The details are in [docs/security.md](docs/security.md).
 
 [![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/fMUAh_?referralCode=dP9ijG&utm_medium=integration&utm_source=button&utm_campaign=generic)
 
-Pick a password (10+ characters) when it asks, wait a few minutes for the first build, then open the
-`app` service's address and sign in at `/teacher` as `admin`. More in
-[docs/setup.md](docs/setup.md#hosting-on-railway).
+1. Pick a password (10+ characters) when it asks.
+2. Wait a few minutes for the first build.
+3. Open the `app` service's address and sign in at `/teacher` as `admin`.
+
+More in [docs/setup.md](docs/setup.md#hosting-on-railway).
 
 **On your own server:** you need Docker.
 
-```bash
-git clone https://github.com/Areng14/BrowserQuiz.git && cd BrowserQuiz
-```
+1. Get the code:
 
-Run the setup script: double-click `setup.cmd` on Windows, or on Mac and Linux:
+   ```bash
+   git clone https://github.com/Areng14/BrowserQuiz.git && cd BrowserQuiz
+   ```
+2. Run the setup script. On Windows, double-click `setup.cmd`. On Mac and Linux:
 
-```bash
-./setup.sh
-```
-
-It prints the address to open. Sign in at `/teacher` as `admin`, with the password it gave you.
+   ```bash
+   ./setup.sh
+   ```
+3. Open the address it prints. Sign in at `/teacher` as `admin`, with the password it gave you.
 
 ### Which runner
 
