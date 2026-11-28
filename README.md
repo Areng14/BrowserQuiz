@@ -85,6 +85,9 @@ More in [docs/setup.md](docs/setup.md#hosting-on-railway).
    ```
 3. Open the address it prints. Sign in at `/teacher` as `admin`, with the password it gave you.
 
+On a school server, also follow [docs/school-hosting.md](docs/school-hosting.md): a fixed address, a DNS
+name, the firewall and HTTPS.
+
 ### Which runner
 
 Code questions run in one of two code runners:

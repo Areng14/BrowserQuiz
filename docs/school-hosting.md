@@ -39,7 +39,13 @@ Pick whichever you can do:
 
 - **Your own certificate.** Many schools have a certificate authority their devices already trust.
   1. Get a certificate for the server's name (like `browserquiz.school.example`).
-  2. Put `cert.pem` and `key.pem` in a `certs` folder next to `docker-compose.yml`.
+  2. Put `cert.pem` and `key.pem` in a `certs` folder next to `docker-compose.yml`. If you got a `.pfx` file instead, run these in that folder. Each one asks for the `.pfx` password. If one says `unsupported`, add `-legacy` to it.
+
+     ```bash
+     openssl pkcs12 -in cert.pfx -clcerts -nokeys -out cert.pem
+     openssl pkcs12 -in cert.pfx -cacerts -nokeys >> cert.pem
+     openssl pkcs12 -in cert.pfx -nocerts -nodes -out key.pem
+     ```
   3. Add `- ./certs:/certs:ro` under the `caddy` service's `volumes`.
   4. Change `Caddyfile` to:
 
