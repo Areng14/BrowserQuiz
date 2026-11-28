@@ -1,7 +1,7 @@
 // Signing in: passwords, passkeys, and teacher accounts (the admin's).
 
 import { dash } from './state.js';
-import { ICONS, PASSKEYS, actionsHead, api, ask, date, day, forgetCode, ghLink, h, heads, icon, iconButton, keepCode, mount, post, sortableTable, tip } from './core.js';
+import { ICONS, PASSKEYS, actionsHead, api, ask, date, day, forgetCode, ghLink, h, heads, icon, iconButton, keepCode, mount, post, sortableTable, tellTabs, tip } from './core.js';
 import { copyText, route, showHome } from './home.js';
 import { moreMenu } from './cells.js';
 
@@ -39,22 +39,21 @@ function showLogin() {
   user.focus();
 }
 // After signing in (password or passkey): the work set aside above comes back if it's the same teacher;
-// otherwise it's their dashboard, as it was.
+// otherwise it's their dashboard, as it was. The other tabs hear who it is (core.js tellTabs).
 async function signedIn() {
   const work = dash.parked;
   dash.parked = null;
   dash.who = null;
-  if (work) {
-    try { dash.who = (await api('/api/t/me')).teacher; } catch (e) { return; }
-    if (dash.who.username === work.who && !dash.who.mustChange && location.hash === work.at) {
-      work.login.remove();
-      for (const n of work.nodes) n.hidden = false;
-      dash.leaveGuard = work.guard;
-      document.title = work.title;
-      return;
-    }
-    dash.leaveGuard = null; // someone else's: not theirs to keep
+  try { const me = await api('/api/t/me'); dash.who = me.teacher; dash.version = me.version; } catch (e) { return; }
+  tellTabs(dash.who.username);
+  if (work && dash.who.username === work.who && !dash.who.mustChange && location.hash === work.at) {
+    work.login.remove();
+    for (const n of work.nodes) n.hidden = false;
+    dash.leaveGuard = work.guard;
+    document.title = work.title;
+    return;
   }
+  dash.leaveGuard = null; // someone else's: not theirs to keep
   route();
 }
 

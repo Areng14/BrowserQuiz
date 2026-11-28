@@ -94,6 +94,8 @@
     return app.watch(view, answers, extra);
   }
 
+  // Signed out, or in as someone else, in another tab (dash/core.js tellTabs): load again, which asks to sign in
+  if (window.BroadcastChannel) new BroadcastChannel('bq-teacher').onmessage = () => location.reload();
   // Polls for good: a slip in handling one answer mustn't stop the watching.
   let lastStatus = '';
   async function poll() {

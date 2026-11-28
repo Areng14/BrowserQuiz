@@ -8,6 +8,9 @@
   const jump = document.getElementById('r-jump');
   const { student, classOverview, similarCode, sameWrong, fastRight, highlight, h } = window.BQReport;
 
+  // Signed out, or in as someone else, in another tab (dash/core.js tellTabs): load again, which asks to sign in
+  if (window.BroadcastChannel && !new URLSearchParams(location.search).has('practice')) new BroadcastChannel('bq-teacher').onmessage = () => location.reload();
+
   async function load() {
     const params = new URLSearchParams(location.search);
     const practice = params.has('practice'); // a student reviewing their own practice attempt
