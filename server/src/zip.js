@@ -17,7 +17,7 @@ function readZip(buf) {
   const count = buf.readUInt16LE(eocd + 10);
   const cdOffset = buf.readUInt32LE(eocd + 16);
   if (count === 0xffff || cdOffset === 0xffffffff) throw new Error('zip64 archives are not supported');
-  if (count > MAX_ENTRIES) throw new Error('too many files in archive');
+  if (count > MAX_ENTRIES) throw Object.assign(new Error('too many files in archive'), { code: 'too_many' });
 
   const files = new Map();
   let p = cdOffset;
@@ -38,7 +38,7 @@ function readZip(buf) {
     if (name.endsWith('/')) continue; // directory entry
     if (flags & 1) throw new Error('encrypted zips are not supported');
     total += usize;
-    if (total > MAX_UNPACKED) throw new Error('archive is too large when unpacked');
+    if (total > MAX_UNPACKED) throw Object.assign(new Error('archive is too large when unpacked'), { code: 'too_big' });
     if (buf.readUInt32LE(lho) !== 0x04034b50) throw new Error('corrupt local header for ' + name);
 
     const start = lho + 30 + buf.readUInt16LE(lho + 26) + buf.readUInt16LE(lho + 28);
@@ -121,4 +121,4 @@ function writeZip(entries) {
   return Buffer.concat([...parts, cd, end]);
 }
 
-module.exports = { readZip, writeZip };
+module.exports = { readZip, writeZip, MAX_UNPACKED };

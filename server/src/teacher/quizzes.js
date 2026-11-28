@@ -4,10 +4,11 @@
 const { q } = require('../db');
 const store = require('../store');
 const { json, readBody, readJson, send, HttpError } = require('../http');
-const { normalizeQuiz, loadQuizFile, ASSET_TYPES, QuizError, fillTemplate, svgProblem } = require('../quizfile');
+const { normalizeQuiz, loadQuizFile, ASSET_TYPES, QuizError, fillTemplate, imageProblem, imageMime } = require('../quizfile');
 const Rekey = require('../rekey');
 const { gradeAttempt, isRun, cleanAnswers, gradeAuto } = require('../grade');
 const { writeZip } = require('../zip');
+const { quizJsonText } = require('../quiztext');
 const { publicQuiz } = require('../student');
 const { runSamples, gradeCode, checkSolutions, runJob, runnerConfigured, runnerLanguages } = require('../coderun');
 const { findGaps } = require('../mutants');
@@ -38,8 +39,8 @@ module.exports = function quizRoutes(r) {
     const buf = await readBody(req, 26 * 1024 * 1024);
     let parsed;
     try {
-      const head = buf.toString('utf8', 0, Math.min(buf.length, 64)).replace(/^\uFEFF/, '').trimStart();
-      parsed = head.startsWith('{') ? { quiz: normalizeQuiz(parseQuizJson(buf), new Set()), assets: new Map() } : loadQuizFile(buf);
+      const text = quizJsonText(buf); // a quiz.json, in UTF-8 or UTF-16; null: a .quiz
+      parsed = text != null ? { quiz: normalizeQuiz(parseQuizJson(text), new Set()), assets: new Map() } : loadQuizFile(buf);
       await checkQuiz(parsed.quiz);
     } catch (e) { return quizError(res, e); }
     const id = saveQuiz(me, parsed.quiz, [...parsed.assets].map(([path, a]) => ({ path, mime: a.mime, bytes: a.bytes })), null);
@@ -64,9 +65,9 @@ module.exports = function quizRoutes(r) {
         if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new QuizError(`${p2}: images can be up to 5 MB.`);
         const i = assets.findIndex((a) => a.path === p2);
         if (i >= 0) assets.splice(i, 1);
-        const why = svgProblem(ext, bytes);
+        const why = imageProblem(ext, bytes);
         if (why) throw new QuizError(`${p2} ${why}`);
-        assets.push({ path: p2, mime: ASSET_TYPES[ext], bytes });
+        assets.push({ path: p2, mime: imageMime(ext, bytes), bytes });
       }
       quiz = normalizeQuiz(body.quiz, new Set(assets.map((a) => a.path)));
       await checkQuiz(quiz);
@@ -116,7 +117,7 @@ module.exports = function quizRoutes(r) {
     requireTeacher(req);
     const body = await readJson(req, 4 * 1024 * 1024);
     try {
-      const raw = typeof body.json === 'string' ? parseQuizJson(Buffer.from(body.json)) : body.quiz;
+      const raw = typeof body.json === 'string' ? parseQuizJson(body.json) : body.quiz;
       const images = imagePaths(raw);
       const quiz = normalizeQuiz(raw, images);
       json(res, 200, { quiz: quizSource(quiz), missingImages: [...images] });
