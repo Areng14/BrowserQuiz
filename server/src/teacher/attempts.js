@@ -137,7 +137,8 @@ module.exports = function attemptRoutes(r) {
     const quizId = q('SELECT id FROM quizzes WHERE id = ? AND owner_id = ?').get(String(p.id || ''), me.id);
     const row = quizId && store.getAsset(quizId.id, rel);
     if (!row) throw new HttpError(404, 'not_found');
-    send(res, 200, Buffer.from(row.bytes), { 'Content-Type': row.mime, 'Cache-Control': 'private, max-age=3600', 'Content-Security-Policy': "default-src 'none'; sandbox" });
+    // asked for again each time: after signing out, the browser can't show it from its cache
+    send(res, 200, Buffer.from(row.bytes), { 'Content-Type': row.mime, 'Cache-Control': 'private, no-cache', 'Content-Security-Policy': "default-src 'none'; sandbox" });
   });
 
   r.post('/api/t/attempts/:id/:action', async (req, res, p) => {

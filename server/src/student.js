@@ -792,7 +792,8 @@ module.exports.serveAsset = function serveAsset(req, res, rel) {
   const row = store.getAsset(run.quiz_id, rel);
   if (!row) throw new HttpError(404, 'not_found');
   send(res, 200, Buffer.from(row.bytes), {
-    'Content-Type': row.mime, 'Cache-Control': 'private, max-age=3600',
+    // asked for again each time, so once the student's signed out the browser can't show it from its cache
+    'Content-Type': row.mime, 'Cache-Control': 'private, no-cache',
     'Content-Security-Policy': "default-src 'none'; sandbox",
   });
 };
