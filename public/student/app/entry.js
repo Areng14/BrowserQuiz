@@ -367,9 +367,9 @@ function screenRules(err) {
     const checks = prechecks();
     blocked = !cfg.demo && !S.run.seb && checks.some((c) => !c.ok && !c.soft); // SEB locks the screen itself
     checkList.hidden = !checks.some((c) => !c.ok);
+    // Each check that isn't OK: its name, then what to do. One that blocks Start is named in red, and says so to screen readers.
     checkList.replaceChildren(...checks.filter((c) => !c.ok).map((c) => h('li', {},
-      h('span', { class: 'check-mark ' + (c.ok ? 'ok' : c.soft ? 'soft' : 'bad'), text: c.ok ? 'OK' : c.soft ? 'Note' : 'Fix' }),
-      c.label,
+      h('span', { class: 'check-name' + (c.soft ? '' : ' bad') }, c.soft ? null : h('span', { class: 'sr-only', text: 'Needs fixing: ' }), c.label),
       c.note ? h('span', { class: 'check-note', text: c.note }) : null)));
     if (btn.textContent === 'I agree') btn.disabled = blocked;
   }

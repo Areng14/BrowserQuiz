@@ -180,10 +180,11 @@ select.input:not([multiple]), select.select {
 .lock-title { font-weight: 700; color: var(--accent); }
 .modal.warn-modal { border-color: var(--bad); border-top: 4px solid var(--bad); }
 .fs-card p { margin: 0; }
-.checks { list-style: none; margin: 0; padding: 12px 0 0; border-top: 1px solid var(--line); display: grid; gap: 4px; font-size: 14px; }
-.check-mark { display: inline-block; width: 36px; font-weight: 600; }
-.check-mark.soft { color: var(--ink-2); }
-.check-note { display: block; padding-left: 36px; color: var(--ink-2); }
+.checks { list-style: none; margin: 0; padding: 12px 0 0; border-top: 1px solid var(--line); display: grid; gap: 12px; font-size: 14px; }
+.checks li { display: grid; gap: 2px; }
+.check-name { font-weight: 600; }
+.check-name.bad { color: var(--bad); }
+.check-note { color: var(--ink-2); }
 .ok { color: var(--good); }
 .bad { color: var(--bad); }
 .agree { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
