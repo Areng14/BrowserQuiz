@@ -105,15 +105,15 @@ const job0Scans = (q, lang) => B.bansFor(q.ban, lang).length > 0 && ['c', 'cpp',
 
 // Build once, run each (the runner's "runs", runner/each.py): the languages whose harness runs only the test
 // it's given the number of. A build holds at most EACH_MAX tests (the runner's most runs), and as many as keep
-// the generated test file to EACH_MAIN bytes (javac's constants for one class) and the job to EACH_JOB.
+// the generated test file to EACH_MAIN bytes (javac's constants for one class) and the job, as sent, to EACH_JOB
+// (under the runner's 400 KB of files and 512 KB of request).
 // EACH_BUDGET: how far into a job the runner still starts a run (each.py's BUDGET_S).
 const EACH_FILE = { java: 'BQMain.java', c: 'bqmain.c', cpp: 'bqmain.cpp', csharp: 'bqmain.cs', go: 'bqmain.go', rust: 'bqmain.rs' };
 const EACH_LANGS = Object.keys(EACH_FILE);
 const EACH_MAX = 100;
 const EACH_MAIN = 100 * 1024;
-const EACH_JOB = 300 * 1024;
+const EACH_JOB = 384 * 1024;
 const EACH_BUDGET = 10000;
-const jobBytes = (job) => Object.values(job.files).reduce((s, f) => s + Buffer.byteLength(f), 0);
 
 // Every test in one build, then each run in a process of its own from it, with the time and memory a job's one
 // run has: one part per test, just as one job per test gives them. Tests the runner had no time left for
@@ -127,7 +127,7 @@ async function runEach(q, lang, code, tests) {
   async function build(ids, first) {
     let n = Math.min(ids.length, EACH_MAX);
     let built = H.buildJob(q, lang, code, ids.slice(0, n).map((i) => tests[i]), { scan: first });
-    while (n > 1 && (Buffer.byteLength(built.job.files[EACH_FILE[lang]] || '') > EACH_MAIN || jobBytes(built.job) > EACH_JOB)) {
+    while (n > 1 && (Buffer.byteLength(built.job.files[EACH_FILE[lang]] || '') > EACH_MAIN || Buffer.byteLength(JSON.stringify(built.job)) > EACH_JOB)) {
       n = Math.ceil(n / 2);
       built = H.buildJob(q, lang, code, ids.slice(0, n).map((i) => tests[i]), { scan: first });
     }
