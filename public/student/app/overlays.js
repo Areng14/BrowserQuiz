@@ -222,9 +222,14 @@ async function submitNow(reason) {
       }
       if (tries === 1) ov.failed();
       const delay = Math.min(2000 * 2 ** tries, 15000);
+      // The connection coming back is tried at once, not at the next try: when time is up, the server
+      // takes the answers only for a few seconds (ANSWER_GRACE_MS).
       await new Promise((resolve) => {
-        const t = setTimeout(resolve, delay);
-        ov.retry.onclick = () => { clearTimeout(t); ov.trying(); resolve(); };
+        let t = 0;
+        const go = () => { clearTimeout(t); window.removeEventListener('online', go); resolve(); };
+        t = setTimeout(go, delay);
+        window.addEventListener('online', go);
+        ov.retry.onclick = () => { ov.trying(); go(); };
       });
     }
   }

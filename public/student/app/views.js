@@ -5,7 +5,7 @@ import { KIND, S, api } from './state.js';
 import { errorText, h } from './dom.js';
 import { setAnswer } from './answers.js';
 import { choiceText, isCrossed, kept, metaRow, prompt, setCrossed } from './marks.js';
-import { renderResults, runCooldown } from './code.js';
+import { ranInto, renderResults, runSpot } from './code.js';
 
 function basicView(q) {
   const view = h('div', { class: 'qview' }, metaRow(q, KIND[q.type] || 'Question'), prompt(q));
@@ -119,9 +119,11 @@ function tabOut(box) {
 
 function whyBox(q) {
   const id = q.id + '-why';
-  const ta = growArea({ id, rows: 3 }, S.answers[q.id + '~why'], (v) => setAnswer(q.id + '~why', v.trim() ? v : undefined));
+  const ta = growArea({ id, rows: 3, maxlength: '2000' }, S.answers[q.id + '~why'], (v) => setAnswer(q.id + '~why', v.trim() ? v : undefined));
   return h('div', { class: 'why-box' }, h('label', { class: 'sub', for: id, text: 'What went wrong?' }), ta);
 }
+// Each box holds what the server keeps of that kind of answer (grade.js cleanAnswers) and no more: past
+// that, the rest would look saved and be cut off, and a big enough answer stops every save and the turn-in.
 function growArea(attrs, value, onChange, codeLike) {
   // Phones would capitalize or curl quotes in code-like answers, which changes what gets graded.
   const ta = h('textarea', Object.assign({ class: 'input long-answer' + (codeLike ? ' mono' : ''), spellcheck: codeLike ? 'false' : 'true', autocomplete: 'off' }, codeLike ? { autocapitalize: 'off', autocorrect: 'off' } : {}, attrs));
@@ -146,7 +148,7 @@ function growArea(attrs, value, onChange, codeLike) {
 }
 
 function outputView(q) {
-  const ta = growArea({ id: q.id + '-out', rows: 4 }, S.answers[q.id], (v) => setAnswer(q.id, v.trim() ? v : undefined), true);
+  const ta = growArea({ id: q.id + '-out', rows: 4, maxlength: '5000' }, S.answers[q.id], (v) => setAnswer(q.id, v.trim() ? v : undefined), true);
   return h('div', { class: 'qview' }, metaRow(q, KIND.output), prompt(q), codeBlock(q.code, q.codeLang),
     h('label', { class: 'field', for: q.id + '-out' }, h('span', { class: 'field-label', text: 'Output' }), ta));
 }
@@ -158,7 +160,7 @@ function traceView(q) {
   table.append(h('thead', {}, h('tr', {}, q.columns.map((c) => h('th', { scope: 'col', text: c })))),
     h('tbody', {}, q.cells.map((row, r) => h('tr', {}, row.map((given, c) => {
       if (given != null) return h('td', { class: 'given', text: given });
-      const input = h('input', { class: 'trace-cell', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', 'aria-label': `${q.columns[c]}, row ${r + 1}`, 'data-r': r, 'data-c': c });
+      const input = h('input', { class: 'trace-cell', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', maxlength: '200', 'aria-label': `${q.columns[c]}, row ${r + 1}`, 'data-r': r, 'data-c': c });
       input.value = (cur[r] && cur[r][c]) || '';
       input.addEventListener('input', () => {
         const v = (S.answers[q.id] || blank()).map((rr) => rr.slice());
@@ -186,7 +188,7 @@ function fillView(q) {
   pieces.forEach((seg, i) => {
     if (seg) pre.append(h('code', { 'data-lang': q.codeLang, text: seg }));
     if (i === pieces.length - 1) return;
-    const input = h('input', { class: 'blank', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', 'aria-label': `Blank ${i + 1}` });
+    const input = h('input', { class: 'blank', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', autocorrect: 'off', maxlength: '500', 'aria-label': `Blank ${i + 1}` });
     input.value = cur[i] || '';
     const size = () => { input.style.width = Math.max(6, input.value.length + 2) + 'ch'; };
     size();
@@ -209,7 +211,7 @@ function fillView(q) {
     const results = h('div', { class: 'results fill-results', 'aria-live': 'polite' });
     const runBtn = h('button', { class: 'btn small primary', type: 'button', text: 'Run examples' });
     runBtn.addEventListener('click', () => runFill(q, runBtn, results));
-    runCooldown(runBtn);
+    runSpot(q, runBtn, results);
     view.append(h('div', {}, runBtn), results);
     renderResults(q, results, q.codeLang);
   }
@@ -228,12 +230,11 @@ async function runFill(q, btn, results) {
   }
   S.runBusy = false;
   S.runReadyAt = Date.now() + 5000;
-  if (results.isConnected) renderResults(q, results, q.codeLang);
-  runCooldown(btn);
+  ranInto(q, results, btn, q.codeLang);
 }
 
 function essayView(q) {
-  const ta = growArea({ id: q.id + '-essay', rows: 8 }, S.answers[q.id], (v) => setAnswer(q.id, v.trim() ? v : undefined), !!q.codeLang);
+  const ta = growArea({ id: q.id + '-essay', rows: 8, maxlength: '50000' }, S.answers[q.id], (v) => setAnswer(q.id, v.trim() ? v : undefined), !!q.codeLang);
   return h('div', { class: 'qview' }, metaRow(q, KIND.essay), prompt(q),
     h('label', { class: 'field', for: q.id + '-essay' }, h('span', { class: 'field-label', text: 'Your answer' }), ta));
 }
