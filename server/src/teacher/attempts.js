@@ -142,7 +142,7 @@ module.exports = function attemptRoutes(r) {
 
   r.post('/api/t/attempts/:id/:action', async (req, res, p) => {
     const me = requireTeacher(req);
-    const body = await readJson(req, 4096);
+    const body = await readJson(req, 16 * 1024); // feedback is up to 2000 characters, up to 4 bytes each
     const { a, run } = getAttemptRun(me, p.id);
     const quiz = store.getQuiz(run.quiz_id);
     const note = String(body.note || '').slice(0, 300);

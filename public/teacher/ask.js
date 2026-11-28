@@ -1,7 +1,7 @@
 // The teacher pages' own dialogs, in place of the browser's alert(), confirm() and prompt().
 //   BQAsk.confirm({ title, text, ok, no, danger })    -> Promise<boolean> (no: the Cancel button's words)
 //   BQAsk.notice({ title, text })                      -> Promise<void>
-//   BQAsk.ask({ title, text, label, value, ok, danger, copy, password }) -> Promise<string | null> (null: cancelled)
+//   BQAsk.ask({ title, text, label, value, ok, danger, copy, password, max }) -> Promise<string | null> (null: cancelled; max: most characters)
 // One at a time; Escape or Cancel says no. A destructive one starts on Cancel, so Enter can't delete.
 // One with a password field isn't a modal dialog (that makes the rest of the page inert, a password
 // manager's list included), so iCloud Passwords and the like still work: our own backdrop covers the
@@ -66,9 +66,9 @@
     });
   }
 
-  function inputField(label, value, readOnly, password) {
+  function inputField(label, value, readOnly, password, max) {
     const fid = `bq-ask-in-${++seq}`;
-    const input = el('input', { class: 'input', id: fid, type: password ? 'password' : 'text', value: value || '', readonly: readOnly, autocomplete: password ? 'current-password' : 'off', spellcheck: 'false', autocorrect: 'off' }); // typed as typed: no autocorrect (Safari) or autofill
+    const input = el('input', { class: 'input', id: fid, type: password ? 'password' : 'text', value: value || '', readonly: readOnly, maxlength: max ? String(max) : null, autocomplete: password ? 'current-password' : 'off', spellcheck: 'false', autocorrect: 'off' }); // typed as typed: no autocorrect (Safari) or autofill
     input.value = value || '';
     const node = el('div', { class: 'field' }, label ? el('label', { class: 'field-label', for: fid, text: label }) : null, input);
     if (!label) input.setAttribute('aria-label', 'Text');
@@ -79,6 +79,6 @@
     confirm: (o) => open(o).then((a) => a === true),
     notice: (o) => open(Object.assign({ ok: 'OK', cancel: false }, o)).then(() => undefined),
     // copy: a read-only box with the text selected, to copy by hand when the clipboard isn't allowed
-    ask: (o) => open(Object.assign({}, o, { cancel: !o.copy, field: inputField(o.label, o.value, o.copy, o.password) })).then((a) => (a === null ? null : String(a))),
+    ask: (o) => open(Object.assign({}, o, { cancel: !o.copy, field: inputField(o.label, o.value, o.copy, o.password, o.max) })).then((a) => (a === null ? null : String(a))),
   };
 })();
