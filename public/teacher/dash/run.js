@@ -177,8 +177,9 @@ async function showRun(runId) {
     waitingIds = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting').map((x) => x.attempt.id);
     waitingFlagged = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting' && x.attempt.checks).map((x) => ({ name: x.name, checks: x.attempt.checks }));
     waitingReading = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting' && !x.attempt.ready).length;
-    // stays in its place, off while nobody's waiting, so the bar doesn't shift; gone once the quiz is closed
-    admitAll.hidden = run.status !== 'open';
+    // stays in its place, off while nobody's waiting, so the bar doesn't shift; gone once the quiz is closed,
+    // and in practice (and corrections), where students go straight in and nobody ever waits
+    admitAll.hidden = run.status !== 'open' || run.practice;
     admitAll.disabled = !waitingIds.length;
     // before anyone's started it starts the quiz; after, it starts the students who came late, and each
     // late student's row has its own Start
