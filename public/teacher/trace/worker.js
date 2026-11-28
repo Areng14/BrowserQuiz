@@ -1,5 +1,5 @@
-// Trace a photo, off the page's thread: find the photo's long straight lines, read them one by one (stopping
-// once two agree), and match what was read against the teacher's codes. marks.js, reader.js, find.js.
+// Trace a photo, off the page's thread: read the photo's long straight lines and match what they say against
+// the teacher's codes (reader.js readPhoto). marks.js, reader.js, find.js.
 importScripts('marks.js', 'reader.js', 'find.js');
 
 onmessage = (e) => {
@@ -12,14 +12,7 @@ onmessage = (e) => {
     ctx.drawImage(bmp, 0, 0, c.width, c.height);
     bmp.close();
     const img = ctx.getImageData(0, 0, c.width, c.height);
-    const found = self.BQFind.findLines(img).slice(0, 8);
-    const reads = [];
-    for (let i = 0; i < found.length; i++) {
-      if (self.BQReader.combine(reads, []).sure) break;
-      postMessage({ type: 'reading', i: i + 1, n: found.length });
-      try { reads.push(self.BQReader.decodeLine(img, found[i].p1, found[i].p2)); } catch (err) { /* a line it can't read */ }
-    }
-    const all = self.BQReader.combine(reads, codes);
+    const all = self.BQReader.readPhoto(img, codes, (i, n) => postMessage({ type: 'reading', i, n }));
     const back = (p) => ({ x: p.x / k, y: p.y / k });
     postMessage({ type: 'done', code: all.code, sure: all.sure, agree: all.agree,
       ranked: all.ranked.map((x) => ({ code: x.code, score: x.score })), lines: all.used.map((l) => l.ends.map(back)) });

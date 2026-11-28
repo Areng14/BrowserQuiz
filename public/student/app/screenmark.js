@@ -8,7 +8,7 @@ const ALPHA = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // Crockford's base 32, as the
 // Whitening, so no code is a long repeat; and the check bits. The reader (teacher/trace/reader.js) undoes both.
 const MASK = [1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0];
 const HALF = 4; // CSS pixels per half cell
-const STEP = 10; // the difference between the two tones, out of 255
+const STEP = 14; // the difference between the two tones, out of 255 (10 was too faint on big screens)
 const RAMP = 0.6; // how much of a half cell blends into the next
 
 function crc7(bits) { // x^7 + x^3 + 1

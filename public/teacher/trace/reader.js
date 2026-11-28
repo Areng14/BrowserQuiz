@@ -164,16 +164,18 @@
     for (let i = 0; i < n; i++) { if (hp[i] > 6 * mad) hp[i] = 6 * mad; else if (hp[i] < -6 * mad) hp[i] = -6 * mad; tot += hp[i] * hp[i]; }
     if (!tot) return { ok: false, why: 'flat', contrast };
     // the whole pattern repeats every copy, whatever the code: find that period
+    // opt.T0: the period to look near (the size another line of the same screen read), opt.span either way
     const Lmin = Math.round(HALVES * 1.2), Lmax = Math.floor(n / 2);
-    if (Lmax <= Lmin) return { ok: false, why: 'too short', contrast };
+    const lo = opt.T0 ? Math.max(Lmin, Math.round(opt.T0 * (1 - opt.span))) : Lmin, hi = opt.T0 ? Math.min(Lmax, Math.round(opt.T0 * (1 + opt.span))) : Lmax;
+    if (hi <= lo) return { ok: false, why: 'too short', contrast };
     const r = new Float64Array(Lmax + 1);
-    for (let L = Lmin; L <= Lmax; L++) {
+    for (let L = lo; L <= hi; L++) {
       let s = 0, a = 0, b = 0;
       for (let x = 0; x + L < n; x++) { s += hp[x] * hp[x + L]; a += hp[x] * hp[x]; b += hp[x + L] * hp[x + L]; }
       r[L] = s / Math.sqrt(a * b || 1);
     }
     const peaks = [];
-    for (let L = Lmin + 1; L < Lmax; L++) if (r[L] > 0 && r[L] >= r[L - 1] && r[L] >= r[L + 1]) peaks.push(L);
+    for (let L = lo + 1; L < hi; L++) if (r[L] > 0 && r[L] >= r[L - 1] && r[L] >= r[L + 1]) peaks.push(L);
     peaks.sort((x, y) => r[y] - r[x]);
     const nb = HALVES * K;
     const hmA = new Float64Array(nb), idx = new Int32Array(70);
@@ -196,7 +198,7 @@
     // scan every plausible period (and a little perspective) by how well the fold reads as a code;
     // autocorrelation peaks join the shortlist, then each gets a finer local search
     const scan = [];
-    for (let T = Lmin; T <= Lmax; T *= 1.015) for (const cc of [-0.1, 0, 0.1]) { const pk = readFold(fold(hp, T, cc / n).F); scan.push({ T, c: cc / n, q: pk.q }); }
+    for (let T = lo; T <= hi; T *= opt.T0 ? 1.004 : 1.015) for (const cc of [-0.1, 0, 0.1]) { const pk = readFold(fold(hp, T, cc / n).F); scan.push({ T, c: cc / n, q: pk.q }); }
     scan.sort((x, y) => y.q - x.q);
     const short = [];
     for (const s1 of scan) { if (short.length >= (opt.cands0 || 6)) break; if (!short.some((t) => Math.abs(t.T / s1.T - 1) < 0.03)) short.push(s1); }
@@ -239,34 +241,117 @@
     const norm = soft.map((v) => v / mag);
     const bits = norm.map((v) => (v > 0 ? 1 : 0)), code = M.bitsCode(bits);
     const syncQ = sbest / 6 / (mag / 2 || 1);
-    const out = { ok: true, ends, soft: norm, code, copies: n / T, T, half: T / HALVES, c, dir: sdir, syncQ, q: pick.q, period: r[best.L0] || 0, contrast, thick, fold: best.e / tot };
+    const out = { ok: true, ends, soft: norm, code, copies: n / T, T, half: T / HALVES, c, dir: sdir, syncQ, q: pick.q, period: r[best.L0] || 0, contrast, thick, fold: best.e / tot, scan: opt.T0 ? null : scan };
     return out;
   }
   // several lines -> one answer, plus the nearest of the teacher's codes
   // several lines -> one answer. A code counts when two lines agree on it with the check passing
   // (or one line reads very clean); class codes are ranked by how well each line agrees with them.
+  const mid = (l) => ({ x: (l.ends[0].x + l.ends[1].x) / 2, y: (l.ends[0].y + l.ends[1].y) / 2 });
+  // two reads of one line (found twice, a few pixels apart) are one line, not two that agree
+  function same(a, b) {
+    const [p, q] = a.ends, m = mid(b), L = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+    return Math.abs((q.x - p.x) * (p.y - m.y) - (p.x - m.x) * (q.y - p.y)) / L < 8;
+  }
+  const distinct = (ls) => ls.reduce((acc, l) => (acc.some((x) => same(x, l)) ? acc : acc.concat([l])), []);
+  // how many of a line's 32 bits differ from a code's
+  const misses = (l, b) => { let k = 0; for (let i = 0; i < 32; i++) if ((l.soft[i] > 0) !== !!b[i]) k++; return k; };
   function combine(lines, codes) {
     const good = lines.filter((l) => l && l.ok);
     const groups = new Map();
     for (const l of good) if (l.code.ok) { const g = groups.get(l.code.code) || { code: l.code.code, ls: [] }; g.ls.push(l); groups.set(l.code.code, g); }
-    const gs = [...groups.values()].map((g) => ({ ...g, n: g.ls.length, q: g.ls.reduce((a, l) => a + l.q, 0) })).sort((x, y) => y.n - x.n || y.q - x.q);
+    // given the teacher's codes, only one of them is a read: lines that misread one pattern alike can agree
+    const known = (cd) => !codes || !codes.length || codes.includes(cd);
+    const gs = [...groups.values()].filter((g) => known(g.code)).map((g) => ({ ...g, n: g.ls.length, q: g.ls.reduce((a, l) => a + l.q, 0) })).sort((x, y) => y.n - x.n || y.q - x.q);
     const corr = (l, b) => { let sc = 0, t = 0; for (let i = 0; i < 32; i++) { sc += (b[i] ? 1 : -1) * l.soft[i]; t += Math.abs(l.soft[i]); } return t ? sc / t : 0; };
     // a line that read a near miss of the winning code backs it up (random lines sit near 0)
-    for (const g of gs) { const b = M.codeBits(g.code); g.back = good.filter((l) => !g.ls.includes(l) && corr(l, b) >= 0.55); g.n += g.back.length; }
+    for (const g of gs) { const b = M.codeBits(g.code); g.back = good.filter((l) => !g.ls.includes(l) && corr(l, b) >= 0.55); g.n = distinct(g.ls.concat(g.back)).length; }
     gs.sort((x, y) => y.n - x.n || y.q - x.q);
-    let read = null, sure = false;
+    let read = null, sure = false, agree = gs.length ? gs[0].n : 0;
     if (gs.length && (gs[0].n >= 2 || gs[0].q >= 1.3)) { read = gs[0].code; sure = gs[0].n >= 2; }
-    const use = read ? gs[0].ls.concat(gs[0].back) : good.filter((l) => l.q > 1.05);
+    let use = read ? gs[0].ls.concat(gs[0].back) : good.filter((l) => l.q > 1.05);
+    // or two lines that each read one of the teacher's codes to within 3 bits (by chance: about 1 in 10 million)
+    if (!sure && codes && codes.length) {
+      for (const cd of codes) {
+        const b = M.codeBits(cd), ls = distinct(good.filter((l) => misses(l, b) <= 3));
+        if (ls.length >= 2 && ls.length > (sure ? agree : 1)) { read = cd; sure = true; agree = ls.length; use = ls; }
+      }
+    }
     const sum = new Float64Array(32);
     for (const l of use) { const w = Math.sqrt(Math.max(1, l.copies)) * (l.code.ok ? 3 : 1); l.soft.forEach((v, i) => { sum[i] += v * w; }); }
-    if (!read && use.length) { const r = M.bitsCode(Array.from(sum, (v) => (v > 0 ? 1 : 0))); if (r.ok) read = r.code; }
+    if (!read && use.length) { const r = M.bitsCode(Array.from(sum, (v) => (v > 0 ? 1 : 0))); if (r.ok && known(r.code)) read = r.code; }
     let ranked = [];
     if (codes && codes.length && good.length) {
       const by = use.length ? use : good;
       ranked = codes.map((cd) => { const b = M.codeBits(cd), cs = by.map((l) => corr(l, b)); return { code: cd, score: Math.max(...cs), s2: cs.reduce((a, c) => a + Math.max(0, c) ** 2, 0) }; })
         .sort((x, y) => y.s2 - x.s2).slice(0, 3);
     }
-    return { code: read, sure, agree: gs.length ? gs[0].n : 0, used: use, ranked, lines: good.length };
+    return { code: read, sure, agree, used: use, ranked, lines: good.length };
   }
-  G.BQReader = { decodeLine, combine, lumAt };
+  // The stripe sizes the lines read, likeliest first: lines that read within 7% of each other are one size,
+  // weighed by how cleanly each read (a line whose check passes counts three times).
+  function sizes(reads) {
+    const groups = [];
+    for (const d of reads) {
+      if (!d.ok) continue;
+      const w = d.q * (d.code.ok ? 3 : 1), g = groups.find((x) => Math.abs(d.half / x.half - 1) < 0.07);
+      if (g) { g.half = (g.half * g.w + d.half * w) / (g.w + w); g.w += w; } else groups.push({ half: d.half, w });
+    }
+    return groups.sort((a, b) => b.w - a.w).map((g) => g.half);
+  }
+  // How good a combined read is: two lines agreeing on one of the teacher's codes, then one of their codes,
+  // then how far the likeliest student leads the next, but only for a close match (0.9 and up): reading every
+  // line again at several sizes makes many reads, and some come near a code by chance.
+  function rank(r, codes) {
+    const mine = !!r.code && codes.includes(r.code), a = r.ranked[0], b = r.ranked[1];
+    return (r.sure && mine ? 4 : mine ? 3 : 0) + (a && a.score >= 0.9 ? Math.max(0, Math.min(0.99, a.score - (b ? b.score : 0))) : 0);
+  }
+  // A whole photo: find its long lines and read them one by one, stopping once two agree. Every line on one
+  // screen has the same stripe size, give or take the photo's perspective, so when they don't agree, read
+  // every line again near each size the lines read, likeliest first, and keep the best. progress(done, of).
+  // The sizes all the lines' scans agree on: each line's scan of every period, as how far each period
+  // stands out of that line's own run of scores, pooled over the lines (allowing 4% either way, as the
+  // photo's perspective makes lines nearer the camera a little bigger), and its strongest peaks.
+  function pooled(reads) {
+    const scans = reads.filter((d) => d.ok && d.scan).map((d) => {
+      const qs = d.scan.map((x) => x.q).sort((a, b) => a - b), med = qs[qs.length >> 1], mad = qs.map((v) => Math.abs(v - med)).sort((a, b) => a - b)[qs.length >> 1] || 1e-6;
+      return d.scan.map((x) => ({ T: x.T, z: Math.max(0, Math.min(6, (x.q - med) / (1.4826 * mad))) }));
+    });
+    if (!scans.length) return [];
+    const T0 = Math.min(...scans.map((sc) => sc[0].T)), T1 = Math.max(...scans.map((sc) => sc[sc.length - 1].T)), grid = [];
+    for (let T = T0; T <= T1; T *= 1.01) {
+      let sum = 0;
+      for (const sc of scans) { let m = 0; for (const x of sc) if (x.T >= T * 0.96 && x.T <= T * 1.04 && x.z > m) m = x.z; sum += m; }
+      grid.push({ T, sum });
+    }
+    const peaks = grid.filter((g, i) => (!i || g.sum >= grid[i - 1].sum) && (i === grid.length - 1 || g.sum >= grid[i + 1].sum)).sort((a, b) => b.sum - a.sum), out = [];
+    for (const p of peaks) if (!out.some((T) => Math.abs(p.T / T - 1) < 0.08)) out.push(p.T);
+    return out.map((T) => T / HALVES);
+  }
+  function readPhoto(img, codes, progress) {
+    const found = G.BQFind.findLines(img).slice(0, 8);
+    const read = (f, opt) => { try { return { ...decodeLine(img, f.p1, f.p2, opt), at: f }; } catch (err) { return { ok: false, why: 'error', at: f }; } };
+    const reads = [];
+    for (let i = 0; i < found.length; i++) {
+      if (combine(reads, codes).sure) break;
+      if (progress) progress(i, found.length * 2);
+      reads.push(read(found[i]));
+    }
+    let best = { ...combine(reads, codes), reads };
+    if (best.sure) return best;
+    // a size a line's check passed at first, then where the scans agree, then the sizes lines read most
+    const tries = [];
+    for (const h of reads.filter((d) => d.ok && d.code.ok).map((d) => d.half).concat(pooled(reads).slice(0, 3), sizes(reads).slice(0, 2))) {
+      if (tries.length < 4 && !tries.some((t) => Math.abs(h / t - 1) < 0.05)) tries.push(h);
+    }
+    for (let k = 0; k < tries.length; k++) {
+      if (progress) progress(reads.length + Math.round((k * reads.length) / tries.length), reads.length * 2);
+      const again = reads.map((d) => (d.why === 'no line' ? d : read(d.at, { T0: tries[k] * HALVES, span: 0.1 })));
+      const r = { ...combine(again, codes), reads: again, half: tries[k] };
+      if (rank(r, codes) > rank(best, codes)) best = r;
+      if (best.sure && best.code && codes.includes(best.code)) break;
+    }
+    return best;
+  }
+  G.BQReader = { decodeLine, combine, readPhoto, lumAt };
 })(typeof window !== 'undefined' ? window : globalThis);

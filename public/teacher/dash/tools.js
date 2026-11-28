@@ -43,14 +43,14 @@ async function trace(view, f, again, back) {
   w.onerror = () => { w.terminate(); done("That photo couldn't be read. Try another one."); };
   w.onmessage = (e) => {
     const m = e.data;
-    if (m.type === 'reading') { status.textContent = `Reading line ${m.i} of ${m.n}…`; bar.firstChild.style.width = Math.round((m.i / m.n) * 90) + '%'; return; }
+    if (m.type === 'reading') { bar.firstChild.style.width = Math.round(5 + (m.i / m.n) * 85) + '%'; return; }
     w.terminate();
     if (m.type !== 'done') return done("That photo couldn't be read. Try another one.");
     const ctx = shot.getContext('2d');
     ctx.strokeStyle = '#7ea3ff'; ctx.lineWidth = Math.max(3, shot.width / 300); ctx.lineCap = 'round';
     for (const [a, b] of m.lines) { ctx.beginPath(); ctx.moveTo(a.x * fit, a.y * fit); ctx.lineTo(b.x * fit, b.y * fit); ctx.stroke(); }
     const top = m.ranked[0], next = m.ranked[1];
-    if (m.code) return found(byCode.get(m.code), m.sure ? `${m.agree} lines agree` : 'Read from one line', 'st-good');
+    if (m.code && byCode.has(m.code)) return found(byCode.get(m.code), m.sure ? `${m.agree} lines agree` : 'Read from one line', 'st-good');
     if (top && top.score >= GUESS_AT && top.score - (next ? next.score : 0) >= GUESS_LEAD) return found(byCode.get(top.code), 'Not confirmed', 'st-warn', true);
     done(null, true);
   };
