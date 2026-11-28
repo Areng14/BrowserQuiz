@@ -11,6 +11,9 @@ const { audit, requireAdmin } = require('./common');
 const { revision, version } = require('../version');
 
 const MAX_UPLOAD = 2 * 1024 * 1024 * 1024;
+// A restore from a file being uploaded: one at a time, as they'd share the temporary file (a second one wrote
+// into the first after it was checked and put in place).
+let receiving = false;
 
 // How many newer versions GitHub has that change the app, asked when the admin opens the page and kept 6
 // hours. Only this commit's id goes to GitHub. Only the app image's own files count (images.yml builds it
@@ -99,22 +102,26 @@ module.exports = function serverRoutes(r) {
   r.post('/api/t/server/restore-upload', async (req, res) => {
     const me = requireAdmin(req);
     if (B.quizInProgress(true)) throw new HttpError(409, 'busy', 'Students are in a quiz. Restore once it ends.');
-    // A backup can take minutes to upload (index.js gives other requests one): only a stalled one stops
-    req.longUpload = true;
-    req.setTimeout(60000, () => req.destroy(new Error('upload stalled')));
-    const tmp = path.join(DATA_DIR, 'restore-upload.tmp');
-    await new Promise((resolve, reject) => {
-      let n = 0;
-      const out = fs.createWriteStream(tmp, { mode: 0o600 });
-      req.on('data', (c) => { n += c.length; if (n > MAX_UPLOAD) { req.destroy(); out.destroy(); reject(new HttpError(413, 'too_large')); } });
-      req.on('error', reject);
-      out.on('error', reject);
-      out.on('finish', resolve);
-      req.pipe(out);
-    }).catch((e) => { fs.rmSync(tmp, { force: true }); throw e; });
-    // and again once it's here: a quiz may have started while it uploaded
-    if (B.quizInProgress(true)) { fs.rmSync(tmp, { force: true }); throw new HttpError(409, 'busy', 'Students are in a quiz. Restore once it ends.'); }
-    try { B.stage(tmp, true); } catch (e) { fs.rmSync(tmp, { force: true }); throw new HttpError(400, 'bad_backup', e.message); }
+    if (receiving) throw new HttpError(409, 'busy', 'Another restore is uploading.');
+    receiving = true;
+    try {
+      // A backup can take minutes to upload (index.js gives other requests one): only a stalled one stops
+      req.longUpload = true;
+      req.setTimeout(60000, () => req.destroy(new Error('upload stalled')));
+      const tmp = path.join(DATA_DIR, 'restore-upload.tmp');
+      await new Promise((resolve, reject) => {
+        let n = 0;
+        const out = fs.createWriteStream(tmp, { mode: 0o600 });
+        req.on('data', (c) => { n += c.length; if (n > MAX_UPLOAD) { req.destroy(); out.destroy(); reject(new HttpError(413, 'too_large')); } });
+        req.on('error', reject);
+        out.on('error', reject);
+        out.on('finish', resolve);
+        req.pipe(out);
+      }).catch((e) => { fs.rmSync(tmp, { force: true }); throw e; });
+      // and again once it's here: a quiz may have started while it uploaded
+      if (B.quizInProgress(true)) { fs.rmSync(tmp, { force: true }); throw new HttpError(409, 'busy', 'Students are in a quiz. Restore once it ends.'); }
+      try { B.stage(tmp, true); } catch (e) { fs.rmSync(tmp, { force: true }); throw new HttpError(400, 'bad_backup', e.message); }
+    } finally { receiving = false; }
     audit(me, 'restore', null, 'uploaded file');
     restart(res);
   });
