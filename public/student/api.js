@@ -62,9 +62,10 @@
     event: (type, detail) => post('/api/event', { type, detail }, true),
     beat: (payload) => post('/api/beat', payload),
     run: (body) => post('/api/run', body),
-    // keepalive lets a submit survive the page closing, but browsers cap keepalive bodies at 64 KB.
+    // keepalive lets a submit survive the page closing, but browsers cap keepalive bodies at 64 KB, in
+    // bytes: a character of Chinese is 3 of them, an emoji 4. Over that the browser refuses the request.
     partDone: (part, answers) => post('/api/part-done', { part, answers }),
-    submit: (answers, edits, late) => { const body = { answers, edits: edits && edits.length ? edits : undefined, late: late && late.length ? late : undefined }; return post('/api/submit', body, JSON.stringify(body).length < 60000); },
+    submit: (answers, edits, late) => { const body = { answers, edits: edits && edits.length ? edits : undefined, late: late && late.length ? late : undefined }; return post('/api/submit', body, new TextEncoder().encode(JSON.stringify(body)).length < 60000); },
     resume: () => post('/api/resume'),
     practiceRetry: () => post('/api/practice-retry'),
     assetUrl: (p) => '/asset/' + String(p).split('/').map(encodeURIComponent).join('/') + (seb ? `?seb=${encodeURIComponent(seb.page)}&sebfirst=${encodeURIComponent(seb.first)}&sebkey=${seb.key}` : ''),
