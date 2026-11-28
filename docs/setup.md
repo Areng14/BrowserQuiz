@@ -32,6 +32,16 @@ The code runner comes in two kinds:
 
 The setup script asks which one the first time. To change it later, run `./setup.sh --languages` (on Windows, `setup.cmd -Languages`). On Railway, add the variable `RUNNER_LANGS=full` to the `runner` service and redeploy it. The quiz maker only offers the languages the runner has, and a quiz that needs another one says so when you save it.
 
+**Several classes writing code at once.** The app itself keeps up with a couple of thousand students; grading code is what takes time. Every hidden test is a run of the student's code (a Java run takes about a second), and the runner does a few at a time. Grading still finishes on its own, just later, and a student's Run examples always goes ahead of grading.
+
+| Variable | Service | Default | |
+| --- | --- | --- | --- |
+| `RUNNER_SLOTS` | runner | 4 | Runs at the same time: about one per CPU the runner has |
+| `RUNNER_CONCURRENCY` | app | 4 | The same number as `RUNNER_SLOTS` (with Docker, it's set from it) |
+| `RUNNER_CPUS`, `RUNNER_MEMORY` | runner, Docker only (`.env`) | 2, `2g` | What the runner may use |
+
+For a few classes coding at the same time, 8 CPUs and 8 slots grade about four times as fast as the default. On Railway, set `RUNNER_SLOTS=8` on the runner and `RUNNER_CONCURRENCY=8` on the app.
+
 ## Setting up accounts
 
 **Admin.** The first account is admin. Sign in at `/teacher` with the username `admin` and the password from the setup script. You will then pick your own username and password and get a recovery code. Save the recovery code somewhere safe since it is the only way back into your quizzes if you forget your password. After this, `admin` will no longer work as a username.
