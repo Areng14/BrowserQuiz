@@ -202,8 +202,10 @@ function quizzesTab(data) {
   const pasteBtn = h('button', { class: 'btn', type: 'button', text: 'Upload pasted quiz' });
   pasteBtn.addEventListener('click', async () => {
     if (!pasteJson.value.trim()) { quizMsg.textContent = 'Paste a quiz.json first.'; return; }
+    const json = jsonIn(pasteJson.value);
+    if (!json) { quizMsg.textContent = "That isn't a quiz.json."; return; }
     pasteBtn.disabled = true; pasteBtn.textContent = 'Checking…'; quizMsg.textContent = '';
-    try { await api('/api/t/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: pasteJson.value }); showHome(); } catch (e) { quizMsg.textContent = e.message; pasteBtn.disabled = false; pasteBtn.textContent = 'Upload pasted quiz'; }
+    try { await api('/api/t/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: json }); showHome(); } catch (e) { quizMsg.textContent = e.message; pasteBtn.disabled = false; pasteBtn.textContent = 'Upload pasted quiz'; }
   });
   const quizBtn = h('button', { class: 'btn', type: 'button', text: 'Upload .quiz' });
   quizBtn.addEventListener('click', async () => {
@@ -290,6 +292,16 @@ function classesTab(data) {
         "A spreadsheet saved as CSV, with name and student_id in the first row and one student on each row after it. Students type their ID to sign in."),
       rosterBtn),
     rosterMsg);
+}
+
+// The quiz.json in what was pasted: an AI chat's ```json block, or else from its first { to its last }
+// (a chat's whole answer has words around it). null: there's no { in it at all.
+function jsonIn(text) {
+  const fenced = /```(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```/i.exec(text);
+  if (fenced) return fenced[1];
+  const a = text.indexOf('{');
+  const b = text.lastIndexOf('}');
+  return a < 0 ? null : text.slice(a, b > a ? b + 1 : text.length); // cut short: the server says where
 }
 
 const named = (el, label) => { el.setAttribute('aria-label', label); return el; };
