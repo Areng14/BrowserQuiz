@@ -17,6 +17,8 @@ module.exports = function authRoutes(r) {
   // Username + password. No username means admin, the account from .env.
   r.post('/api/t/login', async (req, res) => {
     const body = await readJson(req, 4096);
+    // Nothing typed isn't a guess: it doesn't count against admin (the name left out means admin) or the budget
+    if (!String(body.password || '')) throw new HttpError(400, 'no_password', 'Enter your password.');
     const uname = (String(body.username || '').trim() || 'admin').toLowerCase().slice(0, 100);
     const teacher = A.byUsername(String(body.username || '').trim() || 'admin');
     // A browser the teacher signed in from before has a budget of its own, so a classmate guessing from the
@@ -34,7 +36,9 @@ module.exports = function authRoutes(r) {
     if (fail && fail.until > Date.now() && !known) {
       throw new HttpError(429, 'locked', `Too many wrong passwords. Try again in ${Math.ceil((fail.until - Date.now()) / 1000)} seconds.`);
     }
-    const ok = await A.checkPassword(String(body.password || ''), teacher && !teacher.disabled ? teacher.pw_hash : null);
+    const ok = await A.checkPassword(String(body.password || ''), teacher ? teacher.pw_hash : null);
+    // The right password for an account that's turned off: say so (only someone with the password learns it)
+    if (ok && teacher.disabled) throw new HttpError(403, 'disabled', 'This account is turned off. Ask your admin to turn it back on.');
     if (!ok) {
       if (devRand) devMisses.set(devRand, (devMisses.get(devRand) || 0) + 1);
       if (devMisses.size > 5000) devMisses.delete(devMisses.keys().next().value);
