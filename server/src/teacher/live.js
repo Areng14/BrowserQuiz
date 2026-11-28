@@ -98,7 +98,9 @@ module.exports = function liveRoutes(r) {
     const run = getRun(me, p.id);
     notWhileOpen(run);
     const quiz = store.getQuiz(run.quiz_id);
-    const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    // Text a spreadsheet would run as a formula (a student named =HYPERLINK(...)) is kept as text, as in the
+    // class's grades (grades.js); numbers stay numbers
+    const esc = (v) => { let s = v == null ? '' : String(v); if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
     let timeZone = new URL(req.url, 'http://x').searchParams.get('tz') || 'UTC';
     try { new Intl.DateTimeFormat('en-US', { timeZone }); } catch (e) { timeZone = 'UTC'; }
     // 2026-11-26 14:05: what spreadsheets read as a date and time
