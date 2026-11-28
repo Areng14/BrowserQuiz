@@ -109,10 +109,20 @@ function svgRefused(f, dataUrl) {
   if (why) window.BQAsk.notice({ title: "That diagram can't be used", text: `It ${why}` });
   return !!why;
 }
+// One save sends the images added since the last one, and the server takes 32 MB at a time (base64 makes
+// them a third bigger): past 20 MB of new ones, save first, or the save is refused as too big.
+const NEW_IMAGES_MAX = 20 * 1024 * 1024;
+function roomFor(f) {
+  const unsaved = Object.values(ed.newAssets).reduce((n, b64) => n + Math.floor((b64.length * 3) / 4), 0);
+  if (unsaved + f.size <= NEW_IMAGES_MAX) return true;
+  window.BQAsk.notice({ title: 'Save before adding more images', text: 'One save can take up to 20 MB of new images.' });
+  return false;
+}
 function addImage(q, f) {
   if (!f) return;
   if (!IMAGE_MIME[extOf(f.name)]) { window.BQAsk.notice({ title: "That image can't be used", text: 'Images must be png, jpg, gif, webp or svg.' }); return; }
   if (f.size > 5 * 1024 * 1024) { window.BQAsk.notice({ title: 'That image is too big', text: 'Images can be up to 5 MB.' }); return; }
+  if (!roomFor(f)) return;
   const reader = new FileReader();
   reader.onload = () => {
     if (svgRefused(f, reader.result)) return;
@@ -135,6 +145,7 @@ function addInlineImage(ta, f) {
   if (!f) return;
   if (!IMAGE_MIME[extOf(f.name)]) { window.BQAsk.notice({ title: "That image can't be used", text: 'Images must be png, jpg, gif, webp or svg.' }); return; }
   if (f.size > 5 * 1024 * 1024) { window.BQAsk.notice({ title: 'That image is too big', text: 'Images can be up to 5 MB.' }); return; }
+  if (!roomFor(f)) return;
   const reader = new FileReader();
   reader.onload = () => {
     if (svgRefused(f, reader.result)) return;
