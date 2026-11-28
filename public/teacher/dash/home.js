@@ -292,7 +292,7 @@ function classesTab(data) {
     h('div', { class: 't-row t-add' },
       h('label', { class: 'field', for: 'roster-name' }, h('span', { class: 'field-label', text: 'Class name' }), rosterName),
       tip(h('label', { class: 'field', for: 'roster-file' }, h('span', { class: 'field-label', text: 'Upload a CSV (name, student ID)' }), rosterFile), rosterFile,
-        "A spreadsheet saved as CSV, with name and student_id in the first row and one student on each row after it. Students type their ID to sign in."),
+        "A spreadsheet saved as CSV, one student on each row: their name (or first and last name) and student ID. Students type their ID to sign in."),
       rosterBtn),
     rosterMsg);
 }

@@ -7,7 +7,7 @@ const { tx, q } = require('../db');
 const P = require('../people');
 const { hashSid } = require('../student');
 const { audit, getRoster, parseCsv, requireTeacher } = require('./common');
-const { parseRosterText, parseTimeX, retireRoster } = require('./library');
+const { parseRosterRows, parseRosterText, parseTimeX, retireRoster } = require('./library');
 
 module.exports = function rosterRoutes(r) {
   // New class from a CSV file ({ csv }) or the roster maker's pasted list ({ text }).
@@ -25,18 +25,10 @@ module.exports = function rosterRoutes(r) {
       // Text" has tabs: whichever the header row has most of
       const head = String(body.csv || '').split(/[\r\n]/, 1)[0];
       const sep = [';', '\t'].reduce((a, c) => (head.split(c).length > head.split(a).length ? c : a), ',');
-      const rows = parseCsv(body.csv || '', sep);
-      if (rows.length < 2) return json(res, 400, { error: 'bad_roster', message: 'The CSV needs a header row and at least one student.' });
-      const header = rows[0].map((h) => h.trim().toLowerCase().replace(/\s+/g, '_'));
-      const ni = header.indexOf('name');
-      const si = header.findIndex((h) => h === 'student_id' || h === 'id' || h === 'studentid');
-      if (ni < 0 || si < 0) return json(res, 400, { error: 'bad_roster', message: 'The header row needs "name" and "student_id" columns.' });
-      rows.slice(1).forEach((r2, i) => {
-        const n = String(r2[ni] || '').trim().slice(0, 80);
-        const sid = String(r2[si] || '').trim().slice(0, 40);
-        if (!n || !sid) problems.push(`Row ${i + 2} is missing a name or student ID.`);
-        else students.push({ name: n, sid });
-      });
+      // Read like a pasted list, so the same headers work (Name, or First and Last; Student ID, ID, Number)
+      const rows = parseCsv(body.csv || '', sep).map((cells, i) => [cells.map((c) => c.trim()), i]).filter(([cells]) => cells.some(Boolean));
+      ({ students, problems } = parseRosterRows(rows));
+      if (!students.length && !problems.length) problems.push('The CSV needs at least one student.');
     }
     if (problems.length) return json(res, 400, { error: 'bad_roster', message: problems.slice(0, 5).join(' ') });
     if (students.length > 500) return json(res, 400, { error: 'bad_roster', message: 'A class can have at most 500 students.' });

@@ -194,10 +194,14 @@ const TIME_X = [1, 1.25, 1.5, 2];
 const TIME_CELL = /^(1|1\.25|1\.5|2)\s*[x×]$/i;
 const parseTimeX = (v) => { const x = Number(String(v).replace(/[x×\s]/gi, '')); return TIME_X.includes(x) ? x : 1; };
 function parseRosterText(text) {
+  const lines = String(text || '').split(/\r?\n/).map((l, i) => [l, i]).filter(([l]) => l.trim());
+  return parseRosterRows(lines.map(([l, i]) => [(l.includes('\t') ? l.split('\t') : parseCsv(l)[0] || []).map((c) => c.trim().replace(/^"|"$/g, '')), i]));
+}
+// A class from rows of cells ([cells, line index]), pasted or from a CSV file: a header row, if there is one,
+// says which column is which (a name, or first and last; an ID), and without one each row's number is its ID.
+function parseRosterRows(rows) {
   const students = [];
   const problems = [];
-  const lines = String(text || '').split(/\r?\n/).map((l, i) => [l, i]).filter(([l]) => l.trim());
-  const rows = lines.map(([l, i]) => [(l.includes('\t') ? l.split('\t') : parseCsv(l)[0] || []).map((c) => c.trim().replace(/^"|"$/g, '')), i]);
   let cols = null;
   if (rows.length) {
     const head = rows[0][0].map((c) => c.toLowerCase());
@@ -293,4 +297,4 @@ function previewLayout(quiz) {
   return { order: quiz.questions.map((qq) => qq.id), perms: Object.fromEntries(quiz.questions.filter((qq) => qq.choices).map((qq) => [qq.id, qq.choices.map((_, i) => i)])), vars: {} };
 }
 
-module.exports = { TDEV, acctFails, checkQuiz, devMisses, devSig, getQuizRow, handGraded, imagePaths, knownDevice, loginBucket, parseQuizJson, parseRosterText, parseTimeX, previewLayout, questionPrompt, quizError, quizPrompt, quizSource, retireQuiz, retireRoster, rosterStudentsForRun, saveQuiz, staleRuns, startSession };
+module.exports = { TDEV, acctFails, checkQuiz, devMisses, devSig, getQuizRow, handGraded, imagePaths, knownDevice, loginBucket, parseQuizJson, parseRosterRows, parseRosterText, parseTimeX, previewLayout, questionPrompt, quizError, quizPrompt, quizSource, retireQuiz, retireRoster, rosterStudentsForRun, saveQuiz, staleRuns, startSession };
