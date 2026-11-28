@@ -187,7 +187,7 @@ const phoneSized = () => (cfg.watch ? !!S.watchPhone // the student's screen, no
   : matchMedia('(pointer: coarse) and (max-width: 600px), (pointer: coarse) and (max-height: 480px)').matches);
 // The code box without Monaco: on phones, and if Monaco fails to load.
 function plainEditor(host, ans, lang, q) {
-  const ta = h('textarea', { class: 'code-fallback', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', 'aria-label': `Code answer. Tab indents. ${leaveHint()}.` });
+  const ta = h('textarea', { class: 'code-fallback', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', maxlength: '50000', 'aria-label': `Code answer. Tab indents. ${leaveHint()}.` });
   tabOut(ta);
   ta.value = ans.code[lang];
   ta.addEventListener('input', () => { ans.code[lang] = ta.value; setAnswer(q.id, ans); });
