@@ -7,8 +7,15 @@ const { elementType, isRange } = require('../quizfile');
 const { cArg, cStr, cWriter, cppLit, csLit, goLit, javaLit, javaStr, javaType, jsDesc, jsLit, rsLit, stepMethod } = require('./literals');
 
 // ---------- job building ----------
+// What BQMain names, imported by name so a student's class of the same name (they share the package) can't
+// stand in for it (BQJ.java says more). A name the question's own classes use is theirs and stays out.
+const JAVA_MAIN_IMPORTS = ['java.lang.Boolean', 'java.lang.Character', 'java.lang.Double', 'java.lang.Integer', 'java.lang.Long',
+  'java.lang.Object', 'java.lang.String', 'java.lang.System', 'java.lang.Throwable', 'java.util.ArrayList', 'java.util.Arrays', 'java.util.HashMap'];
+
 function javaMain(q, tests, marker, scanFile, givenFile) {
-  const L = ['import java.util.*;', '', 'public class BQMain {'];
+  const taken = new Set([...Object.keys(q.types || {}), ...(q.class ? [q.class.name] : [])]);
+  const L = ['import java.util.*;', ...JAVA_MAIN_IMPORTS.filter((n) => !taken.has(n.slice(n.lastIndexOf('.') + 1))).map((n) => `import ${n};`),
+    '', 'public class BQMain {'];
   tests.forEach((t, i) => {
     L.push(`    static void t${i}(String m) throws Throwable {`);
     if (q.mode === 'method' && t.speed) {
@@ -40,12 +47,11 @@ function javaMain(q, tests, marker, scanFile, givenFile) {
     }
     L.push('    }');
   });
-  // The marker stays a local, and this file (source and class) is gone before student code runs. Given a
-  // test's number (the runner's "runs": built once, each test in a process of its own), only that test runs,
-  // and the ban check's facts come with the first. The number is read without naming a class: the student's
-  // classes are in this package, and one of theirs could be called Integer.
+  // The marker stays a local, and this file (source and class) is gone before student code runs: BQJ.begin
+  // deletes it. Given a test's number (the runner's "runs": built once, each test in a process of its own),
+  // only that test runs, and the ban check's facts come with the first. The number is read without naming a
+  // class, in case one of the question's own classes is called Integer.
   L.push('', '    public static void main(String[] args) {', `        String m = ${javaStr(marker)};`, '        BQJ.begin();',
-    '        new java.io.File("BQMain.java").delete();', '        new java.io.File("BQMain.class").delete();',
     '        int only = -1;', '        if (args.length > 0) { only = 0; for (char c : args[0].toCharArray()) only = only * 10 + (c - \'0\'); }');
   if (scanFile) L.push(`        if (only <= 0) BQJ.scan(m, ${javaStr(scanFile)}, ${givenFile ? javaStr(givenFile) : 'null'});`);
   tests.forEach((_, i) => L.push(`        if (only < 0 || only == ${i}) { try { t${i}(m); } catch (Throwable e) { BQJ.fail(m, ${i}, e); } }`));
