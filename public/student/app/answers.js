@@ -26,8 +26,11 @@ function onBeat(res, info) {
   if (res && res.notice && res.notice.id !== S.noticeId) { S.noticeId = res.notice.id; showNotice(res.notice.text); }
   if (res && res.note && res.note.id !== S.noteId) { S.noteId = res.note.id; showNotice(res.note.text); }
   setOnline(true);
-  if (info && info.answers && !res.held && S.saveState === 'saving') setSave('saved');
-  if (info && info.answers && !res.held && S.monitor && !S.monitor.answersDirty) clearUnsent(); // the server has them all
+  // the server has them all, unless something changed while this heartbeat was on its way
+  if (info && info.answers && !res.held && S.monitor && !S.monitor.answersDirty) {
+    if (S.saveState === 'saving') setSave('saved');
+    clearUnsent();
+  }
 }
 function onBeatError(err, failures) {
   if (S.done || !S.el) return;
