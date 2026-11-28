@@ -284,6 +284,8 @@ module.exports = function authRoutes(r) {
     if (!t) throw new HttpError(404, 'not_found');
     if (t.role === 'admin') throw new HttpError(400, 'admin_env', 'Admin is reset from the server settings (ADMIN_RESET or ADMIN_PASSWORD).');
     let out = { ok: true };
+    // A reset or enable is how a locked-out teacher gets back in: their wrong passwords so far stop counting.
+    if (p.action === 'reset' || p.action === 'enable') acctFails.delete(t.username.toLowerCase());
     if (p.action === 'reset') {
       const temp = A.tempPassword();
       q('UPDATE teachers SET pw_hash = ?, must_change = 1 WHERE id = ?').run(await A.hashPassword(temp), t.id);
