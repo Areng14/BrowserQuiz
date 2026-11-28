@@ -28,5 +28,7 @@
     assetUrl: (p) => `${base}/asset?path=${encodeURIComponent(p)}`,
   };
   document.getElementById('pv-close').addEventListener('click', () => window.close());
+  // Signed out, or in as someone else, in another tab (dash/core.js tellTabs): load again, which asks to sign in
+  if (window.BroadcastChannel) new BroadcastChannel('bq-teacher').onmessage = () => location.reload();
   window.BQ.app.start(document.getElementById('bq-app'), api);
 })();

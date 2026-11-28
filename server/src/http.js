@@ -234,6 +234,9 @@ function serveStatic(req, res, rootDir, rel) {
   }
   const headers = Object.assign({ 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': 'no-cache', ETag: etag }, vary);
   if (ext === '.html') headers['Content-Security-Policy'] = PAGE_CSP;
+  // Teacher pages aren't kept: Back after signing out (here or in another tab) would bring grades or a report
+  // back from the browser's back/forward cache as they were.
+  if (ext === '.html' && path.basename(root) === 'teacher') headers['Cache-Control'] = 'no-store';
   // The one page that goes in a frame: the student's screen inside the teacher's Watch page, same origin only.
   if (file.endsWith(path.join(path.sep, 'teacher', 'watch-frame.html'))) {
     headers['Content-Security-Policy'] = PAGE_CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'");

@@ -118,6 +118,11 @@ function themeButton() {
   return b;
 }
 dash.who = null; // the signed-in teacher, from /api/t/me
+// The browser's other tabs share the sign-in cookie: signing out there, or in as someone else, signs this
+// tab out too, so it doesn't go on showing or saving things under the wrong account. (Username, or ''.)
+const tabs = window.BroadcastChannel ? new BroadcastChannel('bq-teacher') : null;
+const tellTabs = (username) => { if (tabs) tabs.postMessage(username); };
+if (tabs) tabs.onmessage = (e) => { if (dash.who && e.data !== dash.who.username) showLogin(); };
 // The password just typed at sign-in, so picking a new one doesn't ask for it again (memory only).
 dash.justTyped = null;
 // The signed-in teacher's name, opening a menu: Settings, Teachers (an admin's), and Sign out. They're
@@ -128,7 +133,7 @@ function accountMenu() {
     { text: 'Settings', onclick: () => { location.hash = '#settings'; } },
     dash.who.role === 'admin' ? { text: 'Teachers', onclick: () => { location.hash = '#teachers'; } } : null,
     dash.who.role === 'admin' ? { text: 'Server', onclick: () => { location.hash = '#server'; } } : null,
-    { text: 'Sign out', onclick: async () => { await post('/api/t/logout'); dash.who = null; forgetCode(); showLogin(); } },
+    { text: 'Sign out', onclick: async () => { await post('/api/t/logout'); dash.who = null; tellTabs(''); forgetCode(); showLogin(); } },
   ], null, { text: dash.who.name });
 }
 // A recovery code waiting to be saved (account.js showRecoveryCode): this tab keeps it until "I saved it",
@@ -249,4 +254,4 @@ function iconButton(btn, name, text, more) {
 // Filled pause and play marks (the paused quiz's banner)
 function glyph(kind, size = 16) { return icon(kind, size, { fill: 'currentColor', stroke: 'none' }); }
 
-export { EVENT_TIP, ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, day, forgetCode, ghLink, glyph, h, heads, icon, iconButton, keepCode, labeled, mmss, mount, pendingCode, plural, post, root, scoreText, setTheme, siteFoot, sortableTable, sortHeads, sortRows, themeButton, themeChoice, timeZone, tip };
+export { EVENT_TIP, ICONS, LABEL, PASSKEYS, accountMenu, actionsHead, api, ask, bar, clock, date, day, forgetCode, ghLink, glyph, h, heads, icon, iconButton, keepCode, labeled, mmss, mount, pendingCode, plural, post, root, scoreText, setTheme, siteFoot, sortableTable, sortHeads, sortRows, tellTabs, themeButton, themeChoice, timeZone, tip };
