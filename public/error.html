@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Page not found - BrowserQuiz</title>
+  <title>{{title}} - BrowserQuiz</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="icon" href="/icon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="/icon-180.png">
@@ -11,15 +11,18 @@
   <style>
     html, body { height: 100%; margin: 0; }
     body { background: var(--bg); }
+    .status { font-size: clamp(88px, 18vw, 128px); font-weight: 800; line-height: 0.9; letter-spacing: -0.04em; margin-left: -0.03em; color: var(--field-line); }
+    .panel h1 { font-size: 28px; line-height: 1.2; letter-spacing: -0.01em; }
     .panel > a.btn { display: inline-flex; align-items: center; justify-self: start; text-decoration: none; }
   </style>
 </head>
 <body>
-  <!-- What the server sends a browser for an address it doesn't have (index.js). Absolute paths: it's sent at any depth. -->
+  <!-- What the server sends a browser for a page that fails (errorpage.js fills it in). Absolute paths: it's
+       sent at any depth. Caddyfile has its own copy, for while the app itself is down. -->
   <div class="bq-app"><main class="screen center"><div class="panel">
-    <p class="eyebrow">BrowserQuiz</p>
-    <h1>Page not found</h1>
-    <a class="btn primary" href="/">Go to the start</a>
+    <p class="status">{{status}}</p>
+    <h1>{{title}}</h1>
+    <a class="btn primary" href="{{href}}">{{button}}</a>
   </div></main></div>
 </body>
 </html>

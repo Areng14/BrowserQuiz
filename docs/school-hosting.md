@@ -47,14 +47,10 @@ Pick whichever you can do:
      openssl pkcs12 -in cert.pfx -nocerts -nodes -out key.pem
      ```
   3. Add `- ./certs:/certs:ro` under the `caddy` service's `volumes`.
-  4. Change `Caddyfile` to:
+  4. In `Caddyfile`, add this line under `encode gzip`:
 
      ```
-     {$DOMAIN} {
-     	encode gzip
      	tls /certs/cert.pem /certs/key.pem
-     	reverse_proxy app:8080
-     }
      ```
 - **A public domain.** Point it at your public address, and forward ports 80 and 443 from the internet to the server. Caddy then gets a free certificate by itself and renews it.
 
