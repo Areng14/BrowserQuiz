@@ -51,6 +51,16 @@ function backups(s) {
   const msg = h('p', { class: 't-small t-set-msg', role: 'status' });
   const say = (text, bad) => { msg.className = `t-small t-set-msg ${bad ? 't-error' : 'st-good'}`; msg.textContent = text; };
   const list = h('div', {});
+  // Signed out (a restart, or the session ran out): the browser would fail the download quietly, or save the
+  // error as the backup. Sign in first.
+  const download = (b) => {
+    const url = `/api/t/server/backups/${encodeURIComponent(b.name)}`;
+    return h('a', { href: url, download: b.name, text: 'Download', onclick: async (e) => {
+      e.preventDefault();
+      try { await api('/api/t/me'); } catch (ex) { if (ex.message !== 'login') say(ex.message, true); return; }
+      location.href = url; // an attachment: it downloads, and the page stays
+    } });
+  };
   const draw = (all) => {
     list.replaceChildren(!all.length ? h('p', { class: 't-muted', text: 'None yet.' }) : h('div', { class: 't-table-wrap' }, sortableTable(h('table', { class: 't-table' },
       h('thead', {}, h('tr', {}, heads(['Made', 'Kind', 'Size'], ['Size']), actionsHead())),
@@ -58,7 +68,7 @@ function backups(s) {
         h('td', { 'data-sort': String(b.at), text: date(b.at) }), h('td', { text: KINDS[b.kind] || b.kind }),
         h('td', { class: 'num', 'data-label': 'Size', 'data-sort': String(b.bytes), text: size(b.bytes) }),
         h('td', { class: 't-actions' }, moreMenu(`More for the backup of ${date(b.at)}`, `backup:${b.name}`, [
-          h('a', { href: `/api/t/server/backups/${encodeURIComponent(b.name)}`, download: b.name, text: 'Download' }),
+          download(b),
           { text: 'Restore', danger: true, onclick: () => restore(b) }])))))), ['Size'])));
   };
   const restarting = () => { now.disabled = true; fromFile.disabled = true; waitForRestart(say); };
@@ -83,11 +93,10 @@ function backups(s) {
     if (!f || !(await ask.confirm({ title: `Restore ${f.name}?`, text: 'Everything on this server is replaced by it, and the server restarts.', ok: 'Restore', danger: true }))) return;
     say('Uploading…');
     fromFile.disabled = true;
-    let res;
+    // api(): signed out since the page opened (a restart), it goes to sign-in like everything else
     try {
-      res = await fetch('/api/t/server/restore-upload', { method: 'POST', body: f, headers: { 'Content-Type': 'application/octet-stream' } });
-      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.message || `Restore failed (${res.status})`); }
-    } catch (e) { say(e.message, true); fromFile.disabled = false; return; }
+      await api('/api/t/server/restore-upload', { method: 'POST', body: f, headers: { 'Content-Type': 'application/octet-stream' } });
+    } catch (e) { if (e.message !== 'login') { say(e.message, true); fromFile.disabled = false; } return; }
     restarting();
   });
   draw(s.backups);
