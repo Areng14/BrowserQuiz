@@ -198,6 +198,7 @@ select.input:not([multiple]), select.select {
 .qbar { border-bottom-width: 1px; }
 /* screen marks (screenmark.js): canvases laid over the lines */
 .quiz.marked .qbar, .quiz.marked .qnav, .quiz.marked .choice { position: relative; }
+.bq-sm-div { position: relative; border-top: 1px solid var(--line); }
 canvas.bq-sm { position: absolute; display: block; pointer-events: none; }
 @media print { canvas.bq-sm { display: none; } }
 .qbar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }

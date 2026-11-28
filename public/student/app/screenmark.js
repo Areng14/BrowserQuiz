@@ -1,5 +1,6 @@
 // Screen marks (server marks.js): this attempt's code, painted faintly into the quiz screen's lines (the
-// header's bottom line, the footer's top line, and each answer box's top and bottom edges), so a photo of
+// header's bottom line, the footer's top line, a line between the question and its answers, and each answer
+// box's top and bottom edges), so a photo of
 // the screen shows whose it was. A line repeats the code in two tones of its own colour that blend into each
 // other, so it still reads as a plain line. The dashboard's Trace a photo reads it back (teacher/trace).
 import { S } from './state.js';
@@ -66,12 +67,24 @@ function line(el, side, inset, thick, offset) {
   paint(c, S.markPattern, base, offset);
 }
 
+// The line between a question and its answers: after the question's text (and picture), when an answer
+// comes after it. Not on code questions (side by side), directions, the review page or the paused screen.
+function divider() {
+  const view = S.el.main.querySelector(':scope > .qview, :scope > .shared-split > .qview');
+  if (!view || view.matches('.wide, .intro, .review, .paused-view') || view.querySelector(':scope > .bq-sm-div')) return;
+  const ask = [...view.children].filter((el) => el.matches('.prompt, .qimg')).pop();
+  if (ask && ask.nextElementSibling) ask.after(Object.assign(document.createElement('div'), { className: 'bq-sm-div' }));
+}
+
 function draw() {
   if (!S.mark || !S.el || !S.el.wrap.isConnected) return;
   S.markPattern = S.markPattern || pattern(S.mark);
   const bar = S.el.wrap.querySelector('.qbar'), nav = S.el.nav;
   if (bar) line(bar, 'bottom', 0, 2, 0);
   if (nav) line(nav, 'top', 0, 2, 191);
+  divider();
+  const div = S.el.main.querySelector('.bq-sm-div');
+  if (div) line(div, 'top', 0, 2, 283);
   // answer boxes: not one that's picked (its edge is the accent colour then)
   S.el.main.querySelectorAll('.choice').forEach((box, k) => {
     const picked = !!box.querySelector('input:checked');
@@ -90,10 +103,12 @@ const later = () => { if (queued) return; queued = true; requestAnimationFrame((
 function startMarks() {
   if (!S.mark || !S.el) return;
   S.el.wrap.classList.add('marked');
+  divider();
   draw();
   const ro = new ResizeObserver(later);
   ro.observe(S.el.wrap);
-  new MutationObserver(later).observe(S.el.main, { childList: true, subtree: true });
+  // a new question gets its line before the page paints (no jump), and its marks on the next frame
+  new MutationObserver(() => { divider(); later(); }).observe(S.el.main, { childList: true, subtree: true });
   new MutationObserver(later).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   S.el.main.addEventListener('change', later);
 }
