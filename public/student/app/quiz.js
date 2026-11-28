@@ -1,5 +1,6 @@
 // The quiz screen: its bars, and drawing the question that's open.
 
+import { startMarks } from './screenmark.js';
 import { BQ, S, cfg, root } from './state.js';
 import { h, mount, toast } from './dom.js';
 import { icon, themeButton } from './theme.js';
@@ -83,6 +84,7 @@ function screenQuiz() {
   mount(wrap);
   renderQuestion();
   startTimer();
+  startMarks();
 }
 
 // Locked parts (quiz.lockParts): going on to a later part finishes every part before it, for good, once

@@ -49,6 +49,8 @@ const NAMES = {
   material: 'BookOpen', // shared material: a case or passage several questions use
   quizzes: 'FileText',
   classes: 'Users',
+  tools: 'Wrench', // the Tools tab
+  camera: 'Camera', // Trace a photo
   teachers: 'Shield',
   live: 'Radio', // open quizzes
   warn: 'TriangleAlert', // a sign-in to check before starting

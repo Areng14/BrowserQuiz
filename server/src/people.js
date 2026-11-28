@@ -60,7 +60,7 @@ const openEvent = (runId, attemptId, s) => tryOpen(ownerOfRun(runId), eventAad(a
 const sealEdits = (runId, attemptId, text) => seal(ownerOfRun(runId), editAad(attemptId), text);
 const openEdits = (runId, attemptId, s) => tryOpen(ownerOfRun(runId), editAad(attemptId), s);
 
-const ATTEMPT_FIELDS = ['answers', 'result', 'ip', 'user_agent', 'pin_ip'];
+const ATTEMPT_FIELDS = ['answers', 'result', 'ip', 'user_agent', 'pin_ip', 'mark'];
 // What a corrections attempt's layout carries over from the exam: sealed inside it as "sealed" (store.js).
 const SEALED_LAYOUT = ['fix', 'startAnswers'];
 

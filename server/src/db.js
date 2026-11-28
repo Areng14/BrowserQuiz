@@ -124,6 +124,7 @@ addColumn('attempts', 'device', 'TEXT');
 // When an exam's student agreed to the rules and went into lockdown, waiting for the teacher to start
 // (student.js /api/ready). Leaving from then on counts, as in the quiz.
 addColumn('attempts', 'ready_at', 'INTEGER');
+addColumn('attempts', 'mark', 'TEXT'); // the code its screen shows, sealed (people.js)
 // Extra time for one student (an accommodation): their time limit is multiplied by this on every quiz.
 addColumn('roster_students', 'time_x', 'REAL NOT NULL DEFAULT 1');
 // When the teacher paused the quiz (pause.js); null while it runs.

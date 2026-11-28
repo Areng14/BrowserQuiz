@@ -73,6 +73,7 @@ If the chat won't take a prompt that long, download it with the button next to *
 **On the day.**
 
 1. If everyone, you included, is on the school wifi, turn on **Only students on my current network**.
+   In an exam, each student's quiz screen carries faint marks. If a photo of a quiz screen gets around, **Tools > Trace a photo** shows whose screen it was. Students are told their screen is marked.
 2. Students go to the address on your screen, type the code, pick their name and type their ID.
 3. They read the rules and click **I agree**. That puts them in lockdown to wait.
 4. Walk around the room. Check that each student is at the right computer and signed in as themselves.

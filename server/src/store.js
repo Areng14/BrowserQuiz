@@ -121,7 +121,7 @@ function fromRow(r) {
     result: result ? JSON.parse(result) : null, ip: open('ip'), userAgent: open('user_agent'), edits: r.edits,
     archived: !!r.archived, createdAt: r.created_at,
     awayMs: r.away_ms || 0, awayMax: r.away_max || 0, restoreStrikes: r.restore_strikes, pinIp: open('pin_ip') || null,
-    qTime: r.q_time ? JSON.parse(r.q_time) : {}, device: r.device || null, readyAt: r.ready_at || null,
+    qTime: r.q_time ? JSON.parse(r.q_time) : {}, device: r.device || null, readyAt: r.ready_at || null, mark: r.mark ? open('mark') : null,
     // runtime only
     awaySince: 0, away: false, burstStart: 0, beatLost: false, eventCount: null, warnWindow: new Map(), flagged: new Set(), viewQ: null, viewAt: 0,
   };

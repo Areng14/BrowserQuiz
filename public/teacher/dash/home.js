@@ -12,6 +12,7 @@ import { showGrade } from './grade.js';
 import { lockdownFields } from './modes.js';
 import { picker } from './picker.js';
 import { gradesTab } from './grades.js';
+import { toolsTab } from './tools.js';
 import { serverTab } from './server.js';
 
 // ---------- dashboard: a sidebar of tabs, each with its own address (#give, #run/<id>, ...) ----------
@@ -21,6 +22,7 @@ const TABS = [
   { id: 'recent', label: 'Recent', icon: 'recent' },
   { id: 'quizzes', label: 'Quizzes', icon: 'quizzes' },
   { id: 'classes', label: 'Classes', icon: 'classes' },
+  { id: 'tools', label: 'Tools', icon: 'tools' },
   // in the menu under the teacher's name (core.js accountMenu), not the sidebar
   { id: 'teachers', label: 'Teachers', icon: 'teachers', admin: true, menu: true },
   { id: 'server', label: 'Server', icon: 'settings', admin: true, menu: true },
@@ -104,7 +106,7 @@ async function showHome(next) {
   if ((dash.tab === 'teachers' || dash.tab === 'server') && !(dash.who && dash.who.role === 'admin')) { showHome('give'); return; }
   noteRuns(data.runs);
   if (dash.tab === 'open' && dash.live < 2) { if (dash.live) { history.replaceState(null, '', '#run/' + encodeURIComponent(dash.openRuns[0].id)); showRun(dash.openRuns[0].id); } else showHome('give'); return; }
-  const page = { open: openTab, give: giveTab, grades: gradesTab, recent: recentTab, quizzes: quizzesTab, classes: classesTab, teachers: teachersSection, server: serverTab, settings: settingsTab }[dash.tab](data, me);
+  const page = { open: openTab, give: giveTab, grades: gradesTab, recent: recentTab, quizzes: quizzesTab, classes: classesTab, tools: toolsTab, teachers: teachersSection, server: serverTab, settings: settingsTab }[dash.tab](data, me);
   const y = same ? window.scrollY : 0;
   mount(shell(dash.tab, page));
   window.scrollTo(0, y);

@@ -396,6 +396,7 @@ function screenRules(err) {
       locked ? null : h('li', { text: 'The quiz runs in fullscreen.' }),
       h('li', { text: 'Mouse and keyboard activity is recorded, and your teacher can watch the quiz page live.' }),
       h('li', { text: 'Pasting from outside the quiz is blocked.' }),
+      S.run.marked ? h('li', { text: 'Your screen is marked, so a photo of it shows whose it was.' }) : null,
       mins ? h('li', { text: 'The quiz turns itself in when time runs out.' }) : null),
     checkList,
     btn, msg,
@@ -472,6 +473,8 @@ async function beginQuiz(btn, msg, label) {
 function enterQuiz(r, fsOk) {
   clearInterval(S.poll);
   S.tag = r.tag || ''; // this attempt: a reset or a second try starts with no marks or scratch work
+  S.mark = r.mark || null; // screen marks (screenmark.js): this attempt's code, when the quiz is marked
+  S.markPattern = null;
   S.quiz = r.quiz;
   S.deadline = r.deadline || 0;
   S.turnInAt = r.turnInAt || 0;

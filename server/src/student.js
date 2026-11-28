@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { q, tx, txGroup } = require('./db');
 const store = require('./store');
 const P = require('./people');
+const { newMark } = require('./marks');
 const T = require('../../public/teacher/types.js');
 const W = require('./watch');
 const { runSamples, studentLanguages } = require('./coderun');
@@ -249,6 +250,7 @@ function runInfoBase(run, quiz) {
     practice: run.mode === 'practice',
     seb: !!run.seb_key, // SEB keeps the window locked full screen itself
     sebQuit: !!run.seb_config, // our settings: opening seb-quit.html closes SEB
+    marked: run.mode !== 'practice', // screen marks (marks.js): Before you start says so
   };
 }
 
@@ -437,9 +439,10 @@ module.exports = function studentRoutes(r) {
     } else {
       const id = crypto.randomUUID();
       // Practice runs skip the waiting room.
-      q(`INSERT INTO attempts (id, run_id, student_id, token_hash, status, ip, user_agent, created_at, device)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, run.id, student.id, sha256(token), run.mode === 'practice' ? 'admitted' : 'waiting',
-        P.sealField(run.id, id, 'ip', clientIp(req)), P.sealField(run.id, id, 'user_agent', String(req.headers['user-agent'] || '').slice(0, 300)), now, dev ? deviceHash(dev) : null);
+      q(`INSERT INTO attempts (id, run_id, student_id, token_hash, status, ip, user_agent, created_at, device, mark)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, run.id, student.id, sha256(token), run.mode === 'practice' ? 'admitted' : 'waiting',
+        P.sealField(run.id, id, 'ip', clientIp(req)), P.sealField(run.id, id, 'user_agent', String(req.headers['user-agent'] || '').slice(0, 300)), now, dev ? deviceHash(dev) : null,
+        newMark(run, id));
       const fresh = store.getAttempt(id);
       store.logEvent(fresh, 'join', 'info', student.name);
       noteSameBrowser(fresh, run, store.getQuiz(run.quiz_id), student.name);
@@ -533,7 +536,7 @@ module.exports = function studentRoutes(r) {
     if (pq.timeLimitMin && !run.corrects) pq.timeLimitMin = myLimit(quiz, a.studentId); // their own, with extra time
     // tag: tells this attempt from an earlier one (a reset, practice again), for what the browser keeps
     if (Parts.timed(quiz, a.layout)) keepLocked(quiz, a, {}, Pause.clock(a, a.pausedAt, now)); // parts whose time ran out while they were away
-    json(res, 200, { quiz: pq, deadline: a.deadline, turnInAt: turnInAt(a) || null, partEnds: partEndsOut(quiz, a), savedAt: seenAt, now, paused: Pause.since(a, a.pausedAt) || undefined, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0, tag: sha256(a.id).slice(0, 12) });
+    json(res, 200, { quiz: pq, deadline: a.deadline, turnInAt: turnInAt(a) || null, partEnds: partEndsOut(quiz, a), savedAt: seenAt, now, paused: Pause.since(a, a.pausedAt) || undefined, saved: a.answers || {}, locked: locks(quiz, a.layout) ? a.layout.locked || 0 : 0, tag: sha256(a.id).slice(0, 12), mark: a.mark || undefined });
   });
 
   r.post('/api/event', async (req, res) => {
