@@ -107,8 +107,8 @@ const job0Scans = (q, lang) => B.bansFor(q.ban, lang).length > 0 && ['c', 'cpp',
 // it's given the number of. A build holds at most EACH_MAX tests (the runner's most runs), and as many as keep
 // the generated test file to EACH_MAIN bytes (javac's constants for one class) and the job to EACH_JOB.
 // EACH_BUDGET: how far into a job the runner still starts a run (each.py's BUDGET_S).
-const EACH_LANGS = ['java'];
-const EACH_FILE = { java: 'BQMain.java' };
+const EACH_FILE = { java: 'BQMain.java', c: 'bqmain.c', cpp: 'bqmain.cpp', csharp: 'bqmain.cs', go: 'bqmain.go', rust: 'bqmain.rs' };
+const EACH_LANGS = Object.keys(EACH_FILE);
 const EACH_MAX = 100;
 const EACH_MAIN = 100 * 1024;
 const EACH_JOB = 300 * 1024;
@@ -169,7 +169,7 @@ async function runTests(q, lang, code, tests, opts) {
     return H.readResults(q, lang, tests, res, marker);
   }
   await runnerLanguages();
-  const parts = (EACH_LANGS.includes(lang) && langs.each.includes(lang) && await runEach(q, lang, code, tests))
+  const parts = (tests.length && EACH_LANGS.includes(lang) && langs.each.includes(lang) && await runEach(q, lang, code, tests))
     // In the compiled languages the ban check's facts are the runner's, read once: with the first test.
     || await Promise.all(tests.map(async (t, k) => {
       const { marker, job } = H.buildJob(q, lang, code, [t], { scan: k === 0 });

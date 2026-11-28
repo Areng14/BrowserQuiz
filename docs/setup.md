@@ -32,7 +32,7 @@ The code runner comes in two kinds:
 
 The setup script asks which one the first time. To change it later, run `./setup.sh --languages` (on Windows, `setup.cmd -Languages`). On Railway, add the variable `RUNNER_LANGS=full` to the `runner` service and redeploy it. The quiz maker only offers the languages the runner has, and a quiz that needs another one says so when you save it.
 
-**Several classes writing code at once.** The app itself keeps up with a couple of thousand students; grading code is what takes time. Every hidden test is a run of the student's code (a Java run takes about a second), and the runner does a few at a time. Grading still finishes on its own, just later, and a student's Run examples always goes ahead of grading.
+**Several classes writing code at once.** The app itself keeps up with a couple of thousand students; grading code is what takes time. Each hidden test runs the student's code on its own (an answer in a compiled language is built once for all of them), and the runner does a few at a time. Grading still finishes on its own, just later, and a student's Run examples always goes ahead of grading.
 
 | Variable | Service | Default | |
 | --- | --- | --- | --- |
