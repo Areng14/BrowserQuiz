@@ -206,15 +206,17 @@ function quizzesTab(data) {
     const json = jsonIn(pasteJson.value);
     if (!json) { quizMsg.textContent = "That isn't a quiz.json."; return; }
     pasteBtn.disabled = true; pasteBtn.textContent = 'Checking…'; quizMsg.textContent = '';
-    try { await api('/api/t/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: json }); showHome(); } catch (e) { quizMsg.textContent = e.message; pasteBtn.disabled = false; pasteBtn.textContent = 'Upload pasted quiz'; }
+    try { await api('/api/t/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: json }); if (pasteBtn.isConnected) showHome(); } catch (e) { quizMsg.textContent = e.message; pasteBtn.disabled = false; pasteBtn.textContent = 'Upload pasted quiz'; }
   });
+  // An upload takes a few seconds (its code is run): the list is redrawn when it's done only if the teacher is
+  // still here, not over a page they went on to (a class being typed, the quiz maker).
   const quizBtn = h('button', { class: 'btn', type: 'button', text: 'Upload .quiz' });
   quizBtn.addEventListener('click', async () => {
     const f = quizFile.files[0];
     if (!f) { quizMsg.textContent = 'Pick a .quiz file first.'; return; }
     if (f.size > 25 * 1024 * 1024) { quizMsg.textContent = 'The .quiz file is bigger than 25 MB.'; return; } // the server's limit, before reading it all in
     quizBtn.disabled = true; quizBtn.textContent = 'Checking…'; quizMsg.textContent = '';
-    try { await api('/api/t/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() }); showHome(); } catch (e) { quizMsg.textContent = e.message; quizBtn.disabled = false; quizBtn.textContent = 'Upload .quiz'; }
+    try { await api('/api/t/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: await f.arrayBuffer() }); if (quizBtn.isConnected) showHome(); } catch (e) { quizMsg.textContent = e.message; quizBtn.disabled = false; quizBtn.textContent = 'Upload .quiz'; }
   });
   // Search by title, once the list is long enough to need it; kept while the tab redraws.
   const none = h('p', { class: 't-muted', text: 'None found.', hidden: true });
@@ -273,7 +275,7 @@ function classesTab(data) {
     const f = rosterFile.files[0];
     if (!f) { rosterMsg.textContent = 'Pick a CSV file first.'; return; }
     rosterBtn.disabled = true; rosterMsg.textContent = '';
-    try { await post('/api/t/rosters', { name: rosterName.value, csv: await csvText(f) }); showHome(); } catch (e) { rosterMsg.textContent = e.message; rosterBtn.disabled = false; }
+    try { await post('/api/t/rosters', { name: rosterName.value, csv: await csvText(f) }); if (rosterBtn.isConnected) showHome(); } catch (e) { rosterMsg.textContent = e.message; rosterBtn.disabled = false; }
   });
   return h('section', { class: 't-section' },
     h('div', { class: 't-head' }, h('h1', { text: 'Classes' }),
