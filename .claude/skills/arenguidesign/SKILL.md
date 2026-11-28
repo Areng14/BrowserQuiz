@@ -1,6 +1,6 @@
 ---
 name: arenguidesign
-description: Areng's UI design rules for building or changing any user interface (pages, screens, dialogs, tables, forms, menus, reports), grounded in minimalist and intuitive design (Nielsen's heuristics, Don Norman, Dieter Rams, Hick's and Fitts's laws, Gestalt) - no slogans or taglines, no pill or badge statuses, buttons colored by role (primary, success, warning, danger) with icons and words, hover tips for hard terms, one consistent set of control sizes and spacing, no scrolling unless the content needs it, few visible buttons with the rest under a menu, layouts anyone can pick up without help, and balanced alignment with breathing room. Use whenever you design, build, restyle, clean up or review UI, even small changes like adding a button, a column or a dialog, and before calling any UI work done.
+description: Areng's UI design rules for building or changing any user interface (pages, screens, dialogs, tables, forms, menus, reports), grounded in minimalist and intuitive design (Nielsen's heuristics, Don Norman, Dieter Rams, Hick's and Fitts's laws, Gestalt) - no slogans or taglines, no dot-separated lines, no pill or badge statuses, buttons colored by role (primary, success, warning, danger) with icons and words, hover tips for hard terms, one consistent set of control sizes and spacing, no scrolling unless the content needs it, few visible buttons with the rest under a menu, layouts anyone can pick up without help, and balanced alignment with breathing room. Use whenever you design, build, restyle, clean up or review UI, even small changes like adding a button, a column or a dialog, and before calling any UI work done.
 ---
 
 # arenguidesign: good UI, the Areng way
@@ -25,6 +25,10 @@ it, so removing things comes before styling them.
   never "Restore" somewhere else.
 - **Errors sit next to what caused them** and say how to fix it, in plain words.
 - **Empty states are one short line** ("None found."), not a paragraph.
+- **No dot-separated lines.** Don't string facts together with `·`, `•`, `|` or `/` ("AP CSA · Period 3
+  · Nov 21 · 28 of 30 in"). Write the few that matter as words ("Unit 4 Test, Period 3"), give each its
+  own labeled field or column, or cut it. A row of facts joined by dots is clutter dressed up as a
+  sentence. Scores and times keep their own notation ("3 / 5", "0:06").
 - **Hard terms get a hover tip, not an explainer line.** A setting, status or flag a newcomer may
   not know shows one or two plain sentences on hover and keyboard focus, read by screen readers as
   its description. Say what it does or what the student gets. Obvious labels get no tip.
@@ -99,7 +103,7 @@ it, so removing things comes before styling them.
 - **Fold away what's rarely used** (advanced options in a collapsed section), and open it on its
   own when it's in use.
 - **Remove columns and fields nobody acts on.** If two columns say the same thing, merge them
-  ("3 · 0:06" instead of separate Strikes and Time away columns).
+  ("3 strikes, 0:06 away" instead of separate Strikes and Time away columns).
 
 ## 7. Easy to pick up
 
@@ -241,6 +245,7 @@ Look at it, don't just reason about it:
    ```
 3. **Check the checklist:**
    - [ ] No taglines or explainer lines the UI could have shown instead
+   - [ ] No lines of facts joined by `·`, `•`, `|` or `/`
    - [ ] No pills, badges or tags for status
    - [ ] Buttons colored by role; one solid button per bar or dialog
    - [ ] Icons from the one set; icon-only only when obvious, and named on hover and for screen readers
