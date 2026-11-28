@@ -397,7 +397,9 @@ module.exports = function studentRoutes(r) {
   // Page load: is this browser already signed in? Lets a reloaded page skip the join screens.
   r.post('/api/resume', async (req, res) => {
     let ctx;
-    try { ctx = current(req, { mustBeOpen: false }); } catch (e) { return json(res, 200, { status: null }); }
+    // Locked (the server restarted and their teacher hasn't signed in yet) isn't signed out: the page says
+    // so and asks again (app/main.js).
+    try { ctx = current(req, { mustBeOpen: false }); } catch (e) { if (e.code === 'locked') throw e; return json(res, 200, { status: null }); }
     const { a, run, quiz } = ctx;
     if (run.status !== 'open' && a.status !== 'active' && a.status !== 'submitted') return json(res, 200, { status: null });
     const student = q('SELECT bq_name(name, id, roster_id) AS name FROM roster_students WHERE id = ?').get(a.studentId);

@@ -2,7 +2,7 @@
 // The student never learns anything about integrity from this UI. The server keeps all of that.
 // Each part of it is a module in this folder; this one starts it (window.BQ.app).
 
-import { BQ, S, api, cfg, resetState, setUp } from './state.js';
+import { BQ, ERRORS, S, api, cfg, resetState, root, setUp } from './state.js';
 import { exitFullscreen } from './dom.js';
 import { pageParams } from './theme.js';
 import { screenJoin, screenRules } from './entry.js';
@@ -12,6 +12,17 @@ import { startPreview, startWatch } from './done.js';
 import { watchView } from './watch.js';
 
 // ---------- lifecycle ----------
+// What /api/resume says this browser is in: the screen to go back to.
+function pickUp(r, code) {
+  if (!r || !r.status) return screenJoin(null, code);
+  S.run = r.run;
+  S.me = { name: r.name };
+  // not started yet: the rules again (agreeing goes back into lockdown; doing it twice counts as
+  // reopening, server /api/ready)
+  if (r.status === 'waiting' || r.status === 'admitted') return screenRules();
+  if (r.status === 'active') return screenContinue(!!r.paused);
+  return screenJoin(null, code); // turned in already: free to join the next quiz
+}
 function teardown() {
   if (!S) return;
   clearInterval(S.timer);
@@ -41,16 +52,23 @@ BQ.app = {
       }
     } catch (e) { /* no code */ }
     // Already signed in on this browser (say, after a reload)? Pick up where they were.
-    api.resume().then((r) => {
-      if (!r || !r.status) return screenJoin(null, code);
-      S.run = r.run;
-      S.me = { name: r.name };
-      // not started yet: the rules again (agreeing goes back into lockdown; doing it twice counts as
-      // reopening, server /api/ready)
-      if (r.status === 'waiting' || r.status === 'admitted') return screenRules();
-      if (r.status === 'active') return screenContinue(!!r.paused);
-      return screenJoin(null, code); // turned in already: free to join the next quiz
-    }).catch(() => screenJoin(null, code));
+    api.resume().then((r) => pickUp(r, code)).catch((e) => {
+      if (!e || e.code !== 'locked') return screenJoin(null, code);
+      // The server restarted and their teacher hasn't signed in yet: the join screen says so, and the
+      // quiz comes back by itself once the teacher has, unless they've gone on from that screen.
+      screenJoin(ERRORS.locked, code);
+      const screen = root.firstElementChild;
+      clearInterval(S.poll);
+      S.poll = setInterval(() => {
+        if (!screen.isConnected) { clearInterval(S.poll); return; }
+        api.resume().then((r) => {
+          if (!screen.isConnected) return;
+          clearInterval(S.poll);
+          if (r && r.status && r.status !== 'submitted') pickUp(r, code);
+          else { const msg = screen.querySelector('.error'); if (msg) msg.textContent = ''; }
+        }).catch(() => {});
+      }, 5000);
+    });
   },
   restart() {
     teardown();
