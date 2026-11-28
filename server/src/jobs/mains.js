@@ -182,8 +182,8 @@ function cppMain(q, tests, marker) {
   const L = ['#include "bqpre.hpp"'];
   if (D) L.push(T.classSource(D, 'cpp'));
   if (q.support && q.support.cpp) L.push(q.support.cpp);
-  // Their own main() can stay; a "#define int long long" doesn't reach the harness.
-  L.push('#define main bq_student_main', '#include "solution.cpp"', '#undef main', '#ifdef int', '#undef int', '#endif', '#include "bq.hpp"');
+  // Their own main() can stay; a "#define int long long" doesn't reach the harness, nor a #pragma GCC optimize.
+  L.push('#define main bq_student_main', '#include "solution.cpp"', '#undef main', '#ifdef int', '#undef int', '#endif', '#pragma GCC reset_options', '#include "bq.hpp"');
   if (D) {
     const names = Object.keys(D);
     L.push('namespace bq {', ...names.map((n) => `void j(W& w, const ${n}* p);`));
@@ -196,35 +196,49 @@ function cppMain(q, tests, marker) {
   }
   const locals = (params, args, ind) => params.map((p, k) => `${ind}${T.cppType(p.type)} a${k} = ${cppLit(T.canon(p.type), args[k], D)};`);
   const argNames = (n) => Array.from({ length: n }, (_, k) => 'a' + k).join(', ');
-  const paramList = (params) => params.map((p, k) => `${T.cppType(p.type)} a${k}`);
-  // The test code is all in namespace bq, which the ban check leaves out (bans.js). Each method the question
-  // asks for is also called here with arguments the compiler can't know, so every one is compiled whole
-  // whichever tests run.
-  L.push('namespace bq {');
+  // The test code is in namespace bq, which the ban check leaves out (bans.js), so everything it does with the
+  // student's code goes through these, outside it: what happens there is theirs, a default argument of theirs
+  // worked out for the call, a constructor or method the compiler puts in place of the call (always_inline).
+  // Not static, so every method the question asks for is compiled whole whichever tests run, and named with the
+  // run's marker, so their code can't declare one first (always_inline too).
+  const fn = (name) => `bq_${marker}_${name}`;
+  const refs = (params) => params.map((p, k) => `${T.cppType(p.type)}& a${k}`).join(', ');
+  const wrap = (ret, name, params, call) => (ret === 'void' ? `void ${fn(name)}(${params}) { (void)${call}; }` : `${ret} ${fn(name)}(${params}) { ${ret} r = ${call}; return r; }`);
   if (q.mode === 'method') {
-    L.push(`void keep(${paramList(q.signature.params).join(', ')}) { Solution sol; (void)sol.${q.signature.name}(${argNames(q.signature.params.length)}); }`);
+    const s = q.signature;
+    L.push(`Solution* ${fn('new')}() { return new Solution; }`,
+      wrap(T.cppType(s.returns), 'call', ['Solution* o', ...(s.params.length ? [refs(s.params)] : [])].join(', '), `o->${s.name}(${argNames(s.params.length)})`));
   } else {
     const C = q.class;
-    L.push(`void keep_new(${paramList(C.constructor).join(', ')}) { (void)new ${C.name}(${argNames(C.constructor.length)}); }`);
-    C.methods.forEach((m, j) => L.push(`void keep${j}(${[`${C.name}* o`, ...paramList(m.params)].join(', ')}) { (void)o->${m.name}(${argNames(m.params.length)}); }`));
+    // (what a method gives back is only taken where these tests look at it, as their calls do)
+    const looked = new Set(tests.flatMap((t) => t.steps.filter((st) => !st.new && (st.expect !== undefined || st.check)).map((st) => stepMethod(C, st))));
+    L.push(`${C.name}* ${fn('new')}(${refs(C.constructor)}) { return new ${C.name}(${argNames(C.constructor.length)}); }`);
+    C.methods.forEach((m, j) => {
+      const params = [`${C.name}* o`, ...(m.params.length ? [refs(m.params)] : [])].join(', ');
+      const call = `o->${m.name}(${argNames(m.params.length)})`;
+      L.push(wrap('void', 'do' + j, params, call));
+      if (m.returns !== 'void' && looked.has(m)) L.push(wrap(T.cppType(m.returns), 'get' + j, params, call));
+    });
   }
+  L.push('namespace bq {');
   tests.forEach((t, i) => {
     L.push(`static void t${i}(int i) {`);
     if (q.mode === 'method') {
       const s = q.signature;
-      L.push(...locals(s.params, t.args, '    '), '    Solution sol;', `    ${T.cppType(s.returns)} r = sol.${s.name}(${argNames(s.params.length)});`,
+      L.push(...locals(s.params, t.args, '    '), `    Solution* sol = ${fn('new')}();`, `    ${T.cppType(s.returns)} r = ${fn('call')}(${['sol', ...(s.params.length ? [argNames(s.params.length)] : [])].join(', ')});`,
         '    bq::W w;', '    bq::j(w, r);', '    bq::ok(i, w);');
     } else {
       const C = q.class;
       const names = [...new Set(t.steps.filter((st) => st.new).map((st) => st.as))];
       if (names.length) L.push(`    ${names.map((n) => `${C.name}* o_${n} = nullptr;`).join(' ')}`);
       t.steps.forEach((st, k) => {
-        if (st.new) { L.push('    {', ...locals(C.constructor, st.new, '        '), `        o_${st.as} = new ${C.name}(${argNames(C.constructor.length)});`, '    }'); return; }
+        if (st.new) { L.push('    {', ...locals(C.constructor, st.new, '        '), `        o_${st.as} = ${fn('new')}(${argNames(C.constructor.length)});`, '    }'); return; }
         const m = stepMethod(C, st);
-        const call = `o_${st.on}->${st.call}(${argNames(m.params.length)})`;
+        const args = [`o_${st.on}`, ...(m.params.length ? [argNames(m.params.length)] : [])].join(', ');
+        const j = C.methods.indexOf(m);
         L.push('    {', ...locals(m.params, st.args, '        '));
-        if (m.returns !== 'void' && (st.expect !== undefined || st.check)) L.push(`        ${T.cppType(m.returns)} r = ${call};`, '        bq::W w;', '        bq::j(w, r);', `        bq::step(i, ${k}, w);`);
-        else L.push(`        ${call};`);
+        if (m.returns !== 'void' && (st.expect !== undefined || st.check)) L.push(`        ${T.cppType(m.returns)} r = ${fn('get' + j)}(${args});`, '        bq::W w;', '        bq::j(w, r);', `        bq::step(i, ${k}, w);`);
+        else L.push(`        ${fn('do' + j)}(${args});`);
         L.push('    }');
       });
       L.push('    bq::done(i);');
@@ -245,9 +259,11 @@ function cppMain(q, tests, marker) {
 // C: functions only. The student's file is its own translation unit (bqsol.c), so the ban check reads exactly
 // what it uses from the compiled object, and nothing of theirs (macros, names) meets the tests'. The
 // question's function is declared first, so a definition that doesn't match it is a compile error in their
-// file ("conflicting types"), not a wrong call.
+// file ("conflicting types"), not a wrong call. Without glibc's inline versions of library functions in it
+// (isdigit and the rest are table lookups, toupper, atoi and bsearch code of their own), each is the call it
+// looks like, for the check to see.
 function cSol(q) {
-  const L = ['#include "bqpre.h"'];
+  const L = ['#define __NO_CTYPE 1', '#define __NO_INLINE__ 1', '#include "bqpre.h"'];
   if (q.support && q.support.c) L.push(q.support.c);
   L.push(T.cSignature(q.signature) + ';', '#define main bq_student_main', '#include "solution.c"', '');
   return L.join('\n');
