@@ -46,7 +46,7 @@ async function showRun(runId) {
       if (admitAll.disabled && lost && first) first.focus({ preventScroll: true });
     }, waitingFlagged.slice(), waitingReading);
   } });
-  // AI grading: everything waiting for the teacher in this run, sent to Claude (server: aigrade.js).
+  // AI grading: everything waiting for the teacher in this run, sent to an AI (server: aigrade.js, aicsv.js).
   const aiBtn = h('button', { class: 'btn', type: 'button', hidden: true });
   // Answers waiting for the teacher: graded one question at a time, across the class (showGrade)
   const gradeBtn = h('button', { class: 'btn primary', type: 'button', hidden: true, onclick: () => showGrade(runId) });
@@ -177,8 +177,9 @@ async function showRun(runId) {
     waitingIds = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting').map((x) => x.attempt.id);
     waitingFlagged = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting' && x.attempt.checks).map((x) => ({ name: x.name, checks: x.attempt.checks }));
     waitingReading = data.students.filter((x) => x.attempt && x.attempt.status === 'waiting' && !x.attempt.ready).length;
-    // stays in its place, off while nobody's waiting, so the bar doesn't shift; gone once the quiz is closed
-    admitAll.hidden = run.status !== 'open';
+    // stays in its place, off while nobody's waiting, so the bar doesn't shift; gone once the quiz is closed,
+    // and in practice (and corrections), where students go straight in and nobody ever waits
+    admitAll.hidden = run.status !== 'open' || run.practice;
     admitAll.disabled = !waitingIds.length;
     // before anyone's started it starts the quiz; after, it starts the students who came late, and each
     // late student's row has its own Start
@@ -369,7 +370,7 @@ async function showRun(runId) {
         d.status === 'active' && d.deadline ? h('span', Object.assign({ class: 't-muted t-small', text: `${mmss(d.timeLeft || 0)} left` }, d.paused ? {} : ticks('left-label', d.timeLeft || 0))) : null,
         d.timeX ? h('span', { class: 't-muted t-small', text: `${d.timeX}× time` }) : null,
         d.status === 'submitted' && !d.sealed ? h('a', { class: 'btn small', href: `/teacher/report.html?attempt=${encodeURIComponent(id)}`, target: '_blank', rel: 'noopener', text: 'Report', style: 'display:inline-flex;align-items:center;text-decoration:none' }) : null,
-        d.status === 'submitted' && d.totals && d.totals.review ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Grade with AI', title: 'Send the answers waiting for you to Claude. Names and IDs stay here.',
+        d.status === 'submitted' && d.totals && d.totals.review ? h('button', Object.assign({ class: 'btn small', type: 'button', text: 'Grade with AI', title: 'Send the answers waiting for you to an AI. Names and IDs stay here.',
           onclick: () => aiDialog(runId, id, aiDone) }, dk('ai'))) : null,
         moreMenu(`More for ${d.name}`, 'detail:more', [
           d.status === 'active' && d.deadline ? { text: 'Add time', onclick: async () => { const mins = await askMinutes(`Add time for ${d.name}`); if (mins) { lastDetail = ''; act(`/api/t/attempts/${id}/extend`, { minutes: mins }); } } } : null,

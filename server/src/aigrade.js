@@ -308,7 +308,7 @@ async function gradeAttempts(quiz, attempts, G, store, progress, cred) {
       const now = (a.result.manual || {})[qq.id];
       if (now && now.reviewed) return; // graded meanwhile (by hand or a pasted CSV): it was waiting when the job started
       a.result.manual = Object.assign({}, a.result.manual, { [qq.id]: toManual(qq, job, verdict, used, job.auto) });
-      store.logEvent(a, 'ai-grade', 'info', qq.id);
+      store.logEvent(a, 'ai-grade', 'info', store.qNumber(quiz, qq));
       store.save(a);
       out.graded++;
     } catch (e) {

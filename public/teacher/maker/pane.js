@@ -115,7 +115,7 @@ function questionPane(q, i) {
     const sumUp = () => {
       const total = q.rubric.filter((x) => String(x.text || '').trim()).reduce((n, x) => n + (Number(x.points) || 0), 0);
       const pts = Number(q.points) || 0;
-      rubric.worth.textContent = total && total !== pts ? `The rubric adds up to ${total} of the question's ${pts} points.` : '';
+      rubric.worth.textContent = total && total !== pts ? `The rubric adds up to ${total} of the question's ${plural(pts, 'point')}.` : '';
       rubric.worth.classList.toggle('qe-off', !!rubric.worth.textContent);
     };
     rubric.node.addEventListener('input', sumUp);

@@ -196,7 +196,8 @@ module.exports = function attemptRoutes(r) {
       // Feedback for the student (grading by question), on their report; a save without it keeps what's there
       const feedback = body.feedback === undefined ? (prev && prev.feedback) || '' : String(body.feedback || '').trim().slice(0, 2000);
       a.result.manual = Object.assign({}, a.result.manual, { [qq.id]: Object.assign({ rubric, override, reviewed: true }, ai ? { ai } : {}, feedback ? { feedback } : {}) });
-      store.logEvent(a, 'grade', 'info', `${qq.id}: ${override != null ? override + ' pts (override)' : Object.keys(rubric).length + ' rubric item(s)'}`);
+      const ticked = Object.keys(rubric).length;
+      store.logEvent(a, 'grade', 'info', `${store.qNumber(quiz, qq)}: ${override != null ? override + ' pts (override)' : `${ticked} rubric item${ticked === 1 ? '' : 's'}`}`);
       store.save(a);
     } else throw new HttpError(404, 'not_found');
     audit(me, p.action, a.id, note);

@@ -171,7 +171,7 @@ function rulesPart(q, refLangs, ...extra) {
     if (!rubric) return;
     const any = q.rubric.some((x) => x.text.trim());
     rubric.worth.textContent = !any ? '' : rubricPoints < Number(q.points) ? `Tests are worth ${Number(q.points) - rubricPoints} of ${q.points}`
-      : `The rubric is worth all ${q.points} points, so the tests count for nothing.`;
+      : `The rubric is worth all ${plural(Number(q.points), 'point')}, so the tests count for nothing.`;
     rubric.worth.classList.toggle('qe-off', any && rubricPoints >= Number(q.points));
   };
   return { node, tick };

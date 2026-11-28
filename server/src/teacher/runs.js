@@ -151,7 +151,7 @@ module.exports = function runRoutes(r) {
       for (const [id, g] of grades) {
         const { a, qq, job } = answers.get(id);
         a.result.manual = Object.assign({}, a.result.manual, { [qq.id]: AICSV.toManual(qq, job, g, job.auto) });
-        store.logEvent(a, 'ai-grade', 'info', `${qq.id} (pasted)`);
+        store.logEvent(a, 'ai-grade', 'info', `${store.qNumber(quiz, qq)} (pasted)`);
         touched.add(a);
         applied++;
       }

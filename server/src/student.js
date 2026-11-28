@@ -520,7 +520,7 @@ module.exports = function studentRoutes(r) {
       });
     } else if (a.resumeOk) {
       a.resumeOk = false;
-      store.logEvent(a, 'resume', 'info', 'let back in by teacher');
+      store.logEvent(a, 'resume', 'info', run.mode === 'practice' ? null : 'let back in by teacher'); // practice lets anyone back in
       a.lastBeat = now;
       a.beatLost = false;
     } else {
