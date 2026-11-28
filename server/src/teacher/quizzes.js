@@ -4,7 +4,7 @@
 const { q } = require('../db');
 const store = require('../store');
 const { json, readBody, readJson, send, HttpError } = require('../http');
-const { normalizeQuiz, loadQuizFile, ASSET_TYPES, QuizError, fillTemplate, svgProblem } = require('../quizfile');
+const { normalizeQuiz, loadQuizFile, ASSET_TYPES, QuizError, fillTemplate, imageProblem, imageMime } = require('../quizfile');
 const Rekey = require('../rekey');
 const { gradeAttempt, isRun, cleanAnswers, gradeAuto } = require('../grade');
 const { writeZip } = require('../zip');
@@ -64,9 +64,9 @@ module.exports = function quizRoutes(r) {
         if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new QuizError(`${p2}: images can be up to 5 MB.`);
         const i = assets.findIndex((a) => a.path === p2);
         if (i >= 0) assets.splice(i, 1);
-        const why = svgProblem(ext, bytes);
+        const why = imageProblem(ext, bytes);
         if (why) throw new QuizError(`${p2} ${why}`);
-        assets.push({ path: p2, mime: ASSET_TYPES[ext], bytes });
+        assets.push({ path: p2, mime: imageMime(ext, bytes), bytes });
       }
       quiz = normalizeQuiz(body.quiz, new Set(assets.map((a) => a.path)));
       await checkQuiz(quiz);

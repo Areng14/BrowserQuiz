@@ -6,6 +6,7 @@ const R = require('./rubric');
 const B = require('./bans');
 const T = require('../../public/teacher/types.js');
 const SVG = require('../../public/student/svg.js');
+const Kind = require('../../public/teacher/imagekind.js');
 const M = require('../../public/student/mathexpr.js');
 
 // mathChars: the math and graph answers a quiz has checked when it's saved, counted once per row of random
@@ -66,15 +67,17 @@ function loadQuizFile(buf) {
     const rel = name.slice(prefix.length);
     const ext = (rel.match(/\.[A-Za-z0-9]+$/) || [''])[0].toLowerCase();
     if (!ASSET_TYPES[ext]) fail(`${rel}: only png, jpg, gif, webp and svg images are allowed in assets/.`);
-    const why = svgProblem(ext, data);
+    const why = imageProblem(ext, data);
     if (why) fail(`${rel} ${why}`);
-    assets.set(rel, { mime: ASSET_TYPES[ext], bytes: data });
+    assets.set(rel, { mime: imageMime(ext, data), bytes: data });
   }
   return { quiz: normalizeQuiz(raw, new Set(assets.keys())), assets };
 }
 
-// A diagram (svg.js): shown as an image, so it can't run anything, but checked all the same.
-const svgProblem = (ext, bytes) => (ext === '.svg' ? SVG.problem(bytes.toString('utf8')) : null);
+// A diagram (svg.js): shown as an image, so it can't run anything, but checked all the same. Any other image
+// has to really be a png, jpg, gif or webp (imagekind.js), and is served as what it is, whatever its name says.
+const imageProblem = (ext, bytes) => (ext === '.svg' ? SVG.problem(bytes.toString('utf8')) : Kind.mime(bytes) ? null : Kind.NOT_IMAGE);
+const imageMime = (ext, bytes) => (ext === '.svg' ? ASSET_TYPES[ext] : Kind.mime(bytes));
 
 // ---------- values ----------
 // Types and their values live in public/teacher/types.js, shared with the quiz maker.
@@ -870,4 +873,4 @@ function normalizeCode(where, q) {
   return out;
 }
 
-module.exports = { svgProblem, loadQuizFile, normalizeQuiz, calculatorOf, putVars, markdownImages, checkValue, elementType, isRange, rangeLength, QuizError, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };
+module.exports = { imageProblem, imageMime, loadQuizFile, normalizeQuiz, calculatorOf, putVars, markdownImages, checkValue, elementType, isRange, rangeLength, QuizError, LIMITS, ASSET_TYPES, normOutput, normBlank, normCell, fillTemplate };

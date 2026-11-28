@@ -101,11 +101,19 @@ function choicesEditor(q) {
 }
 
 // ---------- images ----------
-// A diagram that can't be used says why (svg.js), here rather than on save.
-function svgRefused(f, dataUrl) {
-  if (extOf(f.name) !== '.svg') return false;
+// An image that can't be used says why, here rather than on save: a diagram (svg.js), or a file that isn't
+// really a png, jpg, gif or webp whatever its name says (imagekind.js). The server checks both again.
+function imageRefused(f, dataUrl) {
+  const b64 = String(dataUrl).split(',')[1] || '';
+  if (extOf(f.name) !== '.svg') {
+    let head;
+    try { head = Uint8Array.from(atob(b64.slice(0, 24)), (c) => c.charCodeAt(0)); } catch (e) { head = new Uint8Array(0); }
+    if (window.BQImageKind.mime(head)) return false;
+    window.BQAsk.notice({ title: "That image can't be used", text: `It ${window.BQImageKind.NOT_IMAGE}` });
+    return true;
+  }
   let why;
-  try { why = window.BQSvg.problem(decodeURIComponent(escape(atob(String(dataUrl).split(',')[1])))); } catch (e) { why = "can't be read."; }
+  try { why = window.BQSvg.problem(decodeURIComponent(escape(atob(b64)))); } catch (e) { why = "can't be read."; }
   if (why) window.BQAsk.notice({ title: "That diagram can't be used", text: `It ${why}` });
   return !!why;
 }
@@ -125,7 +133,7 @@ function addImage(q, f) {
   if (!roomFor(f)) return;
   const reader = new FileReader();
   reader.onload = () => {
-    if (svgRefused(f, reader.result)) return;
+    if (imageRefused(f, reader.result)) return;
     const base = f.name.replace(/[^A-Za-z0-9 _.-]/g, '_').slice(-80);
     // The file for a missing image takes that image's name, so the pasted quiz.json still points at it.
     let p2 = q.image && imageMissing(q.image) && extOf(q.image) === extOf(base) ? q.image : `assets/${base}`;
@@ -148,7 +156,7 @@ function addInlineImage(ta, f) {
   if (!roomFor(f)) return;
   const reader = new FileReader();
   reader.onload = () => {
-    if (svgRefused(f, reader.result)) return;
+    if (imageRefused(f, reader.result)) return;
     const base = f.name.replace(/\s+/g, '-').replace(/[^A-Za-z0-9_.-]/g, '_').slice(-80);
     let p2 = `assets/${base}`;
     for (let n = 2; ed.existingAssets.has(p2) || ed.newAssets[p2]; n++) p2 = `assets/${base.replace(/(\.[^.]+)$/, `-${n}$1`)}`;
