@@ -106,52 +106,57 @@ const job0Scans = (q, lang) => B.bansFor(q.ban, lang).length > 0 && ['c', 'cpp',
 // Build once, run each (the runner's "runs", runner/each.py): the languages whose harness runs only the test
 // it's given the number of. A build holds at most EACH_MAX tests (the runner's most runs), and as many as keep
 // the generated test file to EACH_MAIN bytes (javac's constants for one class) and the job to EACH_JOB.
+// EACH_BUDGET: how far into a job the runner still starts a run (each.py's BUDGET_S).
 const EACH_LANGS = ['java'];
 const EACH_FILE = { java: 'BQMain.java' };
 const EACH_MAX = 100;
 const EACH_MAIN = 100 * 1024;
 const EACH_JOB = 300 * 1024;
+const EACH_BUDGET = 10000;
 const jobBytes = (job) => Object.values(job.files).reduce((s, f) => s + Buffer.byteLength(f), 0);
 
 // Every test in one build, then each run in a process of its own from it, with the time and memory a job's one
 // run has: one part per test, just as one job per test gives them. Tests the runner had no time left for
-// ("skipped") go again, in a build of their own. null: the runner doesn't build once after all (one from before,
-// which ran the program as a whole and said nothing of runs), so it's one job per test.
+// ("skipped": code that hangs) go again, side by side in builds of as many as the runs before took the time for.
+// null: the runner doesn't build once after all (one from before, which ran the program as a whole and said
+// nothing of runs), so it's one job per test.
 async function runEach(q, lang, code, tests) {
   const parts = new Array(tests.length);
-  let todo = tests.map((_, i) => i);
-  for (let first = true; todo.length; first = false) {
-    let n = Math.min(todo.length, EACH_MAX);
-    let built = H.buildJob(q, lang, code, todo.slice(0, n).map((i) => tests[i]), { scan: first });
+  let before = false;
+  const fill = (ids, r) => { for (const i of ids) parts[i] = r; };
+  async function build(ids, first) {
+    let n = Math.min(ids.length, EACH_MAX);
+    let built = H.buildJob(q, lang, code, ids.slice(0, n).map((i) => tests[i]), { scan: first });
     while (n > 1 && (Buffer.byteLength(built.job.files[EACH_FILE[lang]] || '') > EACH_MAIN || jobBytes(built.job) > EACH_JOB)) {
       n = Math.ceil(n / 2);
-      built = H.buildJob(q, lang, code, todo.slice(0, n).map((i) => tests[i]), { scan: first });
+      built = H.buildJob(q, lang, code, ids.slice(0, n).map((i) => tests[i]), { scan: first });
     }
-    const ids = todo.slice(0, n);
-    const list = ids.map((i) => tests[i]);
+    const list = ids.slice(0, n).map((i) => tests[i]);
     const { marker, job } = built;
     const res = await callRunner({ ...job, runs: n }, q.limits.timeMs, q.limits.memoryMb);
     if (!Array.isArray(res.runs)) {
-      if (!['compile_error', 'error', 'unavailable'].includes(res.status)) return null;
-      const r = H.readResults(q, lang, list, res, marker); // didn't compile, or the job broke: for all of them
-      for (const i of todo) parts[i] = r;
-      return parts;
+      if (!['compile_error', 'error', 'unavailable'].includes(res.status)) { before = true; return; }
+      fill(ids, H.readResults(q, lang, list, res, marker)); // didn't compile, or the job broke: for all of them
+      return;
     }
     const left = [];
-    res.runs.slice(0, n).forEach((run, k) => {
-      if (!run || run.status === 'skipped') { left.push(ids[k]); return; }
+    const took = [];
+    for (let k = 0; k < n; k++) {
+      const run = res.runs[k];
+      if (!run || run.status === 'skipped') { left.push(ids[k]); continue; }
+      took.push(Number(run.ms) || 0);
       // In the compiled languages the ban check's facts are the runner's, read once: with the first test.
       parts[ids[k]] = H.readResults(q, lang, [list[k]], first && k === 0 && res.scan !== undefined ? { ...run, scan: res.scan } : run, marker, k);
-    });
-    if (res.runs.length < n) left.push(...ids.slice(res.runs.length));
-    if (left.length === ids.length) { // nothing ran: a broken job, graded again later
-      const r = H.readResults(q, lang, list, { status: 'error' }, marker);
-      for (const i of todo) parts[i] = r;
-      return parts;
     }
-    todo = [...left, ...todo.slice(n)];
+    if (!took.length) { fill(ids, H.readResults(q, lang, list, { status: 'error' }, marker)); return; } // nothing ran: broken
+    left.push(...ids.slice(n));
+    const per = Math.max(1, Math.floor(EACH_BUDGET / Math.max(1, ...took)));
+    const groups = [];
+    for (let k = 0; k < left.length; k += per) groups.push(left.slice(k, k + per));
+    await Promise.all(groups.map((g) => build(g, false)));
   }
-  return parts;
+  await build(tests.map((_, i) => i), true);
+  return before ? null : parts;
 }
 
 // One job for all tests (Run, reference checks), or for grading each test in a process of its own (so a hang
