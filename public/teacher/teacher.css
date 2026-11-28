@@ -204,7 +204,7 @@ input[type="file"].input { padding: 6px 10px; }
 .t-table .num { text-align: right; }
 .t-link { padding: 0; font: inherit; color: var(--accent); background: none; border: 0; cursor: pointer; text-align: left; }
 .t-link:hover { text-decoration: underline; }
-.t-back { display: inline-flex; align-items: center; gap: 4px; }
+.t-back { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; overflow-wrap: anywhere; } /* a long quiz name wraps */
 .t-actions { white-space: nowrap; }
 .t-actions .btn + .btn { margin-left: 6px; }
 .t-actions > * + * { margin-left: 6px; }
@@ -244,6 +244,7 @@ input[type="file"].input { padding: 6px 10px; }
   .t-table tr:last-child { border-bottom: 0; }
   .t-table tr.sel { background: var(--soft); }
   .t-table th, .t-table td { padding: 0; border: 0; white-space: normal; text-align: left; }
+  .t-table td { min-width: 0; overflow-wrap: anywhere; } /* a quiz or class name with no spaces wraps in its card */
   .t-table td:first-child { flex: 1 1 100%; min-width: 0; max-width: none; font-weight: 600; overflow-wrap: anywhere; }
   .t-table td:empty, .t-table td.quiet { display: none; }
   .t-table td[data-label]::before { content: attr(data-label) " "; font-weight: 400; color: var(--ink-2); }
@@ -443,6 +444,7 @@ input[type="file"].input { padding: 6px 10px; }
 }
 
 .t-code { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.t-code > div { min-width: 0; } .t-code h1 { overflow-wrap: anywhere; } /* a title with no spaces wraps */
 .t-joincode { font: 600 44px var(--mono); letter-spacing: 0.15em; }
 button.t-joincode { margin: 0 -6px; padding: 0 6px; color: inherit; background: none; border: 0; border-radius: 8px; cursor: zoom-in; }
 button.t-joincode:hover { background: var(--soft); }

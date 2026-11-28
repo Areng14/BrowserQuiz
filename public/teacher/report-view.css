@@ -35,6 +35,9 @@
 .r-view .r-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .r-view .r-eyebrow { margin: 0 0 2px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .r-view .r-head h1, .r-view .r-class h1 { margin: 0; font-size: 22px; line-height: 1.25; }
+/* a title, prompt, name or answer with no spaces in it (a binary number, a URL, snake_case) wraps instead of pushing the page sideways */
+.r-view { overflow-wrap: break-word; }
+.r-view .r-head h1, .r-view .r-class h1, .r-view .r-prompt, .r-view .r-table td { overflow-wrap: anywhere; }
 .r-view .r-sub { margin: 4px 0 0; color: var(--ink-2); font-size: 14px; }
 .r-view .r-score { text-align: right; }
 .r-view .r-score-big { font-size: 34px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
